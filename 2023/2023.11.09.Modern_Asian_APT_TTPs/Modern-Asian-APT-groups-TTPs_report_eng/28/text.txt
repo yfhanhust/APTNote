@@ -1,0 +1,1084 @@
+Discovery TA0007
+Software Discovery T1518
+Basic description
+Contents 197
+Reconnaissance of the specific software in a company may provide valuable information to attackers. When
+attackers know the specific applications being used in a company, they can use them for malicious purposes.
+Software can be analyzed to identify specific applications or systems that have vulnerabilities that the
+attackers can exploit. Attackers can also identify software that stores sensitive data, provides remote access,
+or has administrative privileges.
+Attackers may masquerade as legitimate company software to conceal their malicious activity and minimize
+detection by security products.
+For example, some APT groups avoid attacking systems that have code writing applications, SysInternals
+monitoring programs, or programs used to analyze malware and network traffic such as WireShark installed.
+Examples of procedures
+Information about installed software can be gathered in different ways.
+Example 1
+An APT group that attacked government agencies in Belarus and Russia used the dir command to display a list
+of files in a directory:
+dir \\c$\"program files" /od
+dir \\c$\windows\system32\tasks
+Example 2
+Operators also used the wmic utility to get a list of installed software:
+cmd /c wmic product get name
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Software Discovery T1518
+Example 3
+Contents 198
+In the Indonesian incident, the attackers checked for the presence of a Kaspersky Endpoint Security for
+Windows agent and its version:
+cmd.exe /C dir "$programfiles\Kaspersky Lab\Kaspersky Endpoint Security for Windows\version.txt"
+cmd.exe /C type "$programfiles\Kaspersky Lab\Kaspersky Endpoint Security for Windows\version.txt"
+Example 4
+Another APT group also used the dir command:
+dir /a "c:\program files*." >> C:\Windows\Web\systeminfo.txtbb
+dir /a "c:\Program Files (x86)*." >> C:\Windows\Web\systeminfo.txtbb
+Detection
+Detection rules for identifying reconnaissance of installed software can be generated based on the command
+lines in the examples presented above. This may include the following:
+1
+Dir command for enumerating directories in C:\Program Files\ and C:\Program Files ( x86)\
+2
+Use of the Wmic console utility
+3
+Reg.exe utility to query the installed software in the Windows registry:
+reg.exe query HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall /S /v DisplayName
+reg.exe query HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall /S /v DisplayVersion
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Software Discovery T1518
+4
+PowerShell:
+Get-WmiObject -Class Win32_Product
+Get-ChildItem "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
+Contents 199
+Detection of this technique is complicated by the fact that all of these actions can also be performed for
+legitimate purposes by an administrator or other authorized person. To reduce the likelihood of false positives,
+you are advised to employ multiple rules that are aimed at detecting various Discovery techniques. For
+example, detection can be based on 3–5 rules triggered within a span of 10 minutes. For each organization,
+you must clarify and exclude certain activity by profiling the legitimate activity that occurs in the particular
+organization.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+Microsoft-Windows-PowerShell/
+PowerShell 4103, 4104
+Operational
+SIGMA rules
+
+
+Sigma-Generic-Software Discovery via Standard Windows Utilities
+
+
+Sigma-Generic-Security Software Discovery via wmic
+
+
+Sigma-Generic-Discovery Component Object Model Keys via PowerShell
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Service Discovery T1007
+System Service Discovery T1007
+Basic description
+Contents 200
+Windows OS services are used by attackers for various objectives. For instance, some services are used
+to establish persistence in the system, others are used for privilege elevation, and some are used to simply
+execute code in the context of a service process. Attackers use the System Service Discovery technique to
+view the running services and to search for information about a specific service.
+There are several ways to view the installed services in Windows:
+1
+Standard tools of the operating system
+2
+PowerShell cmdlets
+3
+WMI
+4
+Windows registry
+WMI can be used with standard tools as well as with PowerShell, so examples of its use are also presented in
+the tables below.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Service Discovery T1007
+Standard tools Examples
+of the operating system
+Contents 201
+sc
+sc query
+sc query type= service
+sc queryex
+sc qc
+sc qdescription
+sc qtriggerinfo
+sc qprivs
+sc qfailure
+sc qfailureflag
+sc qsidtype
+tasklist
+tasklist
+tasklist /svc
+net net start
+net1 net1 start
+driverquery driverquery
+wmic service [get …]
+wmic
+wmic process [get …]
+PowerShell cmdlets Examples
+Get-Service gsv
+Get-Service
+gps
+Get-Process ps
+Get-Process | Where-Object {$_.SessionId -eq 0}
+Get-SystemDriver Get-SystemDriver
+gwmi
+Get-WmiObject Get-WmiObject -Query “select * from Win32_Service”
+Get-WmiObject -Class Win32_Service
+Get-CimInstance Get-CimInstance -ClassName Win32_Service
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Service Discovery T1007
+WMI Classes
+CIM_Process
+CIM_Service
+CIM_ServiceComponent
+Contents 202
+Technical details  |  Discovery TA0007  |  System Service Discovery T1007
+Example 2
+Contents 203
+As part of their reconnaissance for another attack, attackers saved the output of the tasklist utility to a file in a
+temporary directory:
+dir \\c$\windows\system32\tasks
+cmd /c tasklist >$temp\temp.txt
+tasklist
+Example 3
+In one attack, an Asian APT group used the tasklist utility to get the PID of the lsass process from a list of
+services:
+$system32\cmd.exe /C tasklist /svc | findstr lsass
+Example 4
+Some of the more sophisticated Asian APT groups also combine service discovery methods like in this
+example of an attack targeting an industrial facility:
+cscript.exe //nologo wmic.vbs /cmd 10.0.0.10 [domain][user] [password] "sc query wam"
+Detection
+Process creation events can be used to detect discovery of services that is conducted using standard tools
+in the operating system. Discovery of services via PowerShell can be detected by looking for Windows Event
+ID 4104. However, keep in mind that a script may be obfuscated. If an attacker conducts discovery of services
+by using the registry, this can be detected by looking for process creation events (EventId 4688 or Sysmon 1) in
+which the CommandLine shows the registry hive containing information about services.
+Detection of this technique is complicated by the fact that most of these actions can also be performed
+for legitimate purposes by an administrator or other authorized person. To reduce the likelihood of false
+positives, you are advised to employ multiple rules that are aimed at detecting various Discovery techniques.
+For example, detection can be based on 3–5 rules triggered within a span of 10 minutes. For each organization,
+you must clarify and exclude certain activity by profiling the legitimate activity that occurs in the particular
+organization.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Service Discovery T1007
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-System Service Discovery via Standard WIndows Utilities
+
+
+Sigma-Generic-System Service Discovery via PowerShell
+
+
+Sigma-Generic-System Service Discovery via Registry
+
+
+Sigma-Generic-System Service Discovery via wmic
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 204
+Technical details  |  Discovery TA0007  |  System Information Discovery T1082
+System Information Discovery T1082
+Basic description
+Contents 205
+Attackers use this technique to gather information about the target system or network. This information can
+include the hostname, operating system version, open ports, running services, installed software, and other
+relevant data. The collected information is used to understand the context of the environment and to plan
+further attack vectors.
+Examples of procedures
+During our analysis of Asian APT groups, we observed the use of standard tools for obtaining system
+information.
+Example 1
+The attackers used the systeminfo utility the most frequently. It shows detailed information about the
+configuration of the computer and operating system, data on the PC manufacturer, RAM, network adapter,
+BIOS/UEFI version, configured time zone, localization, and available support for virtualization technologies.
+C:\Windows\system32\cmd.exe /C systeminfo
+Example 2
+Attackers also use the hostname command to get the name of the victim's machine.
+C:\Windows\system32\cmd.exe /C hostname
+Example 3
+Example of using the diskpart utility to get a list of volumes:
+cmd /c echo list volume |diskpart
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Information Discovery T1082
+Example 4
+Contents 206
+An executable file observed in one attack executes discovery commands via cmd and writes their results to a
+file named ~dep222.tmp. 0x5D decryption key.
+C:\Windows\adobe.exe
+MD5: 6117854AA463D953DAE2AC8062FEDD5E
+Commands executed by the sample:
+cmd /c systeminfo >> $user\$temp\~dep22
+cmd /c dir >> $user\$temp\~dep22
+cmd /c netstat -ano >> $user\$temp\~dep22
+cmd /c tasklist /v >> $user\$temp\~dep22
+cmd /c net start >> $user\$temp\~dep22
+cmd /c net user >> $user\$temp\~dep22
+cmd /c ipconfig /all >> $user\$temp\~dep22
+Detection
+The main way to detect the System Information Discovery T1082 technique is to look for process creation
+events, which can be used to identify suspicious command-line parameters such as systeminfo or hostname.
+Detection of this technique is complicated by the fact that all of these actions can also be performed for
+legitimate purposes by an administrator or other authorized person. To reduce the likelihood of false positives,
+you are advised to employ multiple rules that are aimed at detecting various Discovery techniques. For
+example, detection can be based on 3–5 rules triggered within a span of 10 minutes. For each organization,
+you must clarify and exclude certain activity by profiling the legitimate activity that occurs in the particular
+organization.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Information Discovery T1082
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+SIGMA rules
+
+Sigma-Generic-System Information Discovery via Standard Windows Utilities
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 207
+Technical details  |  Discovery TA0007  |  System Network Configuration Discovery T1016
+System Network Configuration Discovery T1016
+Basic description
+Contents 208
+The technique known as System Network Configuration Discovery is employed during the attack stage in
+which the attackers gather information about network settings and parameters. The collected data can be
+used by the attackers for communication with their C2, lateral movement, and/or pivoting.
+There are many ways to get information about the network configuration in Windows. For example, you can
+view the ARP cache, routes, network interfaces, and much more.
+Outside of an attack, these actions are frequently performed by administrators/engineers for network
+configuration and troubleshooting.
+Examples of procedures
+In one attack targeting government organizations in Russia, an Asian APT group redirected the output of
+utilities to a text file in a temporary directory:
+cmd /c route print > $temp\1.txt
+cmd /c ipconfig /displaydns > $temp\1.txt
+During another attack, an advanced Asian APT group used the ipconfig utility directly:
+ipconfig /all
+Some samples from Asian APT groups also contact online services to get a public IP address and thereby find
+out the geographical location of their target host.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Network Configuration Discovery T1016
+Detection
+Contents 209
+Some correlation rules aimed at identifying network configuration discovery activity will generate a large
+number of false positive detections. To reduce the number of false positives, you can combine multiple rules
+to trigger an alert. For example, you can configure an alert to be generated when three discovery rules are
+triggered within a period of 10 minutes on one host. The specific number of rules and the applicable time period
+for a triggered alert should be appropriately configured based on the typical activity in the infrastructure.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 3, 22
+SIGMA rules
+
+
+Sigma-Generic-System Network Configuration Discovery via Standard Windows Utilities
+
+
+Sigma-Generic-Network Connection to Online IP Resolution Web Service (EventID 3)
+
+
+Sigma-Generic-Network Connection to Online IP Resolution Web Service (EventID 22)
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Network Connections Discovery T1049
+System Network Connections Discovery T1049
+Basic description
+Contents 210
+The technique known as System Network Connections Discovery is used by threat actors to gather
+information about active network connections of a compromised host so that they can then use this data for
+Lateral Movement, Pivoting and/or Credential Access (under certain conditions).
+Windows provides APIs, utilities, and PowerShell cmdlets to collect this type of information:
+WinAPI Commands Cmdlets PowerShell
+GetTcpTable, GetUdpTable,
+GetTcp6Table,
+GetTcp6Table2, GetUdpTable,
+WTSEnumerateSessionsA/
+WTSEnumerateSessionsW,
+WTSEnumerateSessionsExA,
+WTSEnumerateSessionsExW,etc
+Examples of procedures
+netstat, query session, qwinsta, query
+user, quser, net use
+Get-NetTCPConnection
+Get-IscsiConnection
+Get-SmbConnection
+Get-SmbMultichannelConnection
+Get-VpnConnection
+Asian APT groups frequently use the System Network Connections Discovery technique. To gather
+information about active sessions, attackers use the qwinsta command (the same as a query session ).
+Example 1
+For example, in an attack targeting government organizations in Russia, an Asian APT group used qwinsta and
+netstat to implement this technique. WMI is used to start these utilities on remote hosts:
+wmic /node: /user:\ /password: process call create "cmd.exe /c
+qwinsta > $temp\1.txt
+wmic /node: /user:\ /password: process call create "cmd.exe /c
+netstat -ano > $temp\1.txt
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Network Connections Discovery T1049
+Example 2
+During another attack, an Asian threat actor used netstat with parameters:
+netstat -nato
+Example 3
+Contents 211
+In another incident that we observed, an Asian APT group used netstat after persisting in the system by
+service creation with the executable file named c:\programdata\usoshared\hpnotifications.exe:
+$system32\cmd.exe /C netstat -ano -p tcp | findstr "EST"
+Detection
+Like many other techniques of the Discovery tactic, this technique is difficult to detect because its typical
+actions may be legitimately performed by administrators and/or users.
+Due to the large amount of legitimate activity matching this technique, you can link multiple granular, timebased correlation rules to effectively identify malicious activity. For example, if there are multiple discovery
+rules, you can configure an alert to be generated when at least three of the rules are triggered on one host
+within a span of 10 minutes. Naturally, the specific parameters should take into account your typical internal
+activity.
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Network Connections Discovery T1049 Contents 212
+SIGMA rules
+
+
+Sigma-Generic-System Network Connections Discovery via PowerShell
+
+
+Sigma-Generic-System Network Connections Discovery via Standard Windows Utilities
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Time Discovery T1124
+System Time Discovery T1124
+Basic description
+Contents 213
+The technique known as System Time Discovery is employed by attackers together with other techniques
+during the reconnaissance stage. The system time helps identify the victim's time zone, which also helps
+provide an approximate location. APT groups often pursue specific objectives and victims, and the location of
+a particular system helps identify useful targets. Attackers may also check the current time of a host before
+creating a scheduled task.
+The current time of a system can be determined in several ways:
+
+
+In the command line by using the time utility
+
+
+Using a PowerShell cmdlet: Get-Date
+
+
+WinAPI calls: GetSystemTime ()
+
+
+Examples of procedures
+Example 1
+We observed time determination commands among many other discovery commands. When conducting
+reconnaissance, Asian APT groups often redirected the output of commands to a specific file, then read the
+data and forwarded it to a command center.
+cmd.exe /c C: & cd\ & cd "" & time /t
+cmd /c time /t >$temp\temp.txt
+Example 2
+In one attack, the net.exe utility was used to determine the time. The following command displays the time
+from the domain server serving as the timeserver.
+net.exe time /do
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Time Discovery T1124
+Example 3
+Contents 214
+Asian APT groups often use specially prepared scripts in which they combine all of the main discovery
+commands necessary for conducting an attack, and save the results to a file. Below is a command snippet
+from a script:
+time /t >> C:\Windows\Web\systeminfo.txtbb
+Detection
+This technique can be detected by tracking commands that determine the system time. However, these
+commands may also be run during legitimate activity.
+As was described earlier in other Discovery techniques, it is best to use a combination of detection rules aimed
+at techniques from the Discovery tactic.
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Sigma-Generic-System Time Discovery via PowerShell
+
+
+Sigma-Generic-System Time Discovery via standard windows utilities
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Permission Groups Discovery T1069
+Permission Groups Discovery T1069
+Basic description
+Contents 215
+Attackers explore lists of groups, such as local groups, domain groups, and groups of cloud services. They
+analyze the permissions of these groups to identify accessible user accounts and user groups, determine
+which users belong to which groups, and identify their privileges. This data allows attackers to get additional
+information about the compromised system that will be used for further actions.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Permission Groups Discovery: Domain Groups T1069.002
+Permission Groups Discovery: Domain Groups T1069.002
+Basic description
+Contents 216
+After an attacker infiltrates a host and obtains the capability to execute commands, they must look around
+and get their bearings. For example, they can identify members of groups in a Windows OS by using the
+dsquery utility:
+dsquery group -name "AllowUSB" | dsget group -members
+Or they can use the net utility:
+net group "maingroup" /domain
+Examples of procedures
+While writing this report, we encountered the following examples of this technique in action:
+$system32\cmd.exe /C net group /do
+$system32\cmd.exe /C net group "domain admins" /domain
+$system32\cmd.exe /C net user domain_admin /domain
+net group "domain users" /do
+net group "domain computers" /do
+Get-MsolGroup
+Get-MsolGroup -All
+Get-MsolRole
+Get-MsolRoleMember -ObjectId 2b745bdf-0803-4d80-*
+help Get-MsolRoleMember
+Get-MsolRoleMember -RoleObjectId 2b745bdf-0803-4d80-
+Get-MsolRoleMember -RoleObjectId 62e90394-69f5-4237-***
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Permission Groups Discovery: Domain Groups T1069.002
+Detection
+Contents 217
+This technique can be detected by looking at process creation events, analyzing data from network traffic if
+domain groups are queried, and tracking script execution events such as PowerShell scripts.
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Permission Local Groups Discovery via wmic
+
+
+Sigma-Generic-Local Groups Discovery via net.exe
+
+
+Sigma-Generic-Local Groups Discovery via PowerShell
+
+
+Sigma-Generic-Domain Groups Discovery via net.exe
+
+
+Sigma-Generic-Groups Discovery via PowerShell
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Network Share Discovery T1135
+Network Share Discovery T1135
+Basic description
+Contents 218
+Lateral movement of attackers through the network is usually preceded by searches for network folders
+and drives. A network shared folder is a shared resource for computers that are joined into one network. This
+allows users to access file directories in various systems over the network. Shared use of files on a Windows
+network is provided via the SMB protocol.
+For threat actors, a shared network shared folder provides another vector for lateral movement and another
+data collection resource.
+To search for shared network resources, attackers use the following:
+1
+Net.exe utility:
+net view
+net use
+net share
+2
+PowerShell: PowerShell get-smbshare
+3
+WMI: PowerShell Get-WmiObject -Class Win32_Share
+4
+Win API: NetShareEnum()
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Network Share Discovery T1135 Contents 219
+Examples of procedures
+Example 1
+In one attack, an Asian APT group used the net.exe utility to view network shared folders:
+$system32\cmd.exe /C net view \remotesystem
+Example 2
+In one incident, an Asian APT group operator conducted reconnaissance through a reverse shell:
+cmd.exe /c C: & cd\ & cd "" & net use
+Example 3
+Here is a discovery script snippet showing the main commands used to search for network shared folders and
+computers on a network:
+net use >> C:\Windows\Web\systeminfo.txtbb
+net share >> C:\Windows\Web\systeminfo.txtbb
+net view >> C:\Windows\Web\systeminfo.txtbb
+net view /domain >> C:\Windows\Web\systeminfo.txtbb
+Example 4
+We also encountered the use of nmap to search for network resources:
+nmap -p 445,3389 -T3 -v -n -Pn --open --script smb-enum-shares _24.xml
+nmap -p 3389 -T3 -v -n -Pn --open _24.xml
+nmap -T3 -A -v -n -Pn --open --script smb-enum-shares .xml
+nmap -p 445 -T3 -A -v -n -Pn --open _24.xml
+nmap -T3 -A -v -n -Pn --open .xml
+nmap -p 445 -T3 -v -n -Pn --open --script nbstat _24.xml
+nmap -p 445 -T4 -v -n -Pn --open --script nbstat _18.xml
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Network Share Discovery T1135
+Example 5
+Here's another example of a scanner, which inspected the SMB port in this case:
+smbscan.exe 
+MD5: B75B8170C5BFABB998F54768E80E3739
+Contents 220
+smbscan.exe scans an IP address for network folders and prints the IP address to stdout if a response
+is received. The sample sends ordinary SMB packets (without shellcodes) and does not exploit SMB
+vulnerabilities.
+Detection
+To detect the Network Share Discovery technique, you should track any startup parameters of the created
+processes and all executed PowerShell commands. Activity matching this technique may be performed by
+system administrators. Therefore, precise detection rules should be configured to account for normal activity
+in the particular organization. Just like for other techniques from the Discovery tactic, we recommend that you
+configure an alert to be generated when multiple discovery rules are triggered. For example, an alert should be
+generated when 3–5 rules for various techniques are triggered within a period of 10 minutes.
+Event source Log Event ID
+Windows Security 4688, 5156
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1, 3
+SIGMA rules
+
+
+Sigma-Generic-Network Share Discovery via PowerShell
+
+
+Sigma-Generic-Network Share Discovery via Standard Windows Utilities
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Remote System Discovery T1018
+Remote System Discovery T1018
+Basic description
+Contents 221
+APT actors can obtain additional information about a computer based on its IP address, name, or other
+network identifier that can be used for lateral movement from an infected system through the company
+infrastructure. These capabilities are provided by remote administration tools (RAT) and by other tools
+available in the operating system, such as "ping", "tracert" and "net".
+They can also get information about external hosts by analyzing the local ARP cache. Another option is to get
+additional information directly from network devices to study the target network. For example, the "show cdp
+neighbors" or "show arp" commands can be used for these purposes.
+Examples of procedures
+Examples of procedures that were encountered when analyzing the incidents mentioned above:
+ping -n 1 
+cmd.exe /c C: & cd\ & cd "Windows\web" & C:\Windows\System32\logfiles\nbtscan.exe 
+cmd /c tracert -h 2  > $temp\1.txt
+MD5 File name
+ab55a08ed77736ce6d26874187169bc9 Ladon.exe
+This plug-in is a comprehensive scanner that is capable of scanning ports and identifying services, network
+assets, passwords, and vulnerabilities.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Remote System Discovery T1018 Contents 222
+Figure 63 Рlug-in code (scanner)
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Remote System Discovery T1018
+Detection
+Contents 223
+One of the ways to detect the Remote System Discovery T1018 technique is to look for process creation
+events. You should pay close attention to any running utilities or tools that were mentioned above, and analyze
+the command-line contents (when audits are enabled). You can also utilize the capabilities of network traffic
+analysis (NTA) systems, which detect and show scans of hosts and ports of assets within the infrastructure.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Network Share Discovery via PowerShell
+
+
+Sigma-Generic-Network Share Discovery via Standard Windows Utilities
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Domain Trust Discovery T1482
+Domain Trust Discovery T1482
+Basic description
+Contents 224
+Domain Trusts (domain trust relationships) are used in Microsoft Active Directory to identify the level of access
+between various domains.
+Trust Validation in the context of Active Directory refers to the process of verifying trust relationships
+between domains or forests. When trust is established between various domains, this trust must be verified to
+ensure security and authenticity.
+Main objectives of domain trust discovery:
+1
+Search for trust relationships between various domains on a network to understand the domain structure and
+find opportunities to expand access capabilities
+2
+Expand access to resources in other domains
+3
+Search for security configuration vulnerabilities to bypass restrictions that may be implemented within
+individual domains
+4
+Elevate privileges by obtaining access to administrative accounts in other domains
+There are several tools for discovering trust relationships and detecting vulnerabilities in a Windows Active
+Directory network. Although these tools can be used by system administrators to check the security of their
+network, they may also be employed by attackers to conduct attacks:
+
+
+PowerSploit
+
+
+PowerView
+
+
+BloodHound
+
+
+PingCastle
+
+
+ADRecon
+
+
+Nmap
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Domain Trust Discovery T1482
+Contents 225
+Discovery of trust relationships in a domain infrastructure can also be performed by using the following
+command:
+Windows CMD
+Command Description
+The nltest command can be used to identify trust relationships between various
+nltest /domain_trusts
+domains.
+The netdom tool can also be used to work with trust relationships between domains.
+netdom trust  For example, you can use the following command to enumerate the trust relationships
+for a specific domain.
+dsquery * -filter The dsquery command lets you query Active Directory. This command can be used to
+"(objectClass=trustedDomain)" enumerate all trust relationships of a domain.
+This command lets you view the available domains in a network. It can help identify other
+net view /domain
+domains with which the current domain has trust relationships.
+The dsget command may be used to get information about the properties of Active
+dsget domain  -trust Directory objects or information about trust relationships for a specific domain
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Domain Trust Discovery T1482
+Windows PowerShell
+Cmdlet Description
+Contents 226
+The Get-ADTrust cmdlet can be used to get information about trust relationships
+Get-ADTrust -Filter *
+between domains.
+Get-NetDomainTrust
+The PowerSploit tool has the Get-NetDomainTrust command, which provides
+information about trust relationships between domains. This tool can be used by
+attackers to inspect a network. Please keep in mind that PowerSploit is a pentesting tool
+and should be used only with the approval of the system owner or in accordance with
+applicable laws and policies.
+The Get-ADDomainController command from the ActiveDirectory module can help
+Get-ADDomainController -Discover
+identify domain controllers in other domains and thereby detect trust relationships.
+Test-NetConnection -ComputerName This command lets you check the availability of a network connection to a remote host.
+ This can be used to check connectivity with trusted domain controllers.
+The Get-NetForestDomain command from the PowerSploit toolset can be used to
+Get-NetForestDomain
+display information about trust relationships within a forest.
+Get-ADDomain  | The Get-ADDomain command from the ActiveDirectory module provides
+Select-Object Name, Trusts information about the current domain and its trust relationships.
+Get-ADTrustRelationship -Domain The Get-ADTrustRelationship command from the ActiveDirectory module provides
+ information about the trust relationships for the specified domain.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Domain Trust Discovery T1482
+Examples of procedures
+Contents 227
+In attacks conducted by Asian APT groups, we did not observe much variety in the methods that they used
+for discovering trust relationships between domains. Instead, their discovery basically involved only the nltest
+command and the well-known tools, such as BloodHound:
+In the attack targeting Russian companies, the following commands were used:
+Command Description
+This command is used to display a list of domain controllers for the specified domain in
+nltest /dclist:
+the network.
+This command is used to enumerate all trust relationships of the current domain. The
+nltest /domain_trusts output of this command includes a list of domains with which trust relationships have
+been established, and indicates the type of each trust relationship.
+Detection
+It may be difficult to detect the Domain Trust Discovery T1482 technique because attackers can use various
+methods and tools to explore the trust relationships in a Windows Active Directory network. Attempts to
+detect domain trust relationships usually involve tracking specific commands or scripts. You can also monitor
+Active Directory events involving changes made to trust relationships between domains. Traffic analyzers can
+help detect suspicious requests or network activity related to domain trust discovery.
+Event source Log Event ID
+Windows Security 4688, 4662
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+SIGMA rules
+
+Sigma-Generic-Domain Trust Discovery via nltest.exe
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Query Registry T1012
+Query Registry T1012
+Basic description
+Contents 228
+Attackers gather information about a system by querying the registry. The Windows registry contains a large
+amount of data on the computer configuration and users. There are several ways to request information from
+the registry, including various console-based or GUI tools, PowerShell cmdlets, and WinAPI functions.
+In many cases, this is not the primary technique that the attackers use for their ultimate objectives. For
+example, they may use the registry to gather information about services installed in the system. In this case,
+the Query Registry technique only shows the way that the attackers achieve certain objectives, while their
+primary technique is System Service Discovery.
+Examples of procedures
+Example 1
+During an attack, an Asian APT group gathered information about storage devices connected to a host by
+using the following registry queries:
+Technical details  |  Discovery TA0007  |  Query Registry T1012
+Example 2
+Contents 229
+In an attack targeting a government organization in Russia, an Asian APT group gathered information about
+installed office software from the registry:
+reg query hku
+reg query hku\S-1-5-21-[REDACTED]\Software\Microsoft\Office
+reg query hku\S-1-5-21-[REDACTED]\Software\Microsoft\Office\14.0
+reg query hku\S-1-5-21-[REDACTED]\Software\Microsoft\Office\14.0\Outlook\profiles
+reg query hku\S-1-5-21-[REDACTED]\Software\Microsoft\Office\14.0\Outlook
+reg query hku\S-1-5-21-[REDACTED]\Software\Microsoft\Office\14.0\Outlook\Preferences
+reg query hku\S-1-5-21-[REDACTED]\Software\Microsoft\Office\14.0\Outlook\UserInfo
+reg query hku\S-1-5-21-[REDACTED]\Software\Microsoft\Office\14.0\Outlook /s | find ""
+Detection
+A request for information from the registry is not necessarily an indicator of an attack or malicious activity.
+Therefore, detection of this technique should rely on non-typical patterns of process creation (for example,
+multiple reg.exe processes created by cmd.exe with queries to registry keys containing information about
+data storage devices) or queries to specific registry keys (for example, reg.exe starting with a command line
+containing HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services ).
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Account Discovery T1087
+Account Discovery T1087
+Basic description
+Contents 230
+Attackers gather information about local user accounts (T1087.001 Local Account), domain accounts
+(T1087.002 Domain Account), or cloud accounts (T1087.004 Cloud Account) and/or email addresses
+(T1087.003 Email Account). This data can be then used to more effectively search for account credentials
+(Credential Access), counteract Blue Team actions, and/or carry out other stages of an attack (for example,
+internal targeted phishing).
+In Windows, you can view local and domain users by using PowerShell cmdlets or other tools. The primary tool
+used for account discovery is net.exe (or net1.exe). The net.exe user command displays a list of local users on a
+host. If a specific username is entered after user, more detailed information about that user will be displayed. If
+the net.exe tool is started with the /domain switch, information about domain users is displayed.
+Tools and cmdlets used for gathering information about user accounts are presented in the table:
+Windows Utilities PowerShell
+Local Account
+net user
+net user 
+query user
+quser
+Get-LocalUser
+net user /domain
+Domain Account Get-ADUser
+net user  /domain
+Attackers can also use PowerShell cmdlets to get domain accounts in cloud infrastructures:
+• Get-MsolUser
+• Get-MsolRoleMember
+• Get-MsolServicePrincipal
+In addition to the described user discovery methods, there are also less obvious approaches. A few examples
+are presented below:
+1
+View the directory %SYSTEMDRIVE%\Users
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Account Discovery T1087
+2
+View the users in groups (net localgroup )
+3
+View the HKEY_USERS
+4
+Contents 231
+View the registry key HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion**
+ProfileList**
+Examples of procedures
+Example 1
+In one attack, an Asian APT group used the net.exe utility to gather information about local accounts:
+net user 
+net user
+Example 2
+Attackers used PowerShell cmdlets to get a list of accounts in a cloud-based Azure Active Directory:
+Get-MsolUser 
+Get-MsolUser -UserPrincipalName 
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Account Discovery T1087
+Detection
+Contents 232
+The Account Discovery technique can be detected by tracking process creation events and script execution
+events (PowerShell: 4103, 4104). Keep in mind that viewing the users in a system is a legitimate activity, and the
+environment should be carefully examined whenever correlation rules are triggered.
+You can also track LDAP requests to enumerate users in a domain, and configure alerts to be generated when
+a request threshold is reached.
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Local Account Discovery via Standard Windows Utilities
+
+
+Sigma-Generic-Domain Account Discovery via PowerShell
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  File and Directory Discovery T1083
+File and Directory Discovery T1083
+Basic description
+Contents 233
+The File and Directory Discovery T1083 technique involves searching and analyzing files and directories on a
+host. Threat actors use this technique to get information about the environment of the target system, identify
+valuable data, or find vulnerabilities in the system for further exploitation.
+Attackers may use the standard commands and tools of the operating system to search and view files and
+directories.
+For example, they may use the following commands in Windows:
+Windows cmd PowerShell
+dir, tree, find, findstr, xcopy, type, move, where,
+attrib, icacls
+Get-ChildItem, gci, dir, ls, Get-Content, gc, cat, type, SelectString, sls, Copy-Item, cp, copy, cpi, Get-Acl, Test-Path, JoinPath
+When employing this technique, attackers can obtain the following:
+
+
+Information about the files and directories residing on the system. This will help them understand how the
+system is set up and which data it contains.
+
+
+Contents of files storing valuable information, such as authentication data, confidential documents,
+passwords, and other secrets.
+
+
+Information from files and directories on system vulnerabilities that can be used to conduct further attacks.
+
+
+Examples of procedures
+This technique is most frequently combined with other techniques such as T1552 (Unsecured Credentials),
+T1119 (Automated Collection), and most techniques from the TA0007 (Discovery) tactic aided by ready-to-use
+scripts or tools.
+Parent_image_path: C:\Windows\system32\cmd.exe
+Command_line: “where /f /t /r \\C$\users\\ .doc .docx .xls .xlsx .ppt
+.pptx .pdf .amr .tif .tiff *.rtf | findstr pass”
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  File and Directory Discovery T1083
+Contents 234
+dir c:\users -File -Recurse -Include '.pdf', '.doc', '.docx', '.xls', '*.xlsx' | where LastWriteTime -gt $lte |
+sort LastWriteTime -Descending | %{$_.FullName}
+write-output $fp1 >> "$env:tmp\$hostname\path.txt"
+$fp1 | copy-item -Destination "$env:tmp\$hostname" -Force -ErrorAction SilentlyContinue
+Detection
+To detect this technique, you are advised to monitor process creation events containing discovery commands
+and track recursive searches through directories for specific file extensions.
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+SIGMA rules
+
+Sigma-Generic-Suspicious Wildcard Searching Data
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Group Policy Discovery T1615
+Group Policy Discovery T1615
+Basic description
+Contents 235
+Attackers gather information about group policies configured in a domain. Group policies are used for
+centralized configuration of endpoints in a domain. A large variety of settings can be configured through group
+policies, ranging from the user desktop wallpaper to the scripts that are run when the user logs in.
+Attackers aim to get relevant information about a domain, including centrally distributed postponed tasks,
+logon/logoff scripts, logs, access settings, and startup restrictions.
+There are several ways to get information about configured group policies, including by using system utilities
+and PowerShell cmdlets, and by directly reading the files of group policies from the SYSVOL folder.
+Examples of procedures
+In one of the attacks examined in the first part of this report, an Asian APT group directly read the contents of
+script files and group policy files by using cmd.exe:
+cmd.exe /C type
+\\SYSVOL\\Policies{REDACTED_GUID}\Machine\Preferences\
+ScheduledTasks\ScheduledTasks.xml
+cmd.exe /C type \\sysvol\run.bat
+Detection
+You can detect this technique by looking for process creation events and PowerShell script block execution
+events. In this case, pay close attention to the creation of shell processes showing patterns of reading from
+Sysvol and running gpresult. The typical patterns of group policy discovery in PowerShell cmdlets are specified
+in the SIGMA rule.
+Detection of this technique is complicated by the fact that administrators, support personnel, and other
+legitimate users may also view information about group policies. To reduce the number of false positives,
+you should carefully analyze the environment to determine what specifically occurred on the host when
+these commands were executed, which user account was used to run them, and whether or not the Security
+Operations department was informed about administrative or other legitimate operations being performed.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Group Policy Discovery T1615
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Group Policy Discovery via gpresult
+
+
+Sigma-Generic-Group Policy Discovery via PowerShell
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 236
+Technical details  |  Discovery TA0007  |  Network Service Discovery T1046
+Network Service Discovery T1046
+Basic description
+Contents 237
+APT actors often analyze a network to find vulnerable services. One of the ways to implement this technique
+is to view open ports on the local/remote host or network device. To detect open ports on machines in a
+network, attackers may use custom-written PowerShell scripts or tools and run them on infected systems.
+Another way to implement this technique is to use vulnerability scanners.
+Examples of procedures
+Below are some examples that we encountered when analyzing the incidents described in this report:
+C:\Windows\temp\1.ps1; Invoke-PortCheck -network 10.0.48 -port 22,80,445,443,3389,8080
+C:\Windows\System32\logfiles\portscan.exe -h  -p 22
+C:\Windows\System32\logfiles\portscan.exe -h  -p 25,110
+During their attacks, Asian APT groups also use utilities such as port scanner (MD5
+bb2ee5e6dfd4d12d31ec33c3fba84909, detected with the verdict Not-a-virus:HEUR:NetTool.Win32.Portscan.
+gen).
+This port scanner was detected in the following directories:
+
+
+С:\Users\Public\Downloads\
+
+
+C:\Windows\tasks\
+
+
+С:\Users\User\Downloads\
+
+
+С:\Windows\help\help
+
+
+under the following names:
+
+
+cp.exe
+
+
+dwm.exe
+
+
+nbtp.exe
+
+
+smit.exe
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Network Service Discovery T1046
+Detection
+Contents 238
+The technique known as Network Service Discovery T1046 can be detected by tracking process creation
+events. You should pay close attention to any running utilities or tools that were mentioned above, and analyze
+the command-line contents (with audit enabled). You can also utilize the capabilities of network traffic analysis
+(NTA) systems, which detect and show scans of hosts and ports of assets within the infrastructure.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Process Discovery T1057
+Process Discovery T1057
+Basic description
+Contents 239
+This technique allows attackers to obtain information about the processes running in the system. This
+information can help provide an overall picture of the work environment. For example, it can help determine if
+it's a developer's computer, a virtual workstation, or a server.
+The attacker can use this information to develop the ongoing strategy of their attack, analyze the running
+antivirus protection tools, and verify that malware is running.
+In Windows operating systems, you can get information about running processes by using the tasklist utility in
+the cmd command shell, by running the Get-Process cmdlet in PowerShell, and by using the WinAPI function
+CreateToolhelp32Snapshot. The ps command is used in UNIX operating systems, and the "show process"
+command can be used on network devices.
+Examples of procedures
+cmd.exe /c tasklist >$temp\temp.txt
+wmic process | find ""
+tasklist /v >> C:\Windows\Web\systeminfo.txtbb
+Detection
+The Process Discovery T1057 technique can be detected based on process creation events and the execution
+of PowerShell script blocks. You should pay close attention to any running utilities or tools that were mentioned
+above, and analyze the command-line contents (with audit enabled).
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Owner/User Discovery T1033
+System Owner/User Discovery T1033
+Basic description
+Contents 241
+Attackers can determine the name of an authorized user of the system, and get a list of all users of the system
+or the name of the system administrator. This information is necessary for collecting additional discovery
+data and further establishing persistence, gaining privileges, and moving through the infrastructure. This
+information can be gathered in a variety of ways because it resides in various places in the operating system.
+Useful information may include the rights to specific files/directories, information about sessions, the owner of
+running processes, or system event logs.
+To get this type of information, you can use various tools and commands such as whoami to get the name
+of the user in whose context a process is running. In macOS and Linux, the currently logged-in user can be
+identified by using the “w” and “who” commands. In macOS, the command “dscl . list /Users | grep -v '_' “ can
+also be used to enumerate user accounts. To access this information, you can also use environment variables
+such as %USERNAME% and $USER.
+On network devices, CLI commands such as "show users" and "show ssh" can also be used to display the
+current users.
+Examples of procedures
+Below are some examples that we encountered when analyzing the incidents described above:
+quser.exe whoami
+quser.exe quser
+$system32\cmd.exe /C whoami
+Detection
+One of the ways to detect the System Owner/User Discovery T1033 technique is to track process creation
+events and the execution of PowerShell script blocks. You should pay close attention to any running utilities or
+tools that were mentioned above, and analyze the command-line contents (with audit enabled).
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  System Owner/User Discovery T1033
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+SIGMA rules
+
+
+Sigma-Generic-Anomaly Parent Process whoami.exe
+
+
+Sigma-Generic-System Owner/User Discovery via PowerShell
+
+
+Sigma-Generic-System Owner/User Discovery via Standard Windows Utilities
+
+
+Sigma-Generic-System Owner/User Discovery via Suspicious CommandLine whoami
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 242
+Technical details  |  Lateral Movement TA0008  |  Remote Services T1021

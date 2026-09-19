@@ -1,0 +1,132 @@
+
+
+
+Sentence : WNFTPSCAN module
+Known variants:
+MD5 Compilation date (payload)
+8bcd66ce8904e87f5cdfc1ad5b071ccb 2012.09.05 07:02:32 (GMT)
+931391d484ff56b0a142f64ee47aff88 2012.09.05 07:02:32 (GMT)
+Summary
+The file is a PE DLL file without exported functions, compiled with Microsoft Visual Studio 2010.
+All the functionality is implemented in the DllMain function.
+This module is a simple non-interactive FTP client. It is used to go through all subdirectories on
+specified FTP server, using credentials specified in config/script stored in its resource section.
+The main purpose of this module is to make directory listings, copy files of interest (JPG, DOC,
+PPT, XLS, EMF, PDF) which are smaller than 1 MB and not older than specified date. The module
+is also capable of checking if remote FTP directories are available for write-access, but this
+functionality is currently not used.
+DllMain
+When loaded, the module retrieves its resource of type “BBB” and name “AAA”, and starts an
+internal plugin framework. The main function of the module is named “task_wnftpscan” and is
+registered in the framework. Then, it starts the framework main loop, effectively parsing the
+resource data and executing the list of actions encoded in the resource.
+The decoded resource data for the known sample can be represented as the following script:
+14/22
+SetOption(conn_a.VERSION_ID, [6] “51070”)
+SetOption(conn_a.VER_SESSION_ID, %removed%)
+SetOption(conn_a.SEND_DELAY_TIME, [5] “2000”)
+SetOption(conn_a.D_CONN, [65] “windowscheckupdate.com;windowsgenuine.com;windowsonlineupdate.com”)
+SetOption(conn_a.D_MODE, 0x0033)
+SetOption(conn_a.D_NAME, [15] “/cgi-bin/win/cab”)
+SetOption(conn_a.D_PASS, 0x00)
+SetOption(conn_a.D_RPRT, [3] “80”)
+SetOption(conn_a.D_SPRT, [3] “80”)
+SetOption(conn_a.D_USER, [21] %removed% )
+SetOption(conn_a.J_CONN, [65] “windowscheckupdate.com;windowsgenuine.com;windowsonlineupdate.com”)
+SetOption(conn_a.J_MODE, 0x0033)
+SetOption(conn_a.J_NAME, [15] “/cgi-bin/win/wcx”)
+SetOption(conn_a.J_PASS, 0x00)
+SetOption(conn_a.J_RPRT, [3] “80”)
+SetOption(conn_a.J_SPRT, [3] “80”)
+SetOption(conn_a.J_USER, [21] %removed% )
+SetOption(ftp_host, %removed% )
+SetOption(ftp_port, %removed% )
+SetOption(ftp_user, %removed% )
+SetOption(ftp_pass, %removed% )
+SetOption(ftp_crdir, “0” )
+SetOption(ftp_getlist, “1” )
+SetOption(ftp_max_file_size, “1000000” )
+SetOption(ftp_min_file_size, “10” )
+SetOption(ftp_file_time, “2012-10-30 00:00:00” )
+SetOption(ftp_file_ac_re)
+SetOption(ftp_ac_re, “..jpg” )
+SetOption(ftp_ac_re, “..jpeg” )
+SetOption(ftp_ac_re, “..doc” )
+SetOption(ftp_ac_re, “..docx” )
+SetOption(ftp_ac_re, “..txt” )
+SetOption(ftp_ac_re, “..xls” )
+SetOption(ftp_ac_re, “..xlsx” )
+SetOption(ftp_ac_re, “..ppt” )
+SetOption(ftp_ac_re, “..pptx” )
+SetOption(ftp_ac_re, “..emf” )
+SetOption(ftp_ac_re, “.*.pdf” )
+Call(task_wnftpscan)
+Main function (task_wnftpscan)
+The config defines parameters for the method task_wnftpscan, which uses WinInet library
+functions to connect to remote FTP server using parameters set in the config and iterate trough
+directories.
+15/22
+It uses PCRE library to check if remote file extensions. Config option ftp_getlist=1 makes the
+code log every directory listing. Option ftp_crdir is set to 0, which prevents the code from
+checking if write-access is available. If it was set to 1 in the config, then the module would try to
+create “tmp” subdirectory in every remote directory it goes in. There are max and min file size
+constraints, set to 1MB and 10 bytes respectively.
+Additionally there is a date constraint which is set to 2012-10-30, indicating the earliest date of
+interest. Seems that attackers have already fetched files before that date.
+When writing to the in-memory logs the module prints a banner “FtpClient V4.0”, which is
+probably an alternative name for the module or the code was reused from some other project. In
+the end of work it adds “WMFTPSCAN END” to the log.
+After collecting logs and fetching files in memory, the module compiles all data together,
+compresses using Zlib methods, encrypts, encodes with Base64 and uploads to one of the
+command and control servers specified in the config.
+This module doesn’t change registry, nor does it created any local files.
+After completing FTP directory scanning and file retrieval, the module sends logs and collected
+files to the C&C server. The connection options are retrieved from the configuration (resource):
+Option name Description
+D_CONN List of C&C domain names, separated by
+‘;’
+D_RPRT C&C server port
+D_NAME Relative URL to send request
+to
+The data send to the C&C server is compressed with Zlib and encrypted with a modified PKZIP
+stream cipher, and then it is Base64-encoded.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "8bcd66ce8904e87f5cdfc1ad5b071ccb", "type" : "IOCS"},
+        {"id": 2, "description": "931391d484ff56b0a142f64ee47aff88", "type" : "IOCS"},
+        {"id": 3, "description": "PE DLL file without exported functions, compiled with Microsoft Visual Studio 2010", "type" : "EXEF"},
+        {"id": 4, "description": "DllMain function", "type" : "TTPS"},
+        {"id": 5, "description": "resource of type “BBB” and name “AAA”", "type" : "DOCF"},
+        {"id": 6, "description": "task_wnftpscan", "type" : "TTPS"},
+        {"id": 7, "description": "WinInet library functions", "type" : "APPS"},
+        {"id": 8, "description": "PCRE library", "type" : "APPS"},
+        {"id": 9, "description": "Zlib methods", "type" : "TTPS"},
+        {"id": 10, "description": "modified PKZIP stream cipher", "type" : "TTPS"},
+        {"id": 11, "description": "Base64 encoding", "type" : "TTPS"},
+        {"id": 12, "description": "FtpClient V4.0 banner", "type" : "TAMP"},
+        {"id": 13, "description": "windowscheckupdate.com;windowsgenuine.com;windowsonlineupdate.com", "type" : "CCSH"},
+        {"id": 14, "description": "ftp_host", "type" : "CCSH"},
+        {"id": 15, "description": "C&C server", "type" : "CCSH"},
+        {"id": 16, "description": "/cgi-bin/win/cab", "type" : "URLS"},
+        {"id": 17, "description": "/cgi-bin/win/wcx", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "hash of"},
+        {"source": 2, "target": 3, "rel_name" : "hash of"},
+        {"source": 3, "target": 4, "rel_name" : "contains function"},
+        {"source": 4, "target": 5, "rel_name" : "uses resource"},
+        {"source": 4, "target": 6, "rel_name" : "calls function"},
+        {"source": 6, "target": 7, "rel_name" : "uses library functions"},
+        {"source": 6, "target": 8, "rel_name" : "uses library"},
+        {"source": 6, "target": 9, "rel_name" : "compresses with"},
+        {"source": 6, "target": 10, "rel_name" : "encrypts with"},
+        {"source": 6, "target": 11, "rel_name" : "encodes with"},
+        {"source": 6, "target": 12, "rel_name" : "prints banner"},
+        {"source": 3, "target": 13, "rel_name" : "connects to C&C domain names"},
+        {"source": 3, "target": 14, "rel_name" : "uses FTP host"},
+        {"source": 6, "target": 15, "rel_name" : "sends data to"},
+        {"source": 15, "target": 16, "rel_name" : "requests URL"},
+        {"source": 15, "target": 17, "rel_name" : "requests URL"}
+    ]
+}

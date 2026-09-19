@@ -1,0 +1,72 @@
+
+
+
+Sentence : 6.1 IndiaEcho-One
+IndiaEcho-One loads API functions from kernel32.dll, urlmon.dll, userenv.dll, advapi32.dll,
+ws2_32.dll, and wininet.dll . If the entirety of the 53 API functions that IndiaEcho-One attempts to load do not
+successfully load, IndiaEcho-One generates and executes a suicide script without performing any further operations. Of
+the 53 API functions that IndiaEcho-One loads, only 7 of the APIs are actively used by the malware; instead, the bulk of
+the API function calls made by IndiaEcho-One during its operation come from the same API functions loaded as part of
+the import table load operation when the binary is initially loaded into memory by Windows.
+IndiaEcho-One requires two temporary files for the process of extracting the payload components from itself. The
+developer(s) of IndiaEcho-One used the source code verbatim from SetupEx’s ExtractBinaryFile to generate these two
+filenames and ensure that there are no conflicting files with the same name within the victim’s %TEMP% directory (Figure
+6-1).
+```
+  GetTempPath(sizeof(szWinTmpPath), szWinTmpPath);
+  sprintf(szTmpBinFile1, "%s%08X", szWinTmpPath, GetTickCount());
+  sprintf(szTmpBinFile2, "%s%08X", szWinTmpPath, (DWORD)(GetTickCount()*12345)/8725);
+  DeleteFile(szTmpBinFile1);
+  DeleteFile(szTmpBinFile2);
+```
+Figure 6-1: SetupEx’s Temporary Filename Generation Code Snippet from ExtractBinaryFile
+IndiaEcho-One stores its payload within the SETUP\2000 resource entry of its own binary. The contents of the resource
+are written to the szTmpBinFile1 specified path and then read into memory for parsing. With the contents of the
+payload file now in memory, the file from which they originated (specified by szTmpBinFile1 ) is deleted. The first 268
+bytes of the file specify the number of individual drop files that exist within the payload along with a string. The SetupEx
+project specifies the format for the first 268 bytes as seen in Figure 6-2 (from the SetupEx source code).
+```
+  typedef struct tagSETUPINFO
+  {
+DWORD   dwFileCount;
+  char    szAutoExecFile[MAX _ PATH];
+  } SETUPINFO, FAR * LPSETUPINFO;
+```
+Figure 6-2: SetupEx’s SETUPINFO Structure Definition
+The szAutoExecFile string, while populated, has no purpose in IndiaEcho-One. dwFileCount specifies the number
+of individual drop files that exist within the payload memory structure. There are dwFileCount number of structures
+named EXTRACTFILEINFO that define the size, name, and timestamps of the individual files that follow the SETUPINFO
+structure. The EXTRACTFILEINFO structure is defined as seen in Figure 6-3 (from the SetupEx source code).
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "IndiaEcho-One", "type" : "EXEF"},
+        {"id": 2, "description": "kernel32.dll", "type" : "APPS"},
+        {"id": 3, "description": "urlmon.dll", "type" : "APPS"},
+        {"id": 4, "description": "userenv.dll", "type" : "APPS"},
+        {"id": 5, "description": "advapi32.dll", "type" : "APPS"},
+        {"id": 6, "description": "ws2_32.dll", "type" : "APPS"},
+        {"id": 7, "description": "wininet.dll", "type" : "APPS"},
+        {"id": 8, "description": "%TEMP% directory", "type" : "SYSP"},
+        {"id": 9, "description": "szTmpBinFile1", "type" : "DOCF"},
+        {"id": 10, "description": "szTmpBinFile2", "type" : "DOCF"},
+        {"id": 11, "description": "SETUP\2000 resource entry", "type" : "EXEF"},
+        {"id": 12, "description": "payload file", "type" : "DOCF"},
+        {"id": 13, "description": "SetupEx’s EXTRACTFILEINFO structure", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loads API from"},
+        {"source": 1, "target": 3, "rel_name" : "loads API from"},
+        {"source": 1, "target": 4, "rel_name" : "loads API from"},
+        {"source": 1, "target": 5, "rel_name" : "loads API from"},
+        {"source": 1, "target": 6, "rel_name" : "loads API from"},
+        {"source": 1, "target": 7, "rel_name" : "loads API from"},
+        {"source": 1, "target": 8, "rel_name" : "uses path of"},
+        {"source": 1, "target": 9, "rel_name" : "creates temporary file"},
+        {"source": 1, "target": 10, "rel_name" : "creates temporary file"},
+        {"source": 1, "target": 11, "rel_name" : "stores payload in"},
+        {"source": 11, "rel_name" : "writes to", "target": 9},
+        {"source": 9, "target": 12, "rel_name" : "contains"},
+        {"source": 12, "target": 1, "rel_name" : "parsed by"}
+    ]
+}

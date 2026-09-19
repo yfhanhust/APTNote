@@ -1,0 +1,118 @@
+
+
+
+Sentence : 15.5%
+CUSTOMERS AFFECTED
+79
+l [TA551]
+2021 Threat Detection Report
+Initial access
+TA551 gains initial access via macro-laden Microsoft Word documents delivered
+within a password-protected ZIP archive attached to a phishing email. Wrapping
+malicious attachments within password-protected archives enables these
+messages to bypass many mail protection filters by preventing direct analysis
+of the malicious files. This technique has become more common in recent
+years, as it increases the likelihood that the phishing message will make it to a
+user’s inbox. While TA551 varies the filenames for these ZIP archives, including
+targeted names tailored to the recipient’s organization, in many cases the name
+was either ~~request.zip~~ or ~~info.zip~~ ~~.~~
+The drop
+After opening the archive using a password provided within the email body, the
+recipient is presented with a Word document containing malicious macros. This
+is the dropper, designed to download additional malware from an adversary
+controlled site. This is a crucial point for organizations with a defense-in-depth
+strategy; many of our TA551 detections progressed no further than the opening
+of this malicious document. Why? Because organizations that have implemented
+a restrictive macro policy disrupt this attack by preventing the execution of
+malicious code. Such a policy is the primary distinction between the two-thirds
+of detections that stopped here and the one-third that progressed to the more
+impactful stages of the attack.
+The macro factor
+For a variety of reasons, many organizations and users do allow macros to
+run. In these cases, the macro will result in a network connection to attempt
+to download the next stage of the malware. Herein lies another example of
+a defense-in-depth strategy that may disrupt the attack: a web proxy that
+inspects network traffic may block access to the domain hosting the malicious
+payload. In some cases, we observed a network connection and creation of an
+empty file as a result of the attempted download, but because the malicious
+content was prevented from being downloaded, the attack chain ended there.
+DLL installation
+If a macro policy doesn’t prevent the code from running and a web proxy doesn’t
+prevent the next payload from being downloaded, a new malware family will
+likely execute. TA551 typically transitions from the initial access phase to
+malware execution via a DLL installer. There have been several variations in how
+the DLL installer payload was downloaded (see T1105: Ingress Tool Transfer). In
+80
+l [TA551]
+2021 Threat Detection Report
+some cases, Microsoft Word downloaded the file directly. Other cases leveraged
+renamed system utilities ~~certutil.zip~~ or ~~mshta.zip~~ to further distance the
+payload from the dropper. The downloaded DLL file typically masqueraded as
+well, using a variety of different non-DLL extensions to attempt to blend in—
+we’ve seen ~~.dat~~ ~~,~~ ~~.jpg~~ ~~,~~ ~~.pdf~~ ~~,~~ ~~.txt~~ ~~,~~ and even ~~.theme~~ file extensions.
+Despite these attempts to masquerade (and sometimes because of them), our
+detection analytics repeatedly triggered when the payload was executed. For
+most of 2020, this execution was done via ~~regsvr32.exe~~ ~~;~~ however, near the end
+of the year this was replaced with the use of ~~rundll32.exe~~ ~~.~~ While far from the
+only threat to use these T1218: Signed Binary Proxy Execution sub-techniques,
+it is no coincidence that T1218 was the second-most prevalent technique we
+observed in 2020.
+Payload
+Once the DLL installer runs, the next stage of malware begins. TA551 has
+delivered various payloads over the years:
+
+
+In 2019 and early 2020, Ursnif and Zloader were common payloads.
+
+
+In mid-2020, TA551 favored delivering Valak as a first-stage and IcedId as a
+
+
+second-stage payload for a few months
+
+By mid-July 2020, TA551 stopped using Valak and exclusively delivered
+
+IcedID (our fourth most prevalent threat) as its first-stage payload through
+the end of the year
+
+In January 2021, after a brief holiday hiatus, TA551 campaigns returned with
+
+a new notable payload: Qbot (our third most prevalent threat)
+Our understanding of this threat is still evolving, as is the relationship between
+TA551’s initial access and the post-exploitation goals of the later-stage malware.
+For another perspective on TA551, check out this post from Unit 42 and follow
+Brad Duncan on Twitter, who has helped us better understand this threat.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "TA551", "type" : "ACTO"},
+        {"id": 2, "description": "Microsoft Word document with macros", "type" : "DOCF"},
+        {"id": 3, "description": "Password-protected ZIP archive", "type" : "DOCF"},
+        {"id": 4, "description": "Phishing email", "type" : "MAIL"},
+        {"id": 5, "description": "request.zip or info.zip", "type" : "DOCF"},
+        {"id": 6, "description": "Adversary controlled site", "type" : "CCSH"},
+        {"id": 7, "description": "DLL installer payload", "type" : "EXEF"},
+        {"id": 8, "description": "certutil.zip or mshta.zip", "type" : "DOCF"},
+        {"id": 9, "description": ".dat, .jpg, .pdf, .txt, .theme file extensions", "type" : "TAMP"},
+        {"id": 10, "description": "regsvr32.exe", "type" : "EXEF"},
+        {"id": 11, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 12, "description": "Ursnif and Zloader malware", "type" : "APPS"},
+        {"id": 13, "description": "Valak malware", "type" : "APPS"},
+        {"id": 14, "description": "IcedID malware", "type" : "APPS"},
+        {"id": 15, "description": "Qbot malware", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "sends"},
+        {"source": 4, "target": 3, "rel_name" : "contains"},
+        {"source": 3, "target": 2, "rel_name" : "contains"},
+        {"source": 5, "target": 3, "rel_name" : "variant of"},
+        {"source": 6, "target": 7, "rel_name" : "hosts"},
+        {"source": 8, "target": 7, "rel_name" : "used to download"},
+        {"source": 10, "target": 7, "rel_name" : "executes via"},
+        {"source": 11, "target": 7, "rel_name" : "executes via"},
+        {"source": 7, "target": 12, "rel_name" : "delivers as payload"},
+        {"source": 7, "target": 13, "rel_name" : "delivered in mid-2020"},
+        {"source": 7, "target": 14, "rel_name" : "delivered from mid-July 2020 to end of year"},
+        {"source": 7, "target": 15, "rel_name" : "delivered in January 2021"}
+    ]
+}

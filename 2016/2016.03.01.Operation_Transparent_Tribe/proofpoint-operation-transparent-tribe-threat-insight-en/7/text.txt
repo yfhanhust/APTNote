@@ -1,0 +1,153 @@
+Technical Analysis
+MSIL/Crimson
+Crimson is modular in the sense that additional payloads downloaded by the main RAT module are often utilized to
+perform functions such as keylogging and browser credential theft. Crimson infections also typically occur in stages.
+Crimson’s first stage is a downloader component whose primary purpose is to download a more fully featured RAT,
+typically being the Crimson RAT component. The RAT component will then send system information to the C&C while the
+C&C will likely respond with additional module payloads.
+Crimson utilizes a custom TCP protocol for communicating to C&C (Fig. 27). Some of Crimson’s optionally downloaded
+modules have no C&C capability and instead rely on the RAT component for information exfiltration.
+Figure 27: Crimson custom TCP C&C protocol
+24
+Crimson-infected victims may be spied on by their attackers via invasive methods such as through their webcam,
+stealing email from Outlook, and recording their screen. Some Crimson RAT variants support at least 40 individual
+commands, while all the individual commands throughout the different versions of the RAT we researched are listed and
+described in Table 1.
+Table 1. MSIL/Crimson supported commands
+|Command|Description|
+|---|---|
+|afle|Exfltrate fle to C&C|
+|audio|Download legitimate NAudio library from C&C, save as NAudio.dll (notexecuted or added to startup). Used to record audio from microphone.|
+|autf|Add extensions to fle extensions list. Optionally search for fles in extensionslist and exfltrate|
+|autoa|Exfltrate all fles with an extension matching the fle extensions list|
+|capcam|Capture still from webcam|
+|camvdo|Continuous capture from webcam (stopped with_stops_ command)|
+|clping|set runTime to DateTime.Now|
+|clrklg|Stop keylogger and delete keylogs|
+|cnls|Stop upload, download, and screen capture|
+|cscreen|Single screenshot|
+|delt|Delete provided path/fle|
+|dirs|Send disk drives|
+|dotnet|Download URLDownload payload, save as dotnetframwork.exe and add tostartup via registry|
+|dowf|Retrieve fle from C&C|
+|dowr|Retrieve fle from C&C and execute|
+|email|Capable of retrieving email account name, number of emails, and exfiltrateemails from Outlook|
+|endpo|Kill process given PID|
+|fbind|Save fle from C&C in existing directory with .exe appended to name|
+|fle|Exfltrate fle to C&C|
+|flsz|Send fle info: CreateTimeUtc, File Size|
+|fdr|List folders in a directory|
+|fes|List fles in a directory|
+|ftyp|Add extensions to fle extensions list|
+|info|Send PC info (MAC, PC Name, User, LAN IP, OS, AV, missing modules…)|
+|klgs|Sometimes not implemented but command exists_(previous versions: enable_automatic exfltration of keylogs)|
+|listf|Search for fles with given extension(s)|
+|mesg|Pop-up “Alert” box with provided message|
+|msdlf|Click mouse|
+|muspo|Move mouse cursor|
+25
+|obind|Save file from C&C to directory with .exe appended to name|
+|---|---|
+|outdwn|Search for specifc email attachment with specifed name and exfltrate|
+|passl|Retrieve password logger logs|
+|procl|List processes|
+|runf|Execute command|
+|rupth|Retrieve malware’s run path|
+|savaf|Save fle from C&C|
+|scren|Capture screen continuously|
+|scrsz|set scrSize (utilized by scren and cscreen)|
+|secup|Download “secApp” payload from C&C, add to startup via registry|
+|sndpl|Download “pssApp” from C&C (browser credential stealer) and begin logexfltration|
+|sndps|Download “pssApp” from C&C (browser credential stealer)|
+|splitr|Split fle to provided number of splits, however we believe due toprogrammer error this functionality will not work as expected|
+|stops|Stop screen capture|
+|stsre|Get microphone audio|
+|sysky|Exfltrate keylogs to C&C|
+|systsk|Update module, likely_secApp_|
+|thumb|Get 200x150 GIF thumbnail of image|
+|uclntn|Sets RegKey: [variable]_ver to provided value, possibly used as a versionindicator|
+|udlt|Download “remvUser” payload from C&C, save as msupdate.exe, thenexecute it|
+|uklog|Download keylogger payload from C&C, save as win_services.exe then addto start up via registry|
+|updatc|Download controller/client/main RAT, save as servicesdefender.exe, thenexecute it|
+|updatu “OR” usbwrm|Download USB payload, save as udriver.exe then add to start up via registry|
+MSIL/Crimson Module Analysis
+As previously mentioned (and shown in the commands table), Crimson relies on additional module payloads to further
+enrich its feature set. These modules include keylogging, browser credential theft, automatic searching and stealing of
+files on removable drives, and two different payload update modules. Lastly, there appears to be a module referred to as
+“remvUser” that we have not been able to locate.
+URLDownload
+When executed, this module will first check for the existence of a registry key: HKCU\SOFTWARE\Microsoft\Windows_
+_CurrentVersion\last_edate . If the key does not exist then it will be created by the module and assigned a DateTime.Now
+string. This key is periodically checked for how many days have passed. Once the malware detects that at least 15 days
+have passed, a HTTP GET request is sent to a hardcoded location to retrieve a text file that should point to another HTTP
+location containing a final payload. For example, one analyzed sample (md5: 532013750ee3caac93a9972103761233)
+contained a hardcoded URL: hxxp://sahirlodhi[.]com/usr/api.txt. So far we have observed the attackers modify api.txt
+twice, first containing a link to: hxxp://bbmsync2727[.]com/upd/secure_scan.exe and then: hxxp://bbmsync2727[.]com/
+26
+ccmb/ssm.exe .
+In the module that we analyzed, the downloader logic was configured to request a file from a hardcoded URL: hxxp://
+sahirlodhi[.]com/usr/api.txt, which is likely a compromised website. The module expects that another URL will be stored
+at the previously retrieved URL, which initially we found to be the following: hxxp://bbmsync2727[.]com/upd/secure_scan.
+exe (md5: e456d6035e41962a4e49345b00393dcd). This payload is a MSIL/Crimson Downloader variant that, when
+executed, will begin the MSIL/Crimson lifecycle all over again by downloading a new controller/orchestrator.
+secApp
+The secApp that we analyzed (md5: ccfd8c384558c5a1e09350941faa08ab) contained functionality very similar to the
+initial downloader, however the initial beacon that is sent to the C&C was doupdat rather than updatc and was configured
+to connect to the same hardcoded C&C but to a different port. In addition to supporting the updatc command issued by
+the C&C, this module also supports the following commands: info, upsecs, and upmain. The info command supports the
+same functionality that the main RAT module supports while upsecs and upmain allows the controller to modify the path
+and application names for both the secApp and mainApp.
+Credential Stealer
+The pssApp is a password harvesting module that initially appears to support retrieving saved credentials from the
+Chrome, Firefox, and Opera browsers. Successfully harvested credentials are stored in a hardcoded location such as:
+%APPDATA%\Roaming\chrome\chrome_update . If no credentials are found, the credential log will simply contain “Not
+Found> > <” while an example of successfully stolen credentials are shown in Figure xx. In our very limited testing, this
+module was not able to retrieve passwords from Opera 35.0.2066.68 or Firefox 44.0.2 but was successful with Chrome
+48.0.2564.116 m.
+Figure 28: Successfully harvested credentials by the pssApp module
+Some samples (md5: 8a991eec65bd90f12450ee9dac0f286a) also appear to support the retrieval of credentials from
+Windows Live, FileZilla, Vitalwerks’ Dynamic Update Client (DUC), and Paltalk.
+Keylogger
+The keylogger module is a basic keylogger that stores keylogs in a plain text file (Fig. 29) in a hardcoded location. The
+module that we analyzed (md5: f18172d7bb8b98246cb3dbb0e9144731) was hardcoded to store keylogs in a file named
+“nvidia” in the following location: %APPDATA%\NVIDIA\ .
+Figure 29: Data stored in “nvidia” keylog
+27
+USB Module
+If either the updatu or usbwrm commands are issued, a USB drive module may be downloaded and set to execute
+on next startup. In the payload that we analyzed, the purpose only appears to search for potentially interesting files in
+removable storage and copy them to the local disk, likely so they may be exfiltrated at a later time. This payload may
+be configured with a set of file extensions (Fig 30) that are used to search for matching files on any USB drives. If any
+files are found, they are copied to a configured directory on the local disk while a running list of copied files are stored
+in a separate log so duplicate files are not copied. The anti-duplication method, however, only utilizes filenames so in
+the event that an already copied file is later modified, a newer copy will not be saved for exflitration. Despite one of the
+commands that may be used to download this payload may indicate this payload to contain “worm” functionality, that
+does not appear to be the case.
+remvUser
+During our research, we were not able to locate this module; so we are not sure what its functionality is. A best guess is
+that it could be a clean-up/implant removal utility.
+Python/Peppy
+Peppy is a Python-based RAT with the majority of its appearances having similarities or definite overlap with MSIL/
+Crimson appearances. Peppy communicates to its C&C over HTTP and utilizes SQLite for much of its internal
+functionality and tracking of exfiltrated files. The primary purpose of Peppy may be the automated exfiltration of
+potentially interesting files and keylogs. Once Peppy successfully communicates to its C&C, the keylogging and
+exfiltration of files using configurable search parameters begins (Fig. 30). Files are exfiltrated using HTTP POST requests
+(Fig. 31).
+Figure 30: Peppy configurable search parameters
+Figure 31: Peppy exfiltrating files
+28
+In addition to keylogging and the exfiltration of files, Peppy is also capable of accepting commands from its C&C to
+update itself, disable itself, exfiltrate a specific file, uninstall itself, execute a shell command, take screenshots, spawn a
+reverse shell, and download a remote file and execute it.
+In addition, we have discovered a simple Python-based downloader (md5: 82719f0f6237d3efb9dd67d95f842013) that
+was possibly written by the author(s) of Peppy based on code overlap between the downloader’s functionality and
+Peppy’s download_exec routine (Fig. 32, 33).
+Figure 32: Python downloader code
+Figure 33: Peppy download_exec routine and MyURLOpener class
+Conclusion
+As we described, there are clearly a number of common threads throughout these attacks. We have been able to
+connect campaigns, vectors, payloads, and, in some cases, infrastructure, but additional details continue to emerge.
+In the short term, this serves as an important reminder that wars are no longer waged solely on the ground or in the
+air. Rather, threat actors (whether from nation-states or private parties with interests in international conflicts) will use a
+variety of cyber tools to achieve their goals.
+29

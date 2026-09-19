@@ -1,0 +1,31 @@
+RPC backdoor
+Turla has developed a whole set of backdoors relying on the RPC protocol. These backdoors are used to perform
+lateral movement and take control of other machines in the local network without relying on an external C&C server.
+https://www.welivesecurity.com/2019/05/29/turla-powershell-usage/ 5/11
+5/30/2019 A dive into Turla PowerShell usage | WeLiveSecurity
+The features implemented are quite basic: file upload, file download and command execution via cmd.exe or
+PowerShell. However, the malware also supports the addition of plugins.
+This RPC backdoor is split into two components: a server and a client. An operator will use the client component to
+execute commands on another machine where the server component exists, as summarized in Figure 7.
+Figure 7. RPC backdoor usage
+For instance, the sample identified by the following SHA-1 hash
+EC54EF8D79BF30B63C5249AF7A8A3C652595B923 is a client version. This component opens the named pipe
+\pipe\atctl with the protocol sequence being “ncacn_np” via the RpcStringBindingComposeW function. The sample
+can then send commands by calling the NdrClientCall2 function. The exported procedure HandlerW, responsible for
+parsing the arguments, shows that it is also possible to try to impersonate an anonymous token or try to steal
+another’s process token just for the execution of a command.
+Its server counterpart does the heavy lifting and implements the different commands. It first checks if the registry key
+value HKLM\SYSTEM\CurrentControlSet\services\LanmanServer\Parameters\NullSessionPipes contains “atctl”. If
+so, the server sets the security descriptor on the pipe object to “S:(ML;;NW;;;S-1-16-0)” via the SetSecurityInfo
+function. This will make the pipe available to everyone (untrusted/anonymous integrity level).
+The following image shows the corresponding MIDL stub descriptor and the similar syntax and interface ID.
+Figure 8. RPC backdoor client’s MIDL on the left, server’s on the right
+As mentioned previously, this backdoor also supports loading plugins. The server creates a thread that searches for
+files matching the following pattern lPH*.dll. If such a file exists, it is loaded and its export function ModuleStart is
+called. Among the various plugins we have located so far, one is able to steal recent files and files from USB thumb
+drives.
+https://www.welivesecurity.com/2019/05/29/turla-powershell-usage/ 6/11
+5/30/2019 A dive into Turla PowerShell usage | WeLiveSecurity
+Many variants of this RPC backdoor are used in the wild. Among some of them, we have seen local proxies (using
+upnprpc as the endpoint and ncalrpc as the protocol sequence) and newer versions embedding PowerShellRunner
+to run scripts directly without using powershell.exe.

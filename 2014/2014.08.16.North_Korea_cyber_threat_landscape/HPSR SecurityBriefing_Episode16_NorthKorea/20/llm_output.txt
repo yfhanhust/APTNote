@@ -1,0 +1,136 @@
+
+
+
+Sentence : Appendix C – Analysis of DarkSeoul Dropper
+Dropper
+MD5: 9263e40d9823aecf9388b64de34eae54
+Also known as/detected as : ``
+
+Dropper-FDH (McAfee) ``
+
+Trojan:Win32/Dembr.A (Microsoft)
+Trojan.Jokra (Symantec)
+The dropper component that we examined was distributed as a UPX-packed binary.
+Installation
+When executed it creates the following files in the affected user’s %Temp% directory:
+
+alg.exe: A legitimate binary used to open SSH connections with remote servers
+
+MD5 e45cd9052dd3dd502685dfd9aa2575ca ``
+Size: 166,912 bytes
+
+conime.exe: A legitimate binary used to open SSH connections with remote servers
+
+MD5: 6a702342e8d9911bde134129542a045b ``
+Size: 153,600 bytes
+
+~pr1.tmp: Payload - A destructive bash script
+
+MD5: dc789dee20087c5e1552804492b042cd
+Size: 1,186 bytes Also known as/detected as:
+KillMBR-FBIA (McAfee)
+Trojan:SH/Kofornix.A (Microsoft)
+Trojan.Jokra (Symantec)
+AgentBase.exe: Payload - Win32 wiper component (see details below)
+MD5: db4bbdc36a78a8807ad9b15a562515c4 ``
+Size: 24,576 ``
+Payload—attempts to connect to remote servers and upload a destructive bash script ``
+After determining the location of user profile directories on the affected computer, the malware
+searches these directories for configuration files and directories that may be associated with the
+connection manager clients mRemote and SecureCRT. ``
+
+
+mRemote—an open source tool for centrally managing remote server connections using a GUI
+(Kevin Kline, 2008).69 This tool is no longer being actively developed or supported. ``
+
+
+SecureCRT—a commercial SSH and Telnet client by VanDyke Software. ``
+
+
+If an mRemote installation is located, the dropper reads the configuration file and checks if there’s
+a NODE that is defined with “Username=root”, “Protocol=SSH”, and a password that is not blank. If
+those conditions are satisfied it extracts the information. The password is decrypted after being
+extracted. ``
+If a SecureCRT installation is located, the dropper extracts information from sessions that have
+Username=root, Protocol=SSH and a saved password. If these conditions are satisfied, the
+username, hostname, port, and password are extracted. The password is then decrypted. ``
+After extracting these connection and server details, the dropper uses the previously dropped alg.
+exe and conime.exe to attempt to connect remote servers, upload and run the bash script
+~pr1.tmp. ``
+The bash script initially checks which UNIX it is running on (of HP-UX, SunOS, Linux, or AIX) and
+then attempts to wipe the /kernel, /usr /etc and /home directories, thus rendering the machine
+inoperative.
+Win32 Wiper component
+When the AgentBase.exe component is executed, it first attempts to stop the following processes,
+presumably in order to evade detection:
+
+
+pasvc.exe – policy agent from AhnLab
+
+
+clisvc.exe – ViRobot ISMS from Hauri
+
+
+It then enumerates all physical drives and overwrites the first 512 bytes with the string:
+“princpes”, effectively destroying the MBR (master boot record) of the affected drive.
+It continues to look for removable and fixed drives, locates the root directory on these drives, and
+then attempts to delete all files and folders in this directory.
+Finally, the affected computer is shut down and rebooted, although if the wiping mechanisms
+were successful then the machine will not be able to boot.
+Learn more at
+hp.com/go/hpsr
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Dropper", "type" : "EXEF"},
+        {"id": 2, "description": "9263e40d9823aecf9388b64de34eae54", "type" : "IOCS"},
+        {"id": 3, "description": "%Temp% directory", "type" : "SYSP"},
+        {"id": 4, "description": "alg.exe", "type" : "EXEF"},
+        {"id": 5, "description": "e45cd9052dd3dd502685dfd9aa2575ca", "type" : "IOCS"},
+        {"id": 6, "description": "conime.exe", "type" : "EXEF"},
+        {"id": 7, "description": "6a702342e8d9911bde134129542a045b", "type" : "IOCS"},
+        {"id": 8, "description": "~pr1.tmp", "type" : "DOCF"},
+        {"id": 9, "description": "dc789dee20087c5e1552804492b042cd", "type" : "IOCS"},
+        {"id": 10, "description": "AgentBase.exe", "type" : "EXEF"},
+        {"id": 11, "description": "db4bbdc36a78a8807ad9b15a562515c4", "type" : "IOCS"},
+        {"id": 12, "description": "mRemote", "type" : "APPS"},
+        {"id": 13, "description": "SecureCRT", "type" : "APPS"},
+        {"id": 14, "description": "pasvc.exe", "type" : "EXEF"},
+        {"id": 15, "description": "clisvc.exe", "type" : "EXEF"},
+        {"id": 16, "description": "/kernel", "type" : "SYSP"},
+        {"id": 17, "description": "/usr", "type" : "SYSP"},
+        {"id": 18, "description": "/etc", "type" : "SYSP"},
+        {"id": 19, "description": "/home", "type" : "SYSP"},
+        {"id": 20, "description": "princpes", "type" : "TAMP"},
+        {"id": 21, "description": "HP-UX", "type" : "OPPS"},
+        {"id": 22, "description": "SunOS", "type" : "OPPS"},
+        {"id": 23, "description": "Linux", "type" : "OPPS"},
+        {"id": 24, "description": "AIX", "type" : "OPPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has MD5 hash"},
+        {"source": 1, "target": 3, "rel_name" : "creates in"},
+        {"source": 4, "target": 5, "rel_name" : "has MD5 hash"},
+        {"source": 6, "target": 7, "rel_name" : "has MD5 hash"},
+        {"source": 8, "target": 9, "rel_name" : "has MD5 hash"},
+        {"source": 10, "target": 11, "rel_name" : "has MD5 hash"},
+        {"source": 1, "target": 4, "rel_name" : "drops and uses"},
+        {"source": 1, "target": 6, "rel_name" : "drops and uses"},
+        {"source": 1, "target": 8, "rel_name" : "drops and runs"},
+        {"source": 1, "target": 10, "rel_name" : "drops and executes"},
+        {"source": 4, "target": 6, "rel_name" : "used with"},
+        {"source": 12, "target": 1, "rel_name" : "searches for configuration files of"},
+        {"source": 13, "target": 1, "rel_name" : "searches for configuration files of"},
+        {"source": 10, "target": 14, "rel_name" : "stops process"},
+        {"source": 10, "target": 15, "rel_name" : "stops process"},
+        {"source": 8, "target": 21, "rel_name" : "checks if running on"},
+        {"source": 8, "target": 22, "rel_name" : "checks if running on"},
+        {"source": 8, "target": 23, "rel_name" : "checks if running on"},
+        {"source": 8, "target": 24, "rel_name" : "checks if running on"},
+        {"source": 8, "target": 16, "rel_name" : "wipes directory"},
+        {"source": 8, "target": 17, "rel_name" : "wipes directory"},
+        {"source": 8, "target": 18, "rel_name" : "wipes directory"},
+        {"source": 8, "target": 19, "rel_name" : "wipes directory"},
+        {"source": 10, "target": 20, "rel_name" : "overwrites MBR with string"}
+    ]
+}

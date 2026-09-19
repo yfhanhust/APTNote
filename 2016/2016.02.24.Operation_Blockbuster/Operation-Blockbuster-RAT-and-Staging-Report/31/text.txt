@@ -1,0 +1,60 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 30
+Observed as the payload of IndiaEcho and loaded by LimaBravo, RomeoGolf is a RAT with some similarity to the families
+derived from Romeo-CoreOne (see Section 2) and as RomeoFoxtrot-Two (see Section 8) in terms of the commands
+supported. Structurally, however, RomeoGolf is a family unto its own.
+While capable of operating as a service DLL, the core functionality of RomeoGolf is activated out of the DllMain, not
+the ServiceMain, export. Upon activation, RomeoGolf spawns a new thread that attempts to open a handle to the
+RomeoGolf binary and then calls the LockFile API function with that handle in order to prevent disruption of the
+RomeoGolf executable. The thread then goes into an infinite sleep.
+RomeoGolf is heavily object oriented and written in C++. With the exception of the file locking thread just mentioned,
+all of RomeoGolf’s functionality is contained within a single class. Within the class are two additional classes: a class for
+network communication to and from the C2 server and a class containing the list of queued commands.
+RomeoGolf’s class contains a primary member function responsible for its operation (a function Novetta identifies as the
+Execute function). When the Execute function is called, it enters an infinite loop where the following tasks occur:
+
+The configuration file ( crkdf32.inf ) is loaded into memory. Failure to load the configuration results in a
+
+one-minute delay before another attempt is made. RomeoGolf does not continue until the configuration file is loaded
+successfully, and instead continues the cycle of attempted loads and sleeps.
+
+The unique identifier for the victim’s machine is checked within the configuration and, if found to be 0, is generated
+
+by using 4 calls of the rand () function to generate the necessary 64-bits of the identifier.
+
+A flag within the configuration is checked to determine if all the files and drives of the victim’s machine have been
+
+enumerated, and, if not, a new thread is generated (along with a signaling event) to perform the task.
+
+A flag within the configuration is checked to determine if the victim’s Terminal Service’s has been enumerated
+
+for active users, and, if not, a new thread is generated (along with a signaling event) to perform the task. The
+enumeration lasts until at least one user logs in through either Terminal Services or the local console.
+
+The victim’s system information is gathered including the machine’s name, the victim’s username, the operating system,
+
+location information, the processor type, available memory size, and the IP addresses associated with the machine.
+
+A C2 server address is randomly selected from the configuration and an attempt to connect to the C2 server is made.
+
+Up to 10 attempts to contact a C2 server are made before the operation fails. Between each attempt to contact a C2
+server, RomeoGolf sleeps for 1 minute.
+
+If a successful connection is made to a C2 server, a new thread is generated that sends a heartbeat signal to the C2
+
+server every 1 minute. If after 10 attempts no connections are successful, RomeoGolf sleeps for a preconfigured
+period of time (measured in minutes) before looping back to Task #1.
+
+
+RomeoGolf receives commands from the C2 server and executes the appropriate handler for each command.
+
+
+After the command processing concludes, the connection to the C2 server is terminated, and any queued commands
+
+
+are purged.
+
+The last contact time within the configuration is updated, indicating the last time the malware contacted a C2
+
+server, and the configuration is saved to disk.
+
+Loops back to Task #1.

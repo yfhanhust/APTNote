@@ -1,0 +1,66 @@
+Step Four - RAT Component
+The main part of “Matryoshka” is a remote administration tool library. It is designed to exist in
+the infected computer memory and is never written to the computer's physical disk itself.
+When we “dumped” the RAT to the disk, some of the AV tools detect it with the following
+signatures:
+Trojan.Jectin identified on April 9 [th] 2015 by Symantec [8] .
+Troj/Agent-AMEY that was identified on March 25 [th] 2015 by Sophos [9] .
+This, however, is not the case while the RAT is injected into a legitimate host process.
+Runtime API Address Resolution
+Since the library is injected into memory, the imported functions must be resolved in runtime, to
+solve this problem the CopyKittens group used a method called “Runtime API Address
+Resolution” [10] using the LoadLibrary and GetProcAddress APIs. In order to evade static virus
+scanners in new version of the RAT, the attackers obfuscated the names of the API functions. They
+resolve them in runtime using a simple substitute cipher combined with Base64 encoding. The
+same trick was used in the Reflective Loader component. We retrieved the original functions
+names as plaintext strings by using a simple Python script. A list of decrypted API strings and the
+python code can be found in the Appendix and Minerva Labs Research GitHub repository [11] .
+Installation and Persistence
+Since the RAT library was built to run from the memory of a host process, it relies on the loader
+to survive system restart. The first time the RAT runs, it will copy the reflective loader, named
+“kernel.dll” to one of Windows’ common folders and will create a registry key named {0355F5D0467C-30E9-894C-C2FAEF522A13} under “SOFTWARE\Microsoft\Windows\CurrentVersion\Run”
+with the value of “C:\Windows\System32\rundll32.exe "\%LOCATION%\kernel.dll" _dec” to re
+run the injection routine after each boot.
+In addition, to make sure the RAT always runs (since host process might be closed or crash), the
+RAT creates a task in the Windows task scheduler named “Microsoft Boost Kernel Optimization”
+which will re-run the injection routine every 20 minutes. The task scheduler method has also been
+added to the newest version of the RAT.
+8 http://www.symantec.com/security_response/earthlink_writeup.jsp?docid=2015-040923-3643-99
+9 https://www.sophos.com/en-us/threat-center/threat-analyses/viruses-and-spyware/Troj~Agent-
+      [AMEY/detailed](https://www.sophos.com/en-us/threat-center/threat-analyses/viruses-and-spyware/Troj~Agent-AMEY/detailed-analysis.aspx) analysis.aspx
+
+10
+https://www.symantec.com/content/en/us/enterprise/media/security_response/whitepapers/a_museu
+m_of_api_obfuscation_on_win32.pdf
+11 https://github.com/MinervaLabsResearch/BlogPosts
+10
+This makes the RAT unstable as multiple instances may be executed simultaneously on the same
+host machine causing unexpected behavior. To reduce this risk, the authors have used a global
+mutex.
+DNS Command & Control
+The RAT uses DNS protocol to communicate with the attackers C2 server.
+The DNS queries are constructed from the following sections:
+
+
+C2 domain name
+
+
+The unique ID of the infected machine (computer name + HD serial
+
+
+Random string
+
+
+Data to be transmitted.
+
+
+To make traffic analysis and detection more difficult, the group uses a substitute cipher to
+obfuscate the data before it is sent to the C2:
+11
+Another way used to disguise the DNS traffic and lower the suspicions of SOC and NOC teams was
+the use IPs from address blocks of Microsoft and McAfee in the C2 responses:
+Once a command is received from the C2 server in the DNS response, the RAT will translate it to
+a corresponding command.
+For example, when the C2 sends a DNS response with the IP address 134.170.185.13, the RAT will
+try and steal outlook passwords.
+12

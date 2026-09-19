@@ -1,0 +1,38 @@
+PCC_PROXY
+The PCC_PROXY object provides the platform for a tunneling network traffic to and from the
+client to a specific endpoint (or endpoints if multiple tunnels are activated by the client). Derived
+on the PCC_BASEMOD class, the PCC_PROXY class performs very little network tunneling within
+the CommLoop interactive PCC_PROXY::ProcessPacket and
+PCC_PROXY::ReadWaitingData member functions. The PCC_PROXY::ProcessPacket
+member function queues incoming PCC_PROXY packets into a received queue while
+PCC_PROXY::ReadWaitingData returns packets from a transmit queue, with the
+directionality from the perspective of the server variant. The core of the PCC_PROXY ’s network
+tunneling comes from a spawned processing thread ( PCC_PROXY::MainThread ) that is
+generated when the PCC_PROXY object is instantiated.
+The PCC_PROXY::MainThread function consist an infinite loop that only terminates when the
+PCC_PROXY::fShutdown flag is set. Otherwise, the loop will inspect another internal flag
+( PCC_PROXY::fNetworkEnabled ) to determine if the network tunneling is currently active. If
+the PCC_PROXY::fNetworkEnabled flag is set to false, then tunneling is disabled but
+command processing continues.
+It is possible to have more than one tunnel active at any given time. In order to firewall tunnels
+from each other over the backbone of the server variant’s command channel, each tunnel is
+assigned a specific channel identifier. This allows the client to specify which specific tunnel data
+is transmitted to as well as telling the client which tunnel is returning data. If the
+PCC_PROXY::fNetworkEnabled flag is set to true, PRC_PROXY::MainThread will loop
+through all active channels, perform a select on the socket connected to the endpoint and -- if
+the select indicates that there is data waiting on a particular socket -- the data is read. A new
+PCC_PROXY based packet is then generated and the packet is queued for delivery to the client.
+After processing each of the channels for new data, PCC_PROXY::MainThread processes
+incoming command packets from the client (an operation usually handled by the
+PCC_BASEMOD::ProcessPacket function). Packets belonging to the PCC_PROXY subsystem
+have a common header, much like the other PCC_BASEMOD derived classes. To this end, the
+PCC_PROXY packets have the same packet header as the PCCFilePacketHeader packet
+header.
+The PCC_PROXY supports five commands:
+|dwCommandType Functionality|Col2|
+|---|---|
+|0x04|Connect to Specified Endpoint (Creates New Channel)|
+|0x08|Send Data to Endpoint|
+|0x0C|Terminate Channel|
+|0x10|Enable Network Tunneling (PCC_PROXY::fNetworkEnabledsettotrue)|
+|0x14|Disable Network Tunneling (PCC_PROXY::fNetworkEnabledsettofalse)|

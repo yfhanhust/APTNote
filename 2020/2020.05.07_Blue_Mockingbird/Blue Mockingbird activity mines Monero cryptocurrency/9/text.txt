@@ -1,0 +1,73 @@
+Take action
+https://redcanary.com/blog/blue-mockingbird-cryptominer/ 5/11
+5/26/2020 Blue Mockingbird activity mines Monero cryptocurrency
+We’ve scratched the surface on the XMRIG DLL payload, but we can dive deeper to understand more details (T1496:
+Resource Hijacking). First, the export fackaaxv has been consistently present in the DLLs. Next, each DLL also contains a
+PE binary section _RANDOMX . This section appears unique to cryptocurrency-mining payloads because it houses the
+RandomX proof of work algorithm that XMRIG may use. The network connections made for mining usually involve a
+nanopool[.]org domain.
+We made the assessment that the payload was actually XMRIG based on several pieces of evidence. First, there were
+multiple references to “xmrig”, including version numbers, in the binary strings. These were accompanied by cleartext
+references to command-line options common to XMRIG:
+```
+        coin
+    donate-level
+
+    max-cpu-usage
+
+    cpu-priority
+
+    log-file
+
+```
+The final piece of evidence came from a text log written to disk by some versions of the miner DLL. In the text logs,
+identifying information for XMRIG was output alongside hardware details for the victim system.
+```
+                      * ABOUT    XMRig/5.3.0 MSVC/2015
+                  * LIBS    libuv/1.31.0 OpenSSL/1.1.1c
+
+                  hwloc/2.1.0
+
+                  * HUGE PAGES    unavailable
+
+                  * 1GB PAGES    unavailable
+
+```
+https://redcanary.com/blog/blue-mockingbird-cryptominer/ 6/11
+5/26/2020 Blue Mockingbird activity mines Monero cryptocurrency
+```
+                      * CPU    Intel(R) Core(TM) i7-4770 CPU @
+                  3.40GHz (1) x64 AES
+
+                  L2:0.3 MB L3:8.0 MB 1C/1T NUMA:1
+
+                  * MEMORY    1.3/4.0 GB (33%)
+
+                  * DONATE    0%
+
+                  * POOL #1    xmr-au1.nanopool.org:14433 coin
+
+                  monero
+
+                  * COMMANDS    'h' hashrate, 'p' pause, 'r'
+
+                  resume
+
+                  * OPENCL    disabled
+
+                  * CUDA    disabled
+
+                  [2020-04-16 08:30:26.753] [xmr
+                  au1.nanopool.org:14433] DNS error: "unknown node
+
+                  or service"
+
+```
+Each payload comes compiled with a standard list of commonly used Monero-mining domains alongside a Monero wallet
+address. So far, we’ve identified two wallet addresses used by Blue Mockingbird that are in active circulation. Due to the
+private nature of Monero, we cannot see the balance of these wallets to estimate their success. We’ve seen mining payloads
+compiled as early as December 2019 and as recently as late April 2020. In each compilation, one of the two wallets has
+been embedded into the binary. The wallet addresses could be extracted from the binaries easily in earlier versions using a
+simple strings command. In newer versions, the string is obfuscated.
+Even with string obfuscation in the binary, you can observe the wallet addresses in network tra�ic. During execution of the
+miner DLLs, unique information is passed in cleartext across TCP streams:

@@ -1,0 +1,90 @@
+
+
+
+Sentence : Forcepoint ™ Security Labs™ | Special Investigations
+Keylogger . When BADNEWS first starts it will spawn a new thread to log keystrokes to a file. The header
+of the file contains the marker " KLTNM: " and the system language. The rest of the file contains information
+about the active window and the keys pressed:
+```
+KLTNM:  崐ခခ00000409
+2016/06/01 09:42:18 - {Window Name}
+[SHIFT]c[SHIFT];
+```
+The malware will only send the keylog file to the C&C when instructed to by the " kl " command.
+Document Crawler . When BADNEWS first starts it will spawn a new thread to check all local & mapped
+drives for document files with the following extensions:
+
+
+doc
+
+
+docx
+
+
+pdf
+
+
+ppt
+
+
+pptx
+
+
+txt
+
+
+Any documents under 15MB will be copied to the user's %temp%\SMB **_ folder. The malware will only send
+these documents to the C&C when instructed to by the "** _ustr " command.
+Window Message Processor . BADNEWS will also check for any new hard-drives that are added to the
+machine such as USB devices. It does this in an interesting way by creating a window and listening for the
+WM_DEVICECHANGE window message:
+```
+ LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+ {
+ // Window message 23 is defined by the malware as a code to disable the document crawler
+if ( Msg > WM_QUERYENDSESSION )
+ {
+ if ( Msg == WM_ENDSESSION )
+ return 23;
+// Has a new device been added to the machine? If so, try to find documents
+ if ( Msg == WM_DEVICECHANGE )
+ CrawlDrivesForDocuments();
+}
+else
+{
+ switch ( Msg )
+ {
+ case WM_QUERYENDSESSION:
+ return 23;
+case WM_CREATE:
+ return 0;
+case WM_DESTROY:
+ return 23;
+}
+}
+ return DefWindowProcW(hWnd, Msg, wParam, lParam);
+ }
+```
+Figure 25 - Device Change Listener
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BADNEWS", "type" : "ACTO"},
+        {"id": 2, "description": "Keylogger thread", "type" : "TTPS"},
+        {"id": 3, "description": "Keystroke log file", "type" : "DOCF"},
+        {"id": 4, "description": "C&C server", "type" : "CCSH"},
+        {"id": 5, "description": "%temp%\\SMB folder", "type" : "SYSP"},
+        {"id": 6, "description": "Document files (doc, docx, pdf, ppt, pptx, txt)", "type" : "DOCF"},
+        {"id": 7, "description": "USB devices", "type" : "USB"},
+        {"id": 8, "description": "Window message WM_DEVICECHANGE", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "spawns"},
+        {"source": 2, "target": 3, "rel_name" : "logs to"},
+        {"source": 3, "target": 4, "rel_name" : "sends to (when instructed)"},
+        {"source": 1, "target": 5, "rel_name" : "copies documents to"},
+        {"source": 6, "target": 5, "rel_name" : "are copied to"},
+        {"source": 1, "target": 8, "rel_name" : "listens for"},
+        {"source": 8, "target": 7, "rel_name" : "detects addition of"}
+    ]
+}

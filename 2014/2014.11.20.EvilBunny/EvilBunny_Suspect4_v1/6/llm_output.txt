@@ -1,0 +1,121 @@
+
+
+
+Sentence : 1. THE BUNNY DROPPER
+Suspect #4 is the fourth out of a row of malware samples, which are believed to stem from
+the same malicious actor. Insights on the campaign were first presented at Hack.lu
+Conference 2014 in Luxembourg [8]. The name 'EvilBunny' is derived from a link to debug
+information embedded in the dropper binary of suspect #4. The path to the associated
+.pdb-file contains the name of the project and sub project, namely 'bunny 2.3.2' and
+'Transporter2'.
+Illustration 1: IDA Pro's request for the associated .pdb-file
+EvilBunny has been seen spreading through a malicious PDF document, exploiting CVE2011-4369 on 20 [th] of December 2011 [1]. The exploit would download the bunny dropper
+and install suspect #4 on the infected system. Both, dropper and payload were compiled
+on 25 [th] of October 2011, while CVE-2011-4369 was released only on 16 [th] of December. It
+is unclear as of when the attacks started; although, clearly, either the attackers adopted
+the vulnerability within 4 days or the attacks were performed using an AdobeReader 0-day.
+The functionality of the dropper can be summarized in the following steps:
+
+
+Sandbox check and anti virus product enumeration
+
+
+Dropping payload 'netmgr.exe'
+
+
+Creating a registry key for persistence
+
+
+Creating a registry key for deletion of the dropper
+
+
+Searching for a sandbox environment, the malware takes a number of simple steps to
+verify. It tests the module file name to see if it is less than 5 characters long or if it contains
+either of the four strings 'klavme', 'myapp', 'TESTAPP' or 'afyjevmv.exe'. Also, it verifies if
+less than 15 processes are running in the environment, using the API call EnumProcesses.
+page | 4
+In case any of the conditions is met execution will abort. Up to the time of writing it remains
+unclear which environment the mentioned strings aim to identify, if any.
+Accessing the systems WMI
+(Windows Management
+Interface) the malware queries
+the installed AntiVirus software
+by issuing 'SELECT * FROM
+AntiVirusProduct'. More
+specifically, the malware is
+interested in the data fields
+'productUptoDate',
+'VersionNumber', 'DisplayName'
+and 'productState'. The Illustration 2: The process count as environment check
+information about AntiVirus provided by WMI differs between Windows versions, so the
+requests address different namespaces, 'ROOT\SecurityCenter' for WindowsXP and
+'ROOT\SecurityCenter2' for Windows Vista and newer versions.
+Names of AntiVirus products are represented as hard coded SHA-256 hashes, namely the
+following:
+d4634c9d57c06983e1d2d6dc92e74e6103c132a97f8dc3e7158fa89420647ec3
+4db3801a45802041baa44334303e0498c2640cd5dfd6892545487bf7c8c9219f
+bfe74ca464620a62f11b8c47a3778bb132d84fecd90ce7c75817970f2eeeca51 Antivirus
+443b6fb65fa57d57ee3113e48e9b4ed1db2921d5352e27fa85064cd60553c3ff BitDefender
+e1625a7f2f6947ea8e9328e66562a8b255bc4d5721d427f943002bb2b9fc5645
+588730213eb6ace35caadcb651217bfbde3f615d94a9cca41a31ee9fa09b186c
+f1761a5e3856dceb3e14d4555af92d3d1ac47604841f69fc72328b53ab45ca56 Kaspersky
+Only three of the seven hashes were identified. If any of the indicated products is installed
+and active on the machine execution will abort.
+The dropper comes with its payload attached in the resource section. The resource
+RCData contains the entire netmgr.exe binary; alleged suspect #4. The binary is dropped
+as netmgr.exe, either located in %APPDATA%\Perf Manager\ or %WINDIR%\msapps.
+The final directory location depends whether the dropper is running with administrative
+privileges or not.
+Interestingly, the dropper also changes the creation time stamp of the newly created binary
+to time stamp of the system executable explorer.exe. This serves to avoid raising
+suspicion of a forensic analysts or tools.
+As a means of persistence the dropper creates an entry under [HKLM|
+HKCU]...\CurrentVersion\Run which points to the dropped netmgr.exe binary. This
+page | 5
+ensures that netmgr.exe will be executed every time the system boots. Furthermore, the
+dropper generates another entry in the Windows registry, under [HKLM|
+HKCU]\Software\Microsoft\IPSec. This entry is named 'isakmpAutoNegociate' and points
+to the dropper binary. This key will be requested by netmgr.exe later to locate the dropper
+binary and delete it.
+The naming of the key for cleanup of the dropper is chosen to confuse analysts, although
+the name is clearly misspelled.
+Another interesting side fact is that the dropper does not start the dropped malware,
+neither does it contain code which could even do so. This implies, the final infection stage
+does not start unless the infected machine is rebooted. Also, the dropper binary will not be
+deleted in the meanwhile.
+page | 6
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Suspect #4", "type" : "DOCF"},
+        {"id": 2, "description": "EvilBunny", "type" : "APPS"},
+        {"id": 3, "description": ".pdb-file", "type" : "DOCF"},
+        {"id": 4, "description": "bunny 2.3.2", "type" : "TAMP"},
+        {"id": 5, "description": "Transporter2", "type" : "TAMP"},
+        {"id": 6, "description": "Malicious PDF document", "type" : "DOCF"},
+        {"id": 7, "description": "CVE-2011-4369", "type" : "CVES"},
+        {"id": 8, "description": "bunny dropper", "type" : "EXEF"},
+        {"id": 9, "description": "netmgr.exe", "type" : "EXEF"},
+        {"id": 10, "description": "%APPDATA%\\Perf Manager\\", "type" : "SYSP"},
+        {"id": 11, "description": "%WINDIR%\\msapps", "type" : "SYSP"},
+        {"id": 12, "description": "[HKLM|HKCU]...\\CurrentVersion\\Run", "type" : "REGI"},
+        {"id": 13, "description": "[HKLM|HKCU]\\Software\\Microsoft\\IPSec", "type" : "REGI"},
+        {"id": 14, "description": "isakmpAutoNegociate", "type" : "REGI"},
+        {"id": 15, "description": "explorer.exe", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "contains"},
+        {"source": 3, "target": 5, "rel_name" : "contains"},
+        {"source": 6, "target": 7, "rel_name" : "exploits"},
+        {"source": 6, "target": 8, "rel_name" : "downloads"},
+        {"source": 8, "target": 9, "rel_name" : "drops"},
+        {"source": 8, "target": 12, "rel_name" : "creates in"},
+        {"source": 8, "target": 13, "rel_name" : "creates in"},
+        {"source": 8, "target": 14, "rel_name" : "creates as"},
+        {"source": 9, "target": 10, "rel_name" : "can be located in"},
+        {"source": 9, "target": 11, "rel_name" : "can be located in"},
+        {"source": 9, "target": 15, "rel_name" : "changes creation time stamp to"},
+        {"source": 12, "rel_name" : "points to", "target": 9},
+        {"source": 13, "rel_name" : "points to", "target": 8}
+    ]
+}

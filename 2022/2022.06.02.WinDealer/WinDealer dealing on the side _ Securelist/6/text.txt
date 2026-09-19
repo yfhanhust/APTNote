@@ -1,0 +1,38 @@
+The impossible infrastructure
+The latest WinDealer sample we discovered in 2020 doesn’t contain a hardcoded C2 server but
+instead relies on a complex IP generation algorithm to determine which machine to contact. The
+details of this algorithm are left as an exercise to the reader, but the end result is that the IP address
+https://securelist.com/windealer-dealing-on-the-side/105946/ 3/8
+6/6/22, 10:28 AM WinDealer dealing on the side | Securelist
+is selected at random from one of these two ranges:
+113.62.0.0/15 (AS4134, CHINANET XIZANG PROVINCE NETWORK)
+111.120.0.0/14 (AS4134, CHINANET GUIZHOU PROVINCE NETWORK)
+Once the IP address has been selected, communications take place either over UDP port 6999 or
+TCP port 55556. In an even weirder twist, a research partner shared with us an additional
+WinDealer sample (MD5 d9a6725b6a2b38f96974518ec9e361ab) that communicates with the
+hardcoded URL “http://www[.]microsoftcom/status/getsign.asp”. This domain is obviously invalid
+and cannot resolve to anything in normal circumstances – yet the malware expects a response in a
+predetermined format (“\x11\x22\x??\x33\x44”).
+Packets exchanged with the C2 server contain a header (described in the next table) followed by
+AES-encrypted data. They leverage a homemade binary protocol containing magic numbers and
+flags, making it easy to recognize and filter packets on a large scale.
+Offset Description Sample
+value (in
+hex)
+0x00 Magic number 06 81 DA 91
+CE C7 9F 43
+0x08 Target identifier 57 5B 73 B2
+0x0C Flag set by the attacker. Its exact meaning remains unclear 00 or 0B or
+16
+0x0D Connection type or backdoor command identifier
+0 = initial connection
+1 = subsequent connection
+Others = backdoor command identifiers
+00
+0x0E Unknown static value 14
+0x0F Unknown value 00
+0x10 Payload
+Initial connection: the generated AES key and its CRC32,
+encrypted using RSA-2048 with a hardcoded public key.
+All other packets: payload size followed by encrypted payload
+using AES-128 in ECB mode with the generated AES key.

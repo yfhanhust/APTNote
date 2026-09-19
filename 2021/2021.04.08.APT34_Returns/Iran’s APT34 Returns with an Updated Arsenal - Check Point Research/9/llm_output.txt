@@ -1,0 +1,104 @@
+
+
+
+Sentence : C&C communication
+The backdoor’s communication with the C&C server ( sarmsoftware[.]com ) is HTTP
+based on port 443 with port 80 as fallback.
+The backdoor uses two different techniques for its outgoing and incoming
+communications with the C&C server, though in both cases the same encryption
+algorithm is utilized (see more on encryption below).
+Command Request Communication
+The backdoor contacts the C&C server in the following URL using a GET request:
+```
+   sarmsoftware[.]com/search/{identifier}
+```
+The response to this request is hidden in the source code of following Flickr lookalike
+page:
+Fig 10: Fake Flickr lookalike page used as C&C
+The response is returned to the backdoor within the HTML code, in the following format:
+```
+   /Encrypted_Message_Encoded_with_Base64/
+```
+https://research.checkpoint.com/2021/irans-apt34-returns-with-an-updated-arsenal/ 8/12
+4/9/2021 Iran’s APT34 Returns with an Updated Arsenal - Check Point Research
+Fig 11: C&C commands embedded within the code
+After this base64 string is decoded and decrypted, the plain-text content is in the
+following pipe-separated format:
+Fig 12: Encrypted data format
+Command Number – a running index number to keep track of executed
+commands. If set to any number other than -1, the backdoor should proceed to
+execute the command, according to the Command ID. Otherwise, ignore and
+terminate.
+Command ID – can be one of the following commands:
+101 – Shell Command: execute the Shell command attached in the {Arg1}
+argument.
+102 – Download File: Downloads a file that can be found on the {Arg2}
+path on the server, and saves it on the disk with the {Arg1} name.
+103 – Upload File: Uploads a local file {Arg1} to the server.
+104 – Shell Command (duplicate): execute the Shell command attached in the
+{Arg1} argument.
+Command Results Communication
+After the backdoor has executed an arbitrary command on the victim’s machine, it
+returns the result of the executed command to the C&C server, to the same URL as before,
+but in a POST request instead of a GET:
+```
+   sarmsoftware[.]com/search/{identifier}
+```
+The format of the POST body is a simple JSON, based on the command number provided
+from the C&C server and the encrypted result of the command execution:
+https://research.checkpoint.com/2021/irans-apt34-returns-with-an-updated-arsenal/ 9/12
+4/9/2021 Iran’s APT34 Returns with an Updated Arsenal - Check Point Research
+Fig 13: Result data format
+Communication Encryption
+As the basis for the encrypted communication, the attackers utilize the Mersenne Twister
+pseudorandom number generator.
+The 4 first bytes of each encrypted message is the seed for the Mersenne Twister, to be
+used for the decryption of the rest of the message.
+The encrypted Base64 communication can be decrypted using the following Python
+snippet:
+def decode(msg):
+bs=base64.b64decode(msg)
+seed=int.from_bytes(bs[:4],byteorder='big')
+rng = mersenne_rng(seed)
+k=rng.get_random_number()
+key=int.to_bytes(k,length=4,byteorder='little')
+dec="".join([chr(bs[i]^key[(i-4)%4]) for i in range(4,len(bs))])
+return dec
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "sarmsoftware[.]com", "type" : "CCSH"},
+        {"id": 2, "description": "HTTP port 443", "type" : "NETP"},
+        {"id": 3, "description": "HTTP port 80", "type" : "NETP"},
+        {"id": 4, "description": "sarmsoftware[.]com/search/{identifier}", "type" : "URLS"},
+        {"id": 5, "description": "Flickr lookalike page", "type" : "WEBS"},
+        {"id": 6, "description": "/Encrypted_Message_Encoded_with_Base64/", "type" : "DOCF"},
+        {"id": 7, "description": "Base64 encoded string", "type" : "DOCF"},
+        {"id": 8, "description": "Command Number", "type" : "TAMP"},
+        {"id": 9, "description": "Command ID", "type" : "TAMP"},
+        {"id": 10, "description": "Shell Command (101 and 104)", "type" : "EXEF"},
+        {"id": 11, "description": "{Arg1}", "type" : "DOCF"},
+        {"id": 12, "description": "{Arg2} path on the server", "type" : "SYSP"},
+        {"id": 13, "description": "Download File (Command ID: 102)", "type" : "TAMP"},
+        {"id": 14, "description": "Upload File (Command ID: 103)", "type" : "TAMP"},
+        {"id": 15, "description": "Mersenne Twister pseudorandom number generator", "type" : "APPS"},
+        {"id": 16, "description": "4 first bytes of each encrypted message (seed for the Mersenne Twister)", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "uses as fallback"},
+        {"source": 4, "target": 5, "rel_name" : "hosts"},
+        {"source": 5, "target": 6, "rel_name" : "contains"},
+        {"source": 7, "target": 1, "rel_name" : "sent to"},
+        {"source": 8, "target": 9, "rel_name" : "tracks"},
+        {"source": 9, "target": 10, "rel_name" : "can be"},
+        {"source": 9, "target": 13, "rel_name" : "can be"},
+        {"source": 9, "target": 14, "rel_name" : "can be"},
+        {"source": 10, "target": 11, "rel_name" : "uses argument"},
+        {"source": 13, "target": 12, "rel_name" : "downloads from path"},
+        {"source": 13, "target": 11, "rel_name" : "saves as file"},
+        {"source": 14, "target": 11, "rel_name" : "uploads file"},
+        {"source": 7, "target": 15, "rel_name" : "uses for encryption"},
+        {"source": 16, "target": 7, "rel_name" : "is part of"}
+    ]
+}

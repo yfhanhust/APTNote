@@ -1,0 +1,37 @@
+CVE-2014-4114
+背景
+CVE-2014-4114 漏洞是 iSIGHT 公司 [20] 在 2014 年 10 月 14 日发布相关报告，报告其中提到
+一个 0day 漏洞（ CVE-2014-4114 ）用于俄罗斯相关主要针对北约、欧盟、电信和能源相关领
+域的网络间谍活动。微软也是在 10 月 14 日发布相关安全公告。
+而 CVE-2014-6352 是可以认为绕过 CVE-2014-4114 补丁的漏洞，微软之前的修补方案首
+先在生成 Inf 和 exe 文件后添加 MakeFileUnsafe 调用，来设置文件 Zone 信息，这样随后在漏
+洞执行 inf 安装时，会有一个安全提示。而 CVE-2014-6352 漏洞样本抛弃了使用 inf 来安装
+exe ，转而直接执行 exe 。因为 xp 以上系统可执行文件的右键菜单第二项是以管理员权限执
+行，这样导致如果用户关闭了 uac 会导致没有任何安全提醒。所以微软 6352 的补丁是在调
+用右键菜单添加一个安全提示弹窗。
+表 8 漏洞相关基本信息
+漏洞编号 CVE-2014-6352
+20 “ iSIGHT discovers zero-day vulnerability CVE-2014-4114 used in Russian cyber-espionage campaign ”，
+http://www.isightpartners.com/2014/10/cve-2014-4114/
+表 9 漏洞相关基本信息
+分析
+由于之前 CVE-2014-4114 和 CVE-2014-6352 主要内嵌在 Microsoft Office 2007 （ open xml ）
+格式文档中使用。
+Open Xml 通过 xml 描述文档构造，通过 zip 打包在一起，导致安全分析人员很容易提取
+出样本中的恶意数据。本次样本（ ****df4715 ）使用了传统的
+office03 （复合文档格式）文件格式，并且通过构造特殊 zlib 数据来躲避多数安全软件扫描
+和分析人员分析。
+传统的 CVE-2014-4114 样本分析只需要使用 zip 解压 Microsoft Office 2007 文档后，查看
+\ppt\embeddings\ 目录下内嵌文件即可知道样本行为。
+图 19Microsoft Office 2007 样本内嵌恶意文件
+而 Microsoft Office 2003 格式无法直接解压缩，并且原来 embeddings 目录下的文件会被
+zlib 压缩后以 ExternalObjectStorage [21] 结构保存在 PowerPoint Document 流中。
+通常我们解析到 ExOleObjStgCompressedAtom 结构，调用 zlib 解压其中数据即可得到原
+始的内嵌文件，而此样本利用 Office 容错能力嵌入了没有 zlib 头的 zlib 流导致大部分分析工
+具解压识别，如我们使用 oletools 解析提示无效压缩头。
+21 https://msdn.microsoft.com/en-us/library/dd910846(v=office.12).aspx
+图 20Oletools 解压 pps 内嵌 zlib 数据失败
+图 21 恶意样本内嵌的 zlib 流
+修正解压问题后，最终拿到了内嵌文件，利用 inf 给内嵌的 pe 写启动达到最终目的。
+图 22 恶意样本内嵌的 Inf 文件
+图 23 恶意样本内嵌的 PE 文件

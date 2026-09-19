@@ -1,0 +1,76 @@
+
+
+
+Sentence : TerraPreter
+Evilnum group also uses 64-bit executables that decrypt and run a Meterpreter instance
+in memory. The use of Meterpreter gives them flexibility and the ability to run various
+payloads in a stealthy and extensible way.
+The structure of these components and the integrity checks implemented were identified
+as TerraLoader code. That’s why we refer to these components as TerraPreter.
+Decompiled code of the main malicious routine is shown in Figure 7.
+https://www.welivesecurity.com/2020/07/09/more-evil-deep-look-evilnum-toolset/ 10/21
+7/10/2020 More evil: A deep look at Evilnum and its toolset | WeLiveSecurity
+Figure 7. Decompiled code for Meterpreter Loader components
+The routine labeled Dummy calls a series of APIs that don’t do anything. The RC4
+function initialization brute-forces the key to use by taking a base string and appending a
+number to it that is incremented in each iteration. It then decrypts a 16-byte buffer with
+the candidate key using RC4. If the decrypted buffer matches a hardcoded string, then
+that candidate key will be the chosen RC4 key for later use. We believe this may be a timewasting countermeasure against emulators.
+After the embedded buffer with the payload is decrypted, the malware will finally set a
+callback to the GrayStringW API function, pointing to the decrypted buffer. After going
+through many layers of decoding, Meterpreter’s metsrv.dll is loaded in memory. From
+https://www.welivesecurity.com/2020/07/09/more-evil-deep-look-evilnum-toolset/ 11/21
+7/10/2020 More evil: A deep look at Evilnum and its toolset | WeLiveSecurity
+this point on, what we see is regular Meterpreter behavior that has not been modified.
+However, we will continue to describe how communications are performed.
+TerraPreter communicates with a C&C server using HTTPS and retrieves a series of
+commands. C&Cs we have seen contacted are cdn.lvsys[.]com and faxing-mon[.]best. The
+first one was redirected to d2nz6secq3489l.cloudfront[.]net. Every time a C&C receives a
+request, it sends different binary data XORed with a random 4-byte key. The malware
+reads the key to be used for decryption from the first 4 bytes of a 32-byte header that
+prefixes the encrypted data. Figure 8 shows an example.
+Figure 8. Data sent by the C&C
+The first command sent by the C&C is core_patch_url, which changes the last part of the
+URL for subsequent requests. Then core_negotiate_tlv_encryption is sent by the C&C,
+along with its public key. From this point on, messages will be encrypted before they are
+XORed.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Evilnum group", "type" : "ACTO"},
+        {"id": 2, "description": "64-bit executables", "type" : "EXEF"},
+        {"id": 3, "description": "Meterpreter instance", "type" : "APPS"},
+        {"id": 4, "description": "TerraLoader code", "type" : "DOCF"},
+        {"id": 5, "description": "Decompiled code of the main malicious routine", "type" : "DOCF"},
+        {"id": 6, "description": "RC4 function initialization", "type" : "EXEF"},
+        {"id": 7, "description": "16-byte buffer", "type" : "DOCF"},
+        {"id": 8, "description": "hardcoded string", "type" : "DOCF"},
+        {"id": 9, "description": "decrypted buffer with the payload", "type" : "DOCF"},
+        {"id": 10, "description": "GrayStringW API function", "type" : "APPS"},
+        {"id": 11, "description": "Meterpreter’s metsrv.dll", "type" : "EXEF"},
+        {"id": 12, "description": "C&C server", "type" : "CCSH"},
+        {"id": 13, "description": "cdn.lvsys[.]com", "type" : "CCSH"},
+        {"id": 14, "description": "faxing-mon[.]best", "type" : "CCSH"},
+        {"id": 15, "description": "d2nz6secq3489l.cloudfront[.]net", "type" : "URLS"},
+        {"id": 16, "description": "binary data XORed with a random 4-byte key", "type" : "DOCF"},
+        {"id": 17, "description": "32-byte header that prefixes the encrypted data", "type" : "DOCF"},
+        {"id": 18, "description": "core_patch_url command", "type" : "TTPS"},
+        {"id": 19, "description": "core_negotiate_tlv_encryption command", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "decrypt and run"},
+        {"source": 4, "target": 5, "rel_name" : "contains decompiled code of"},
+        {"source": 6, "target": 7, "rel_name" : "decrypts buffer with"},
+        {"source": 7, "target": 8, "rel_name" : "matches hardcoded string"},
+        {"source": 9, "target": 10, "rel_name" : "sets callback to"},
+        {"source": 11, "target": 3, "rel_name" : "loads in memory as part of"},
+        {"source": 3, "target": 12, "rel_name" : "communicates with using HTTPS"},
+        {"source": 12, "target": 13, "rel_name" : "contacts C&C server"},
+        {"source": 12, "target": 14, "rel_name" : "contacts C&C server"},
+        {"source": 13, "target": 15, "rel_name" : "redirected to"},
+        {"source": 12, "target": 16, "rel_name" : "sends encrypted binary data"},
+        {"source": 16, "target": 17, "rel_name" : "contains header with key for decryption"},
+        {"source": 12, "target": 18, "rel_name" : "sends command to change URL"},
+        {"source": 12, "target": 19, "rel_name" : "sends command with public key"}
+    ]
+}

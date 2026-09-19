@@ -1,0 +1,115 @@
+
+
+
+Sentence : Second Stage Infection
+After the first infection stage completed, it will persistent itself as a system service or
+autorun program. Collecting information and establish a connection to the C&C
+server. The most interesting part is each time when the log file is upload succeeds, it
+will try to download bin.asc from each computer’s unique folder. Most of
+www.talent-jump.com/article/2020/02/17/CLAMBLING-A-New-Backdoor-Base-On-Dropbox-en/ 13/23
+2/18/2020 CLAMBLING - A New Backdoor Base On Dropbox (EN) | 詮睿科技
+bin.asc we captured is requesting the victim to download x64bin.asc file from
+Dropbox.
+Further analysis of x64bin.asc, we found the second Dropbox API token, its
+purpose is different from the first one. Now the threat actor is ready to use Dropbox
+as another C&C server with the full backdoor feature.
+The second infection stage’s sample has some bonus features including the ability
+to interact with Dropbox, the command code mapping show as below:
+|Command Code|Action|
+|---|---|
+|2|ListDrives|
+|3|ListFiles|
+|4|ExecuteFile|
+|5|ManageFile|
+|6|UploadFile|
+|7|DownloadFile|
+|8|OpenTerminal|
+In these commands, there are three different files, each of these file has specific
+filename and purpose:
+eLHgZNBH : The status file, upload to Dropbox at regular intervals.
+yasHPHFJ : The command file, containing command and arguments.
+csaujdnc : The execution result of the command.
+The status file eLHgZNBH contain the basic information about victim and
+timestamp, upload to Dropbox at regular intervals. Whenever status file upload
+succeeds, it will try to download the command file yasHPHFJ if it existed. Extract
+the command code and arguments from yasHPHFJ then execute the command
+and upload the execution result to Dropbox as csaujdnc (Figure 14).
+www.talent-jump.com/article/2020/02/17/CLAMBLING-A-New-Backdoor-Base-On-Dropbox-en/ 14/23
+2/18/2020 CLAMBLING - A New Backdoor Base On Dropbox (EN) | 詮睿科技
+Figure 14. Flow of three files interact with Dropbox
+By using this control flow, the threat actor can use Dropbox as a C&C server to
+control the victim’s computer even the fixed connection between the specific C&C
+server’s IP address has been found and blocked. Unless we block
+content.dropboxapi.com and api.dropboxapi.com, otherwise we can not
+isolate the infected computer.
+The Dropbox API remain the detail of each file and folder, for example this is a file
+information return by Dropbox API:
+{
+'.tag': 'file',
+'name': 'Secret_File.txt',
+'path_lower': '/secret_file.txt',
+'path_display': '/Secret_File.txt',
+'id': 'id:',
+'client_modified': '2019-07-21T02:45:42Z',
+'server_modified': '2019-07-21T02:53:04Z',
+'rev': '[0-9a-f]{6,}',
+'size': 125,
+'is_downloadable': True,
+'content_hash': ''
+}
+www.talent-jump.com/article/2020/02/17/CLAMBLING-A-New-Backdoor-Base-On-Dropbox-en/ 15/23
+2/18/2020 CLAMBLING - A New Backdoor Base On Dropbox (EN) | 詮睿科技
+It contains the server_modified timestamp even with history revision file id, we can
+use rev
+to list the full history of this file and download it. Sort out this information
+and the command code mapping, we can now list the full command executed on
+each computer and its arguments. Here is two computers’ execution list (Figure 15
+& 16).
+Figure 15. Real command execution list from one victim.
+Figure 16. Another real command execution list.
+According to these record, the threat actor follows almost the same action on every
+infected computer. First, download additional attack programs from Dropbox, like
+mimikatz
+or other UAC bypass tools. Second, search the high-value file including
+www.talent-jump.com/article/2020/02/17/CLAMBLING-A-New-Backdoor-Base-On-Dropbox-en/ 16/23
+2/18/2020 CLAMBLING - A New Backdoor Base On Dropbox (EN) | 詮睿科技
+private source code, config file, database, and the key-log / clipboard log. Upload all
+of these files to Dropbox for further searching. Last but not least, infiltrate the
+company intranet or even the cloud service.
+Combining all decoded yasHPHFJ files, we can show the threat actor’s approximate
+working hours (Figure 17).
+Figure 17. The threat actor’s approximate working hours.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "System service or autorun program", "type" : "APPS"},
+        {"id": 2, "description": "C&C server", "type" : "CCSH"},
+        {"id": 3, "description": "bin.asc", "type" : "DOCF"},
+        {"id": 4, "description": "x64bin.asc", "type" : "DOCF"},
+        {"id": 5, "description": "Dropbox API token (second)", "type" : "TTPS"},
+        {"id": 6, "description": "eLHgZNBH (status file)", "type" : "DOCF"},
+        {"id": 7, "description": "yasHPHFJ (command file)", "type" : "DOCF"},
+        {"id": 8, "description": "csaujdnc (execution result file)", "type" : "DOCF"},
+        {"id": 9, "description": "content.dropboxapi.com", "type" : "CCSH"},
+        {"id": 10, "description": "api.dropboxapi.com", "type" : "CCSH"},
+        {"id": 11, "description": "Secret_File.txt (example file)", "type" : "DOCF"},
+        {"id": 12, "description": "mimikatz (UAC bypass tool)", "type" : "EXEF"},
+        {"id": 13, "description": "High-value files (private source code, config file, database, key-log / clipboard log)", "type" : "DOCF"},
+        {"id": 14, "description": "Intranet or cloud service", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "connect to"},
+        {"source": 3, "target": 7, "rel_name" : "download from"},
+        {"source": 4, "target": 7, "rel_name" : "download from"},
+        {"source": 5, "target": 2, "rel_name" : "use as C&C"},
+        {"source": 6, "target": 3, "rel_name" : "upload to"},
+        {"source": 7, "target": 3, "rel_name" : "download from"},
+        {"source": 8, "target": 3, "rel_name" : "upload to"},
+        {"source": 6, "target": 9, "rel_name" : "upload to"},
+        {"source": 7, "target": 9, "rel_name" : "download from"},
+        {"source": 8, "target": 9, "rel_name" : "upload to"},
+        {"source": 12, "target": 3, "rel_name" : "download from"},
+        {"source": 13, "target": 3, "rel_name" : "upload to"},
+        {"source": 14, "target": 1, "rel_name" : "infiltrate via"}
+    ]
+}

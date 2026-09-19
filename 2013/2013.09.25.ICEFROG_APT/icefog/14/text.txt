@@ -1,0 +1,82 @@
+► APPENDIX C
+THE ICEFOG-NG BOT DESCRIPTION
+In addition to the web-based Icefog malware samples, we have come across a variant of the Icefog
+bot which is based on a custom protocol working over a TCP session (port 5600 TCP) with its own
+desktop application that serves as a command-and-control center.
+For reference, we called it Icefog-NG (New Generation). We believe that the new generation
+of Icefog was created to improve bot response and to increase the efficiency of operations. The
+previous web-based version of the bot had significant time lag during operation (up to 40 seconds),
+the new generation bot was created to solve the time lag issue.
+|MD5|SIZE|COMPILEDON|
+|---|---|---|
+|FA452F67C6BF8056B563690D61C4A4C6|86’016|2013-06-21 01:06:26|
+SUMMARY
+The module is a non-packed Win32 PE Executable file compiled in Microsoft Visual C++ 2005. It
+is a backdoor that is capable of collecting system information, download and upload files, execute
+commands.
+DETAILED DESCRIPTION
+To enable automatic start during system boot, the malware adds and uses the following system
+registry value:
+HKCU\Software\Microsoft\Windows NT\CurrentVersion\Windows\Load=”%TMP%\msloger.exe”
+During start it checks if a file named “%TMP%\~AA.tmp” exists. If yes, it copies the file to %TMP%\
+hwp.hwp. Next it kills processes named “hwp.exe” and then opens “hwp.hwp”. This is important
+step during first malware run which opens a decoy .hwp document. This shows that the malware
+was designed to be installed from .hwp documents containing exploits.
+60
+Appendix C
+Then it copies “%TMP%\~Ab.tmp” to “%TMP%\msloger.exe”.
+After that the malware registers on the C&C. To do that, the malware connects to www.kreamnnd.
+com on port 5600 and sends a registration message
+[Total message size: DWORD] SX [HOSTID length:WORD] [HOSTID] [Host Info Data
+Size: DWORD] [Host Info Data]
+HOSTID is a string having system hostname and system IP joined by “_”: Hostname_IP.
+The data is encrypted using XOR with key “&^@~^%9?i0h”. If the connection with C&C is lost the
+bot can re-establish the session by sending
+[Total message size: DWORD] XT [Hostname length:WORD] [HOSTNAME]_[IPADDR]
+CONTROL COMMANDS
+After connecting to the C&C and sending the registration message the bot expects commands from
+the server. These commands are described below.
+COMMAND CMD
+This command is used to execute a command line. The message has the following format:
+[Total Message Size: DWORD] SC[COMMAND]
+The bot checks if the COMMAND contains “sleep” then it sleeps for the specified time after “sleep”
+substring.
+Otherwise, a new cmd.exe processes is spawned to execute the COMMAND. If the command does
+not contain “>” the output will be directed to %TMP%\cmd1.dat and the result will be sent to the
+C&C automatically using the following format:
+[Total Message Size: DWORD] [cmd1.dat data]
+The %TMP%\cmd1.dat is deleted after the file is sent to the C&C.
+61
+APPENDIX C
+COMMAND DOWNLOAD
+This command is used to download a file from the victim machine. The message has the following
+format:
+[Total Message Size: DWORD] DL[FILEPATH]
+The server expects the bot to send a response message with the file size from victim bot
+[Total Message Size: DWORD] OK [File Size: DWORD]
+Then the server sends an acknowledgement message to the victim bot
+[Total Message Size: DWORD] OK
+The bot encrypts the contents of the file and saves it to %TMP%\mstmpdata.dat. After that part it
+sends mstmpdata.dat file split in chunks of 0x4ffc each (the last one may be shorter than 0x4ffc).
+Here is the format of that message:
+[Total Message Size: DWORD] [File data no longer than 0x4ffc]
+The last message is repeated containing the next chunk of the file until end of file is reached.
+COMMAND UPLOAD
+This command is used to upload a file from the C&C to the bot. The format of this command is the
+following:
+[Total Message Size: DWORD] UP [File Size: DWORD][Data Chunk Size+Total
+Message Size field length, a hardcoded value of 0x5000 : DWORD] [File
+Name]
+The server expect an OK message from the bot
+[Total Message Size: DWORD] OK
+Then C&C sends the first part of the file.
+[Total Message Size: DWORD] [File data no longer than 0x4ffc]
+The server expects the OK message from the bot and transfers the next data chunk until the whole
+file is uploaded
+62
+Appendix C
+COMMAND SLEEP
+This command is used to suspend the C&C connection thread for 1 second.
+[Total Message Size: DWORD] SL
+63
+APPENDIX D

@@ -1,0 +1,102 @@
+
+
+
+Sentence : Document analysis
+1/14
+The actor used the VBA self-decoding concept in its macro that was first introduced in
+2016. A malicious macro is encoded within another that is then decoded and executed
+dynamically.
+Figure 1: Malicious document
+We can consider this technique an unpacker stub, which is executed upon opening the
+document. This unpacker stub unpacks the malicious macro and writes it into the
+memory of Microsoft Office without being written to disk. This can easily bypass several
+security mechanisms.
+2/14
+Figure 2: Self decoding technique
+Figure 3 shows the macro used by this document. This macro starts by calling the
+“ ljojijbjs ” function, and based on the results will take different paths for execution.
+Figure 3: Encoded macro
+Microsoft by default disables the dynamic execution of the macro, and if an attacker needs
+to execute one dynamically—which is the case here—the threat actor needs to bypass the
+VB object model (VBOM) by modifying its registry value.
+To check if it can bypass the VBOM, it looks to see if the VBOM can be accessed or not.
+The “ljojijbjs” function is used for this purpose and checks read access to the
+VBProject.VBComponent . If it triggers an exception, it means the VBOM needs to be
+bypassed (IF clause). If there is no exception, it means the VBOM is already bypassed and
+VBA can extract its macro dynamically (Else clause).
+3/14
+Figure 4: Check VB object model accessibility
+“fngjksnhokdnfd” is called with one parameter to bypass VBOM. This function sets the
+VBOM registry key to one.
+Figure 5: Modifying VBOM registry key
+After bypassing VBOM, it calls another function which creates a Mutex in the victims’s
+machine by calling CreateMutexA API call and names it “mutexname” . This could be used
+by the actor to make sure it infects its victim only once but in this document we didn’t
+observe any evidence of checking the mutex.
+Figure 6: Mutex creation
+Finally, in order to perform the self-decoding process, it needs to open itself by creating a
+new Application object and load the current document in it in invisible mode.
+Figure 7: Self open
+4/14
+If VBOM is already bypassed, The function Init is called and generates the malicious
+macro content in obfuscated format.
+Figure 8: Obfuscated macro
+In the next step, this obfuscated macro is passed to “eviwbejfkaksd” to be de-obfuscated
+and then executed into memory.
+Figure 9: De-obfuscator
+To de-obfuscate the macro, two string arrays have been defined:
+StringOriginal which contains an array of characters before de-obfuscation
+StringEncoded which contains an array of characters after de-obfuscation
+5/14
+A loop has been defined to de-obfuscate the macro. For each iteration it takes a character
+in the obfuscated macro and looks for its index in StringEncoded . When it finds its index,
+it looks for its equivalent index in StringOriginal, takes that character from it and adds it
+to the new macro. As an example “gm* bf” as encoded macro will be decoded to “Option” .
+Figure 10: De-obfuscation loop
+Following this process gives us the final macro that will be executed in the memory space
+of Microsoft Office. In order to execute this decoded macro, it creates a module and writes
+into it before calling its main function to execute the macro.
+The main function defines a shellcode in hex format, and a target process which is
+Notepad.exe . Then, based on the OS version, it creates a Notepad.exe process and
+allocates memory within its address space using VirtualAlloc . It then writes the shellcode
+into the allocated memory using WriteProcessMemory . At the end it calls
+CreateRemoteThread to execute the shellcode within the address space of Notepad.exe .
+6/14
+Figure 11: De-obfuscated macro
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "The actor", "type" : "ACTO"},
+        {"id": 2, "description": "VBA self-decoding concept", "type" : "TTPS"},
+        {"id": 3, "description": "Malicious macro", "type" : "EXEF"},
+        {"id": 4, "description": "Microsoft Office", "type" : "APPS"},
+        {"id": 5, "description": "VB object model (VBOM)", "type" : "TTPS"},
+        {"id": 6, "description": "Registry value for VBOM", "type" : "REGI"},
+        {"id": 7, "description": "Mutex named 'mutexname'", "type" : "TAMP"},
+        {"id": 8, "description": "CreateMutexA API call", "type" : "EXEF"},
+        {"id": 9, "description": "Application object for self-opening", "type" : "TTPS"},
+        {"id": 10, "description": "Obfuscated macro content", "type" : "EXEF"},
+        {"id": 11, "description": "De-obfuscator function 'eviwbejfkaksd'", "type" : "EXEF"},
+        {"id": 12, "description": "StringOriginal array", "type" : "TAMP"},
+        {"id": 13, "description": "StringEncoded array", "type" : "TAMP"},
+        {"id": 14, "description": "Notepad.exe", "type" : "EXEF"},
+        {"id": 15, "description": "VirtualAlloc API call", "type" : "EXEF"},
+        {"id": 16, "description": "WriteProcessMemory API call", "type" : "EXEF"},
+        {"id": 17, "description": "CreateRemoteThread API call", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "uses"},
+        {"source": 3, "target": 4, "rel_name" : "executes in"},
+        {"source": 5, "target": 6, "rel_name" : "modifies"},
+        {"source": 1, "target": 7, "rel_name" : "creates"},
+        {"source": 8, "target": 7, "rel_name" : "calls to create"},
+        {"source": 9, "target": 3, "rel_name" : "loads in memory"},
+        {"source": 10, "target": 3, "rel_name" : "generates"},
+        {"source": 11, "target": 10, "rel_name" : "de-obfuscates"},
+        {"source": 12, "target": 10, "rel_name" : "used in de-obfuscation"},
+        {"source": 13, "target": 10, "rel_name" : "used in de-obfuscation"},
+        {"source": 14, "target": 15, "rel_name" : "calls to allocate memory"},
+        {"source": 14, "target": 16, "rel_name" : "calls to write shellcode"},
+        {"source": 14, "target": 17, "rel_name" : "calls to execute shellcode"}
+    ]
+}

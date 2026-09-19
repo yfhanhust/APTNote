@@ -1,0 +1,609 @@
+BackDoor.PlugX.38
+A multi-module backdoor written in C and designed to operate in 32-bit and 64-bit
+Microsoft Windows operating systems. Once installed by the BackDoor.PlugX.26 loader, it
+operates in an infected computer’s RAM. It is used in targeted attacks on information
+systems for gaining unauthorized access to data and transferring it to C&C servers. The
+operating routine and algorithms are similar to those of BackDoor.PlugX.28. Similar
+structures are used for storing and processing data, including an identical object for storing
+strings.
+Operating routine
+All WinAPI functions are called dynamically using the CRC32 algorithm, and the checksum is
+calculated over the entire function name, including the trailing \x00 .
+Similar to BackDoor.PlugX.28, this modification does not have uniform conventions for user
+function calls. Simple string encryption is applied. It is not implemented in a separate
+function but embedded in it.
+Threads are not created directly, but via the global threads_container object, which
+stores a list of running threads with information about each of them. Each thread has its own
+hardcoded name that are encrypted in some cases.
+Assumed threads_container structure:
+```
+ struct threads_info
+ {
+LIST_ENTRY p_threads_list;
+ DWORD threads_count;
+ };
+struct threads_container
+ {
+CRITICAL_SECTION crit_sect;
+ threads_info threads;
+ };
+struct thread_obj
+ {
+LIST_ENTRY p_threads;
+ DWORD thread_ID;
+ threads_container p_threads_container;
+ DWORD (__stdcall p_function)(LPVOID arg);
+LPVOID arg;
+BYTE *name;
+};
+```
+Start of operation
+After receiving control from the loader, BackDoor.PlugX.38 initializes a number of global
+objects that are used in further operations. Then it sets its
+SetUnhandledExceptionFilter exception handler. For an unhandled exception, the
+function finds the ID of the thread that caused this exception in threads_container and
+generates the string:
+```
+ EName:%s,EAddr:0x%p,ECode:0x%p,EAX:%p,EBX:%p,ECX:%p,EDX:%p,ESI:%p,EDI:%p,EBP:%p,ESP:%
+p,EIP:%p;
+```
+where EName is the thread name. The remaining parameters are taken from the
+EXCEPTION_POINTERS structure. The string is generated in a local variable and is not used
+in further operations. The handler then terminates this thread.
+After preparation procedures, the trojan gets the SeDebugPrivilege and
+SeTcbPrivilege privileges, then initializes the main thread with the bootProc name,
+which is stored in open format.
+First, bootProc calls FreeLibrary on a module named msvsct.txt. Then the configuration
+is initialized.
+Configuration from the loader
+To determine the configuration type, the loader passes the argument to the pointer used by
+BackDoor.PlugX.38 to check the first 4 bytes. If the first bytes of the argument are the magic
+number, it means the loader passed the shellarg structure. The magic number has the
+value 0x504c5547, which corresponds to the PLUG value in the ASCII encoding.
+The shellarg structure is represented as follows:
+```
+ struct shellarg
+{
+DWORD signature;
+ DWORD dword_0;
+ DWORD dword_1;
+ DWORD p_shellcode;
+ DWORD shellcode_size;
+ DWORD config;
+ DWORD config_size;
+ };
+```
+In this case, the configuration from the argument is decrypted and stored in the global
+variable of the trojan program. Then the path to the backdoor's working directory is
+extracted from the received configuration. The trojan attempts to read boot.cfg from this
+directory, which can also store the configuration (for example, passed from the C&C server).
+If the file exists, the program reads the configuration from it, decrypts it, and applies it.
+Configuration encryption algorithm:
+```
+ import struct
+def DWORD(i):
+return i & 0xFFFFFFFF
+def LOBYTE(i):
+return i & 0x000000FF
+def dec(key, in_data):
+ k1 = k2 = k3 = k4 = key
+result = ""
+for x in in_data:
+ k1 = DWORD(k1 + (k1 >> 3) - 0x11111111)
+k2 = DWORD(k2 + (k2 >> 5) - 0x22222222)
+k3 = DWORD(k3 + 0x33333333 - (k3 << 7))
+k4 = DWORD(k4 + (0x44444444 - (k4 << 9)))
+k = LOBYTE(k1 + k2 + k3 + k4)
+result += chr(ord(x) ^ k)
+return result
+def decrypt(addr, size):
+ data = get_bytes(addr, size, 0)
+ key = struct.unpack("<I", data[:4])[0]
+result = dec(key, data)
+return result
+```
+Hardcoded configuration
+The hardcoded configuration is decrypted if the argument received from the loader does
+not have the PLUG magic value.
+Structure of the configuration:
+```
+ struct timeout
+{
+BYTE days;
+BYTE hours;
+BYTE minutes;
+BYTE seconds;
+};
+struct srv
+{
+WCHAR type;
+WCHAR port;
+BYTE address[64];
+};
+struct proxy_info
+ {
+WCHAR type;
+WCHAR port;
+```
+```
+ BYTE address[64];
+BYTE username[64];
+BYTE password[64];
+};
+struct st_config
+ {
+DWORD dword_0;
+ DWORD key;
+ DWORD dword_1;
+ DWORD flag_hide_service;
+ BYTE gap_0[24];
+ DWORD flag_delete_proc_bins;
+ DWORD dword_2;
+ DWORD flag_dont_start_service;
+ timeout timeout;
+DWORD dword_3;
+ BYTE timetable[672];
+DWORD DNS_1;
+ DWORD DNS_2;
+ DWORD DNS_3;
+ DWORD DNS_4;
+ srv srv_1;
+ srv srv_2;
+ srv srv_3;
+ srv srv_4;
+ BYTE url_1[128];
+ BYTE url_2[128];
+ BYTE url_3[128];
+ BYTE url_4[128];
+ proxy_info proxy_1;
+ proxy_info proxy_2;
+ proxy_info proxy_3;
+ proxy_info proxy_4;
+ DWORD HTTP_method;
+ DWORD inject_flag;
+ DWORD persist_mode;
+ DWORD flag_broadcasting;
+ DWORD flag_elevated_inject;
+ WCHAR inject_target_proc[256];
+ WCHAR homedir[256];
+WCHAR persist_name[256];
+ WCHAR service_display_name[256];
+ WCHAR str_1[256];
+ WCHAR str_2[256];
+ WCHAR campaign_id[256];
+ }config;
+```
+After initializing the configuration, the trojan checks the command line arguments. If there is
+one argument, the program uses a standard script for achieving persistence and performing
+basic functions; if the command line contains three arguments, the program performs one of
+the functions, depending on their values.
+Operating with a single command line argument
+The persistence option depends on the config.persist_mode value:
+
+
+0 — does not achieve persistence, goes directly to the main functionality;
+
+
+1 — autorun by HKCU\Software\Microsoft\Windows\CurrentVersion\Run ;
+
+
+2 — creates tasks in Task Scheduler;
+
+
+3 — sets services (if there are no administrative privileges, it is equivalent to 1 mode).
+
+
+If executed without achieving persistence, the trojan checks the config.inject_flag
+flag. If the value is not equal to 0, the argument passed from the loader is checked. If the
+argument contains the PLUG value, the process specified in
+config.inject_target_proc is started. The shellcode from the shellarg structure is
+injected into this process and the main process is terminated.
+In case of execution with persistence, the trojan checks the current directory. If it matches the
+trojan’s working directory config.homedir, the persistence stage is skipped and either the
+process injection or the main functionality is performed. Otherwise, 2 mutexes are created
+with the Global\DelSelf(XXXXXXXX) and Global\DelSelf(YYYYYYYYY) names,
+where XXXXXXXX and YYYYYYY are IDs of the current and parent processes in the HEX view,
+respectively. In all persistence modes, the trojan moves its files to the working directory.
+The persistence provides an option when the config.persist_mode parameter can take
+the 0 value. This is necessary if the process is started with 3 arguments and the second
+argument equals 100 . In such conditions, after transferring its files, BackDoor.PlugX.38 is
+restarted from its working directory.
+In the persistence option with the value config.persist_mode == 1, the autorun key
+creates a parameter with the name specified in the config.persist_name configuration.
+After that, the trojan launches itself from the working directory.
+If the persistence option is set to config.persist_mode == 2, a task is created in the
+scheduler by calling schtasks :
+```
+ cmd.exe /c schtasks /create /sc minute /mo 2 /tn "" /tr
+ "\"\""
+```
+If administrative privileges are obtained, the trojan adds the /ru "system” parameter.
+After creating the task, the trojan terminates the process.
+If the persistence option is set to config.persist_mode == 3, a service is set. The trojan
+checks for a service named config.persist_name and, if it exists and stopped, deletes it.
+If the service is running, the service creation step is skipped. Otherwise, the trojan creates the
+config.persist_name service with the config.service_display_name display
+name. If the config.flag_dont_start_service value is not equal to 0, the service
+does not start. After creating the service, the trojan terminates the process.
+When performing the main functionality, the trojan creates the Global\ReStart0 mutex.
+Then by a mutex named Global\DelSelf(YYYYYYYYY), the program searches for the
+parent process. After the search the process is terminated, the process’ binary is deleted
+(provided the config.flag_delete_proc_bins flag is set). Next, the trojan checks the
+value of the config.flag_elevated_inject flag. If the value is not equal to 0, the
+named thread SiProc is started.
+In this thread, the malware also checks the argument passed by the loader. Further execution
+of the SiProc thread continues only if the PLUG value is present. The thread iterates
+through the processes and attempts to get the session ID based on the PID value of each
+process. If successful, it copies the process access token and assigns the (S-1-16-12288)
+HighIntegrity class to its duplicate. Then, using this marker, it creates the msiexec.exe
+209 <currentPID> process, which injects shellcode with a payload. The thread receives a
+pointer to the elevated_injects structure as an argument:
+```
+struct injected_proc
+{
+DWORD session_id;
+DWORD pid;
+DWORD hProcess;
+BYTE token_user_name[40];
+};
+struct elevated_injects
+{
+injected_proc procs[32];
+DWORD hThread;
+DWORD hEvent;
+};
+```
+Each time the shellcode is successfully injected, the elevated_injects.procs array is
+filled in.
+After this, the plug-in container object and the plug-ins themselves are initialized. Then an
+array of auxiliary functions used by the plug-ins is initialized. These functions are accessed
+via the named display of the PI[%8.8 X] object, where the format parameter is the ID of
+the current process.
+Then each plug-in is sequentially initialized, resulting in an individual object
+plugin_object creation:
+```
+ struct plugin_object
+ {
+DWORD dword_1;
+ DWORD init_flag;
+ DWORD index;
+DWORD datestamp;
+ DWORD (__stdcall p_job_func)(LPVOID p_conn_object, packet p_packet);
+ BYTE name[32];
+};
+```
+The plug-in names correspond to those of BackDoor.PlugX.28, with the exception of the
+absence of the DISK second plug-in. The values placed in plugin_object. datestamp
+differ for each plug-in:
+|Plug-in name|Datestamp value|
+|---|---|
+|Disk|20120325h|
+|KeyLog|20120324h|
+|Nethood|20120213h|
+|Netstat|20120215h|
+|Option|20120128h|
+|PortMap|20120325h|
+|Process|20120204h|
+|RegEdit|20120315h|
+|Screen|20120220h|
+|Service|20120117h|
+|Shell|20120305h|
+|SQL|20120323h|
+|Telnet|20120225h|
+Similar to BackDoor.PlugX.28, the initialization of the KeyLog and Screen plug-ins differ
+from the others. When initializing KeyLog, a named stream KLProc is created, in which the
+trojan intercepts keyboard events via the RegisterRawInputDevices and
+GetRawInputData functions. The event log is contained in the
+<config.homedir>\NvSmart.hlp file. When initializing the Screen plug-in, 16 cursors
+are sequentially loaded in addition to creating an object.
+After initializing all plug-ins, the named thread PlugProc is started. The stream attempts to
+sequentially read files with the .plg extension from the working directory, whose names can
+take values from 0 to 127. A compressed and encrypted PE module can be read from each
+of the files. If the argument from the loader contains the PLUG value, after reading the file,
+the next named thread LdrLoadShellcode is initialized. It decrypts and unpacks the
+module, and then loads it, passing it the shellarg structure with the PLUG value as an
+argument. It should be noted that the ldrloadshellcode procedure is used when
+injecting in processes from the configuration and in the msiexec process by copying to the
+target process.
+After working with plug-ins, the OlProc thread is started, which communicates with the
+C&C server. In addition, several other threads are started from OlProc . The trojan
+preliminarily attempts to extract the CLSID parameter from the
+Software\CLASSES\MPLS\ registry key. The extraction is performed from the HKLM
+section, or in case of failure, from the HKCU section. If the specified parameter is absent, the
+trojan creates it, generates a random value of 8 bytes, formats it as %2.2X%2.2X%2.2X%
+2.2X%2.2X%2.2X%2.2X%2.2X, and enters this value into the created parameter. Similar to
+BackDoor.PlugX.28, inside OlProc the malware attempts to hide the service in the
+services.exe process (provided the config.flag_hide_service flag is set). Then the
+OlProcNotify thread is started, and the configuration is initialized again.
+After that, a cycle of connections to the server starts. It is possible to load the address of a
+new C&C server if there have already been attempts to connect to 4 servers. There are URLS
+of the form config.url_<n> provided for this purpose. An HTTP request is made at the
+specified URL, and the response is an encoded server address located between the DZKS
+and DZJS strings. Servers can be resolved using queries to DNS servers specified in the
+configuration file.
+The first connection attempt is performed without a proxy. Before doing this, the trojan
+checks the value of the config.timetable parameter, which is responsible for the
+connection schedule (the byte flag is set for every quarter of an hour). Then it checks the
+type of server to connect to. The srv structure is similar to that of BackDoor.PlugX.28:
+```
+ struct srv
+{
+WORD type;
+WORD port;
+BYTE address[64];
+};
+```
+In this case, the BackDoor.PlugX.38 type field, which defines the connection Protocol, is a
+bit field:
+
+
+1 — TCP,
+
+
+2 — HTTP,
+
+
+4 — UDP,
+
+
+8 — ICMP,
+
+
+16 — HTTPS.
+
+
+In the analyzed sample, the ICMP Protocol is not supported, but the value is provided (a stub
+is set when creating the connection object). When using the HTTPS Protocol, the trojan
+utilizes a connection to an HTTP proxy server via a socket.
+When creating a connection object, a connection string is generated that is not used in the
+analyzed sample:
+```
+ Protocol:[%4s], Host: [%s:%d], Proxy: [%d:%s:%d:%s:%s]
+```
+A packet structure similar to BackDoor.PlugX.28 is used to communicate with the server:
+```
+ struct packet_hdr
+ {
+```
+```
+ DWORD key;
+ DWORD command_id;
+DWORD len;
+DWORD errc;
+};
+struct packet
+{
+packet_hdr header;
+ BYTE data[61440] //0xF000;
+};
+```
+For initial access, similar to BackDoor.PlugX.28, the trojan generates from 0 to 0x1F random
+bytes, which are sent to the server. A packet with the command is a response for the request.
+When using an HTTP connection, there are differences from BackDoor.PlugX.28 in the
+request generation mechanism.
+A SxWorkProc named thread is created. First, the User-Agent string is formed in parts:
+
+
+Hardcoded Mozilla/4.0 (compatible; MSIE string;
+
+
+The value of the HKLM\SOFTWARE\Microsoft\Internet Explorer\Version
+Vector\IE parameter or hardcoded 8.0 ;
+
+
+Windows NT X.Y, where X.Y is the Windows version;
+
+
+Parameter values from the
+
+
+```
+ HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet
+ Settings\5.0\User Agent\Post Platform,
+ HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet
+```
+Settings\User Agent\Post Platform keys, as well as similar values from the
+HKCU section, are combined via ; ;
+
+Closing bracket ) .
+
+The specified parts are combined into a single string that serves as the User-Agent.
+The resource string is formed as /index?id=%7.P, where the parameter is the address of
+the local variable. The method is selected depending on the value of
+config.HTTP_method :
+
+
+0 — GET;
+
+
+1 — POST;
+
+
+2 — random choice between GET and POST.
+
+
+Then M-headers are added, which are necessary for the HTTP connection to work and sync
+(similar to the prefix structure in BackDoor.PlugX.28).
+
+
+M-Session:
+
+
+M-Status:
+
+
+M-Size:
+
+
+M-Sn:
+
+
+Data is transmitted in the request body. Packets are encrypted using the same algorithm
+used for the encryption configuration. When preparing a packet for encryption, the
+packet.header.key field contains the 20161127h value, but later it is replaced with a
+random key. When encrypting and compressing both transmitted and received data, the
+following options can be used:
+
+
+If in the packet_hdr.command_id field the bit is set to 0x10000000, a packet is not
+compressed (for example, the closing packet after sending a file);
+
+
+If the bit is set to 0x20000000 in the same field, the packet is not encrypted.
+
+
+The field of the len header specifies the length of the compressed and uncompressed data
+(2 low-order bytes for compressed length, 2 high-order bytes for uncompressed length).
+When using a TCP connection, data is transmitted without any headers.
+The general commands are similar to those of BackDoor.PlugX.28:
+|Command|Function|
+|---|---|
+|1|Sending system information|
+|2|Re-requesting the command|
+|3|Operating with plug-ins|
+|4|Connection reset|
+|5|Self-deleting|
+|6|Sending current configuration to the C&C server|
+|7|Receiving new configuration.|
+|8|Sending information about processes with injections (msiexec.exe)|
+|9|Sending the results of LAN scanning|
+|10|(see below)|
+Operating with plug-ins (command 3) is performed in a separate OlProcManager thread
+and implemented the same way as in BackDoor.PlugX.28.
+When a new configuration is received, it is saved as <config.homedir>\boot.cfg and
+applied immediately. After that, the trojan receives information about proxy servers from all
+available sources:
+
+All proxy server parameters separated by : — <type: port:address: ID:
+password> are extracted from the HKLM\Software\CLASSES\MPLS\PROXY registry
+key;
+
+Proxy system data is extracted from the
+HKU\Software\Microsoft\Windows\CurrentVersion\Internet Settings
+registry key;
+
+
+The AutoConfigURL parameter retrieves the address used to call the
+UrlDownloadToFileA function. Then using InternetGetProxyInfo WinAPI from
+jsproxy.dll the trojan makes a request to appengine[.]google.com, which results in
+obtaining proxy server data;
+
+
+Proxy data is extracted from the Mozilla configuration file: .default\prefs.js .
+
+
+All received data is saved in the internal object and used for connection. SOCKS4, SOCKS5,
+and HTTP proxy protocols can be used to establish a connection.
+After OlProcNotify, a new thread JoProc is initialized in the same OlProc, which then
+initializes 3 threads sequentially:
+```
+ JoProcListen
+JoProcBroadcast
+JoProcBroadcastRecv
+```
+JoProcListen starts the JoProcAccept thread, which creates a UDP connection object
+and also connects to the C&C server. It is assumed that this thread should have asynchronous
+forwarding between the UDP connection and the connection to the С&C server but the
+created UDP connection object is non-working. When created, it does not connect to any
+host, and the conditional methods that should transmit and receive data represent stubs that
+return the 0 value.
+The same applies to the JoProcBroadсast and JoProcBroadcastRecv functions.
+JoProcBroadсast iterates through the available network adapters, retrieves their IP
+addresses, subnet masks, and gateway addresses, then creates a real TCP connection object
+and exits. JoProcBroadcastRecv also has no functionality.
+It should be noted that the above operations are performed only if the
+config.broadcasting flag is set. The 9, 10 commands of the C&C server are also
+designed to work with network scanning, but there is no useful functionality in them. When
+the 10 command is received, the config.broadcasting flag is checked and then the
+command execution stops.
+Executing with 3 command line arguments
+|Second command lineargument|Value|Conditions for getting anargument|
+|---|---|---|
+|100|Installation to the systemaccording toconfig.persist_mode, bypassingthe injection in processes|-|
+|200|Injection into theconfig.inject_target_proc process|-|
+|201|Main functionality|Passed to theconfig.inject_target_proc process at startup andinjection|
+|202|Main functionality withoutachieving persistence|-|
+|209|Operating with plug-ins|Transmitted to msiexec.exe inthe case of|
+|Col1|Col2|config.flag_elevated_inject|
+|---|---|---|
+|300|Self-deleting|-|
+When running with the 209 argument, argv[2] is also counted, which is the ID of the
+trojan’s parent process that launched msiexec.exe with injection. In this case, the \\.
+\PIPE\RUN_AS_USER(%d) pipe is created, where the format parameter is the PID of the
+current process. Next, the DoImpUserProc thread is initialized, in which the trojan operates
+with plug-ins. The trojan receives commands for plug-ins from the pipe, and the results are
+sent to the main process in the pipe.
+Operating with plug-ins
+Execution of plug-in tasks is generally identical to BackDoor.PlugX.28, with the exception of:
+
+
+The Netstat plug-in, which creates a table of TCP and UDP connections and manages the
+TCP connection, now counts OS versions with MajorVersion == 10 ;
+
+
+The Nethood plug-in only contains the A000h command, which collects information
+about network resources. This backdoor modification does not include the A001h
+
+
+command, which allowed the disabling of a given network resource.
+Named threads launching order
+bootProc is the main function, and the rest of the threads are started from it:
+
+
+SiProc (injection to msiexec.exe),
+
+
+OlProc,
+
+
+OlProcNotify (connecting to the C&C server, working with commands),
+
+
+OlProcManager (processing tasks for plug-ins in the framework of the current process),
+
+
+JoProc (network scanning),
+
+
+JoProcListen (creating a tunnel between a conditional UDP connection and the C&C
+server),
+
+
+JoProcBroadcast (network broadcasting),
+
+
+JoProcBroadcastRecv (processing responses to broadcasted messages),
+
+
+PlugProc (working with plug-ins during injection),
+
+
+LdrLoadShellcode,
+
+
+KLProc (keylogger thread),
+
+
+SxWorkProc (HTTP connection handler),
+
+
+DoImpUserProc (working with plug-ins via pipe).
+
+
+plug-in threads can be launched from OlProcManager and DoImpUserProc, depending
+on the configuration:
+
+
+RtlMessageBoxProc (Runs while working with the Option plug-in, used to display
+MessageBox with the specified parameters);
+
+
+ScreenT1, ScreenT2 ( Screen plug-in, threads for RDP emulation);
+
+
+ShellT1, ShellT2 ( Shell plug-in, threads for reading and writing cmd pipe);
+
+
+TelnetT1, TelnetT1 ( Telnet plug-in, threads for receiving and sending console
+data).
+

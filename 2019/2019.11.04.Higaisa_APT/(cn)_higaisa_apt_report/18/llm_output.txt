@@ -1,0 +1,125 @@
+
+
+
+Sentence : 3.2.2 恶意文档类诱饵
+我们发现的另一个攻击母体为（a5a0bc689c1ea4b1c1336c1cde9990a4），其路径为
+\AppData\Roaming\Microsoft\Word\STARTUP\winhelp.wll，而该目录为word 的启动
+文件夹，当word 启动的时候，会自动加载该目录下的模块文件。因此该手法常做为office
+后门加载方式的重要手法。
+遗憾的是，我们并未获取到相关的文档文件，因此尚不知该启动文件是执行了某一恶意文档
+释放的（因为有很多攻击诱饵会利用漏洞等方式释放相关恶意文件到word 启动目录），还
+是其他的母体释放到该目录的。不过我们认为由某一恶意文档通过漏洞释放的可能性更大。
+该wll 文件加载后，首先会检测是否存
+在%USERPROFILE%\PolicyDefinitions\MMCSnapins.exe 文件：
+腾讯安全御见威胁情报中心 30 / 73
+TLP：WHITE
+如果不存在则从资源中释放：
+图42：检测文件释放存在代码
+图43：释放文件代码
+随后向启动目录释放lnk 文件，实现重启计算机后启动MMCSnapins.exe：
+腾讯安全御见威胁情报中心 31 / 73
+TLP：WHITE
+图44：设置自启动代码
+释放的MMCSnapins.exe（0e1ed07bae97d8b1cc4dcfe3d56ea3ee），实际也为一个
+downloader。文件运行后首先删除winhelp.wll，抹痕迹：
+图45：抹痕迹代码
+延时三分钟：
+腾讯安全御见威胁情报中心 32 / 73
+TLP：WHITE
+图46：延时执行代码
+创建%temp%\kb345203.dat 文件、创建%USERPROFILE%\DigitalLockers\目录，用于
+存放最终下载解密后的木马文件：
+图47：创建存放目录代码
+访问C2，首先发送HEAD 请求检测网络是否畅通，随后发送GET 请求下载，其中id 为硬
+盘相关序列号。http://180.150.227.24/view/index.php?id=860016C5：
+图48：发送HEAD 请求
+腾讯安全御见威胁情报中心 33 / 73
+TLP：WHITE
+图49：发送GET 请求下载
+下载后数据存放在kb345203.dat 文件中：
+图50：存放下载文件代码
+读取kb345203.dat 文件，并检查有格式：
+腾讯安全御见威胁情报中心 34 / 73
+TLP：WHITE
+图51：检查文件格式代码
+使用RC4 解密数据，解密后得到的PE 文件执行：
+腾讯安全御见威胁情报中心 35 / 73
+TLP：WHITE
+图52：解密及执行代码
+下载回来的木马共有3 个，具体功能如下：
+1、%USERPROFILE%\DigitalLockers\wimercs.exe
+（65f0581d200935d0d1e969d87b6d1e6b），为infostealer 木马，用于窃取文件
+目录结构。
+执行命令，获取C 盘、D 盘、E 盘的文件目录信息：
+图53：获取目录信息代码
+获取到的信息使用RC4 加密：
+腾讯安全御见威胁情报中心 36 / 73
+TLP：WHITE
+图54：加密获取到信息代码
+将加密后的文件上传到C2 中。180.150.227.24&/do/index.php?id=ssss：
+图55：上传信息代码
+腾讯安全御见威胁情报中心 37 / 73
+TLP：WHITE
+2、%USERPROFILE%\DigitalLockers\aitagent.exe
+（46c6e0c51391b07f5f2eafd983d8624e），为gh0st RAT 插件版。
+该木马是gh0st 源码修改而来，只保留两个远控命令均为加载插件，插件在内存中直接
+加载不落地：
+图56：RAT 分发命令代码
+腾讯安全御见威胁情报中心 38 / 73
+TLP：WHITE
+图57：加载插件代码
+腾讯安全御见威胁情报中心 39 / 73
+TLP：WHITE
+图58：加载插件代码
+3、%USERPROFILE%\DigitalLockers\winecvs.exe
+（bdfc03e3c33e914c716b4e88b7b62015），为一个功能完整的RAT 木马。
+创建名为NetworkEnterprise 的互斥量：
+腾讯安全御见威胁情报中心 40 / 73
+TLP：WHITE
+配置信息如下：
+图59：创建互斥量代码
+6080&wiki.xxxx.com&69.172.75.148&Frame&2000&AdobePatch&Software\Micro
+soft\Windows\CurrentVersion\RunOnce
+具体功能如下：
+腾讯安全御见威胁情报中心 41 / 73
+TLP：WHITE
+图60：RAT 功能代码
+腾讯安全御见威胁情报中心 42 / 73
+TLP：WHITE
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "a5a0bc689c1ea4b1c1336c1cde9990a4", "type" : "IOCS"},
+        {"id": 2, "description": "\\AppData\\Roaming\\Microsoft\\Word\\STARTUP\\winhelp.wll", "type" : "SYSP"},
+        {"id": 3, "description": "%USERPROFILE%\\PolicyDefinitions\\MMCSnapins.exe", "type" : "EXEF"},
+        {"id": 4, "description": "lnk file in startup directory", "type" : "DOCF"},
+        {"id": 5, "description": "0e1ed07bae97d8b1cc4dcfe3d56ea3ee (MMCSnapins.exe)", "type" : "IOCS"},
+        {"id": 6, "description": "%temp%\\kb345203.dat", "type" : "DOCF"},
+        {"id": 7, "description": "%USERPROFILE%\\DigitalLockers\\", "type" : "SYSP"},
+        {"id": 8, "description": "http://180.150.227.24/view/index.php?id=860016C5", "type" : "CCSH"},
+        {"id": 9, "description": "%USERPROFILE%\\DigitalLockers\\wimercs.exe (65f0581d200935d0d1e969d87b6d1e6b)", "type" : "IOCS"},
+        {"id": 10, "description": "%USERPROFILE%\\DigitalLockers\\aitagent.exe (46c6e0c51391b07f5f2eafd983d8624e)", "type" : "IOCS"},
+        {"id": 11, "description": "%USERPROFILE%\\DigitalLockers\\winecvs.exe (bdfc03e3c33e914c716b4e88b7b62015)", "type" : "IOCS"},
+        {"id": 12, "description": "180.150.227.24&/do/index.php?id=ssss", "type" : "CCSH"},
+        {"id": 13, "description": "69.172.75.148", "type" : "CCSH"},
+        {"id": 14, "description": "Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "stored in"},
+        {"source": 2, "target": 3, "rel_name" : "checks for"},
+        {"source": 2, "target": 4, "rel_name" : "releases"},
+        {"source": 5, "target": 4, "rel_name" : "executes"},
+        {"source": 5, "target": 6, "rel_name" : "creates"},
+        {"source": 5, "target": 7, "rel_name" : "creates directory"},
+        {"source": 8, "target": 6, "rel_name" : "downloads to"},
+        {"source": 9, "target": 7, "rel_name" : "stored in"},
+        {"source": 10, "target": 7, "rel_name" : "stored in"},
+        {"source": 11, "target": 7, "rel_name" : "stored in"},
+        {"source": 9, "target": 8, "rel_name" : "sends data to"},
+        {"source": 10, "target": 8, "rel_name" : "communicates with"},
+        {"source": 11, "target": 8, "rel_name" : "communicates with"},
+        {"source": 11, "target": 12, "rel_name" : "sends data to"},
+        {"source": 11, "target": 13, "rel_name" : "connects to"},
+        {"source": 11, "target": 14, "rel_name" : "uses registry"}
+    ]
+}

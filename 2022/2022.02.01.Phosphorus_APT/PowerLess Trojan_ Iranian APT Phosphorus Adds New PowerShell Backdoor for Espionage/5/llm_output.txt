@@ -1,0 +1,211 @@
+
+
+
+Sentence : Pivoting from a Previously Known Arsenal
+The journey to the discovery of the new toolset started with threat intelligence efforts that
+included pivoting on an IP address (162.55.136[.]20) that was already attributed to
+Iranian threat actors by multiple sources, including US CERT.
+While examining different files that were downloaded from this IP address, we stumbled
+upon a file named “WindowsProcesses.exe”:
+WindowsProcesses.exe hosted on the abovementioned IP
+The file seems to have only been detected by 35/68 antivirus vendors, according to
+VirusTotal:
+WindowsProcesses.exe details as seen in VirusTotal
+Analysis of WindowsProcesses.exe
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 3/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+This file, entitled “WindowsProcesses.exe” is a 64-bit executable loader whose sole
+purpose is to resolve relevant DLLs and load another file from the “%windir%\Temp”
+path entitled “dll.dll”:
+WindowsProcesses and related modules execution diagram
+Once the relevant DLLs (mostly related to .NET runtime libraries) and API calls are
+resolved, dll.dll is executed:
+The main code of WindowsProcesses.exe
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 4/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+By the looks of it, the authors could have been inspired by a code snippet found publicly
+available on GitHub, which facilitates running PowerShell with CLR in native runtime.
+The snippet is named “Powerless”, and the authors seem to have kept that naming
+convention, as shown in the PDB path of the binary:
+C:\Users\pugna\Desktop\126\V1\ PowerLessCLR \x64\Release\ PowerLessCLR .pdb
+Analysis of dll.dll
+Dll.dll is a simple .NET AES decryptor that uses a hardcoded key “()*&3dCfabE2/123” to
+decode another file named “upc” to ultimately execute PowerShell code from the
+decrypted object:
+The code of dll.dll
+upc
+The upc encrypted BLOB is decrypted using dll.dll, and contains multiple encryption
+layers that all are decrypted in stages using base64 and AES ECB decryption.
+The keys that are being used for decryption are as follows:
+()&3dCfabE2/123
+0123654789mkiujn
+25sL(14@#SDFcgd
+Prior to decrypting the PowerShell backdoor, an intermediate stage takes place when the
+victim’s machine is assigned a unique identifier which is sent to the C2, which downloads
+an additional configuration:
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 5/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+The intermediate stage during the PowerLess backdoor decryption
+Analysis of the PowerLess Backdoor
+After all the AES encrypted layers are decrypted, the PowerLess backdoor is executed:
+PowerLess backdoor command parsing code segment
+The PowerLess backdoor is equipped with the following capabilities:
+Downloading and executing additional malware and files
+Additional modules:
+Browsers info stealer
+Keylogger module
+Encrypted channel with the C2
+Executing arbitrary commands
+Killing processes
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 6/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+Stealing browser data
+Keylogging
+It is worth mentioning that the backdoor is being run within a .NET context, so therefore
+it does not spawn “powershell.exe”. This behavior can be interpreted as an attempt to
+evade certain PowerShell detections, although PowerShell logs are being saved on the
+machine:
+Windows Processes and the malicious loaded module “dll.dll” as seen in the Cybereason
+XDR Platform
+Oddly enough, there is a part of the code in the PowerLess Backdoor, that do spawn a
+powershell.exe process, when the request to kill a process is received from the C2:
+A part of the PowerLess Backdoor that spawns powershell.exe
+It can be assumed that the native language of the backdoor’s authors is likely not English
+given the abundance of typos and grammatical mistakes found in the code:
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 7/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+PowerLess backdoor logging
+Keylogger
+One of the modules downloaded by the PowerLess backdoor is a keylogger that is written
+in .NET. It’s core functionality is quite simple, consisting of hooks and the logging of the
+user’s keystrokes:
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 8/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+Partial code from the keylogger module
+The logs are being stored in the following path:
+"C:\Windows\Temp\Report.06E17A5A-7325-4325-8E5D-E172EBA7FC5BK":
+Logs path of the keylogger module
+Stealer
+Another module is a browser info stealer, which is also written in .NET, and includes the
+BouncyCastle crypto library. It also uses an SQLite data reader object for Chrome and
+Edge browser database files. In the staging phase, the data is encrypted and written in
+JSON format for exfiltration:
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 9/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+Partial code from the info stealer module
+The logs are being stored in the following path: “C:\Windows\Temp\cup.tmp”:
+Logs path of the stealer module
+Additional Tools Potentially Related to Phosphorus
+In addition to the newly discovered PowerLess Backdoor, other tools were identified by
+the Nocturnus Team which are suspected to originate from the same developer. However,
+at this point in time there isn't enough evidence to conclusively tie these tools to
+Phosphorus with a high level of confidence.
+Looking at the PE info of “WindowsProcesses.exe”, the below PDB path is present:
+“ C:\Users\pugna\Desktop\126\V1\PowerLessCLR\x64\Release\PowerLessCLR.pdb ”:
+The PDB path from WindowsProcesses.exe
+Searching for the prefix “C:\Users\pugna” returns other unidentified tools:
+Artifacts found in VirusTotal with the search “C:\Users\pugna”
+Chromium F
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 10/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+“Chromium F.exe” is yet another .NET browser info stealer. Although the code is
+different, by the functionality it is similar to the abovementioned info stealer module,
+leading us to assess that it might be an earlier variant:
+Code segment from Chromium F.exe
+Sou.exe - Audio Recorder
+“Sou.exe” is another .NET file, but this time it’s an audio recorder which uses the NAudio
+open source library:
+Code segment from Sou.exe
+A New Locker in the Making?
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 11/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+One of the more recent tools that was allegedly from the same developer is what appears
+to be an unfinished Ransomware variant. It is also written in .NET and at this point
+doesn’t do anything except locking the target’s screen. As can be seen, the fields like the
+ransom amount and attacker’s email are yet to be set. Although unfinished, it is worth
+mentioning that the sample was uploaded from Iran via web, and it might imply yet
+another step in the direction of this threat actor towards ransomware:
+Unfinished ransomware sample uploaded to VirusTotal from Iran
+The unfinished ransomware locker screen
+Analysis of FRP Loaders
+Java Multi Platform Loader
+One of the more active IPs that was reported in the ProxyShell attacks was
+148.251.71[.]182. In addition, another recent report mentions this IP address as part of an
+active exploitation of the Log4j vulnerability:
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 12/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+Files found on the IP address 148.251.71[.]182
+The “symantec” and “update” themed files all serve the FRP again. The “RCE” links, on
+the other hand, serve a Java loader that distinguishes the victim machine’s operating
+system and drops the appropriate version of FRP:
+The Java RCE class
+There are two slightly different variations of the loader, but eventually they check for the
+file separator of the OS, which is “/” in case it’s Linux or “\” in Windows, and then
+downloads the payload and creates persistence:
+Content of the malicious Java class
+Powershell to Exe Downloader
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 13/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+Another loader which eventually delivers FRP is PowerShell code converted to an
+executable by the “Ps1 To Exe” freeware that is available for download on public forums,
+where less technical people can successfully use it:
+Information about one of the FRP loaders
+Finally, the loader creates a scheduled task for FRP, of course while being dependent on
+the OS type.
+A full process tree of a real time attack that exploits the ProxyShell vulnerability and
+deployment of the FRP modules, can be seen below:
+A real time FRP staging and execution as seen in the Cybereason XDR Platform
+https://www.cybereason.com/blog/powerless-trojan-iranian-apt-phosphorus-adds-new-powershell-backdoor-for-espionage 14/18
+2/10/22, 10:50 PM PowerLess Trojan: Iranian APT Phosphorus Adds New PowerShell Backdoor for Espionage
+Once the attackers exploited the vulnerable Microsoft Exchange Server, they downloaded
+the FRP module, ran multiple reconnaissance commands, created persistence, dumped
+credentials using a known LOLBIN technique (Comsvcs.dll), and attempted to move
+laterally, as can be seen in the above Cybereason XDR Platform image.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "162.55.136[.]20", "type" : "CCSH"},
+        {"id": 2, "description": "WindowsProcesses.exe", "type" : "EXEF"},
+        {"id": 3, "description": "%windir%\\Temp", "type" : "TPTH"},
+        {"id": 4, "description": "dll.dll", "type" : "DOCF"},
+        {"id": 5, "description": "upc", "type" : "DOCF"},
+        {"id": 6, "description": "PowerLess Backdoor", "type" : "EXEF"},
+        {"id": 7, "description": "Browsers info stealer module", "type" : "APPS"},
+        {"id": 8, "description": "Keylogger module", "type" : "APPS"},
+        {"id": 9, "description": "C:\\Windows\\Temp\\Report.06E17A5A-7325-4325-8E5D-E172EBA7FC5BK", "type" : "SYSP"},
+        {"id": 10, "description": "C:\\Windows\\Temp\\cup.tmp", "type" : "SYSP"},
+        {"id": 11, "description": "Chromium F.exe", "type" : "EXEF"},
+        {"id": 12, "description": "Sou.exe - Audio Recorder", "type" : "EXEF"},
+        {"id": 13, "description": "Unfinished ransomware sample", "type" : "EXEF"},
+        {"id": 14, "description": "148.251.71[.]182", "type" : "CCSH"},
+        {"id": 15, "description": "FRP (Fast Reverse Proxy) loader", "type" : "EXEF"},
+        {"id": 16, "description": "Java RCE class", "type" : "APPS"},
+        {"id": 17, "description": "PowerShell to Exe Downloader", "type" : "TTPS"},
+        {"id": 18, "description": "ProxyShell vulnerability exploitation", "type" : "CVES"},
+        {"id": 19, "description": "Log4j vulnerability", "type" : "CVES"},
+        {"id": 20, "description": "Comsvcs.dll (LOLBIN technique)", "type" : "APPS"},
+        {"id": 21, "description": "Iran", "type" : "COUNTRY"},
+        {"id": 22, "description": "Phosphorus APT group", "type" : "ACTOR"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "label": "Hosts"},
+        {"source": 2, "target": 4, "label": "Drops"},
+        {"source": 2, "target": 3, "label": "Writes to path"},
+        {"source": 4, "target": 5, "label": "Reads from file"},
+        {"source": 4, "target": 6, "label": "Executes"},
+        {"source": 6, "target": 7, "label": "Includes module"},
+        {"source": 6, "target": 8, "label": "Includes module"},
+        {"source": 8, "target": 9, "label": "Writes logs to path"},
+        {"source": 7, "target": 10, "label": "Writes logs to path"},
+        {"source": 2, "target": 14, "label": "Downloads from"},
+        {"source": 14, "target": 15, "label": "Hosts"},
+        {"source": 15, "target": 16, "label": "Includes"},
+        {"source": 17, "target": 15, "label": "Delivers via"},
+        {"source": 21, "target": 14, "label": "Uploads from"},
+        {"source": 22, "target": 6, "label": "Develops and uses"},
+        {"source": 22, "target": 13, "label": "Potentially develops"},
+        {"source": 22, "target": 15, "label": "Uses in attacks"},
+        {"source": 18, "target": 14, "label": "Exploits via"},
+        {"source": 19, "target": 14, "label": "Exploits via"}
+    ]
+}

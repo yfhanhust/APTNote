@@ -1,0 +1,214 @@
+
+
+
+Sentence : 3 Technical Analysis
+This section contains a technical analysis of the Solarmarker malware (Jupyter, Polazert,
+YellowCockatoo) and its related components . It includes the corresponding admin panel
+and malware sample.
+Solarmarker is a .NET-based modular data exfiltration tool with an obfuscated backdoor
+that targets Windows systems. The PTI team first found it as a portable executable file. Within
+the first generation of samples, Solarmarker contained statically embedded Powershell
+payloads and DLLs. However, in September 2021, the threat actors respnsible switched
+to using MSI package installers [4]. This strategy proved to be advantageous for evading
+security software of enabling more malicious functionality.
+3.1 Distribution Mechanism
+Solarmarker threat actors generate numerous malicious phishing web pages with
+common business terms in English to target corporations and employees. These web pages
+target users performing job-related searches, leading them to legitimate-looking websites
+and prompting them to download document files that secretly contain Solarmarker malware.
+This technique is commonly referred as SEO poisoning. Threat actors distribute thousands
+of keywords and links promote malicious web pages containing malware. When malicious
+pages earn top-ranking SEO results, they can easily distribute to millions of victims at a time.
+Figure 1. Fake PDF File
+The malicious links found in the documents use URL-redirection to direct users to the
+malware dropper page. These pages serve the payload mostly in the form of a legitimate
+PDF viewer (Adobe Reader, Slim PDF, Sumatra PDF, or Nitro PDF).
+5 / 27
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law. It shall be noted that PRODAFT provides this information “as is” according to its findings, without providing
+any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report nor any of
+its contents can be used as admissible proof before legal authorities.
+TLP:WHITE Solarmarker In-Depth Analysis
+Figure 2. Solarmarker dropper site hosted in sites.google.com
+3.2 Solarmarker Malware Execution
+The first Solarmarker samples ran in five different stages enabled through portable
+executable files [2]. New iterations reduced the number of stages to four. [3]. This reduction
+simplified the attack by skipping the malicious installation screen that victims would
+otherwise encounter.
+3.2.1 Installation
+The MSI installer version of Solarmarker comes in two different versions. The first version
+comes with a decoy PDF viewer application installer. After running the MSI file, the installer
+successfully installs the legitimate application. During installation, a malicious Powershell
+script is executed in the background and loads the Solarmarker DLL. (see Figure 3)
+Figure 3. MSI file installation interface
+6 / 27
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law. It shall be noted that PRODAFT provides this information “as is” according to its findings, without providing
+any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report nor any of
+its contents can be used as admissible proof before legal authorities.
+TLP:WHITE Solarmarker In-Depth Analysis
+In the second version, the installer displays an error (Figure 4) and executes a malicious
+Powershell script (Figure 6) that leaves a backdoor in the system and establishes a reverse
+connection to the command and control server.
+Figure 4. MSI Installer Error
+3.2.2 Powershell Loader
+The dropped Powershell script (Figure 5) loads the backdoor and provides support for
+malware persistence. The backdoor DLL file is stored in BASE64-encoded format inside
+the Powershell script. First, the script decodes the BASE64-encoded DLL and saves it to a
+predefined path with a random name. Then, the script decodes the DLL with a simple XOR
+cipher and loads the decoded DLL via the calling System.Reflection.Assembly method.
+At this stage, the script gains persistence by creating a shortcut file at the
+“AppData\Microsoft\Windows\Start Menu\Programs\Startup” directory. This shortcut file
+executes during system startup and invokes the backdoor DLL manually.
+Figure 5. Obfuscated Powershell Loader
+7 / 27
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law. It shall be noted that PRODAFT provides this information “as is” according to its findings, without providing
+any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report nor any of
+its contents can be used as admissible proof before legal authorities.
+TLP:WHITE Solarmarker In-Depth Analysis
+Figure 6. Execution of Powershell Loader
+Threat actors generate Powershell scripts using the C&C server. They keep the records of
+these scripts and note which victim gets infected with the corresponding script.
+3.2.3 Backdoor DLL
+The DLL is obfuscated using the Dotfuscator [1] tool. Dotfuscator performs a combination
+of code obfuscation and shrinking, which hardens the reverse engineering process. Luckily,
+most of the strings are still in plain text format because the cybercrime group failed to use
+the Dotfuscator tool correctly.
+Figure 7. Dotfuscator Indicator
+8 / 27
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law. It shall be noted that PRODAFT provides this information “as is” according to its findings, without providing
+any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report nor any of
+its contents can be used as admissible proof before legal authorities.
+TLP:WHITE Solarmarker In-Depth Analysis
+Upon execution, the DLL generates a random 16-byte AES key to encrypt traffic between
+the C&C and the victim’s machine. The DLL sends this key with a random generated victim
+identification base64 string to the C&C server after encrypting it with a hardcoded RSA
+public key (Figure 8) in the initial request. These hardcoded RSA keys are white-listed and
+manageable from the C&C server.
+Figure 8. Hardcoded RSA Key
+Figure 9. Generated Victim Key
+The malicious backdoor DLL sends the collected system information to the C&C server and
+waits for incoming tasks. The system information packet contains the computer architecture,
+hardware identity, operating system name, computer name, workgroup name, and user
+rights values. (Figure 10).
+Figure 10. JSON Serialized System Information
+9 / 27
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law. It shall be noted that PRODAFT provides this information “as is” according to its findings, without providing
+any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report nor any of
+its contents can be used as admissible proof before legal authorities.
+TLP:WHITE Solarmarker In-Depth Analysis
+The backdoor also has a data exfiltration module named Jupyter . Jupyter loads and parses
+auto-fill data, saved passwords, and saved credit card information from the victim’s web
+browsers. After parsing the saved passwords, it filters them according to the rules defined
+inside the C&C panel (3.4.1). Generally, this process targets online cryptocurrency wallet
+domains.
+Figure 11. Jupyter DLL
+10 / 27
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law. It shall be noted that PRODAFT provides this information “as is” according to its findings, without providing
+any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report nor any of
+its contents can be used as admissible proof before legal authorities.
+TLP:WHITE Solarmarker In-Depth Analysis
+3.3 C&C Infrastructure
+The PTI team discovered that threat actors were using two different
+command-and-control servers. They routed malware connections from victims to
+an intermediary server called ”Admin Panel” using multiple alternative load balancer
+servers. This server saves the victim-specific ID to the panel and manages initial
+command-and-control operations.
+The second server, called ”MAT Panel”, classifies and stores all victim data, such as
+cryptocurrency credentials and wallets. The admin panel contains multiple users for checking
+incoming victim credentials. More detailed information about the control panel and the
+C&C structure is given in the next section. The following table contains all of the server IP
+addresses, hosting providers, and roles of the servers used in the Solarmarker malware
+campaign as of this report.
+11 / 27
+|IP|Hosting Provider|Role|
+|---|---|---|
+|~~185.244.213.64~~|~~M247 LTD Paris~~|~~Load Balancer~~|
+|~~167.88.15.115~~|~~Nexeon Technologies, Inc (NT-63)~~|~~Load Balancer~~|
+|~~216.230.232.134~~|~~The Optimal Link Corporation (THEOPT-2)~~|~~Load Balancer~~|
+|~~45.42.201.248~~|~~SmartHost LLC~~|~~Load Balancer~~|
+|~~37.120.237.251~~|~~M247 LTD Quebec~~|~~Load Balancer~~|
+|~~188.241.83.61~~|~~M247 LTD Paris~~|~~Load Balancer~~|
+|~~146.70.41.157~~149.255.35.179|~~M247 LTD New York~~Hivelocity Inc|~~Load Balancer~~Load Balancer|
+|~~45.155.204.139~~|~~Starcrecium Limited~~|~~Admin Panel~~|
+|~~176.113.115.125~~|~~Red Bytes LLC~~|~~MAT Panel~~|
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law. It shall be noted that PRODAFT provides this information “as is” according to its findings, without providing
+any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report nor any of
+its contents can be used as admissible proof before legal authorities.
+TLP:WHITE Solarmarker In-Depth Analysis
+3.4 Management Panel
+The PTI team detected and gained access to two Solarmarker management panels.
+While the first panel (MAT panel) is used for extracting and categorizing victim data, the
+second one the malware C&C through which commands are issued. (see Figure 12)
+3.4.1 MAT Panel
+The MAT panel is used for management and filtering of the victim data. This panel
+contains the following list of pages,
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Solarmarker malware", "type" : "EXEF"},
+        {"id": 2, "description": ".NET-based modular data exfiltration tool", "type" : "TTPS"},
+        {"id": 3, "description": "Windows systems", "type" : "SYSP"},
+        {"id": 4, "description": "portable executable file", "type" : "EXEF"},
+        {"id": 5, "description": "statically embedded Powershell payloads and DLLs", "type" : "TTPS"},
+        {"id": 6, "description": "MSI package installers", "type" : "EXEF"},
+        {"id": 7, "description": "malicious phishing web pages with common business terms in English", "type" : "URLS"},
+        {"id": 8, "description": "SEO poisoning", "type" : "TTPS"},
+        {"id": 9, "description": "document files that secretly contain Solarmarker malware", "type" : "DOCF"},
+        {"id": 10, "description": "URL-redirection", "type" : "TTPS"},
+        {"id": 11, "description": "malware dropper page", "type" : "URLS"},
+        {"id": 12, "description": "legitimate PDF viewer (Adobe Reader, Slim PDF, Sumatra PDF, or Nitro PDF)", "type" : "APPS"},
+        {"id": 13, "description": "MSI installer version of Solarmarker", "type" : "EXEF"},
+        {"id": 14, "description": "decoy PDF viewer application installer", "type" : "APPS"},
+        {"id": 15, "description": "malicious Powershell script", "type" : "EXEF"},
+        {"id": 16, "description": "Solarmarker DLL", "type" : "EXEF"},
+        {"id": 17, "description": "reverse connection to the command and control server", "type" : "NETP"},
+        {"id": 18, "description": "backdoor DLL stored in BASE64-encoded format inside Powershell script", "type" : "EXEF"},
+        {"id": 19, "description": "shortcut file at AppData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", "type" : "TPTH"},
+        {"id": 20, "description": "C&C server", "type" : "CCSH"},
+        {"id": 21, "description": "random 16-byte AES key to encrypt traffic between C&C and victim’s machine", "type" : "TTPS"},
+        {"id": 22, "description": "hardcoded RSA public key", "type" : "TTPS"},
+        {"id": 23, "description": "system information packet", "type" : "TAMP"},
+        {"id": 24, "description": "data exfiltration module named Jupyter", "type" : "EXEF"},
+        {"id": 25, "description": "admin panel", "type" : "CCSH"},
+        {"id": 26, "description": "MAT Panel", "type" : "CCSH"},
+        {"id": 27, "description": "victim-specific ID saved to the admin panel", "type" : "TTPS"},
+        {"id": 28, "description": "cryptocurrency credentials and wallets", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "label": "targets"},
+        {"source": 1, "target": 4, "label": "distributed via"},
+        {"source": 5, "target": 1, "label": "includes"},
+        {"source": 6, "target": 1, "label": "delivered through"},
+        {"source": 7, "target": 9, "label": "hosts"},
+        {"source": 8, "target": 7, "label": "uses"},
+        {"source": 10, "target": 9, "label": "uses"},
+        {"source": 11, "target": 9, "label": "redirects to"},
+        {"source": 12, "target": 11, "label": "pretends to be"},
+        {"source": 13, "target": 15, "label": "installs"},
+        {"source": 14, "target": 13, "label": "disguised as"},
+        {"source": 15, "target": 16, "label": "loads"},
+        {"source": 17, "target": 20, "label": "establishes"},
+        {"source": 18, "target": 15, "label": "stored in"},
+        {"source": 19, "target": 1, "label": "creates"},
+        {"source": 20, "target": 17, "label": "receives connection from"},
+        {"source": 21, "target": 20, "label": "generates for communication with"},
+        {"source": 22, "target": 20, "label": "uses to encrypt key sent to"},
+        {"source": 23, "target": 20, "label": "sends to"},
+        {"source": 24, "target": 16, "label": "part of"},
+        {"source": 25, "target": 27, "label": "manages"},
+        {"source": 26, "target": 28, "label": "stores"}
+    ]
+}

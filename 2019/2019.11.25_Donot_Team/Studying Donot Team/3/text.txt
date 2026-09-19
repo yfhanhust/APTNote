@@ -1,0 +1,30 @@
+Attack chain
+At the early stage of infection, the victim receives an MS Word document in Office Open XML format. Even though we do not have
+clear evidence, we are sure that the initial penetration vector is a targeted phishing message with MS Office attachment. The
+document itself is not malicious, but it abuses the external elements autoloading capability to launch the next stage document.
+The loaded fine is an RTF document exploiting vulnerability CVE-2018-0802 in Microsoft Equation. The main shellcode is
+preceded by a chain of intermediate ones, each decrypting the subsequent slice with a single-byte XOR with keys 0x90 and 0xCE.
+blog.ptsecurity.com/2019/11/studying-donot-team.html 1/8
+11/30/2019 Positive Technologies - learn and secure : Studying Donot Team
+First shellcode decrypting the second one
+The main shellcode performed the following actions:
+Uses a single-byte XOR with key 0x79 to decrypt binary data from file %TEMP%\one .
+Creates executable files C:\Windows\Tasks\Serviceflow.exe and C:\Windows\Tasks\sinter.exe . These are the group's
+malicious loaders. We will talk more about them later.
+Creates file C:\Windows\Tasks\S_An.dll, containing two bytes 0x90.
+Creates file C:\Windows\Tasks\A64.dll . Depending on the system bit capacity, this is a modified x64-bit or x86-bit version of
+UACMe utility escalating privileges in the system. In addition to bypassing UAC control, the library creates and launches BAT
+script %TEMP%\v.bat . The script will use the following commands to register one of the loaders created earlier as a service:
+sc create ServiceTool displayname= "ServiceFill" binpath= "C:\Windows\Tasks\Serviceflow.exe" start= "auto"
+sc start ServiceTool
+blog.ptsecurity.com/2019/11/studying-donot-team.html 2/8
+11/30/2019 Positive Technologies - learn and secure : Studying Donot Team
+Decrypting BAT scripts in modified UACMe libraries
+Creates and launches JScript script C:\Windows\Tasks\bin.js . Its task is to launch library A64.dll via RnMod export using
+rundll32.
+Creates shortcut WORDICON.lnk in the startup folder. Its task is to launch loader sinter.exe after system restart.
+Creates shortcut Support.lnk in the startup folder. Its task is to launch bin.js JScript script after system reboot.
+blog.ptsecurity.com/2019/11/studying-donot-team.html 3/8
+11/30/2019 Positive Technologies - learn and secure : Studying Donot Team
+Decompiled code of the main shellcode
+So, at that stage there are two loaders with a firm foothold in the System. We will discuss their operation later on.

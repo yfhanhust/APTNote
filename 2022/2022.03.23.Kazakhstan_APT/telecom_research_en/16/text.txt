@@ -1,0 +1,43 @@
+Control server protocol
+Establishing a connection to the server mimics the creation of a TLS1.0 connection between the
+client and the server. Trojan body contains two buffers:
+
+
+Contains the TLS1.0 Client Hello package:
+
+
+Contains TLS 1.0 Client Key Exchange packets with key length 0x100 bytes, Change Cipher
+Spec, Client Handshake Finished:
+
+
+When sending a Client Hello packet, the trojan encrypts all bytes of the Client Random field,
+starting from the 4th one, using the XOR method with random bytes. It also records the current
+time in the first 4. The server's response to this message is accepted, but the data is ignored.
+When sending the second packet, the backdoor also encrypts the Client Key Exchange packet’s
+public key field using the XOR method with random bytes, and writes its 28-byte key into the
+data of the Client Handshake Finished packet. That’ll be used to encrypt and decrypt packets
+sent or received from the server. The backdoor encrypts the last 4 bytes of the Client Handshake
+Finished packet with random bytes. Then, it sends it to the command and control server. In
+response, the server sends its own key. That key is used to initialize the key shared with the client.
+After that, the backdoor enters the command processing cycle from the control server. The
+traffic between the client and the server is encrypted using the RC4 algorithm.
+The list of commands:
+|opcode|Command|
+|---|---|
+|0x01|Gathering information regarding the infected device|
+|0x02|Remote shell|
+|0x03|File manager (see below for commands ending in 3)|
+|0x100|Keep-Alive|
+|0x103|Open file for writing|
+|0x203|Download a file|
+|---|---|
+|0x303|Data to be written|
+|0x400|Reconnect to server|
+|0x403|Obtain information about disk or directory listing;|
+|0x500|To finish work|
+|0x503|Move a file|
+|0x600|Delete proxy configuration ini file|
+|0x603|Delete a file|
+|0x703|Run a process|
+|0x700|Execute a command during ShellExecute|
+|0x800|Renew configuration|

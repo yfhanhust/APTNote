@@ -1,0 +1,53 @@
+Initialization
+We begin our journey through Xagent source code in the file ~~main.cpp~~ in the function
+~~startXagent()~~, which contains the instantiations of the main objects, as shown below.
+```
+   int startXagent(wstring path)
+   {
+     [...]
+```
+AgentKernel krnl( (wchar_t *)path.c_str() ); ➊
+IAgentChannel* http_channel = ~~new~~ HttpChannel(); ➋
+```
+     //IAgentChannel* smtp_channel = new MailChannel();
+```
+IAgentModule* remote_shell = ~~new~~ RemoteShell(); ➌
+```
+     IAgentModule file_system = new FSModule();
+     //IAgentModule key_log = new RemoteKeylogger();
+```
+krnl.registerChannel(http_channel); ➍
+```
+     //krnl.registerChannel(smtp_channel);
+     krnl.registerModule(remote_shell);
+     krnl.registerModule(file_system);
+     //krnl.registerModule(key_log);
+```
+krnl.startWork(); ➎
+```
+     [...]
+   }
+```
+➊ Instantiation of an ~~AgentKernel~~ object, called “kernel” hereafter, which is the Xagent
+execution manager.
+➋ Instantiation of an ~~IAgentChannel~~ object, called “channel” hereafter, which is the means
+of communication with the C&C server. The source code contains two different channel
+implementations, one over HTTP and one over email. Here the developers have commented
+out the email channel instantiation.
+➌ Instantiations of several ~~IAgentModule~~ objects, called “modules” hereafter, which implement
+Xagent functionalities. Here the developers have commented out the keylogger
+module instantiation.
+➍ Calls to the ~~AgentKernel::registerChannel()~~ and ~~AgentKernel::registerModule()~~
+methods, through which the kernel starts managing these modules’ executions, and pass
+their communications through the registered channel. Registrations of the unused channel
+and module are commented out.
+➎ Call to the ~~AgentKernel::startWork()~~ method, which creates execution threads
+on the worker methods of each registered module and channel.
+Commenting out module and channel instantiations is a strategy we previously observed when
+analyzing Xagent binaries. Each sample does indeed come with a specific combination of modules
+and channels, even though the Xagent kernel is completely capable of managing all of them
+in parallel (including multiple channels).
+By doing so, operators probably intend to adapt Xagent binaries for specific targets, and avoid
+exposing the whole Xagent code to security researchers. Moreover, operators may still deploy
+additional modules and channels during execution, as we will explain later.
+54

@@ -1,0 +1,636 @@
+
+
+
+Sentence : SILENCE ATM PACK
+Logical attacks on ATMs were the first activity of Silence Group that we detected.
+The attackers would penetrate the bank’s corporate network, gain entry to the
+virtual network to which all ATMs were connected and inject unique programs into
+the ATMs that affected the dispenser process operations.
+This unique pack incorporated the following programs:
+
+
+A Dropper to unpack (out of itself) the Atmosphere library to affect the
+dispenser and the injector to inject Atmosphere into the dispenser process.
+
+
+The basic DLL Atmosphere library to affect the dispenser.
+
+
+An executable injector program to inject the library into the process
+
+
+Atmosphere.Dropper
+|File name|MD5 hash|Col3|
+|---|---|---|
+|app3.exe|4107F2756ED|B33AF1F79B1DCE3D2FD77|
+|app4.exe|6743F474E3A|6A02BC1CCC5373E5EBBFA|
+|app11.exe|14863087695|D0F4B40F480FD18D061A4|
+|J133295_18107_a4.exe|f69c3596974|5ae1b60403868e085062e|
+In the course of further analyses of the Group, we identified a large number of
+programs of that type. It was clear that the programs were compiled on the go,
+as the attack was unfolding. Some of them did not work, being designed for ATMs
+of one specific type, while the attackers tried to use them on ATMs of a different
+type. Thus, programs had to be compiled along the way. As a result, some
+Droppers had to inject the library to affect the dispenser in a strictly defined
+process; others only had to extract the library, while the injecting was done by
+another Injector program. In total, we detected up to 10 types of programs with
+minor differences between them. Most of them had logical errors that in some
+cases caused program failure.
+app3.exe works to inject code into SFX manager’s process fwmain32.exe (or,
+alternatively, sop.exe) for Wincor Nixdorf ATMs; to exploit API functions exported
+by MSXFS library.dll to affect the ATM; to gain information about the ATM and the
+amount of cash in its cassettes; and to issue banknotes to the attacker.
+
+When run, this file checks if the process fwmain32.exe is running. If not,
+it shuts down.
+
+60
+Silence
+Moving into the darkside
+Atmosphere.Injector
+|File name|MD5 hash|Col3|Program type|
+|---|---|---|---|
+|fuckacp.exe|B3ABB10CC8F4CBB454|992B95064A9006|Atmosphere.Injector|
+|injector.exe|1EE9F88CC7867E021A8|18DFF012BDF9E|Atmosphere.Injector|
+This program helps the attacker to inject DLL into the relevant process. Command
+line parameters are used to specify which dynamic library must be injected in
+which particular process. It is worth noting that the process is identified not by its
+name, but by its system identifier (process id).
+The code for dynamic library injection is similar to that in the dropper.
+Similarly, we detected several programs of that type. Their compilation settings
+were different and some libraries were statically linked. This is most likely
+because the attacker could not run the program on those ATMs which did not
+have libraries that the program required.
+Atmosphere
+|File name|MD5 hash|Col3|Program type|
+|---|---|---|---|
+|lib_HpBsi.dll|79E61313FEBE5C67D16|8CFC3C88CD743|Atmosphere|
+|li.dll|C49E6854C79043B624|D07DA20DD4C7AD|Atmosphere|
+|lib_HkUEl.dll|86EA1F46DF745A3057|7F02FC24E266FF|Atmosphere|
+||c8d0ccd2e58c1c467ee|8b138c8a15eec||
+||d81ae5e0680d09c118|a1705762b0bfce||
+|lib_xqkRN.dll|ddb276dbfbce7a9e19f|eecc2c453733d||
+There are several programs of that kind too. See below for analysis results and
+differences.
+62
+Silence
+Moving into the darkside
+
+By calling function WFSGetInfo with flag dwCategory == WFS_INF_CDM_CASH_
+UNIT_INFO the attacker can gain information about the status and contents of
+
+all cassettes in the ATM.
+
+
+The dispenser is identified by calling the function WFSGetInfo with the flags
+dwCategory == 301(WFS_INF_CDM_CASH_UNIT_INFO) and 401 (value unknown).
+
+
+The function WFSGetInfo to identify the dispenser is called sequentially 30
+times with different hService values ranging from 1 to 30 – obviously to search
+for services in the system and locate the service handle that corresponds to the
+running ATM service. This could be done by calling the function WFSOpen, but
+the attacker probably thought that the argument of the first function (the ATM’s
+logical name in the system) could be non-standard or different on different
+ATM types, so he decided to do an ATM device search by using the brute force of
+open service handles.
+
+
+A thread is then created to check every one second if there are commands from
+
+
+the attacker and execute them if needed
+Command transmission
+Once the command file is found, its contents are read by the function "fread" and
+are then split into lines. Characters between quotation marks (") are extracted
+from the first line. Then the first character extracted from quotation marks is
+converted into a command number. Once the command is received, WinAPI of the
+functions CryptAcquireContextA and CryptGenRandom generates a line with a
+random set of characters. The size of the line is not less than the size of the file,
+plus a random number between 10 and 1024. The resulting line is then added to
+the end of the file, and the file is deleted.
+64
+Silence
+Moving into the darkside
+Supported commands are listed below.
+|Command|Description|Col3|
+|---|---|---|
+|1,8,9,10,11,12,13|Write return code ofle and log fle|f the last executed command in a separate|
+|2|Retrieve ATM cashwith formatting (ad|unit data and write the result in the log fle,vanced write mode)|
+|3|Retrieve ATM cash|unit data|
+|4|Retrieve ATM cash|unit data and write the result in the log fle|
+|5|Inject code\modifyapp’s random threafunctions sequenceGetThreadContext|the command counter of the currentd (fwmain32.exe) by calling the GetCurrentProcessId + OpenThread ++ SetThreadContext|
+|7|Issue cash in a one|-off mode|
+|?|Issue all cash, inter|val 3 seconds|
+|?|Establish a limit on|cash issuance|
+66
+Silence
+Moving into the darkside
+Other differences between the first and the second files in the rest of the code
+are based on:
+1.
+Different compiler settings and optimization in the first and second files.
+2.
+The fact that the first file lib_xqkRN.dll has a code added to it that the second
+file does not have. This also explains why the first file has a larger number
+of functions. Principally, it is a cryptographic class code to encrypt RSA, AES,
+MD5, SHA-1, for which no code has been detected.
+3.
+Additionally, the second file has a list of currencies that the first sample
+did not have. The code operating with these strings in this file is not called
+anywhere.
+Another version of Atmosphere lib_HpBsi.dll (MD5 79E61313FEBE5C67D168CFC3
+C88CD743, 61440 bytes, timestamp: 59D94BD5 (Sat Oct 07 21:49:09 2017)), which
+the DROPPER extracts from its resources, is also designed for withdrawing
+banknotes from ATM cassettes. It has minor differences and the following
+command table:
+70
+|Command|Description|Col3|
+|---|---|---|
+|"B"|Retrieves information about tline "cash units info received|he contents of ATM cassettes. The" is added to the log.|
+|"A"|Retrieves information about tlogging.|he contents of the cassettes without|
+|"Q"|Retrieves information about t|he contents of ATM cassettes.|
+|"D"|One-off issue of banknotes oATM.|f a specifc denomination from the|
+|"H"|Suspends all threads in the pthe GetThreadContext + SetThexecution to its own function|rocess, except for its own, and usesreadContext functions to redirect.|
+|"M", "R", "S","P", "T", "L"|The result of the last commaintel\.007. This commanend of any other command.|nd execution is written to the fle C:\d is also executed by default at the|
+Silence
+Moving into the darkside
+The program uses the following command handlers:
+|Command number|Command value|Col3|
+|---|---|---|
+|2|Retrieve informaresult in the log|tion about ATM cash units and write thefle, with formatting (extended write mode)|
+|3|Retrieve informa|tion about ATM cash units|
+|4,13|Retrieve informaresult in the log|tion about ATM cash units and write thefle|
+|7|One-off cash wit|hdrawal|
+|10|Suspend operati|ons for 10 minutes|
+|11|Terminate app o|peration|
+|8|Withdraw all cas|h, interval 3 seconds|
+Below is a table that compares the old version with the new:
+|Function|Old samp|le|New sample|
+|---|---|---|---|
+|Working directory|c:\intel||c:\atm\1|
+|Process for injecting|fwmain32|.exe|atmapp.exe|
+|Method for launchingpayload after injectioninto the process|LoadLibra|ry shellcode|LoadLibrary shellcode(with minor changes)|
+|Debugging info shown inthe console|In an exte|nded format|In a brief format, onlythe number of detectedprocesses|
+|List of XFS functions used|WFMFreeBWFMAllocWFSExecuWFSFreeRWFSGetIn|uffer,ateBuffer,te,esult,fo|WFMFreeBuffer,WFMAllocateMore,WFMAllocateBuffer,WFSExecute,WFSFreeResult,WFSStartUp, WFSGetInfo|
+|File size|60 Kbytes||84 Kbytes|
+|Creating springboards onfunction WFS*|Yes||No|
+|Retrieving information oncassette status|Yes||Yes|
+|Determining dispenserand PIN pad statusbefore operation (codes301 and 401)|Yes||No|
+|Searching for hServicehandles when callingWFSGetInfo|Yes||No|
+72
+|Functions available toread the keys entered onthe PIN pad|Yes|Col3|No|
+|---|---|---|---|
+|Transmitting commandsthrough fles withextension|.cmd||.c|
+|Random data generationbased on|CryptAcquireCoCryptGenRando|ntextA +m|rand()|
+|Writing return code to fle|Yes, to fle with*.007|extension|No|
+|A command to modifythe command counter ofthe current app’s randomfow|Yes, command #|5|No|
+|Command to pauseTrojan operation|No||Yes|
+|File name|MD5 hash|Col3|Program type|
+|---|---|---|---|
+|m32.exe|40228a3ea22e61a0f536448|81cd59281|Mimikatz|
+Silence
+Moving into the darkside
+
+The screenshot above shows the launch of this file for a random (knowingly
+non-existent) command; the one below shows the launch of the original
+
+Mimikatz.
+
+Both apps responded identically to this argument in the command line,
+showing a list of supported commands.
+
+74
+|File name|MD5 hash|Col3|Program type|
+|---|---|---|---|
+|cleaner.exe|8A9D278B473B6C5625D57739|714702FC|RAdmin log cleaner|
+Silence
+Moving into the darkside
+It then writes them to the end of the file and deletes the file. Presumably,
+the programmer’s intention was to have these random values written to the
+beginning of the file so as to obstruct restoration of RAdmin connections logs. An
+implementation error, however, prevents this from happening:
+The argument FILE_END is thereby passed on to the function SetFilePointer, which
+means that the write pointer is set to the end of the file.
+Perl IRC DDoS bot
+This bot is a Perl script designed to run on Linux OS. Its functionality includes
+retrieving information about the infected machine, executing shell commands
+(cmd), sending emails, downloading files, scanning ports and carrying out DDoS
+attacks. The server involved is 91.134.146[.]175:1984, communication protocol IRC,
+channel name "#PMA".
+76
+|Command|Description|Col3|
+|---|---|---|
+|VERSION|Send the current version of|the bot to the server.|
+|help|Brief bot man||
+|system|Retrieve information about|the current bot instance|
+|version|Receive a bot version||
+|food|Bot man for DDoS||
+|channel|Man for general bot comma|nds|
+Silence
+Moving into the darkside
+|utils|Bot man for apps|Col3|
+|---|---|---|
+|die|Terminate bot operati|on|
+|join|Join the channel recei|ved as a parameter|
+|part|Leave the channel rec|eived as a parameter|
+|portscan|Get a list of open TCPas a parameter.|ports on the device whose ip address is received|
+|download|Download and save fl|e|
+|dns|Send to server the IP|address whose URL is received as a parameter.|
+|port|Check if the TCP portreceived as paramete|is open on a specifc device. IP and port arers.|
+|udp1|Launch a UDP food atpackets). The addressparameters.|tack, packet length 64 to 1024 bytes (small, port, and attack duration are received as|
+|udp2|Launch a DDoS attackUDP, ICMP, TCP. Attackif the time set as a paaddress of the victim,of the attack. Each UD|using all network protocols, and primarily IGMP,s all ports starting from 1 ending with the last onerameter is running. Received as a parameter: the the length of the message sent, and the durationP port is attacked twice.|
+|udp3|Launch an UDP DDoSthe port, and the dura|attack using long packets, receiving the address,tion of the attack as parameters.|
+|tcp|Launch a TCP DDoS atport. The address, pora parameter. This combe transmitted in thethis, however, is an eraltogether: the script|tack. Opens 1,000 connections on a specifct, and the duration of the attack are received asmand’s man indicates that 4 parameters mustsequence: "   ";ror as the parameter" " is missingdoes not send any messages to the victim.|
+|http|Launch an Http DDoSof the victim and thea message of the follonHost: <%Victim URL%victim’s address.|attack. Parameters received include the addressduration of the attack. The application sendswing type: "GET   / Http/1.1\r\nAccept: /\r\>\r\nConnection: Keep-Alive\r\n\r\n" to the|
+|cback|Open a TCP connectio(or cmd commands in|n with a remote host to execute shell commands the case of Windows).|
+|mail|Send the message. Thcontent-type: text/htFrom: <%second parmTo: <%third parmeter<%forth parameter%>To send the message,parameter –t.|e body of the message:ml      Subject: <%frst parmeter%>eter%>%> it uses the utility "/usr/sbin/sendmail" with the|
+78
+|ctcpfol od(versionwith oneparameter)|The bot sends the user withfollowing messages:"\001VERSION\001\n""\001PING\001\n"10 times.|the nickname (the fri st parameter) the|
+|---|---|---|
+|msgfood|Sends the user (whose namwith non-printable characte|e it receives as a parameter) a messagers.|
+|noticefood|Similar to the "msgfood" cofor transmission.|mmand, but another IRC command is used|
+|maxifood|Carries out the attack launc5 times.|hed in ctcpfood, msgfood and noticefood|
+|rejoin|Reconnect to the channel.||
+|op|Add operator status by nickparameters.|name. Status and nickname are received as|
+|deop|Delete operator status by nias parameters.|ckname. Status and nickname are received|
+|voice|Add voice status by nicknamparameters.|e. Status and nickname are received as|
+|devoice|Delete voice status by nicknparameters.|ame. Status and nickname are received as|
+|msg|Send a message (the seconreceived as the frst parame|d parameter) to the user whose nickname ister.|
+|food|Send messages (the third pis received as the second paparameter.|arameter) to the user whose nicknamerameter. Number of messages: the frst|
+|ctcp|The bot sends the user withthe following message: "\00|the nickname [VK8] (the frst parameter)1<%param2%>\001".|
+|ctcpfood(versionwith twoparameters)|The bot sends the user withparameter) the following menumber of messages is rece|the nickname [VK9] (the secondssages: "\001<%param3%>\001". Theived as a parameter.|
+|invite|Invite the user to the channparameters.|el. The user and channel are received as|
+|newerver|Change the IRC server. The nparameter; standard port 6|ew nickname and address are received as a667.|
+|nick|Change the nickname. The n|ew nickname is received as a parameter.|
+|raw|Sends to the server a messa|ge that is received as a parameter.|
+|eval|Run a module that is receiv|ed as a parameter.|
+|quit|Terminate app operation||
+79
+Silence
+Moving into the darkside
+A list of scanned TCP ports:
+1,7,9,14,20,21,22,23,25,53,80,88,110,112,113,137,143,145,222,333,405,443,444,445,512,587,6
+16,666,993,995,1024,1025,1080,1144,1156,1222,1230,1337,1348,1628,1641,1720,1723,1763,19
+83,1984,1985,1987,1988,1990,1994,2005,2020,2121,2200,2222,2223,2345,2360,2500,2727
+,3130,3128,3137,3129,3303,3306,3333,3389,4000,4001,4471,4877,5252,5522,5553,5554,5
+642,5777,5800,5801,5900,5901,6062,6550,6522,6600,6622,6662,6665,6666,6667,6969,7
+000,7979,8008,8080,8081,8082,8181,8246,8443,8520,8787,8855,8880,8989,9855,9865,
+9997,9999,10000,10001,10010,10222,11170,11306,11444,12241,12312,14534,14568,15951,172
+72,19635,19906,19900,20000,21412,21443,21205,22022,30999,31336,31337,32768,33180,
+35651,36666,37998,41114,41215,44544,45055,45555,45678,51114,51247,51234,55066,5555
+5,65114,65156,65120,65410,65500,65501,65523,65533
+80
+Silence
+Moving into the darkside
+```
+5b4417521c71cc89cd3b2fe94ab395b2 — Silence.Downloader
+7d3614df9409da3933637f09587af28c — Silence.Downloader
+7d8af1f6cf7d08c0c39e03033585d404 — Silence.Downloader
+97599e2edc7e7025d5c2a7d7a81dac47 — Silence.Downloader
+9b037ead562c789620a167af85d32f72 — Silence.Downloader
+a1e210598820cbb08e269b2dfd96e741 — Silence.Downloader
+a58a830dce460e91217328bdefb25cbe — Silence.Downloader
+b09b8be361cd0e30a70cc4603a31d1ee — Silence.Downloader
+b4313151019b2091cbd27c8810e5c7c5 — Silence.Downloader
+```
+c6c84da4f27103db4ff593f4d4f45d95 — Silence.Downloader
+```
+ef0fb10c602e3ee81e3677c83a44b409 — Silence.Downloader
+8a9d278b473b6c5625d57739714702fc — Silence.Cleaner
+a3de4a1e5b66d96183ad42800d6be862 — Silence.MainModule
+b43f65492f2f374c86998bd8ed39bfdd — Silence.MainModule
+```
+c4f18d40b17e506f42f72b8ff111a614 — Silence.MainModule
+cf c5a0e5bdc87ab11b75ec8a6715a4 — Silence.MainModule
+f
+```
+f1954b7034582da44d3f6a160f0a9322 — Silence.MainModule
+121c7a3f139b1cc3d0bf62d951bbe5cb — Silence.ProxyBot
+88cb1babb591381054001a7a588f7a28 — Silence.ProxyBot
+a6771cafd7114df25ac0ef2688722fdf — Silence.ProxyBot
+a6cb04fad56f1fe5b8f60fabf2f64005 — Silence.ProxyBot
+dc4ac53350cc4b30839db19d8d6f3b5f — Silence.ProxyBot
+50565c4b80f41d2e7eb989cd24082aab — Silence.ProxyBot.Net
+8191dae4bdeda349bda38fd5791cb66f — Silence.ProxyBot.Net
+242b471bae5ef9b4de8019781e553b85 — Silence.SurviellanceModule
+d7491ed06a7f19a2983774fd50d65fb2 — Silence.SurviellanceModule
+1648437368e662fbe4805a1f95aa9fd0 — Smoke
+dde658eb388512ee9f4f31f0f027a7df — CHM
+```
+E-mails
+Senders:
+info@finamnews019[.]xyz
+driley123@bellsouth[.]net
+belov@ppfbank[.]ru
+belov@vivacity[.]ru
+cap@jabber[.]sg
+cjlove143@ymail[.]com
+driley123@bellsouth[.]net
+iambrunk@sbcglobal[.]net
+josueruvalcaba@mail[.]com
+pakovelli@mail[.]com
+payonline@fbank[.]org
+prokopenkovg@bankci[.]ru
+revamped702@att[.]net
+82
+|IP|Provider|Country|Col4|Program|Year|
+|---|---|---|---|---|---|
+|46.183.221[.]89|DataClub S.A.|Latvia||Silence.ProxyBot|2016-07|
+|||||Kikothac||
+|87.98.227[.]83|OVH|Spain||Silence.ProxyBot|2016-08|
+|5.39.30[.]110|OVH|France||Silence.Downloader|2016-09|
+|46.183.221[.]37|DataClub S.A.|Latvia||Silence|2016-11|
+|54.36.191[.]97|OVH|France||Silence.Downloader|2017-10|
+|139.99.156[.]100|OVH|France||Exploit|2017-10|
+|185.161.208[.]61|DeltaHost|Ukraine||Silence.ProxyBot|2017-072018-02|
+|185.161.208[.]61||||Silence|Silence|
+|185.161.208[.]61||||Silence.ProxyBot.NET|Silence.ProxyBot.NET|
+|185.20.184[.]29|DeltaHost|Ukraine||Silence|2017-07|
+|185.20.184[.]29||||Meterpretersecure2048[.]at|Meterpretersecure2048[.]at|
+|137.74.224[.]142|OVH|France||Silence.Downloader|2017-08|
+|149.56.131[.]140|OVH|France||Meterpreter|2017-082017-10|
+|158.69.218[.]119|OVH|Canada||Silence.Downloader|2017-08|
+|5.188.231[.]89|MoreneHostSinaro.host|TheNetherl|ands|Unknown|2017-10|
+|185.29.10[.]117|DataClub S.A.|Sweden||Silence.ProxyBot|2017-09|
+|185.29.10[.]117|DataClub S.A.|Sweden||Silence.Downloader|Silence.Downloader|
+Silence
+Moving into the darkside
+|91.207.7[.]86|MaxiDed|P|oland|Silence.Downloader|2018-04|
+|---|---|---|---|---|---|
+|91.207.7[.]79|MaxiDed|P|oland|Silence.Downloader|2018-04|
+|91.207.7[.]79|MaxiDed|P|oland|JS downloader|2017-10|
+|5.154.191[.]105|Stephost|M|oldavia|exploit|2018-04|
+|144.217.14[.]173|OVH|Ca|nada|Exploit CVE-2017-0199|2017-04|
+|144.217.162[.]168|OVH|Ca|nada|Silence.Downloader|2017-06|
+|164.132.228[.]29|OVH|Fr|ance|Silence.Downloader|2017-06|
+|185.29.11[.]126|DataClub S.A.|ThN|eetherlands|Kikothac|2017-12|
+|193.169.245[.]89|DeltaHost|ThN|eetherlands|Kikothac|2016-08|
+|51.255.200[.]161|OVH|Fr|ance|Exploit CVE-2017-0199|2017-06|
+|91.243.80[.]200|MoreneHost|ThN|eetherlands|Exploit CVE-2017-11882 + CVE-2018-0802|2018-05|
+|92.222.68[.]32|OVH|Fr|ance|Silence.Downloader|2017-04|
+|92.222.68[.]32|OVH|Fr|ance|Undernet DDoS bot|2017-09|
+|5.8.88[.]254|MoreneHost|ThN|eetherlands|Silence.Downloader|2018-05|
+|109.13.212[.]72|SFR SA|Fr|ance|pakovelli@mail[.]com|2017-08|
+|194.58.97[.]95|Reg.Ru|R|ussia|hackedfnamnews019[.]xyz|2017-10|
+|46.170.125[.]222||Po|land|yu_chernyshova@mail[.]com|2017-08|
+|62.57.131[.]114||Sp|ain|touqirkhan@mail[.]com|2017-08|
+|77.246.145[.]202|E-PLANET|R|ussia|hacked vivacity[.]ru|2017-08|
+|91.207.7[.]97||Po|land|LNK downloader|2017-06|
+|91.207.7[.]97||Po|land|JS downloader|2017-10|
+|ira.pubcs16[.]ro91.134.146[.]175|OVH|Ir|eland|Undernet DDoS bot|2017-09|
+84
+|IP|Real bank|Provider|Col4|Country|Date|
+|---|---|---|---|---|---|
+|5.200.55[.]198|bankrab[.]ru|OOO IT-Gr|ad|Russia|07-2016|
+|185.7.30[.]137|itbank[.]ru|VMLAB LLCustomer|C VPSs|Russia|06-2017|
+|Domain|Dat|e|
+|---|---|---|
+|tvaudio[.]ru|07-2|016|
+|vivacity[.]ru|08-2|017|
+|fnamnews019[.]xyz|10-2|017|
+|Domain|IP|Provi|der|Country|Date|
+|---|---|---|---|---|---|
+|trustintbank[.]org|109.234.34[.]35|VDSINHosti|A VDSng|Russia|2016-07|
+|itbank[.]us|193.0.178[.]12|PE Vi|ktor Tyurin|TheNetherlands|2016-07|
+|itrbank[.]ru|31.31.204[.]161|Reg.R|u|Russia|2016-09|
+|itmbank[.]ru|185.100.67[.]129|Hoste|r.KZ|Kazakhstan|2016-09|
+|itmbank[.]us|46.30.43[.]83|Eurob|yte VPS|Russia|2016-09|
+|mosfnbank[.]ru|5.200.56[.]161|OOO|IT-Grad||2016-09|
+|mostbbank[.]ru|31.31.204[.]161|Reg.R|u|Russia|2016-09|
+|mostbbank[.]ru|77.246.145[.]86|E-PLA|NET|Russia|2017-06|
+|mostbbank[.]ru|77.246.145[.]82|77.246.145[.]82|77.246.145[.]82|77.246.145[.]82|2017-06|
+|ppfbank[.]ru|185.158.154[.]147|IT-GRLLC|AD 1Cloud|Russia|2017-06|
+|fbank[.]org|185.158.154[.]17|IT-GRLLC|AD 1Cloud|Russia|2017-06|
+|fbank[.]org|185.154.53[.]132|185.154.53[.]132|185.154.53[.]132|185.154.53[.]132|2017-06|
+|dgbank[.]ru|158.255.0[.]35|Mir TeLtd|lematiki|Russia|2017-09|
+|bankci[.]ru|95.142.39[.]5|Eurob|yte VDS|Russia|2017-09|
+|bankci[.]ru|95.142.39[.]6|Eurob|yte VDS|Russia|2017-09|
+|csbank[.]ru|185.180.231[.]63|FirstB|yte|Russia|2017-09|
+Silence
+Moving into the darkside
+|fcbank[.]ru|195.161.41[.]2|AvguroTechnologiesLtd. Hostingservice provider|Russia|2017-09|
+|---|---|---|---|---|
+|fcbank[.]ru|81.177.135[.]99|81.177.135[.]99|81.177.135[.]99|2017-10|
+|mmibank[.]ru|81.177.140[.]58|AvguroTechnologiesLtd. Hostingservice provider|Russia|2017-09|
+|mmibank[.]ru|81.177.6[.]226|81.177.6[.]226|81.177.6[.]226|2017-10|
+|spas-ibosberbank[.]ru|185.235.130[.]69|ON-LINE DATALTD|TheNetherlands|2018-01|
+|fpbank[.]ru|217.28.213[.]250|INTRELL-NET|Russia|2018-05|
+|fpbank[.]ru|217.28.213[.]162|217.28.213[.]162|217.28.213[.]162|2018-05|
+|fpbank[.]ru|217.29.57[.]176|217.29.57[.]176|217.29.57[.]176|2018-05|
+|Domain|IP|Col3|Program|Year|
+|---|---|---|---|---|
+|variiform[.]gdn|91.207.7[.]97||Smoke|2017-10|
+|cassocial[.]gdn|cassocial[.]gdn|cassocial[.]gdn|cassocial[.]gdn|cassocial[.]gdn|
+|secure2048[.]at|185.20.184[.]29||Meterpreter|2017-07|
+File system artifacts
+Directories
+
+
+c:\1
+
+
+c:\intel
+
+
+c:\atm
+
+
+Files:
+
+
+C:\Users\<%username%>\AppData\Roaming\Microsoft\Windows\Start Menu\
+Programs\Startup\WINWORD.exe
+
+
+C:\ProgramData\IntelSofts_.exe
+
+
+C:\ProgramData\MicrosoftsUpdte.exe
+
+
+C:/Windows/temp/OBDP952.tmp.exe
+
+
+apcs.exe
+
+
+netsrvc32.exe
+
+
+smmsrv.exe
+
+
+MicrosoftsUpdte_.exe
+
+
+Intel Security.exe
+
+
+pripr.exe
+
+
+86
+Output : 
+### Overview of the Silence Group and Their Activities
+
+The **Silence** group is a sophisticated cybercriminal organization known for targeting financial institutions, primarily in Russia and Eastern Europe. They employ various malware tools and tactics to gain unauthorized access to banking systems, steal sensitive information, and conduct fraudulent transactions. Below is a detailed breakdown of their activities, including the malware they use, infrastructure details, and file system artifacts.
+
+### Malware Components
+
+#### Key Files and Directories
+- **Directories:**
+  - `c:\1`
+  - `c:\intel`
+  - `c:\atm`
+
+- **Files:**
+  - `C:\Users\<%username%>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\WINWORD.exe`
+  - `C:\ProgramData\IntelSofts_.exe`
+  - `C:\ProgramData\MicrosoftsUpdte.exe`
+  - `C:/Windows/temp/OBDP952.tmp.exe`
+  - `apcs.exe`
+  - `netsrvc32.exe`
+  - `smmsrv.exe`
+  - `MicrosoftsUpdte_.exe`
+  - `Intel Security.exe`
+  - `pripr.exe`
+
+### Infrastructure and Domains
+
+#### IP Addresses and Real Banks
+- **5.200.55[.]198** (bankrab[.]ru, OOO IT-Grad, Russia, 07-2016)
+- **185.7.30[.]137** (itbank[.]ru, VMLAB LLCustomer, C VPSs, Russia, 06-2017)
+
+#### Domains and Dates
+- `tvaudio[.]ru` (07-2016)
+- `vivacity[.]ru` (08-2017)
+- `fnamnews019[.]xyz` (10-2017)
+
+#### Domain, IP, Provider, Country, and Date
+- **trustintbank[.]org**:
+  - **IP**: 109.234.34[.]35
+  - **Provider**: VDSINHosti A VDSng
+  - **Country**: Russia
+  - **Date**: 2016-07
+
+- **itbank[.]us**:
+  - **IP**: 193.0.178[.]12
+  - **Provider**: PE Viktor Tyurin
+  - **Country**: The Netherlands
+  - **Date**: 2016-07
+
+- **itrbank[.]ru**:
+  - **IP**: 31.31.204[.]161
+  - **Provider**: Reg.Ru
+  - **Country**: Russia
+  - **Date**: 2016-09
+
+- **itmbank[.]ru**:
+  - **IP**: 185.100.67[.]129
+  - **Provider**: Hoster.KZ
+  - **Country**: Kazakhstan
+  - **Date**: 2016-09
+
+- **itmbank[.]us**:
+  - **IP**: 46.30.43[.]83
+  - **Provider**: Eurobyte VPS
+  - **Country**: Russia
+  - **Date**: 2016-09
+
+- **mosfnbank[.]ru**:
+  - **IP**: 5.200.56[.]161
+  - **Provider**: OOO IT-Grad
+  - **Country**: Russia
+  - **Date**: 2016-09
+
+- **mostbbank[.]ru**:
+  - **IPs**: 31.31.204[.]161, 77.246.145[.]86, 77.246.145[.]82
+  - **Provider**: Reg.Ru, E-PLANET
+  - **Country**: Russia
+  - **Date**: 2016-09, 2017-06
+
+- **ppfbank[.]ru**:
+  - **IP**: 185.158.154[.]147
+  - **Provider**: IT-GRLLC AD 1Cloud
+  - **Country**: Russia
+  - **Date**: 2017-06
+
+- **fbank[.]org**:
+  - **IPs**: 185.158.154[.]17, 185.154.53[.]132
+  - **Provider**: IT-GRLLC AD 1Cloud
+  - **Country**: Russia
+  - **Date**: 2017-06
+
+- **dgbank[.]ru**:
+  - **IP**: 158.255.0[.]35
+  - **Provider**: Mir TeLtd Lematiki
+  - **Country**: Russia
+  - **Date**: 2017-09
+
+- **bankci[.]ru**:
+  - **IPs**: 95.142.39[.]5, 95.142.39[.]6
+  - **Provider**: Eurobyte VDS
+  - **Country**: Russia
+  - **Date**: 2017-09
+
+- **csbank[.]ru**:
+  - **IP**: 185.180.231[.]63
+  - **Provider**: FirstByte
+  - **Country**: Russia
+  - **Date**: 2017-09
+
+- **fcbank[.]ru**:
+  - **IPs**: 195.161.41[.]2, 81.177.135[.]99, 81.177.135[.]99
+  - **Provider**: AvguroTechnologiesLtd. Hostingservice provider
+  - **Country**: Russia
+  - **Date**: 2017-09, 2017-10
+
+- **mmibank[.]ru**:
+  - **IPs**: 81.177.140[.]58, 81.177.6[.]226
+  - **Provider**: AvguroTechnologiesLtd. Hostingservice provider
+  - **Country**: Russia
+  - **Date**: 2017-09, 2017-10
+
+- **spas-ibosberbank[.]ru**:
+  - **IP**: 185.235.130[.]69
+  - **Provider**: ON-LINE DATA LTD
+  - **Country**: The Netherlands
+  - **Date**: 2018-01
+
+- **fpbank[.]ru**:
+  - **IPs**: 217.28.213[.]250, 217.28.213[.]162, 217.29.57[.]176
+  - **Provider**: INTRELL-NET
+  - **Country**: Russia
+  - **Date**: 2018-05
+
+### File System Artifacts
+
+#### Key Directories and Files
+- **Directories:**
+  - `c:\1`
+  - `c:\intel`
+  - `c:\atm`
+
+- **Files:**
+  - `C:\Users\<%username%>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\WINWORD.exe`
+  - `C:\ProgramData\IntelSofts_.exe`
+  - `C:\ProgramData\MicrosoftsUpdte.exe`
+  - `C:/Windows/temp/OBDP952.tmp.exe`
+  - `apcs.exe`
+  - `netsrvc32.exe`
+  - `smmsrv.exe`
+  - `MicrosoftsUpdte_.exe`
+  - `Intel Security.exe`
+  - `pripr.exe`
+
+### Additional Domains and Files
+
+- **Domain:**
+  - `variiform[.]gdn` (IP: 91.207.7[.]97, Program: Smoke, Year: 2017-10)
+  - `cassocial[.]gdn`
+  - `secure2048[.]at` (IP: 185.20.184[.]29, Program: Meterpreter, Year: 2017-07)
+
+### Conclusion
+
+The **Silence** group's activities are characterized by a sophisticated and targeted approach to financial institutions. They use a combination of malware, domain spoofing, and file system artifacts to gain access to sensitive systems and data. Organizations should be vigilant and implement robust security measures to mitigate the risks posed by such advanced threat actors.

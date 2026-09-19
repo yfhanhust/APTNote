@@ -1,0 +1,54 @@
+
+
+
+Sentence : Command 0x80061002: Remote Shell Interaction
+The Remote Shell Interaction command is responsible for both polling for waiting remote
+shell output as well as providing input to the remote shell. When activated, the Remote Shell
+Interaction command handler determines if the pipe for the STDIN is still valid (non-NULL).
+If the pipe is invalid, the command handler will generate a response with the following fields
+within the CommandData set:
+|Field Value|Col2|
+|---|---|
+|dwCommandID|0x80061002|
+|dwLastError|value fromGetLastError|
+|dwPayloadSize|size of the string in the payload|
+|(payload)|string: “hWritePipe2 Error:%d\n” where%d is the value fromGetLastError|
+If the pipe handle is still valid, and the CommandData ’s dwPayloadSize value is non-zero, the
+payload data that follows the CommandData structure is passed to the remote shell via the pipe
+without translation by means of a call to WriteFile .
+After a 500ms sleep, a new buffer of 65564 bytes is allocated by the command handler in order
+to hold any response data. A call to PeekPipe is made to determine if there is any output from
+the remote shell waiting. If PeekPipe indicates the presence of waiting data, a call to
+ReadFile is made to copy up to 65536 bytes of the output into the payload portion of the
+response buffer. The command handler returns the response with the CommandHeader set to
+the size of the entire data blob and the following fields set within the CommandData structure:
+|Field Value|Col2|
+|---|---|
+|dwCommandID|0x80061002|
+|dwLastError|2|
+|dwPayloadSize|size of the data in the payload (or 0 if no data was waiting)|
+|(payload)|(optional) Data from the remote shell’s output (STDOUT orSTDERR)|
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Command 0x80061002", "type" : "EXEF"},
+        {"id": 2, "description": "Remote Shell Interaction command handler", "type" : "TTPS"},
+        {"id": 3, "description": "STDIN pipe", "type" : "SYSP"},
+        {"id": 4, "description": "CommandData set", "type" : "REGI"},
+        {"id": 5, "description": "GetLastError value", "type" : "TAMP"},
+        {"id": 6, "description": "Payload string: “hWritePipe2 Error:%d\n”", "type" : "EXEF"},
+        {"id": 7, "description": "WriteFile call", "type" : "APPS"},
+        {"id": 8, "description": "PeekPipe call", "type" : "APPS"},
+        {"id": 9, "description": "ReadFile call", "type" : "APPS"},
+        {"id": 10, "description": "Response buffer (65564 bytes)", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "is handled by"},
+        {"source": 2, "target": 3, "rel_name" : "checks validity of"},
+        {"source": 2, "target": 4, "rel_name" : "generates"},
+        {"source": 5, "target": 6, "rel_name" : "is used in"},
+        {"source": 7, "target": 3, "rel_name" : "uses"},
+        {"source": 8, "target": 4, "rel_name" : "calls after sleep"},
+        {"source": 9, "target": 10, "rel_name" : "copies data into"}
+    ]
+}

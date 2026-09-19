@@ -1,0 +1,73 @@
+
+
+
+Sentence : Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 69
+After the RAT channel processes the requested command, SJM1 terminates the connection between the client node and
+itself. Therefore, each time an attacker wishes to issue a command against a SJM1 node, the attacker much reconnect to
+the node.
+The inclusion of the RAT channel is somewhat unusual for several reasons. First, the channel is unauthenticated while,
+as presented in the sync channel discussion, there is a heavy use of asymmetric encryption to ensure command files are
+legitimate and only producible by the Lazarus Group attackers. Secondly, the construction of the RAT channel appears
+almost as if it were an afterthought of the developer(s) given that it requires constant reconnections to a node to issue
+multiple commands. Lastly, the RAT channel is single node focused, while the rest of the functionality of SJM1 is geared
+toward a hive or collective.
+17.1.3 Sync Channel
+The crawler channel and sync channel share the same handler function with the crawler channel being the basis for the
+sync channel’s operations. More to the point, the entirety of the crawler channel’s events occurs as a precursor to the sync
+channel specific operations. Therefore, immediately following the transfer of the known nodes list to the client from the
+server and the updating of the appropriate NodeInfo entries in the known nodes and seed nodes lists, the sync channel
+adds to or updates the client to the client nodes list.
+The client sends two datagrams containing information about the client node to the server. The first datagram contains a
+ClientInfo data structure (see Table 17-8) describing aspects of the client node related to its basic properties such as IP
+address and listening port as well as its type. The second datagram contains a ClientInfoEx data structure (see Table
+17-9) that describes hardware and operating system level aspects of the node such as the OS version information, CPU
+details, and if particular ports of interest are open, among other details. If the size of the two datagram payloads matches
+their respective data structure sizes, the data structures are joined into a single data structure and stored within the list of
+client nodes . If, however, the size of the ClientInfo data structure is incorrect, the ClientInfoEx transfer is aborted
+by the server node.
+The client node and the server node now begin the process of the client node synchronizing its command files. Command
+files are specifically formatted data files that SJM1 uses to transfer commands from node to node. The structure of a
+command file (Table 17-5) consists of a RSA encrypted header, the command’s data and its associated header in a cleartext
+header, and an optional encrypted data blob containing the information necessary to verify the integrity of the entire
+command file.
+|OFFSET|SIZE|FIELD DESCRIPTION|
+|---|---|---|
+|0|128 Bytes|Encrypted Command File Header (see Table 17-6)|
+|128|Variable but at least 4 Bytes (m)|Data header (see Table 17-7)|
+|m+4|4 Bytes (DWORD)|Size of data field|
+|m+132|Variable (n)|Data|
+|m+n+132|128 Bytes|(Optional) encrypted verification data|
+Table 17-5: SierraJuliett-MikeOne’s Command File Structure
+The first 128 bytes of a command file are encrypted using a private RSA key that presumably only belongs to the Lazarus
+Group, as the key has not been found disclosed publicly. Underneath the RSA encryption lies the command file header
+(see Table 17-6) which species the type of command, an identifier for the command, the data/parameters of the command
+and the size of that data along with its header, and, optionally, the necessary information to verify the integrity of the
+entire command file along with the command’s data and the data’s associated header. The command ID field (offset 4)
+is particularly important as it allows SJM1 nodes to quickly determine if a particular command file has previously been
+executed based on a running counter of the last command ID executed (offset 32 of the node’s configuration data structure).
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RAT channel", "type" : "TTPS"},
+        {"id": 2, "description": "client node", "type" : "ACTO"},
+        {"id": 3, "description": "Lazarus Group attackers", "type" : "ACTO"},
+        {"id": 4, "description": "sync channel", "type" : "TTPS"},
+        {"id": 5, "description": "client nodes list", "type" : "DOCF"},
+        {"id": 6, "description": "ClientInfo data structure", "type" : "DOCF"},
+        {"id": 7, "description": "ClientInfoEx data structure", "type" : "DOCF"},
+        {"id": 8, "description": "command file", "type" : "DOCF"},
+        {"id": 9, "description": "RSA encrypted header", "type" : "DOCF"},
+        {"id": 10, "description": "encrypted verification data", "type" : "DOCF"},
+        {"id": 11, "description": "SJM1 node", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "terminates connection with"},
+        {"source": 3, "target": 1, "rel_name" : "uses"},
+        {"source": 4, "target": 6, "rel_name" : "sends"},
+        {"source": 4, "target": 7, "rel_name" : "sends"},
+        {"source": 2, "target": 5, "rel_name" : "adds to or updates in"},
+        {"source": 8, "target": 9, "rel_name" : "contains"},
+        {"source": 8, "target": 10, "rel_name" : "optionally contains"},
+        {"source": 11, "target": 8, "rel_name" : "uses to transfer commands"}
+    ]
+}

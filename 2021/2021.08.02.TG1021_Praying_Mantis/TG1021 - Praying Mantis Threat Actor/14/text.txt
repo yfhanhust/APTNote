@@ -1,0 +1,33 @@
+Module Reflective Loading
+One of the malware’s most interesting built-in function capabilities is reflective loading of custom DLLs. In order to
+reflectively load a payload, the following 3-step procedure is performed using the “Command” and “Forward”
+variables as arguments:
+
+A random port is selected by the malware for future communications with the loaded module. The port’s
+availability is checked by opening and closing a TCP socket over the loopback. After that, a target IP address is
+extracted from the “Command” variable in the format of a 32 bit integer. The port and IP are concatenated to
+form a struct which is later passed as an argument to the loaded module.
+
+Figure 6 : Random port generation before reflective DLL loading
+A shellcode is extracted from the “Command” variable and loaded to memory. This shellcode reflectively loads
+a DLL passed in the “Forward” variable and returns a pointer to an initial method. If a shellcode and DLL were
+previously loaded, the NodeIISWeb will use the previously exported method unless given a flag which forces a
+reload and execution of the shellcode and DLL.
+a. The custom shellcode that performs the necessary operations to enable execution of the loaded DLL, for
+example relocations within the binary.
+b. The shellcode returns a pointer to a specific exported function of the DLL by comparing the name of the
+exported function to a hash value embedded within the shellcode. That way the threat actor controls which
+function is returned by generating a custom shellcode for any needed function.
+c. If no DLL was provided in the “Forward” variable – the shellcode is simply executed with a null-pointer as
+argument, allowing execution of generic shellcodes.
+Figure 7 : Reconstructed InitLoader method - Execution of shellcode to reflectively load payload DLL
+
+Finally, the exported method is invoked using the structure created in step 1 as an argument.
+
+11
+Figure 8 : Reflective loading of payload DLL and invocation of the selected function
+A sample shellcode was acquired alongside the malicious DLL that was loaded using that shellcode. The shellcode
+which was found is a Position Independent Code (PIC) used to reflectively load “ExtDLL.dll” to memory by
+allocating, writing and relocating any needed addresses to the appropriate allocated address. The exported
+method returned by the shellcode is a method named “Hello” – which is the method used to execute the main
+flow of “ExtDLL.dll”.

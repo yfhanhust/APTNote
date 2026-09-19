@@ -1,0 +1,55 @@
+Trojanized trading program for macOS
+For macOS users, Celas LLC also provided a native version of its trading app. A hidden “autoupdater”
+module is installed in the background to start immediately after installation, and after each system reboot. It
+https://securelist.com/operation-applejeus/87553/ 7/30
+8/23/2018 Operation AppleJeus: Lazarus hits cryptocurrency exchange with fake installer and macOS malware - Securelist
+keeps contacting the command and control (C2) server in order to download and run an additional
+executable from the server. The communication conforms to the Windows version of the updater and is
+disguised as an image file upload and download, while carrying encrypted data inside.
+We have analyzed the following installation file:
+MD5: 48ded52752de9f9b73c6bf9ae81cb429
+File Size: 15,020,544 bytes
+File Type: DMG disk image
+Known file name: celastradepro_mac_installer_1.00.00.dmg
+Date of creation: 13 July 2018
+Once the Cellas Trade Pro app is installed on macOS, it starts the Updater application on the system load via
+a file named “.com.celastradepro.plist” (note that it starts with a dot symbol, which makes it unlisted in the
+Finder app or default Terminal directory listing). The “Updater” file is passed the “CheckUpdate” parameter
+on start.
+https://securelist.com/operation-applejeus/87553/ 8/30
+i
+Celas Trade Pro app plist fle (Apple Property List) i
+The command-line argument “CheckUpdate” looks redundant from a code analysis perspective: there is no
+other argument that the application expects. In the absence of all arguments, it doesn’t do anything and
+quits. This may or may not be way to trick sandboxes that could automatically execute this trojan updater,
+with no suspicious activity produced without such a “secret” extra argument. The choice of a benign string
+such as “CheckUpdate” helps it to hide in plain sight of any user or administrator looking into running
+processes.
+The trojanized updater works similar to the Windows version in many ways. Both applications are
+implemented using a cross-platform QT framework. Upon launch, the downloader creates a unique
+identifier for the infected host using a “%09d-%06d” format string template. Next, the app collects basic
+system information, which for macOS is done via dedicated QT classes:
+Host name
+OS type and version
+System architecture
+OS kernel type and version
+The process of encrypting and transferring data is the same as in the Windows version. This information is
+XOR-encrypted with hardcoded 16-byte static key “Moz&Wie#t/6T!2y”, prepended with GIF89a header
+and uploaded to the C2 server via HTTP POST and the following URL:
+https://www.celasllc[.]com/checkupdate.php
+i
+POST request template strings
+The module relies on a hardcoded User-Agent string for macOS:
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko)
+Chrome/66.0.3359.139 Safari/537.36
+Once the server replies, it checks the HTTP response code. HTTP response code 300 indicates that the
+server has no task for the updater and the application terminates immediately. If the HTTP response is code
+200, then the updater gets the data in the response, decodes it from base64 encoding and decrypts it using
+RC4 with the hardcoded static key “W29ab@ad%Df324V$Yd“. It calculates the MD5 of the decoded and
+decrypted data, which is compared to a value stored inside, to verify the integrity of the transferred file.
+After that, the payload is extracted and saved to a hardcoded file location “/var/zdiffsec“, sets executable
+permissions for all users and starts the app with another secret hardcoded command-line argument
+“bf6a0c760cc642“. Apparently the command-line argument is the way to prevent the detection of its
+malicious functionality via sandboxes or even reverse engineering. We have previously seen this technique
+adopted by Lazarus group in 2016 in attacks against banks. As of 2018, it is still using this in almost every
+attack we investigated.

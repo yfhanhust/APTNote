@@ -1,0 +1,97 @@
+Dropper Analysis
+The released rasman.exe is a legitimate file: Adobe 3D Utility:
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 9/14
+6/21/2019 奇安信威胁情报中⼼
+Figure 3.1 Version information of rasman.exe
+Rasman.exe will load dlls in the same directory by default, including AGM.dll, BIB.dll,
+CoolType.dll and ACE.dll, which could lead to DLL Side-Loading:
+Figure 3.2 Import table information of rasman.exe
+The code of the 4 dlls is the same, is the hijacked dll, will be loaded by rasman.exe
+program by default. Although 4 dlls have the opportunity to execute dllmain, the only dll
+that loads the next stage payload is CoolType.dll because the attacker designed a flag
+variable to control whether the next stage payload needs to be loaded:
+MD5 File Name Size flag Comment
+9ca638ae‐
+b4ce87936b1a993ef8e285fa
+ACE.dll 11441Kb 0x8F Loader filled with use‐
+less data
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 10/14
+6/21/2019 奇安信威胁情报中⼼
+0a9d3fff‐
+f6083a015ab72117cba84fe0
+840c754098c473faff6fd22d‐
+db8163b7
+a8ff3e6abe26c4ce72267154‐
+ca604ce3
+e84927bc7e4be‐
+f6af8daf8640d95325e
+d7c72d9394dc6e519d‐
+bce21830eb37cb
+f5220efbe14b98ac06bc2‐
+cadef5c0f23
+321c4d24‐
+da35f39c4ab145b6cfc4da19
+AGM.dll 11441Kb 0x8F Loader filled with use‐
+less data
+BIB.dll 11441Kb 0x6D Loader filled with use‐
+less data
+rasman.db3 910Kb Shellcode file with
+random name
+rasman.exe 246Kb Legitimate executable
+with random name
+CoolType.dll 11441Kb 0x27 Loader filled with use‐
+less data, load
+shellcode
+MSVCP80.dll 11441Kb Library functions pop‐
+ulated with useless
+data
+MSVCR80.dll 11441Kb Library functions pop‐
+ulated with useless
+data
+The code at the entrance of AGM.dll indicates the two if judgments will not enter,
+because the value of flag is 0x8f, which is greater than the first two judgments, so the
+subsequent payload will not be loaded:
+Figure 3.3 DllMain function of AGM.dll
+The code of the CoolType.dll code is 0x27, which is less than 0x46, so it will enter the
+first if condition and execute fun_LoadExportFun:
+Figure 3.4 DllMain function of CoolType.dll
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 11/14
+6/21/2019 奇安信威胁情报中⼼
+The function of fun_LoadExportFun is mainly to cover large code at the entrance of exe,
+loop into the garbage code appearing in the configuration, the size is 0x20610 bytes,
+then add the code 0xff, 0x15 at the end, and finally connect the address of the export
+function of AGM_5, only In order to finally execute the code that loads the shellcode:
+Figure 3.5 fun_LoadExportFun
+When the program returns to the exe process space, it will jump back to the code range
+covered by fun_LoadExportFun to continue running, and finally execute the AGM_5
+function, mainly to avoid being traced back to the execution flow:
+Figure 3.6 A lot of padding code
+When AGM_5 is executed, it first hides all the child windows of the process, then reads
+the file with the suffix of db3 (here rasman.db3) with the same file name in the same
+directory, and finally performs execution:
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 12/14
+6/21/2019 奇安信威胁情报中⼼
+Figure 3.7 Loading shellcode for rasman.db3
+The loaded shellcode is a variant of the Denis family used by OceanLotus:
+Figure 3.8 Contents of rasman.db3
+Then it connects to udt.sophiahoule.com and establish C2 communication, which
+eventually causes the computer to be controlled:
+Figure 3.9 Captured network packets
+The characteristics of this malicious code:
+
+Insert the encrypted data to the end of the hta script to avoid the existence of
+
+multiple files.
+
+The released files are randomly named according to the file name and file
+
+description selected from the compromised computer, so as to avoid being easily
+acquired in forensics.
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 13/14
+6/21/2019 奇安信威胁情报中⼼
+
+Only select one of the dll files while performing DLL Side-Loading, and fill the exe
+
+entry point with junk code and then do a jump operation to avoid stack traceback.
+
+Enlarge the file size to avoid being uploaded automatically.

@@ -1,0 +1,75 @@
+
+
+
+Sentence : En Route with Sednit
+A source code search engine allowed us to retrieve what we believe
+to be the C source code of the LZW algorithm implementation employed
+by Sedreco [21] . Figure 19 shows an extract of the compressed data header
+initialization in the source code, with the distinctive ~~LZW!~~ signature.
+```
+               ((Dword )buff)[0] = 0x21575A4C; / 'LZW!' signature /
+               ((Dword )buff)[1] = bSize;
+               ((Dword *)buff)[2] = GetCRC32(data, bSize);
+               lastByte += 12;
+           LZWENTRY lzwTable[0x1000];
+           int tableSize = 0, beginTable = 0x100;
+           for (int k = 0; k <= 0xFF; k++) {
+             lzwTable[k].next = lzwTable[k].substrIndex = 0;
+             lzwTable[k].substrSize = 1;
+           }
+
+           Dword currentPos = 0;
+           while (currentPos < bSize)
+           {
+
+```
+/* Поиск самой длинной подстроки */
+Figure 19. Extract of LZW algorithm C source code
+Sedreco network threads regularly — usually every 10 minutes — fetch the data from the outbound
+file and encrypt them with the 3DES algorithm and a hardcoded key. The data structure described
+in Figure 16 is then appended to the encrypted data, thus acting as a footer. In this case, the ~~Type~~
+field is set to ~~1~~ .
+Finally, the resulting encrypted data are transmitted to the C&C server by Sedreco network threads.
+Plugins
+An interesting feature of Sedreco is its ability to run external plugins. The downloading and execution
+of those plugins can be requested by the C&C server with command number 1, while their unloading
+can be accomplished with command number 2 (see commands list).
+A Sedreco plugin comes as a Windows DLL with two exported functions named ~~Init~~ and ~~UnInit~~ .
+The plugin is loaded in the same address space as Sedreco’s payload with a call to the Windows API
+~~LoadLibraryA~~ . The plugin’s ~~Init~~ export is then called, with the following structure as its argument:
+```
+   struct PluginArguments {
+     void RegisterNewCommand;  // Developers’ name (see Figure 13)
+     void FN_read_file;  // ESET’s name (also applies to next fields)
+     void FN_write_in_outbound_file;
+     void FN_unregister_command;
+     HKEY_TYPE handle_opened_registry_hive;
+     void output_buffer;
+     void FN_append_to_output_buffer;
+   };
+```
+74
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sedreco", "type" : "ACTO"},
+        {"id": 2, "description": "LZW algorithm implementation", "type" : "EXEF"},
+        {"id": 3, "description": "'LZW!' signature", "type" : "TAMP"},
+        {"id": 4, "description": "C source code", "type" : "DOCF"},
+        {"id": 5, "description": "3DES algorithm", "type" : "EXEF"},
+        {"id": 6, "description": "Hardcoded key", "type" : "TAMP"},
+        {"id": 7, "description": "C&C server", "type" : "CCSH"},
+        {"id": 8, "description": "Windows DLL plugin", "type" : "DOCF"},
+        {"id": 9, "description": "LoadLibraryA (Windows API)", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 4, "rel_name" : "implemented in"},
+        {"source": 4, "target": 3, "rel_name" : "contains"},
+        {"source": 1, "target": 5, "rel_name" : "encrypts with"},
+        {"source": 5, "target": 6, "rel_name" : "uses key"},
+        {"source": 1, "target": 7, "rel_name" : "communicates with"},
+        {"source": 7, "target": 8, "rel_name" : "requests to download and execute"},
+        {"source": 1, "target": 9, "rel_name" : "calls"}
+    ]
+}

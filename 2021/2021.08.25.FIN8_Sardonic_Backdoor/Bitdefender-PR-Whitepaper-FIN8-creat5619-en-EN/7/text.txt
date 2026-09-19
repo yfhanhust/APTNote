@@ -1,0 +1,35 @@
+Persistence
+Deployment of this backdoor begins by running the Sardonic loader. First, a PowerShell script named “sldr.ps1”
+(SHA256 edfd3ae4def3ddffb37bad3424eb73c17e156ba5f63fd1d651df2f5b8e34a6c7) is copied to the victim machine
+and executed. We believe this was performed manually by the attackers, rather than being installed at one point as
+part of an automated loader process.
+This script contains two base-64 strings, corresponding to two additional PowerShell scripts: the first is an RC4encrypted second stage, and the second one implements the decryption algorithm for the former. In an improvement
+from earlier loaders used by FIN8, the decryption key “B4a0f3AE251b7689CFdDe1” is not included in the sample, but
+is given as a command-line argument.
+The purpose of the second stage task is to install the persistence mechanism. Additionally, it can kill an existing
+process passed as a command-line argument, but we haven’t seen this feature used.
+Instead of persisting itself, this second stage abuses WMI (Windows Management Instrumentation) to execute a
+PowerShell command approximately 2-4 minutes after each startup, using the following event filter:
+SELECT * FROM __InstanceModificationEvent WITHIN 60
+WHERE TargetInstance ISA ‘Win32_PerfFormattedData_PerfOS_System’
+AND TargetInstance.SystemUpTime >= 140 AND TargetInstance.SystemUpTime < 240
+That PowerShell command loads and executes a .NET DLL file from another WMI object:
+powershell.exe -nop -c [System.Reflection.Assembly]::Load(([WmiClass] ‘root\cimv2:Win32_
+Base64Class’).Properties[‘Prop’].Value);[MSDAC.PerfOSChecker]::StartCheck()
+Additionally, to ensure that the third stage starts executing immediately, two more WMI objects are created which,
+combined, run it every four seconds, using the following event filter:
+SELECT * FROM __InstanceModificationEvent WITHIN 4
+WHERE TargetInstance ISA ‘Win32_PerfFormattedData_PerfOS_System
+4
+Bitdefender Whitepaper
+FIN8 Threat Actor Goes Agile with New Sardonic Backdoor
+These objects are deleted seven seconds later to ensure that this stage executes exactly once. The WMI objects used
+to start the next stage are depicted in figure 1.
+Fig. 1: WMI persistence objects
+The third stage .NET DLL is contained in the second-stage PowerShell script, in 2 versions, one 32-bit and one 64-bit,
+each encoded in a base-64 string. The architecture-specific version is installed in a WMI “root/cimv2:Win32_
+Base64Class” object, in a “Prop” property. The PowerShell command mentioned above loads that assembly, then
+executes its “MSDAC.PerfOSChecker::StartCheck” method.
+5
+Bitdefender Whitepaper
+FIN8 Threat Actor Goes Agile with New Sardonic Backdoor

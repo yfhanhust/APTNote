@@ -1,0 +1,197 @@
+
+
+
+Sentence : Backdoor installation process
+During installation, the backdoor checks the current path of the executable file by comparing it
+with the value of off_bin_path from the configuration (%ALLUSERSPROFILE%
+\Messenger\msmsgs.exe ). If the path does not match and the backdoor is launched for the
+first time, a mutex is created, the name of which is generated as follows:
+Format of the mutex name for wsprintfW is Global\%d%d%d .
+Then checks whether UAC is enabled. If control is disabled, the malware creates the
+control.exe process (from System32 or SysWOW64, depending on the system's bitness)
+with the CREATE_SUSPENDED flag. After that, the backdoor injects the Root module into it,
+using WriteProcessMemory . Before doing this, the backdoor also implements a function that
+loads the module and transfers control to it. If UAC is enabled, this step is skipped.
+The main executable file ( msmsgs.exe ) and TosBtKbd.dll are copied to the directory specified in
+the off_bin_path parameter and then installed as a service. The service name, display name,
+and description are contained in the configuration (parameters off_svc_name,
+off_svc_display_name, and off_svc_description ). In this sample all three parameters
+have the Messenger value. If the service fails to start, the backdoor is registered in the registry.
+The key and parameter name for this case are also stored in the configuration
+( off_reg_key_install and off_reg_value_name parameters).
+After installation, the backdoor attempts to inject the Root module into one of the processes
+specified in the configuration ( off_inject_target_<1..4> ). If successful, the current
+process terminates, and the new process (or service) proceeds to interact with the C&C server.
+A separate thread is created for this purpose. After that, a new registry key is created or an
+existing registry key is opened, which is used as the malware's virtual file system. The key is
+located in the Software\Microsoft\<key> branch, and the <key> value is also generated
+depending on the serial number of the system volume. The key can also be located in the HKLM
+and HKCU, depending on the privileges of the process. Next, the RegNotifyChangeKey
+function tracks changes in this key. Each parameter is a compressed and encrypted plug-in. The
+backdoor extracts each value and loads it as a module, adding it to the list of available ones.
+This functionality is executed in a separate thread.
+The next step generates a pseudo-random sequence from 3 to 9 bytes long, which is written to
+the registry in the SOFTWARE\ key located in the HKLM or HKCU. The parameter name is also
+generated and is unique for each computer. This value is used as the ID of the infected device.
+After that, the backdoor extracts the address of the first C&C server from the configuration. The
+server storage format is as follows: <protocol>://<address>:<port> . In addition to the
+values that explicitly define the protocol used (HTTP, TCP, UDP), the URL value can also be
+specified. In this case, the backdoor refers to this URL and receives a new address of the C&C
+server in response, using the domain generation algorithm (DGA). The algorithm generates the
+string:
+```
+ wstr __stdcall dga(wstr p_wstr)
+{
+unsigned int v1; // ecx
+unsigned int v2; // edi
+unsigned int v3; // esi
+unsigned int v4; // edx
+char v5; // dl
+wstr *v6; // eax
+```
+```
+wstr *v7; // esi
+wstr tmp_str; // [esp+10h] [ebp-34h] BYREF
+char generated_char_str[16]; // [esp+20h] [ebp-24h] BYREF
+struct _SYSTEMTIME SystemTime; // [esp+30h] [ebp-14h] BYREF
+GetSystemTime_0(&SystemTime);
+if ( SystemTime.wDay > 0xAu )
+{
+if ( SystemTime.wDay > 0x14u )
+v1 = 0xE52F65F3 * SystemTime.wYear - 0x2527D2DD * SystemTime.wMonth
+- 0x4BA7EAF5;
+else
+v1 = 0xF108D240 * SystemTime.wMonth - 0x78C6249D * SystemTime.wYear
+- 0x17AB943D;
+}
+else
+{
+v1 = 0xF5D6C030 * SystemTime.wMonth - 0x5FBD1755 * SystemTime.wYear 0x5540E1B0;
+}
+v2 = 0;
+v3 = v1 % 7;
+do
+{
+v4 = v1 % 0x34;
+if ( v1 % 0x34 >= 0x1A )
+v5 = v4 + 39;
+else
+v5 = v4 + 97;
+v1 = 13 * v1 + 7;
+```
+```
+ generated_char_str[v2++] = v5;
+}
+while ( v2 <= v3 + 7 );
+generated_char_str[v3 + 8] = 0;
+v6 = wstr::assign_char_str_pl2(&tmp_str, generated_char_str);
+v7 = (wstr *)wstr::init_by_wchar_pl2(p_wstr, (LPCWSTR)v6->buffer_wchar);
+wstr::clean_pl2(&tmp_str);
+return v7;
+}
+```
+The resulting string is combined with the string stored in the configuration, using the part before
+the @ symbol. The received URL is used for an HTTP request, which is answered with the encoded
+address of the C&C server.
+After that, a connection object is created that corresponds to the protocol specified for this
+server.
+TCP
+SOCKS4, SOCKS5, and HTTP proxy protocols are supported when connecting over TCP. At the
+beginning, a socket is created and a connection to the server is established in keep-alive mode.
+A packet with the following header format is used for communication with the server:
+```
+ struct packet_header
+{
+DWORD key;
+DWORD id;
+DWORD module_code;
+DWORD compressed_len;
+DWORD decompressed_len;
+};
+```
+HTTP
+When using the HTTP protocol, data is sent by a POST request:
+Data transfer over HTTP is performed by the handler function in a separate thread. The
+mechanism is similar to that of BackDoor.PlugX .
+DNS servers from the configuration are used to resolve the addresses of C&C servers (in this
+sample all 4 addresses are 8.8.8.8). The first packet sent to the server is a sequence of zeros from
+0 to 0x3f bytes in length. The length is selected randomly.
+The backdoor receives a response from the server, which is then decrypted and unpacked. Then,
+the packet header checks the module_code value, which contains the code of the plug-in for
+which the command was received. The backdoor refers to the plug-in whose code is specified in
+the command and calls the function for processing commands from its table. The ID of the
+command itself is contained in the id field of the header.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "msmsgs.exe", "type" : "EXEF"},
+        {"id": 2, "description": "%ALLUSERSPROFILE%\\Messenger\\msmsgs.exe", "type" : "SYSP"},
+        {"id": 3, "description": "off_bin_path", "type" : "REGI"},
+        {"id": 4, "description": "Global\\%d%d%d", "type" : "TAMP"},
+        {"id": 5, "description": "UAC (User Account Control)", "type" : "SYSP"},
+        {"id": 6, "description": "control.exe", "type" : "EXEF"},
+        {"id": 7, "description": "System32 or SysWOW64", "type" : "TAMP"},
+        {"id": 8, "description": "Root module", "type" : "EXEF"},
+        {"id": 9, "description": "WriteProcessMemory", "type" : "APPS"},
+        {"id": 10, "description": "TosBtKbd.dll", "type" : "EXEF"},
+        {"id": 11, "description": "off_svc_name", "type" : "REGI"},
+        {"id": 12, "description": "off_svc_display_name", "type" : "REGI"},
+        {"id": 13, "description": "off_svc_description", "type" : "REGI"},
+        {"id": 14, "description": "Messenger", "type" : "TAMP"},
+        {"id": 15, "description": "off_reg_key_install", "type" : "REGI"},
+        {"id": 16, "description": "off_reg_value_name", "type" : "REGI"},
+        {"id": 17, "description": "off_inject_target_<1..4>", "type" : "TAMP"},
+        {"id": 18, "description": "C&C server", "type" : "CCSH"},
+        {"id": 19, "description": "Software\\Microsoft\\<key>", "type" : "REGI"},
+        {"id": 20, "description": "HKLM (HKEY_LOCAL_MACHINE)", "type" : "TAMP"},
+        {"id": 21, "description": "HKCU (HKEY_CURRENT_USER)", "type" : "TAMP"},
+        {"id": 22, "description": "RegNotifyChangeKey", "type" : "APPS"},
+        {"id": 23, "description": "<key>", "type" : "REGI"},
+        {"id": 24, "description": "Infected device ID", "type" : "TAMP"},
+        {"id": 25, "description": "DGA (Domain Generation Algorithm)", "type" : "TTPS"},
+        {"id": 26, "description": "<protocol>://<address>:<port>", "type" : "URLS"},
+        {"id": 27, "description": "HTTP", "type" : "NETP"},
+        {"id": 28, "description": "TCP", "type" : "NETP"},
+        {"id": 29, "description": "UDP", "type" : "NETP"},
+        {"id": 30, "description": "SOCKS4", "type" : "NETP"},
+        {"id": 31, "description": "SOCKS5", "type" : "NETP"},
+        {"id": 32, "description": "packet_header structure", "type" : "TAMP"},
+        {"id": 33, "description": "POST request", "type" : "NETP"},
+        {"id": 34, "description": "BackDoor.PlugX", "type" : "ACTO"},
+        {"id": 35, "description": "8.8.8.8", "type" : "CCSH"},
+        {"id": 36, "description": "DNS (Domain Name System)", "type" : "DNSS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "located in"},
+        {"source": 1, "target": 3, "rel_name" : "compared to"},
+        {"source": 1, "target": 4, "rel_name" : "creates mutex with name format"},
+        {"source": 5, "target": 6, "rel_name" : "checks if disabled and creates process"},
+        {"source": 8, "target": 6, "rel_name" : "injects into"},
+        {"source": 1, "target": 8, "rel_name" : "loads and transfers control to"},
+        {"source": 10, "target": 2, "rel_name" : "copied with"},
+        {"source": 1, "target": 3, "rel_name" : "copies files to directory specified in"},
+        {"source": 11, "target": 1, "rel_name" : "installed as service name"},
+        {"source": 12, "target": 1, "rel_name" : "service display name"},
+        {"source": 13, "target": 1, "rel_name" : "service description"},
+        {"source": 14, "target": 11, "rel_name" : "value for all parameters"},
+        {"source": 15, "target": 1, "rel_name" : "registered in registry key and parameter name"},
+        {"source": 16, "target": 1, "rel_name" : "registry value name"},
+        {"source": 17, "target": 18, "rel_name" : "injects into processes specified in"},
+        {"source": 18, "target": 24, "rel_name" : "generates ID for infected device"},
+        {"source": 19, "target": 1, "rel_name" : "creates or opens registry key as virtual file system"},
+        {"source": 20, "target": 19, "rel_name" : "located in HKLM branch"},
+        {"source": 21, "target": 19, "rel_name" : "located in HKCU branch"},
+        {"source": 25, "target": 18, "rel_name" : "uses DGA to generate C&C server address"},
+        {"source": 26, "target": 18, "rel_name" : "extracts address from configuration and formats it"},
+        {"source": 27, "target": 26, "rel_name" : "can be part of the protocol used"},
+        {"source": 28, "target": 26, "rel_name" : "can be part of the protocol used"},
+        {"source": 29, "target": 26, "rel_name" : "can be part of the protocol used"},
+        {"source": 30, "target": 28, "rel_name" : "supported proxy protocols when connecting over TCP"},
+        {"source": 31, "target": 28, "rel_name" : "supported proxy protocols when connecting over TCP"},
+        {"source": 32, "target": 18, "rel_name" : "uses for communication with the server"},
+        {"source": 33, "target": 18, "rel_name" : "sends data by POST request"},
+        {"source": 34, "target": 33, "rel_name" : "mechanism similar to"},
+        {"source": 35, "target": 36, "rel_name" : "used to resolve C&C server addresses"},
+        {"source": 36, "target": 18, "rel_name" : "resolves server addresses"}
+    ]
+}

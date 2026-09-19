@@ -1,0 +1,67 @@
+
+
+
+Sentence : Side-Loading technique:
+|credwiz.exeMD5 15CF85C3D904A7D8650164B0B831A318|Col2|
+|---|---|
+|SHA256|17EABFB88A164AA95731F198BD69A7285CC7F64ACD7C289062CD3979A4A2F5BF|
+“Credwiz.exe” is a legit windows file copied from system32/SysWOW64 folder to
+“C:\ProgramData\Adobe\credwiz.exe”.
+When this file gets executed, it will side-load malicious duser.dll file which is dropped in
+the same folder.
+|DUser.dll (version 1)MD5 AC4A8D82D91286D5E0F59B85C8975DF8|Col2|
+|---|---|
+|SHA256|FB761A2DA4841F8739D33A682C5F2F39A033C7BA16430CE5785F7D51AB5D1537|
+Module ‘DUser.dll’ is embedded as the 1st object into Stage-2 HTA file. The file gets dropped
+into “C:\ProgramData\Adobe\DUser.dll”. It has only 1 export function i.e. “cfileexists”.
+As the names suggsts, its only function is to check for the presence of a file at
+“%temp%\MicroSoft\winms.exe” (2nd object dropped from Stage-2 HTA file) and execute it.
+If not found, then it checks for “strcat.txt” at the same location. If it exists, then read the
+content of “str
+cat.txt” and write the content into a file named “winms.exe” as shown in
+12
+It will then launch the RAT module “winms.exe”.
+13
+|DUser.dll (version 2)MD5 B29E7FAC2D84DA758473F3B5E81F3265|Col2|
+|---|---|
+|SHA256|92E9CEEDF28C99F90F8892AEC9D2FA413FF0F4F17C5B0316D05871E95993C3FA|
+In a few instances, we saw a completely different version of DUser.dll module. This DLL
+had an export named as “DllMain”. An interesting PDB string was observed in this file.
+“F:\Packers\CyberLink\Latest Source\Multithread Protocol Architecture\Final Version\
+DUser\Release\x86\DUser.pdb”
+As per the PDB path, DUser was developed in the folder “CyberLink\Latest
+Source\Multithread Protocol Architecture”. At this stage, we are not aware of any similar
+tool.
+This Duser.dll will initiate the connection over this IP address ‘173.212.224.110’ over TCP
+port ‘6102’. This IP address & port can be found out in file as it is mentioned in cleartext.
+Once successfully connected, it will try to delete a BAT file from Program Data as can be
+seen in below image and then proceed for performing various operations based on the
+command received from C2C.
+14
+The commands are numbers from 0 to 15, so it compares each time when it receives the
+command from C2.
+Based on the commands, it fetches the index value and redirects to specific
+function/module to perform the desired operation as shown in below figs.
+For example if C2 sends 0, then it collects the Computer Name, Username, OS version etc.
+and sends it back to C2.
+16
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "credwiz.exe", "type" : "EXEF"},
+        {"id": 2, "description": "C:\\ProgramData\\Adobe\\credwiz.exe", "type" : "SYSP"},
+        {"id": 3, "description": "duser.dll (version 1)", "type" : "DOCF"},
+        {"id": 4, "description": "C:\\ProgramData\\Adobe\\DUser.dll", "type" : "SYSP"},
+        {"id": 5, "description": "%temp%\\MicroSoft\\winms.exe", "type" : "EXEF"},
+        {"id": 6, "description": "%temp%\\strcat.txt", "type" : "DOCF"},
+        {"id": 7, "description": "173.212.224.110:6102", "type" : "CCSH"},
+        {"id": 8, "description": "duser.dll (version 2)", "type" : "DOCF"},
+        {"id": 9, "description": "F:\\Packers\\CyberLink\\Latest Source\\Multithread Protocol Architecture\\Final Version\\DUser\\Release\\x86\\DUser.pdb", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "copied to"},
+        {"source": 3, "target": 4, "rel_name" : "dropped in"},
+        {"source": 5, "target": 6, "rel_name" : "check for presence of"},
+        {"source": 8, "target": 7, "rel_name" : "connects to over TCP"}
+    ]
+}

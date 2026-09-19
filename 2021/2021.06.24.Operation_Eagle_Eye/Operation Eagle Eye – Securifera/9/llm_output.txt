@@ -1,0 +1,62 @@
+
+
+
+Sentence : The DATA
+So here we are, root level access to a suite of tools that captures network traffic across an enterprise and
+makes decisions based on it. It was now time to switch gears and begin investigating what functionality these
+devices provided and how it could be abused by an attacker ( post-compromise risk assessment) . After
+navigating through the CommandPost web application endpoints and performing some minimal system
+enumeration on the devices, I felt like I had a handle on the systems work together. There are 3 device types,
+CommandPost, Sensors, & Collectors. The Sensors collect, inspect, and modify traffic. The Collectors store the
+data, and the CommandPost provides the web interface for managing the devices.
+Given the role of each device, I think the most interesting target to an attacker would have to be a Sensor. If a
+Sensor can intercept (and possibly modify) traffic in transit, an attacker could leverage it to take control of the
+network. To confirm this theory, I logged in to a Sensor and began searching for the software and services
+needed to do this. I started by trying to identify the network interface(s) that the data would be traversing. To my
+surprise, the only interface that showed as being “up” was the IP address I logged in to. Time to RTFM.
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 15/20
+6/24/2021 Operation Eagle Eye – Securifera
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 16/20
+6/24/2021 Operation Eagle Eye – Securifera
+A picture is worth a 1000 words. Based on the figures from the manual shown above, my guess is that the traffic
+is likely traversing one of the higher numbered interfaces. Now I just have to figure out why they aren’t visible to
+the root user. After searching through the logs I find the following clue.
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 17/20
+6/24/2021 Operation Eagle Eye – Securifera
+It appears a custom driver is being loaded to manage the interfaces responsible for the network traffic
+monitoring. Since the base OS is CentOS, it must be mounting them in some kind of security container that is
+restricting access to the devices which is why I can’t see it. After digging into the driver and some of the
+processes associated with it, I found that the software uses libpcap and a ring buffer in file-backed memory to
+intercept network traffic to be inspected/modified. This means to access all of the traffic flowing through the
+device all we have to do is read the files in the ring buffer and parse the raw network packets. Running the script
+for just a short time confirms our theory. We quickly notice the usual authentication flows for major websites
+like Microsoft 0365, Gmail, and even stock trading platforms.
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 18/20
+6/24/2021 Operation Eagle Eye – Securifera
+Given the impact of our discovery and what was possible post compromise on these devices, we wrapped up
+our assessment and immediately reached out the customer and the vendor to began the disclosure process.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "CommandPost web application", "type": "APPS"},
+        {"id": 2, "description": "Sensors", "type": "TAMP"},
+        {"id": 3, "description": "Collectors", "type": "STOR"},
+        {"id": 4, "description": "Network interface(s) on Sensor", "type": "NETP"},
+        {"id": 5, "description": "Custom driver for managing interfaces", "type": "EXEF"},
+        {"id": 6, "description": "CentOS OS", "type": "OPPS"},
+        {"id": 7, "description": "libpcap library", "type": "APPS"},
+        {"id": 8, "description": "Ring buffer in file-backed memory", "type": "TPTH"},
+        {"id": 9, "description": "Microsoft 0365 authentication flow", "type": "URLS"},
+        {"id": 10, "description": "Gmail authentication flow", "type": "URLS"},
+        {"id": 11, "description": "Stock trading platform authentication flow", "type": "URLS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 4, "rel_name": "manages"},
+        {"source": 5, "target": 4, "rel_name": "controls"},
+        {"source": 6, "target": 2, "rel_name": "runs on"},
+        {"source": 7, "target": 8, "rel_name": "uses"},
+        {"source": 2, "target": 9, "rel_name": "intercepts"},
+        {"source": 2, "target": 10, "rel_name": "intercepts"},
+        {"source": 2, "target": 11, "rel_name": "intercepts"}
+    ]
+}

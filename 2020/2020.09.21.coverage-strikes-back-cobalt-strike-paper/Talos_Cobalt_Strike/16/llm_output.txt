@@ -1,0 +1,69 @@
+
+
+
+Sentence : The art and science of detecting Cobalt Strike
+The structure of the data observed is:
+• 4 bytes - Counter
+• 4 bytes - Data Size
+• 4 bytes - Type of callback
+• Variable - Data
+Figure 18 is a decrypted Process List callback.
+Detection
+Based on these actions, we wanted to write detection
+that would catch a Cobalt Strike stager being downloaded
+before it can target anything else. Catching the stager is
+pivotal, as it is most likely to prevent infection. Once the
+stager traverses into memory, it reflectively loads the final
+beacon payload and becomes harder to deal with.
+Researchers first generated every variant possible and
+created PCAPs of the stager traversing over typical ports
+seen in file-data traversal.
+Once again, we triggered the Metasploit shellcode rules for
+every payload when we checked prior coverage:
+• 1:30229 INDICATOR-SHELLCODE Metasploit windows/
+shell stage transfer attempt
+• 1:30471 INDICATOR-SHELLCODE Metasploit payload
+windows_adduser
+• 1:30480 INDICATOR-SHELLCODE INDICATOR-SHELL­
+CODE Metasploit payload windows_x64_meterpret­
+er_reverse_https
+Since we confirmed these rules provide coverage, we can
+move onto the core stageless beacon.
+Figure 18
+The approach here was to once again find a unique set
+of instructions that can be associated with Cobalt Strike
+beacons while avoiding false positives. It was pretty difficult
+to find a good match in the stageless beacons, but the
+function in Figure 19 sparked our interest.
+This function is pretty simple — its purpose is to parse the
+DOS header and check for the correct file magic signature.
+Figure 19: A function
+inside a stageless Cobalt
+Strike beacon.
+© 2020 Cisco. All rights reserved. talos-external@cisco.com | talosintelligence.com page 12 of 29
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cobalt Strike", "type" : "TTPS"},
+        {"id": 2, "description": "Process List callback", "type" : "EXEF"},
+        {"id": 3, "description": "stager", "type" : "EXEF"},
+        {"id": 4, "description": "beacon payload", "type" : "EXEF"},
+        {"id": 5, "description": "memory", "type" : "TAMP"},
+        {"id": 6, "description": "Metasploit shellcode rules", "type" : "TTPS"},
+        {"id": 7, "description": "1:30229 INDICATOR-SHELLCODE Metasploit windows/shell stage transfer attempt", "type" : "IOCS"},
+        {"id": 8, "description": "1:30471 INDICATOR-SHELLCODE Metasploit payload windows_adduser", "type" : "IOCS"},
+        {"id": 9, "description": "1:30480 INDICATOR-SHELLCODE INDICATOR-SHELL­CODE Metasploit payload windows_x64_meterpreter_reverse_https", "type" : "IOCS"},
+        {"id": 10, "description": "stageless beacon", "type" : "EXEF"},
+        {"id": 11, "description": "DOS header", "type" : "TAMP"},
+        {"id": 12, "description": "file magic signature", "type" : "IOCS"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "loads"},
+        {"source": 4, "target": 5, "rel_name" : "traverses into"},
+        {"source": 6, "target": 7, "rel_name" : "detects"},
+        {"source": 6, "target": 8, "rel_name" : "detects"},
+        {"source": 6, "target": 9, "rel_name" : "detects"},
+        {"source": 10, "target": 11, "rel_name" : "parses"},
+        {"source": 10, "target": 12, "rel_name" : "checks for"}
+    ]
+}

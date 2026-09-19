@@ -1,0 +1,123 @@
+
+
+
+Sentence : Current Campaign Analysis
+As an example, we decided to analyze one of their latest samples. The following archive caught
+our attention for exploiting a WinRAR unacev2 module vulnerability and for having interesting
+content. In this case, it looked like someone was using the military conflict in Ukraine to deliver
+some sort of malware. A quick search for those patterns gave us the source of the archive – the
+Gamaredon Group.
+https://www.fortinet.com/blog/threat-research/gamaredon-group-ttp-profile-analysis.html 1/19
+8/22/2019 The Gamaredon Group: A TTP Profile Analysis
+Figure 1. Files inside the archive
+The archive contains several decoy files:
+1_Миротворець\заява.jpg
+Translation: Peacemaker\statement.jpg
+2_Пiнчук\Пiнчук Андрiй Юрiйович 27.12.1997.docx
+Translation: Pinchuk\Pinchuk Andrey Yuriyovych 27.12.1997.doc
+Andrey Pinchuk is a Ukranian politician with alleged ties to Russia
+3_Хавченко\Хавченко Дмитро Василiйович 06.01.1966.docx
+Translation: Havchenko \ Havvchenko Dmitry 06.01.1966.doc
+Dmitry Havchenko is a Ukranian entrepreneur involved in Ukranian politics who owns
+the cryptocurrency exchange WEX.
+D3i_GMCWAAAq_8u.jpg
+ssu_zakon.docx
+Translation: Security Service of Ukraine_The Law.docx
+Several text files
+All of the text files contain old phone billing information, as well as coordinates, numbers, and
+addresses. We cannot determine if this information is real or not. Even if it is, this kind of data can
+be easily found in public domains.
+Figure 2. Billing data
+Another file is used as bait is called ssu_zakon.docx. This document is just a note regarding the
+Security Service of Ukraine (SSU) law.
+https://www.fortinet.com/blog/threat-research/gamaredon-group-ttp-profile-analysis.html 2/19
+8/22/2019 The Gamaredon Group: A TTP Profile Analysis
+Figure 3. Contents of ssu_zakon.docx
+The archive also contains 2 MS Office documents named correspondingly for the names stated
+on the decoy image - Pinchuk Andriy Yuryevich 27.12.1997.docx and Havchenko Dmitry
+Vasilyevich 06.01.1966.docx.
+The document names are written in Ukrainian, while the content is written in Russian – and in
+fact, is just the translated text from the decoy image. The text provides brief information on two
+persons, listing the address of their registration and information about their military careers.
+Figure 4. Corresponding document contents
+Checking the metadata of two documents, we observed the following:
+2_Пiнчук\Пiнчук Андрiй Юрiйович 27.12.1997.docx
+https://www.fortinet.com/blog/threat-research/gamaredon-group-ttp-profile-analysis.html Created: 10.04.2019 07:33:00 3/19
+Modified:10.04.201907:34:00
+8/22/2019 The Gamaredon Group: A TTP Profile Analysis
+Created by: USER
+3_Хавченко\Хавченко Дмитро Василiйович 06.01.1966.docx
+Created: 10.04.2019 07:35:00
+Modified: 10.04.2019 07:35:00
+Created by: USER
+ssu_zakon.docx
+Created: 28.01.2019 06:42:00
+Modified: 05.04.2019 05:05:00
+Created by: USER
+The files заява.jpg (statement.jpg) and D3i_GMCWAAAq_8u.jpg are the same. The original
+source of this picture is a post on a website called Mirotvorets (Peacemaker). The website is
+known for publishing the personal information of people who are considered to be “enemies of
+Ukraine.”
+The text on the pictures below talks about Crimea, the military conflict, and about two people who
+are suspected of sponsoring the Presidential election campaign of the current president of
+Ukraine (Volodymyr Zelensky).
+Figure 5. Decoy images
+The image date on the image is 7 of April 2019. This is the same day it was published on the
+Mirotvorets website. But one interesting fact is that WinRAR shows the last modification date as
+21.02.2019 22:03:
+https://www.fortinet.com/blog/threat-research/gamaredon-group-ttp-profile-analysis.html 4/19
+8/22/2019 The Gamaredon Group: A TTP Profile Analysis
+Figure 6. File last modification time
+To understand this time-travel mystery, we decided to check the ACE archive structure.
+Figure 7. ACE archive structure information
+As you can see on figure 7, the ACE archive contains a date field in MS-DOS format.
+If we convert 02/ 21/ 2019, 22:03:06 to an MS-DOS timestamp, we get 0x4E55B063. This would
+be written as 0x63B0554E in little-endian ordering. Checking our archive, we can find the
+corresponding field:
+https://www.fortinet.com/blog/threat-research/gamaredon-group-ttp-profile-analysis.html 5/19
+Figure8Timestamphexvalue
+8/22/2019 The Gamaredon Group: A TTP Profile Analysis
+Now, if we search for it using \x63\xB0\x55\x4E, we find this module for a Metasploit Framework:
+Figure 9. Same value in the Metasploit module
+Searching further, we observed an earlier Proof of Concept script that was published on the 27
+of February, 2019.
+th
+Figure 10. Unacev2.dll vulnerability PoC
+The date listed in the archive was pre-defined and inserted by generator scripts. This fact gives
+us the idea that the attackers are utilizing publicly available scripts to pack their payload. The only
+real timestamps we can currently trust are the timestamps extracted from MS Office document
+metadata. Those are 05.04.2019 and 10.04.2019. Besides the date and time information, we also
+have a very generic username of the file creator: USER.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "WinRAR unacev2 module vulnerability", "type" : "CVES"},
+        {"id": 2, "description": "Gamaredon Group", "type" : "ACTO"},
+        {"id": 3, "description": "Ukraine", "type" : "COUN"},
+        {"id": 4, "description": "Peacemaker\\statement.jpg", "type" : "DOCF"},
+        {"id": 5, "description": "Pinchuk Andrey Yuriyovych 27.12.1997.docx", "type" : "DOCF"},
+        {"id": 6, "description": "Havchenko Dmitry Vasilyevich 06.01.1966.docx", "type" : "DOCF"},
+        {"id": 7, "description": "D3i_GMCWAAAq_8u.jpg", "type" : "DOCF"},
+        {"id": 8, "description": "ssu_zakon.docx", "type" : "DOCF"},
+        {"id": 9, "description": "Security Service of Ukraine (SSU)", "type" : "OPPS"},
+        {"id": 10, "description": "Mirotvorets website", "type" : "URLS"},
+        {"id": 11, "description": "Volodymyr Zelensky", "type" : "ACTO"},
+        {"id": 12, "description": "0x63B0554E (MS-DOS timestamp)", "type" : "TAMP"},
+        {"id": 13, "description": "Metasploit Framework module", "type" : "APPS"},
+        {"id": 14, "description": "Unacev2.dll vulnerability PoC script", "type" : "DOCF"},
+        {"id": 15, "description": "USER (file creator username)", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "targets"},
+        {"source": 4, "target": 10, "rel_name" : "originates from"},
+        {"source": 5, "target": 9, "rel_name" : "related to"},
+        {"source": 6, "target": 9, "rel_name" : "related to"},
+        {"source": 7, "target": 10, "rel_name" : "originates from"},
+        {"source": 8, "target": 9, "rel_name" : "related to"},
+        {"source": 12, "target": 13, "rel_name" : "used in"},
+        {"source": 13, "target": 14, "rel_name" : "references"},
+        {"source": 5, "target": 15, "rel_name" : "created by"},
+        {"source": 6, "target": 15, "rel_name" : "created by"},
+        {"source": 8, "target": 15, "rel_name" : "created by"}
+    ]
+}

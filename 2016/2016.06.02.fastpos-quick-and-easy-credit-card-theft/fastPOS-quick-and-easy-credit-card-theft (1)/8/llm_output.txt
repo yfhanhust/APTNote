@@ -1,0 +1,84 @@
+
+
+
+Sentence : Data exfiltration
+This RAM scraper has an unusual way of data exfiltration. It does not have any HTTP useragent. Instead of HTTP POST, the HTTP GET verb is used. This implies that a server would
+have to do post-processing on their server-side logs. GET method is usually employed to
+request data from a specific HTTP resource while POST is for submitting data to the specified
+HTTP resource. Analysis of the HTTP responses indicates that a positive HTTP 200 response is
+given by the C&C server – meaning that the HTTP GET request is processed correctly.
+However, no content is provided back to the client from the server.
+4
+Trend Micro | FastPOS: Quick and Easy Credit Card Theft
+Figure 4. HTTP GET request to C&C server
+Furthermore, because of the use of HTTP GET, the requests are cached on the infected
+endpoints and remain in web browser history. FastPOS either deletes the URL cache entry to
+handle the cached content or when it attempts to update using the third thread for self-update.
+Aside from implementing HTTP GET (instead of HTTP POST) on the client-side, the command
+and control server does not implement HTTPS to encrypt the traffic. This makes the requests
+and responses, including the credit card data, exposed in the network traffic. In turn, this makes
+the network traffic easy to spot as it exposes all gathered information from the endpoint in every
+HTTP transaction. However, this threat does so in a quick and easy manner, hence the name
+FastPOS.
+Typically, PoS threats either log data locally or send it out to their respective C&C servers
+immediately. In the case of FastPOS, it does not store any scraped information or status logs
+locally but sends it to C&C server hard-coded in the malware. It does this using the following
+commands/parameters:
+|key&log=TWND%sKWND%s|Used to send the logged keystrokes. Firststring is the window title; second string is thekey log|
+|---|---|
+|add&log=%s&foundin=%s|Used by the RAM Scraper thread during dataexfiltration. First string is the card dump;second string is the process name.|
+Table 1. Commands for sending the stolen information
+It also continuously sends status logs to the C&C server using the parameters listed below:
+5
+|new&username=%s&computername=%s&os=%s&architecture=%s|Registersnew infectedsystem withuser name,computername, OSandarchitecture|
+|---|---|
+|statuslog&log=scanning-%s|Indicatesprocessesbeing|
+Trend Micro | FastPOS: Quick and Easy Credit Card Theft
+|Col1|scanned forcredit carddata|
+|---|---|
+|update&username=%s|Sends whena softwareupdate isrequested|
+|statuslog&log=CheckedForUpdate|Sends afterrequest forsoftwareupdate|
+|statuslog=&log=GetLastError%d|Reportsencounterederror with anerror code|
+Table 2. Parameters for sending logs
+FastPOS has implemented a functionality that indicates the process name where the credit card
+is found. This is usually used to pre-filter if the entry is valid or not. They can also reuse this
+later for profiling purposes or for determining the PoS software running on the infected terminal.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RAM scraper", "type" : "EXEF"},
+        {"id": 2, "description": "HTTP GET verb", "type" : "NETP"},
+        {"id": 3, "description": "C&C server", "type" : "CCSH"},
+        {"id": 4, "description": "HTTP POST verb", "type" : "NETP"},
+        {"id": 5, "description": "HTTP resource", "type" : "URLS"},
+        {"id": 6, "description": "positive HTTP 200 response", "type" : "NETP"},
+        {"id": 7, "description": "web browser history", "type" : "APPS"},
+        {"id": 8, "description": "FastPOS malware", "type" : "EXEF"},
+        {"id": 9, "description": "HTTP traffic", "type" : "NETP"},
+        {"id": 10, "description": "credit card data", "type" : "TAMP"},
+        {"id": 11, "description": "HTTPS encryption", "type" : "NETP"},
+        {"id": 12, "description": "URL cache entry", "type" : "REGI"},
+        {"id": 13, "description": "third thread for self-update", "type" : "TTPS"},
+        {"id": 14, "description": "commands/parameters for sending logged keystrokes and card dumps", "type" : "EXEF"},
+        {"id": 15, "description": "status logs to C&C server", "type" : "TAMP"},
+        {"id": 16, "description": "user name, computername, OS and architecture parameters", "type" : "REGI"},
+        {"id": 17, "description": "error code parameter", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "sends to"},
+        {"source": 4, "target": 5, "rel_name" : "requests data from"},
+        {"source": 3, "target": 6, "rel_name" : "responds with"},
+        {"source": 2, "target": 7, "rel_name" : "cached in"},
+        {"source": 1, "target": 8, "rel_name" : "part of"},
+        {"source": 9, "target": 3, "rel_name" : "sent to"},
+        {"source": 10, "target": 9, "rel_name" : "exposed in"},
+        {"source": 11, "target": 9, "rel_name" : "not implemented on"},
+        {"source": 2, "target": 12, "rel_name" : "deletes or updates"},
+        {"source": 8, "target": 13, "rel_name" : "uses for update"},
+        {"source": 14, "target": 3, "rel_name" : "sends to"},
+        {"source": 15, "target": 3, "rel_name" : "sent to with parameters"},
+        {"source": 16, "target": 15, "rel_name" : "used in"},
+        {"source": 17, "target": 15, "rel_name" : "reports error code"}
+    ]
+}

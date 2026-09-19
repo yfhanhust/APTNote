@@ -1,0 +1,393 @@
+
+
+
+Sentence : 3. INTRUSION OVERVIEW
+3.1 ANATOMY OF ATTACK
+In researching this white paper, the majority of intelligence and incident
+reports reviewed described phishing and malicious document-related tactics
+being utilized by CARBANAK actors as a method of initial compromise.
+However, the initial method of compromise observed during this engagement
+utilized the Apache Struts Content-Type arbitrary command execution
+vulnerability, CVE-2017-5638 . [10] This vulnerability has since been patched
+by the Apache Software Foundation, and the recommended remediation
+process is available on their website. [11] While the time-tested method of
+compromising the user base as the initial ingress method is still very effective,
+server-level compromises commonly give attackers a significant escalation
+compromise while making it harder for defenders to stop them on the initially
+compromised system. An anatomy of the engagement, broken into the
+primary stages, is illustrated in Figure 2.
+Figure 2: Staged Overview of Engagement
+Upon determining that the initially compromised web server, designated as
+system ALPHA, was vulnerable to CVE-2017-5638, the rest of the attacker
+actions could be grouped into the eight stages illustrated in Figure 2. These
+phases are described further in the remainder of Section 3. All binaries, with
+the exception of the ‘b’ Perl script, are described in detail in Section 4.
+10 “Common Vulnerabilities and Exposures”;
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-5638
+11 “Apache Struts Documentation: S2-046”; https://struts.apache.org/docs/s2-046.html
+WHITE PAPER
+3.1.1 Phase 1: D+0
+Initial Compromise, Initial Code Execution
+Attackers from IP 185.117.88.97 utilize CVE-2017-5638 to download
+and execute a Perl script on ALPHA . The Perl script was downloaded via
+WGET from IP 95.215.45.116 . This action constitutes the moment of initial
+compromise and is referenced in this document as “D.” All other times
+discussed in this report will use this moment as a reference in their notation,
+such that “D+2” refers to two days after initial compromise. The metadata
+created by RSA NetWitness Suite describing this action is shown in Figure 3.
+Figure 3: Perl Script Download from 95.215.46.116
+3.1.2 Phase 2: D+0
+Internal Reconnaissance, Privilege Escalation, Persistence
+Six minutes after the download and execution of the Perl script, system
+ALPHA began communicating with IP address 95.215.46.116 via IRC. While
+the available full packet capture retention did not extend to this date at the
+time of analysis, the metadata created was still available. While RSA was
+unable to review the raw data to determine actions taken, RSA IR was able to
+determine traffic type, as well as infer the intention of the nature of actions
+taken via this channel. It appeared that this IRC communication was a method
+of remote command execution conducted by the attackers, evidenced by
+the presence of an output from the “w” User Activity Linux binary. This is
+illustrated in Figure 4.
+8
+9
+WHITE PAPER
+Figure 4: Metadata Showing ‘w’ Output, Actions and Port Usage in IRC Traffic
+While the attackers attempted to use the ‘sudo’ administrative privilege
+binary to gain root access, the privilege-separation user the web server
+was running as did not have the necessary permission. In response to this,
+the attackers downloaded a copy of C source Proof of Concept (PoC) code
+written by “KrE80r” to exploit the Linux Kernel Copy-on-Write “Dirty COW”
+vulnerability, CVE-2016-5195 . [12] This vulnerability has since been resolved
+by the major Linux distributions, with the list of patched kernels found on
+GitHub. [13] At the same time, the attackers downloaded a Bash shell script as
+a driver for the exploit code, named ‘1.sh’. This allowed the attackers to gain
+root privileges on the system at the 27-minute mark. The observed download
+is shown in Figure 5.
+Figure 5: Download of CVE-2016-5195 Exploit Code and Bash Script Driver
+12 “Common Vulnerabilities and Exposures”;
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2016-5195
+13 Benvenuto; “Patched Kernel Versions”;
+https://github.com/dirtycow/dirtycow.github.io/wiki/Patched-Kernel-Versions
+10
+WHITE PAPER
+While the attackers now had root level access, they did not have user
+credentials to move laterally within the environment. In order to gain that
+access, the attackers downloaded versions of the OpenSSH 5.3p1 client and
+server binaries that had been trojanized with malware known as SSHDOOR, [14]
+and installed them onto host ALPHA . The SSHDOOR malware will beacon out
+to IP 185.61.148.96 every 10 minutes until a response is received. A secondary
+function of this malware was credential theft, by which SSHDOOR sends the
+username, password and source/destination host to the attackers. The attackers
+then disengage, leaving the malware to collect credentials until the next day.
+3.1.3 Phase 3: D+1 through D+3
+Lateral Movement, Secondary Ingress, Internal Reconnaissance,
+Credential Harvesting
+Upon gaining credentials via the SSHDOOR malware, attackers respond to
+the SSHDOOR beaconing and establish an SSH tunnel to IP 95.215.46.116
+over TCP port 443. In reviewing the configuration and running processes on
+ALPHA, the attackers observed that the system was running winbind, the UNIX
+implementations of Microsoft RPC, Pluggable Authentication Modules (PAM)
+and the name service switch (NSS). This service allows for unified logins across
+UNIX systems and Microsoft Windows Active Directory (AD). Winbind is a
+component of samba, the Windows interoperability suite for Linux and UNIX,
+which stores information about Windows Active Directory in its configuration
+files. After observing this service running on the system, the attackers checked
+these configuration files for the DNS names of the Microsoft Windows Domain
+Controllers used by winbind to authenticate AD accounts. Upon conducting
+a DNS query for the domain name in the configuration file, the attackers
+gained the names and IP addresses of the two primary DNS servers (also
+Windows Domain Controllers) and the server listed in the configuration file.
+Subsequently, the attackers download a tool named WINEXE, a Linux binary
+that allows remote command execution on Windows systems.
+14 “Linux.Sshdoor”;
+https://www.symantec.com/security_response/writeup.jsp?docid=2013-012808-1032-99
+WHITE PAPER
+Figure 6: Download of Winexe via WGET to ALPHA
+The attackers used credentials taken by the SSHDOOR malware to log in to
+each of the Windows servers, running the qwinsta.exe and tasklist.exe binaries
+on each and then logging out.
+3.1.4 Phase 4: D+3 through D+25
+Privilege Escalation, Internal Reconnaissance, Persistence, Entrenchment,
+Lateral Movement
+The attackers also observed that one of the Windows Domain-authenticated
+credentials stolen was the service account for the client’s authenticated
+vulnerability scans, and was present in the local ‘sudoers’ file. Having determined
+the current level of access available to them, the attackers decided to download
+additional tools in order to establish a static entry point into the environment
+ensuring they could avoid detection. To accomplish this, the attackers
+downloaded the PSCAN TCP port scanner and the ALW Advanced Log Wiper
+binaries and began identifying systems and services accessible from ALPHA.
+11
+12
+WHITE PAPER
+Figure 7: Download of ALW and PSCAN from 95.215.46.116
+One of these systems was the Red Hat Satellite server, which is the primary
+enterprise update server for Red Hat Enterprise Linux (RHEL) deployments.
+Given that the Satellite server requires the ability to interact with all other
+systems under the root user in order to update software, the attackers
+chose this system as their initial primary staging system. This system was
+designated system BRAVO . From BRAVO, the attackers traversed the
+Linux environment through stolen credentials and SSH pre-shared keys and
+conducted internal reconnaissance on any Windows systems within direct
+network access. During this time, the attackers strictly contained all malicious
+files, secondary tools and ingress network communication to the Linux
+environment. Additionally, they consistently tested the Struts vulnerability
+on host ALPHA to ensure the initial method of compromise was open, and to
+alert them to any possible remediation of that system.
+3.1.5 Phase 5: D+25 through D+30
+Disruption, Adaptive Action, Entrenchment, Lateral Movement, Persistence
+The discovery of the Struts vulnerability on host ALPHA, and its subsequent
+remediation, gave the attackers a moment of pause, and they migrated a copy
+of the SSHDOOR client and server to the centralized Syslog server, along
+with a copy of WINEXE, the ALW Log Wiper and their own SSH pre-shared
+key, all of which they had installed on seven key systems at this point. They
+13
+WHITE PAPER
+utilized the ALW log wiper on the Syslog server, designated system CHARLIE,
+in order to remove any log traces of their activities to date at the centralized
+source and hinder any follow-on investigations. The attackers would use
+system CHARLIE as their primary Linux egress point for the rest of the
+incident, though they would ensure that the SSHDOOR binaries remained
+on BRAVO as a backup ingress mechanism. Additionally, they downloaded
+the AUDITUNNEL Reverse Tunneling tool to host CHARLIE and began using
+this as their primary method of ingress to the Linux environment. This was
+assumedly done to transition to a new ingress method should any investigation
+around the remediation of ALPHA identify the SSHDOOR malware.
+Figure 8: AUDITUNNEL Download from 95.215.46.116
+To ensure they could retain access, they replaced SSHDOOR with
+AUDITUNNEL on four of the key systems. They ceased any significant
+operation into the environment until D+29, at which time both the SSHDOOR
+and AUDITUNNEL ingress methods were still operational. On D+30, the
+attackers migrate into the Windows server environment proper to find an
+appropriate staging system to install malware and begin staging ingress within
+the Windows environment. After three failed attempts, the attackers find a
+Windows Domain Controller with Internet access, designated system DELTA .
+3.1.6 Phase 6: D+30 through D+44
+Lateral Movement, Persistence, Entrenchment, Internal Reconnaissance,
+Credential Harvesting
+Once firmly on DELTA, the attackers downloaded and installed the GOTROJ
+malware as their primary method of ingress into the Windows environment.
+At this point, they have secured nine methods of ingress into the environment
+across three different ingress methods. In order to ensure ingress via the
+GOTROJ channel, the actors execute the malware into memory on three
+additional systems, putting the system ingress count at twelve systems. Once
+the malware is persistent and tested on DELTA, the attackers download a
+Windows version of WGET and the TINYP lateral movement tool to system
+DELTA and begin traversing the Windows environment. As they move through
+14
+WHITE PAPER
+the environment, they download a secondary version of TINYP, a host
+reconnaissance tool called INFOS, a process listing tool called CCS, a custom
+version of MIMIKATZ, a Windows version of the previously mentioned PSCAN
+scanner, and the PuTTY Secure Copy tool called PSCP .
+Figure 9: Windows Toolset Download of WGET, TINYP, INFOS, CCS, MIMIKATZ,
+PSCP and PSCAN
+During this time, it becomes quickly apparent that the attackers are targeting
+critical financial data, based on commands, string searches and lateral
+movement decisions conducted by the attackers. This continues until D+43/
+D+44, at which time a coordinated expulsion event took place and post
+remediation activities began.
+3.2 DETECTION AND RESPONSE
+The client contacted RSA IR when system administrators observed anomalies
+associated with the ‘root’ user on system ALPHA during remediation. These
+anomalies were brought to the attention of client security personnel. The
+CVE-2017-5638 vulnerability present on system ALPHA was identified 25
+days (D+25) after the initial compromise when hundreds of thousands of
+successful vulnerability scanning and exploit sessions against the system were
+observed. The vulnerability was determined to have been introduced by an
+out-of-band source installation of an affected version of Apache Struts, which
+had been installed by the web developers. While the organization had taken
+the necessary steps to remediate and patch all systems reported vulnerable to
+CVE-2017-5638, the vulnerable web page on system ALPHA was not detected
+due to the web server and operating system reporting that the affected
+package was not installed. Based on the extensive number of successful exploit
+attempts that ranged from the return of a pre-defined character string to
+successful downloading and execution of malicious code, system ALPHA was
+removed from service, a forensic image was obtained for in-depth analysis
+and the system was restored and remediated. The forensic image was made
+15
+WHITE PAPER
+available to RSA IR upon engagement of services, with RSA IR beginning threat
+hunting actions and follow-on investigations on D+35.
+During threat hunting operations conducted in concert with client analysts,
+RSA IR identified increasingly suspect outbound binary and administrative
+network communication being conducted with external internet hosts.
+Specifically, RSA IR observed the GOTROJ traffic communicating outbound to
+IP 107.181.246.146, and client analysts observed the PSEXESVC.exe service
+binary present and executing on system DELTA. Both of these initial findings
+are shown in Figure 10 and Figure 11, respectively.
+Figure 10: Initial Finding of GOTROJ Communications with Suspect Meta
+Figure 11: Initial Finding of TINYP Lateral Movement
+Correlation of these suspect security events was declared an incident on
+D+35, with RSA IR being immediately engaged for incident response services.
+At this point in the intrusion, the attackers had just entered Stage 5, as
+described in Section 3.1.5.
+Utilizing RSA NetWitness Logs and Packets for network visibility, RSA IR
+identified all network communication channels utilized by the attackers for
+the duration of the incident. This assisted greatly in conducting root cause
+analysis and intrusion scoping, as a significant amount of host forensic
+artifacts had been destroyed, bypassed or made unusable by the attackers.
+WHITE PAPER
+Additionally, the use of this level of visibility allowed RSA IR to conduct
+network protocol analysis on the command and control (C2) communication
+payloads, which led to the capability to decrypt attacker C2 communications
+within minutes of their occurrence. This level of visibility into attacker activity
+greatly assisted in containment, eradication and remediation efforts, which
+concluded on D+44. Upon conclusion of the incident, RSA IR determined that
+the attackers had accessed 154 systems, the majority of which were accessed
+laterally via ingress channels established on systems ALPHA, BRAVO,
+CHARLIE and DELTA. Follow-on analysis of acquired host, network and disk
+forensic data occurred in parallel with continuous monitoring and Threat
+Hunting operations until incident closure on D+74.
+Utilizing RSA NetWitness Endpoint for host visibility, RSA IR was able to
+observe and track specific behavioral indicators of compromise (IOCs)
+identifying attacker activity within the environment. As the attackers were
+particularly careful to remove all traces of their activity upon completion
+and ensure their tools were on disk while in use, many traditional artifacts or
+log-based incident response and forensics methodologies would have been
+ineffective in identifying, investigating and responding to these attackers’
+methods. However, utilizing RSA NetWitness Endpoint in concert with RSA
+NetWitness Logs and Packets allowed RSA IR to use the attackers’ methods
+as IOCs, such as specific file download methods with subsequent deletions,
+specific command-line arguments used by the attackers for lateral movement,
+and specific Windows user status command executions.
+16
+17
+WHITE PAPER
+Output : 
+{
+  "systems": [
+    {
+      "name": "ALPHA",
+      "description": "Initial entry point and primary staging system. Vulnerable to CVE-2017-5638.",
+      "compromised_on": "D+0",
+      "remediated_on": "D+25"
+    },
+    {
+      "name": "BRAVO",
+      "description": "Red Hat Satellite server, used as a primary staging system for Linux environment.",
+      "compromised_on": "D+3",
+      "remediated_on": null
+    },
+    {
+      "name": "CHARLIE",
+      "description": "Centralized Syslog server, used as the primary egress point for Linux environment and to remove log traces.",
+      "compromised_on": "D+25",
+      "remediated_on": null
+    },
+    {
+      "name": "DELTA",
+      "description": "Windows Domain Controller with Internet access, used as a staging system for Windows environment.",
+      "compromised_on": "D+30",
+      "remediated_on": null
+    }
+  ],
+  "tools_and_malware": [
+    {
+      "name": "SSHDOOR",
+      "description": "Malware used for ingress and persistence. Initially installed on ALPHA, later moved to BRAVO and CHARLIE.",
+      "first_used": "D+0",
+      "last_used": "D+30"
+    },
+    {
+      "name": "GOTROJ",
+      "description": "Primary method of ingress into the Windows environment. Installed on DELTA and other systems.",
+      "first_used": "D+30",
+      "last_used": "D+44"
+    },
+    {
+      "name": "AUDITUNNEL",
+      "description": "Reverse Tunneling tool used for ingress into the Linux environment. Installed on CHARLIE and other systems.",
+      "first_used": "D+25",
+      "last_used": "D+30"
+    },
+    {
+      "name": "PSCAN",
+      "description": "TCP port scanner used to identify accessible systems from ALPHA.",
+      "first_used": "D+3",
+      "last_used": "D+44"
+    },
+    {
+      "name": "ALW (Advanced Log Wiper)",
+      "description": "Tool used to remove log traces. Installed on CHARLIE and other systems.",
+      "first_used": "D+25",
+      "last_used": "D+30"
+    },
+    {
+      "name": "WINEXE",
+      "description": "Windows version of WGET, used for downloading tools and malware.",
+      "first_used": "D+30",
+      "last_used": "D+44"
+    },
+    {
+      "name": "TINYP",
+      "description": "Lateral movement tool. Installed on DELTA and other systems.",
+      "first_used": "D+30",
+      "last_used": "D+44"
+    },
+    {
+      "name": "INFOS",
+      "description": "Host reconnaissance tool. Installed on DELTA and other systems.",
+      "first_used": "D+30",
+      "last_used": "D+44"
+    },
+    {
+      "name": "CCS",
+      "description": "Process listing tool. Installed on DELTA and other systems.",
+      "first_used": "D+30",
+      "last_used": "D+44"
+    },
+    {
+      "name": "MIMIKATZ",
+      "description": "Custom version of MIMIKATZ, used for credential harvesting. Installed on DELTA and other systems.",
+      "first_used": "D+30",
+      "last_used": "D+44"
+    },
+    {
+      "name": "PSCP (PuTTY Secure Copy)",
+      "description": "Secure copy tool. Installed on DELTA and other systems.",
+      "first_used": "D+30",
+      "last_used": "D+44"
+    }
+  ],
+  "stages_of_intrusion": [
+    {
+      "stage": "1",
+      "time_range": "D+0 to D+3",
+      "activities": ["Initial compromise via CVE-2017-5638", "Installation of SSHDOOR on ALPHA"]
+    },
+    {
+      "stage": "2",
+      "time_range": "D+3 to D+25",
+      "activities": [
+        "Traversal of Linux environment using stolen credentials and SSH pre-shared keys",
+        "Internal reconnaissance on Windows systems",
+        "Establishment of BRAVO as primary staging system"
+      ]
+    },
+    {
+      "stage": "3",
+      "time_range": "D+25 to D+30",
+      "activities": [
+        "Migration of tools and malware to CHARLIE",
+        "Utilization of ALW log wiper on CHARLIE",
+        "Installation of AUDITUNNEL on CHARLIE"
+      ]
+    },
+    {
+      "stage": "4",
+      "time_range": "D+30 to D+44",
+      "activities": [
+        "Entry into Windows environment via DELTA",
+        "Installation of GOTROJ malware",
+        "Traversal and reconnaissance in Windows environment using various tools"
+      ]
+    }
+  ],
+  "detection_and_response": {
+    "initial_detection": "D+25",
+    "engagement_of_services": "D+35",
+    "remediation_conclusion": "D+44",
+    "incident_closure": "D+74"
+  }
+}

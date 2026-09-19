@@ -1,0 +1,129 @@
+
+
+
+Sentence : Analysis of a Recent PlugX Variant - “P2P PlugX”
+This is Shusei Tomonaga at Analysis Center.
+PlugX, a Remote Access Tool (RAT) often seen in many APT cases, has been in the wild for some years.
+Various sectors in Japan have been suffering from this type of attack from 2012, and Analysis Center has
+been working to catch up on the evolution of the PlugX family since then.
+In this blog post, I will write about a recent PlugX variant which we first encountered in October 2014. The
+variant has interesting new aspects and the most significant one, in my view, is the P2P function - so let
+me tentatively name it “P2P PlugX”.
+Size Expansion of Configuration Information
+PlugX is designed to run based on its configuration information stored in itself. Our analysis revealed that
+the size of the configuration information has been expanded for the recent variant. While the former ones
+have either 0x2540 bytes (Observed since August 2013) or 0x2d58 bytes (Observed since June 2014), the
+recent one has 0x36a4 bytes, roughly 20% larger in size. This has led it to do more, such as:
+
+
+Communication with more C&C servers – up to 16
+
+
+P2P communication between infected nodes
+
+
+MAC address check - PlugX runs if the MAC address of an infected  host coincides with configuration
+
+
+information in itself (If not specified in the   configuration, PlugX runs on any host).
+
+(To bypass UAC) configurable setting for the process to abuse
+
+Other than these, new coding algorithm has been introduced.
+I will pick up some of the interesting features for more description. For details of the configuration file,
+you can refer to Appendix A in the bottom of this post.
+Additional Communication Protocol for C&C Servers
+Former versions of PlugX used to set four C&C Server addresses to communicate with. With the P2P
+PlugX, attackers can set up to 16 C&C servers. Communication protocol with C&C servers has also been
+improved.
+Former PlugX could only configure four communication protocols, but for P2P PlugX, protocol number
+255 became available. This protocol is reserved by IANA, but no specific application is assigned.
+T bl 1 C fi ti d C i ti P t l hi h
+Table 1: Configurations and Communication Protocol which
+PlugX uses to connect to C&C Servers
+|Configuration No.|Protocol Number(In IP header)|Data Format|
+|---|---|---|
+|1|6 (TCP)|Binary|
+|2|6 (TCP)|HTTP|
+|3|17 (UDP)|DNS|
+|4|1 (ICMP)|Binary|
+|5|255|Binary|
+P2P Function Enabled
+P2P PlugX can communicate with other similarly-infected hosts. When one PlugX succeeds to infect a
+host, it then accesses to every IP address in the local network one-by-one and communicate with any
+connectable nodes, using one of the following protocols listed in Table 2.
+Table 2: Configurations and Communication Protocols which
+P2P PlugX uses to communicate by P2P
+|Configuration No.|Protocol Number(In IP header)|Data Format|
+|---|---|---|
+|1|6 (TCP)|Binary|
+|2|17 (UDP)|DNS|
+|3|1 (ICMP)|Binary|
+|4|255|Binary|
+With P2P protocol, even if a PlugX exists in an environment with no direct access to the Internet, it may
+communicate with C&C server through other infected hosts. We have also seen some P2P-disabled
+samples.
+Note that this P2P communication theoretically can be applied to any other TCP/UDP ports. But in cases
+which JPCERT/CC haｓ observed, P2P PlugX only uses either TCP/1357 or UDP/1357 for P2P
+communication. If you see any scanning activity to TCP/1357 or UDP/1357, we highly recommend that
+you conduct further investigation.
+New Encoding Algorithm
+PlugX uses a single encoding algorithm for inbound/outbound data, configuration, key logging data and
+strings used internally. Its encoding method has been modified from time to time, aligned with major
+upgrade of PlugX itself.
+Likewise, P2P PlugX has a new encoding algorithm. Here’s a python code to decode.
+def plugx_decode(data):
+decode_key = struct.unpack_from('<I', data, 0)[0]
+out = ''
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Shusei Tomonaga", "type": "ACTO"},
+        {"id": 2, "description": "Analysis Center", "type": "ACTO"},
+        {"id": 3, "description": "PlugX", "type": "APPS"},
+        {"id": 4, "description": "Remote Access Tool (RAT)", "type": "APPS"},
+        {"id": 5, "description": "Japan", "type": "COUN"},
+        {"id": 6, "description": "P2P PlugX", "type": "APPS"},
+        {"id": 7, "description": "October 2014", "type": "TAMP"},
+        {"id": 8, "description": "configuration information", "type": "REGI"},
+        {"id": 9, "description": "0x2540 bytes", "type": "TAMP"},
+        {"id": 10, "description": "0x2d58 bytes", "type": "TAMP"},
+        {"id": 11, "description": "0x36a4 bytes", "type": "TAMP"},
+        {"id": 12, "description": "C&C servers", "type": "CCSH"},
+        {"id": 13, "description": "16 C&C servers", "type": "CCSH"},
+        {"id": 14, "description": "MAC address", "type": "MAC"},
+        {"id": 15, "description": "UAC", "type": "TAMP"},
+        {"id": 16, "description": "new coding algorithm", "type": "TAMP"},
+        {"id": 17, "description": "P2P communication", "type": "TTPS"},
+        {"id": 18, "description": "TCP", "type": "NETP"},
+        {"id": 19, "description": "UDP", "type": "NETP"},
+        {"id": 20, "description": "ICMP", "type": "NETP"},
+        {"id": 21, "description": "IANA", "type": "ACTO"},
+        {"id": 22, "description": "TCP/1357", "type": "NETP"},
+        {"id": 23, "description": "UDP/1357", "type": "NETP"},
+        {"id": 24, "description": "JPCERT/CC", "type": "ACTO"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name": "is a type of"},
+        {"source": 6, "target": 3, "rel_name": "variant of"},
+        {"source": 2, "target": 3, "rel_name": "analyzed"},
+        {"source": 2, "target": 6, "rel_name": "analyzed"},
+        {"source": 6, "target": 8, "rel_name": "uses"},
+        {"source": 8, "target": 9, "rel_name": "has size"},
+        {"source": 8, "target": 10, "rel_name": "has size"},
+        {"source": 8, "target": 11, "rel_name": "has size"},
+        {"source": 6, "target": 12, "rel_name": "communicates with"},
+        {"source": 6, "target": 13, "rel_name": "can set up to"},
+        {"source": 6, "target": 14, "rel_name": "checks"},
+        {"source": 6, "target": 15, "rel_name": "bypasses"},
+        {"source": 6, "target": 16, "rel_name": "uses"},
+        {"source": 6, "target": 17, "rel_name": "enables"},
+        {"source": 17, "target": 18, "rel_name": "uses"},
+        {"source": 17, "target": 19, "rel_name": "uses"},
+        {"source": 17, "target": 20, "rel_name": "uses"},
+        {"source": 17, "target": 21, "rel_name": "uses"},
+        {"source": 17, "target": 22, "rel_name": "uses port"},
+        {"source": 17, "target": 23, "rel_name": "uses port"},
+        {"source": 24, "target": 6, "rel_name": "observed"}
+    ]
+}

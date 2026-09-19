@@ -1,0 +1,100 @@
+TriStation's Reverse Engineering and TRITON's Development
+When TRITON was discovered, we began to wonder how the TRITON actor reverse
+engineered TriStation and implemented it into the framework. We have a lot of theories,
+all of which seemed plausible: Did they build, buy, borrow, or steal? Or some
+combination thereof?
+Our initial theory was that the threat actor purchased a Triconex controller and software
+for their own testing and reverse engineering from the "ground up", although if this was
+the case we do not believe they had a controller with the exact vulnerable firmware
+version, else they would have had fewer problems with TRITON in practice at the victim
+site. They may have bought or used a demo version of the TriStation 1131 software,
+allowing them to reverse engineer enough of TriStation for the framework. They may
+Convert webpages to pdf online with PDFmyURL
+allowing them to reverse engineer enough of TriStation for the framework. They may
+have stolen TriStation Python libraries from ICS companies, subsidiaries or system
+integrators and used the stolen material as a base for TriStation and TRITON
+development. But then again, it is possible that they borrowed TriStation software,
+Triconex hardware and Python connectors from government-owned utility that was
+using them legitimately.
+Looking at the raw TRITON code, some of the comments may appear oddly phrased, but
+we do get a sense that the developer is clearly using many of the right vernacular and
+acronyms, showing smarts on PLC programming. The TS_cnames.pyc script contains
+interesting typos such as 'Set lable', 'Alocate network accepted', 'Symbol table ccepted'
+and 'Set program information reponse'. These appear to be normal human error and
+reflect neither poor written English nor laziness in coding. The significant amount of
+annotation, cascading logic, and robust error handling throughout the code suggests
+thoughtful development and testing of the framework. This complicates the theory of
+"ground up" development, so did they base their code on something else?
+While learning from the TriStation functionality within TRITON, we continued to explore
+legitimate TriStation software. We began our search for "TS1131.exe" and hit dead ends
+sorting through TriStation DLLs until we came across a variety of TriStation utilities in
+MSI form. We ultimately stumbled across a juicy archive containing "Trilog v4." Upon
+further inspection, this file installed "TriLog.exe," which the original TRITON executable
+mimicked, and a couple of supporting DLLs, all of which were timestamped around
+August 2006.
+When we saw the DLL file description "Tricon Communications Interface" and original
+file name "TricCom.DLL", we knew we were in the right place. With a simple look at the
+file strings, "BAZINGA!" We struck gold.
+|Convert|File Name|tr1com40.dll|
+|---|---|---|
+|Convert|MD5|069247DF527A96A0E048732CA57E7D3D|
+|Convert|Size|110592|
+|Compile Date|2006-08-23|
+|---|---|
+|File Description|Tricon Communications Interface|
+|Product Name|TricCom Dynamic Link Library|
+|File Version|4.2.441|
+|Original File Name|TricCom.DLL|
+|Copyright|Copyright © 1993-2006 Triconex Corporation|
+The tr1com40.DLL is exactly what you would expect to see in a custom application
+package. It is a library that helps support the communications for a Triconex controller. If
+you've pored over TRITON as much as we have, the moment you look at strings you can
+see the obvious overlaps between the legitimate DLL and TRITON's own TS_cnames.pyc.
+Figure 8: Strings excerpt from tr1com40.DLL
+Each of the execution command "error codes" from TS_cnames.pyc are in the strings of
+tr1com40.DLL (Figure 8). We see "An MP has re-educated" and "Invalid Tristation I
+command". Even misspelled command strings verbatim such as "Non-existant data item"
+and "Alocate network accepted". We also see many of the same unknown values. What
+is obvious from this discovery is that some of the strings in TRITON are likely based on
+code used in communications libraries for Trident and Tricon controllers.
+In our brief survey of the legitimate Triconex Corporation binaries, we observed a few
+samples with related string tables.
+|Convert|Pe:dllname|CompileDate|Reference CPP Strings Code|
+|---|---|---|---|
+|Convert|Lagcom40.dll|2004/11/19|$Workfile:   LAGSTRS.CPP  $ $Modtime:   Jul 21 199917:17:26  $ $Revision:   1.0|
+|Convert|Tr1com40.dll|2006/08/23|$Workfile:   TR1STRS.CPP  $ $Modtime:   May 16 200609:55:20  $ $Revision:   1.4|
+|Convert|webpages to pdf o|webpages to pdf o|webpages to pdf o|
+|Tridcom.dll|2008/07/23|$Workfile: LAGSTRS.CPP $ $Modtime: Jul 21 199917:17:26 $ $Revision: 1.0|
+|---|---|---|
+|Triccom.dll|2008/07/23|$Workfile:  TR1STRS.CPP $ $Modtime:  May 16 200609:55:20 $ $Revision:  1.4|
+|Tridcom.dll|2010/09/29|$Workfile:  LAGSTRS.CPP $ $Modtime:  Jul 21 199917:17:26 $ $Revision:  1.0|
+|Tr1com.dll|2011/04/27|$Workfile:  TR1STRS.CPP $ $Modtime:  May 16 200609:55:20 $ $Revision:  1.4|
+|Lagcom.dll|2011/04/27|$Workfile:  LAGSTRS.CPP $ $Modtime:  Jul 21 199917:17:26 $ $Revision:  1.0|
+|Triccom.dll|2011/04/27|$Workfile:  TR1STRS.CPP $ $Modtime:  May 16 200609:55:20 $ $Revision:  1.4|
+We extracted the CPP string tables in TR1STRS and LAGSTRS and the TS_cnames.pyc
+TS_names array from TRITON, and compared the 210, 204, and 212 relevant strings from
+each respective file.
+TS_cnames.pyc TS_names and tr1com40.dll share 202 of 220 combined table strings.
+The remaining strings are unique to each, as seen here:
+|Convert|TS_cnames.TS_names (2017 pyc)|Tr1com40.dll (2006 CPP)|
+|---|---|---|
+|Convert|Go to DOWNLOAD mode|<200>|
+|Convert|Not set|<209>|
+|Unk75|Bad message from module|
+|---|---|
+|Unk76|Bad message type|
+|Unk77|Bad TMI version number|
+|Unk78|Module did not respond|
+|Unk79|Open Connection: Invalid SAP %d|
+|Unk81|Unsupported message for this TMIversion|
+|Unk83||
+|Wrong command||
+Convert webpages to pdf online with PDFmyURL
+the wild.
+You can see more of the Trilog and Triconex DLL files on VirusTotal.
+|Item Name|MD5|Description|
+|---|---|---|
+|Tr1com40.dll|069247df527a96a0e048732ca57e7d3d|Tricom CommuncationsDLL|
+|Data1.cab|e6a3c93a6d433cbaf6f573b6c09d76c4|Parent of Tr1com40.dll|
+|Trilog v4.1.360R|13a3b83ba2c4236ca59aba679941c8a5|RAR Archive of TriLog|
+|TridCom.dll|5c2ed617fdec4779cb33c89082a43100|Trident CommunicationsDLL|

@@ -1,0 +1,40 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 66
+17.1.1 Crawler Channel
+The crawler channel allows one node to quickly determine the node list of another node. By accessing the peer list of
+a node, it is a simple process to enumerate all of the connected nodes of the SJM1 network that have Internet-facing,
+routable interfaces.
+The client node transmits a 6-byte data structure to the server node. The data structure consists of a 4-byte (DWORD)
+value specifying if the client node knows it is not behind a NAT device and thus Internet accessible followed by a 2-byte
+(WORD) value the defines the client’s own listening port number. If the value specifying if the client is accessible from
+the Internet is 0, the server will attempt to connect to the client on the specified listening port. This allows the server to
+inform the client if it is behind a non-routable NAT device. The routability test begins by attempting to connect to the
+client node on the specified listening port and then performing the authentication phase if the connection is successful.
+If both of those events occur, then the client node is considerable routable, otherwise the node is considered inaccessible.
+The status of the test is transmitted to the client over the original channel (which the client initiated) in the form of a
+4-byte (DWORD) value of either 1 (routable) or 0 (non-routable). If the routability test fails, it is repeated two more times.
+Given that the routability test waits up to 30 seconds per test for a connection to the client node to succeed or timeout, a
+full minute and a half may expire from the time the crawler channel is activated and the routability test completes.
+SJM1 maintains three lists of NodeInfo entries: a list of seed nodes (from the configuration file), a list of known nodes that
+the SJM1 has either connected to or received from another node who connected to, and a list of client nodes that connected
+to the SJM1 node. The seed nodes list is limited to 30 NodeInfo entries, the known nodes list has a limit of 50 NodeInfo
+entries, and the list of client nodes that have connected to the SJM1 node has a maximum of 100 NodeInfo entries.
+A NodeInfo structure contains information about a particular node as Table 17-2 illustrates. The most important fields
+within the structure are the IP address of the node, the port upon which the node listens for incoming connections
+and the timestamp of the last time a node successfully connected to the node. The timestamp is recorded in the
+VARIANTTIME format which is essentially a floating point number (a double ) that defines the number of days (the
+integer value) and partial days (the decimal value) since December 30, 1899 at midnight. [10] A value of 2.5 for instance,
+represents January 1, 1900 at noon.
+|OFFSET|SIZE|FIELD DESCRIPTION|
+|---|---|---|
+|0|4 Bytes (DWORD)|IP address of node|
+|4|2 Bytes (WORD)|Listening port of node|
+|6|2 Bytes|Unused|
+|8|4 Bytes (DWORD)|Tracking field 1|
+|12|4 Bytes (DWORD)|Tracking field 2|
+|16|8 Bytes (VARIANTTIME)|Timestamp of the last time the node was contacted|
+Table 17-2: SierraJuliett-MikeOne’s NodeInfo Data Structure
+At the completion of the routability test, the server node transmits it current time, in the VARIANTTIME format to the
+client followed by the full array of 50 known nodes’s NodeInfo entries. In order to prevent loops where a node connects
+back to itself, prior to transmitting the known nodes entries the server node removes any NodeInfo entry for the client
+node and replace the removed NodeInfo with an empty (all zeros) entry.
+10 Microsoft. “SystemTimeToVariantTime function” https://msdn.microsoft.com/en-us/library/windows/desktop/ms221646(v=vs.85).aspx Accessed 7 December 2015.

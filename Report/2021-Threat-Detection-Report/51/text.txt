@@ -1,0 +1,93 @@
+Analysis
+Why do adversaries use
+Scheduled Task?
+Adversaries use scheduled tasks to accomplish two primary objectives:
+maintaining access and executing processes in a specific user context, typically
+one with elevated privileges. As a wide variety of legitimate software uses
+scheduled tasks for an even wider variety of legitimate reasons, malicious
+use often blends in with innocuous use. Scheduled tasks are a functionally
+necessary component of the Windows operating system that can’t just be
+turned off or blocked.
+How do adversaries use
+Scheduled Task?
+Execution and persistence
+Of the approximately 3,000 unique ~~schtasks.exe~~ executions in our detection
+set, 99.5 percent included the ~~/Create~~ flag, which makes sense for adversaries
+wanting to establish persistence. Closer inspection of the remaining events
+reveals one obfuscated instance of ~~/Create~~ ~~,~~ as seen in the following image,
+which comes from a confirmed Dridex detection:
+l [T1053.005: Scheduled Task]
+41
+2021 Threat Detection Report
+Let this adversary’s use of both Scheduled Task and Obfuscated Files or
+Information serve as a general reminder that these techniques rarely walk
+alone—your scheduled task detections need to account for obfuscation
+techniques.
+After ~~/Create~~, ~~/Change~~ is the second most common flag passed to ~~schtasks~~ ~~,~~
+followed in order by ~~/Run~~, ~~/Delete~~, and ~~/Query~~ .
+Scheduled tasks can run at a set time or in response to a triggering event on
+the endpoint. Adversaries can choose any one of the 86,400 seconds in a day to
+execute their tasks, but due to code reuse, they often schedule their executions
+for the same time across each endpoint targeted by their campaigns. This is an
+area where code reuse may play to the defender’s advantage. In our data set, 86
+percent of the scheduled task creation events designated specific start times
+by passing time-of-day arguments to the start time ( ~~/ST~~ ) parameter. Scheduled
+task creation events that don’t specify otherwise default to starting at the task’s
+creation time. Scheduled task activity from detections associated with Blue
+Mockingbird contributed significantly to the prevalence of this technique.
+The following image illustrates scheduled task start times (in UTC) across the
+environments we monitor:
+l [T1053.005: Scheduled Task]
+42
+2021 Threat Detection Report
+In addition to specifying the start time for a given scheduled task, adversaries
+can use the ~~/SC~~ (Schedule) flag in combination with one of the values in the
+Y-axis of the chart below ~~(~~ ~~Daily~~ ~~,~~ ~~Minute~~, etc.) to set the frequency of the
+task’s execution.
+Note that schedule values can be modified to the scheduled frequency of
+execution. In other words, just because a task is created with ~~/SC Minute~~
+doesn’t mean it will run every minute. If the task is created with the ~~/MO~~ flag, its
+arguments will modify the frequency of execution. So if ~~/SC Minute~~ and ~~/MO 67~~
+are present when the task is created, it will execute every 67 minutes. Though
+~~/MO~~ isn’t commonly observed, it is worth mentioning because of the impact it
+has on frequency of execution.
+The ~~/MO~~ frequency modifier can also be applied to any Onevent scheduled task.
+Onevent frequencies instruct the scheduled task to execute in response to an
+event on the endpoint. When Onevent is used, the argument passed to the ~~/MO~~
+flag will be an XPath event query string. In 2020, we found seven instances of
+~~/SC Onevent~~, all of which passed the following XPath event query string to the
+~~/MO~~ flag:
+```
+         *[system[provider[@name=’microsoft-windows
+         security-auditing’] and eventid=4801]]
+```
+This XPath event query string will match any events in the Windows Security
+Event Log with Event ID 4801, which may be logged when the workstation is
+unlocked, depending on the applicable audit policy.
+l [T1053.005: Scheduled Task]
+“Adversaries may abuse the Windows
+Task Scheduler to perform task
+scheduling for initial or recurring
+execution of malicious code. There
+are multiple ways to access the
+Task Scheduler in Windows. The
+schtasks can be run
+directly on the command line, or the
+Task Scheduler can be opened through
+the GUI within the Administrator
+Tools section of the Control Panel. In
+some cases, adversaries have used
+a .NET wrapper for the Windows
+Task Scheduler, and alternatively,
+adversaries have used the Windows
+netapi32 library to create a
+scheduled task.”
+43
+2021 Threat Detection Report
+Privilege escalation
+In addition to providing adversaries with a means of maintaining access to
+environments, scheduled tasks can also run under a specified user context. In
+our data, 81 percent of the created tasks were set to run as SYSTEM—the most
+privileged account on Windows. When a scheduled task is created without
+specifying a user context, it will run in the context of the user who created the
+task. This is the second most common configuration we observed.

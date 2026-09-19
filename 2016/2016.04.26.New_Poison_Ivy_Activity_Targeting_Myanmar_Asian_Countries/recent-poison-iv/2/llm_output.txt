@@ -1,0 +1,62 @@
+
+
+
+Sentence : T e c h n i c a l D e t a i l s
+The PIVY variant that ASERT has observed has exhibited some newer behavior that we have
+not seen discussed previously. The samples drop a decoy doc – usually hinting clearly at the
+target, a DLL named ActiveUpdate.dll and the PIVY shellcode file as Active.dat. The�
+ActiveUpdate.dll and Active.dat files are created in a directory that follows the format�
+ActiveUpdate_ [0-9]{3} . The executable copies rundll32.exe to ActiveFlash.exe and then
+executes the new file with the path to the DLL and installs itself for automatic startup via a .lnk�
+in the Windows Startup folder. ESET identified these samples as “� Win32/Korplug.I[F-I]
+variant “, possibly due to the appearance of the malware using DLL sideloading with rundll32
+to load the dropped DLL and perform its malicious actions. This deployment tactic dates well
+into last year (and possibly before) using different executable names for the rundll32 copy and
+the base directory name, however this post will only cover a subset of the variant using
+“ActiveUpdate”.
+Illustration of execution process of one PIVY Sample
+The compile times on these binaries also closely correlate to the times they were first�
+observed in-the-wild and some samples contained timestamp-like entities in the various
+campaign IDs fields in the malware configuration.�
+The decrypted configuration appears to be slightly modified in such a way as to confuse�
+some publicly available tools that parse the configuration data. The campaign ID is not fully�
+null-padded – there is now one null-byte and a string of repeating “x” characters that will
+cause confusion for some scripts. Additionally, the C2s are no longer null-padded – each
+hostname ends with a null-byte that is then followed by a string that will look something like
+“0.1127.0.0.1127.0.0.100000”. This string will change slightly with each Command & Control
+(C2) server – the portions that start with “1” will change to 2 for the second C2, 3 for the third,
+etc. These values end up being present elsewhere in memory without the extra items and only
+small tweaks are needed to fix the parsing.�
+The hostname webserver.servehttp[.]com is observed in a number of PIVY samples, some
+of which are covered in this post. Additionally, the IP resolved to by this hostname
+overlapped with fileshare.serveftp[.]com� which was used in an earlier and
+seemingly unrelated PIVY sample.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PIVY variant", "type" : "EXEF"},
+        {"id": 2, "description": "Decoy doc", "type" : "DOCF"},
+        {"id": 3, "description": "ActiveUpdate.dll", "type" : "EXEF"},
+        {"id": 4, "description": "Active.dat", "type" : "EXEF"},
+        {"id": 5, "description": "Directory format ActiveUpdate_[0-9]{3}", "type" : "SYSP"},
+        {"id": 6, "description": "rundll32.exe", "type" : "APPS"},
+        {"id": 7, "description": "ActiveFlash.exe", "type" : "EXEF"},
+        {"id": 8, "description": "Windows Startup folder .lnk", "type" : "SYSP"},
+        {"id": 9, "description": "Win32/Korplug.I[F-I] variant", "type" : "EXEF"},
+        {"id": 10, "description": "webserver.servehttp[.]com", "type" : "CCSH"},
+        {"id": 11, "description": "fileshare.serveftp[.]com", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "drops"},
+        {"source": 1, "target": 3, "rel_name" : "drops"},
+        {"source": 1, "target": 4, "rel_name" : "drops"},
+        {"source": 3, "target": 5, "rel_name" : "created in"},
+        {"source": 4, "target": 5, "rel_name" : "created in"},
+        {"source": 6, "target": 7, "rel_name" : "copies to"},
+        {"source": 7, "target": 3, "rel_name" : "executes with path to"},
+        {"source": 7, "target": 8, "rel_name" : "installs for automatic startup via"},
+        {"source": 1, "target": 9, "rel_name" : "identified as"},
+        {"source": 1, "target": 10, "rel_name" : "observed in"},
+        {"source": 10, "target": 11, "rel_name" : "resolves to"}
+    ]
+}

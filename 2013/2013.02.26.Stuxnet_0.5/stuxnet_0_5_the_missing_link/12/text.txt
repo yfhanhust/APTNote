@@ -1,0 +1,95 @@
+PLC device attack code
+The code conducts an attack by closing valves in the six top rated cascades out of the possible 18 cascades. The
+states of two types of valves are modified:
+- Centrifuge valves – a set of three valves (feed, product, tails) that work in unison per centrifuge to control
+
+uranium hexafluoride (UF6) flow into each centrifugeStage valves – one per stage to control UF6 flow into each
+stage
+- Auxiliary valves – valves that control UF6 flow into or out of each stage (stage valve) or the cascade as a whole
+
+Figure 2
+Example valve configuration showing both valve types in three stages of a cascade
+Similar to version 1.x of Stuxnet, the PLC device attack code consists of a state machine with eight possible
+states:
+State 0 (Wait): Perform system identification and wait for the enrichment process to reach steady state before
+attack. This can take approximately 30 days.
+State 1 (Record): Take peripheral snapshots and build fake input blocks for replaying later.
+State 2 (Attack centrifuge valves): Begin replaying fake input signals. Close valves on most centrifuges.
+State 3 (Secondary pressure reading): Open both centrifuge and feed stage valves in the final stage of a single
+cascade to obtain a low pressure reading.
+State 4 (Wait for pressure change): Wait for desired pressure change or time limit. This can take up to
+approximately two hours.
+State 5 (Attack auxiliary valves): Open all auxiliary valves except valves believed to be near the first feed stage
+(stage 10). Wait for three minutes in this state.
+State 6 (Wait for attack completion): Wait for six minutes while preventing any state changes.
+State 7 (Finish) : Reset and return to state zero.
+Figure 3
+State flow diagram of 417 PLC device attack code
+State 0:
+The code verifies the system has reached steady state by monitoring the state of each auxiliary valve and the
+amount of elapsed time.
+- The valves must not change state for a period of 300 snapshots. In addition, the code determines if most of the
+
+centrifuge valves are in the open or closed position.
+- All cascades must be operational for three or more days, or currently be in the down state.
+
+- At least one cascade must have been operating for more than 35 days, or collectively all cascades must have
+
+been operating for more than 297 days.
+- Between 3 and 7 of the first 21 auxiliary valves must have been opened in the last 2 days.
+
+
+- Most of the pressure readings associated with the auxiliary valves must be within an expected range.
+
+Only if these all conditions are met does the code proceed to state 1.
+State 1:
+There are 21 snapshots of the peripheral I/O values that are taken one second apart. These values are stored for
+replay during the attack. This prevents systems and technicians from realizing the system is no longer operating as
+expected.
+State 2:
+First, the normal operating pressure is obtained and stored for replay later. For each stage a portion of all the
+centrifuge valves are closed, except in the feed stage (stage 10). The centrifuge valves in the feed stage remain
+completely open, while the centrifuge valves at both the product end and tails end are completely closed.
+The particular centrifuge valves closed per stage are randomly chosen. The code will randomly chose a starting
+centrifuge valve and then close the next one in order until the last centrifuge valve in the stage. If the total desired
+number of valves to close for that stage has not been reached, the code will continue from the first centrifuge valve
+in the stage until the maximum valves to close are reached.
+|Table 7Processing stages and valves states|Col2|Col3|Col4|Col5|Col6|Col7|Col8|Col9|Col10|Col11|Col12|Col13|Col14|Col15|Col16|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|Stage|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|
+|Centrifuges|2|2|4|6|8|10|12|16|20|24|20|16|12|8|4|
+|Centrifugevalves to close|2|2|2|4|6|8|10|13|14|0|14|13|10|8|4|
+|Percentageclosed|100%|100%|50%|67%|75%|80%|83%|81%|70%|0%|70%|81%|83%|100%|100%|
+State 3:
+In state 3, in a single cascade, both centrifuge valves in stage 1 are opened and it is likely the stage valve of stage 1 is
+also opened. Then, the code obtains a pressure reading at stage 1. The pressure should be relatively low. This value
+is used for replay in later stages. If the normal pressure operating pressure wasn’t obtained properly in state 2, state
+3 is actually skipped and hardcoded default values are used instead.
+State 4:
+State 4 waits for the desired pressure change or other predetermined time limits before proceeding to state 5. If any
+of the following conditions are met, the code will continue to state 5:
+- The pressure of the stage 10 or stage 11 transducer (these are likely transducers for or near the feed stage) has an
+
+absolute value greater than 280 units above the expected value and greater than five times the expected value.
+- 46 minutes after the state of an auxiliary valve has been modified from the original state recorded in state 1, with
+
+the exception of auxiliary valve number 17 which is likely a stage valve near the product end.
+- 2 hours and 3 minutes after the attack started (since state 2) without any centrifuge valve state changes.
+
+- 2 hours and 3 minutes since at least four centrifuge valve states have been modified from the original state
+
+recorded in state 1.
+State 5:
+In state 5, all the auxiliary valves are opened except valve numbers 17, 18, and 20. Before continuing to state 6, the
+code waits for at least 2 minutes and 53 seconds.
+State 6:
+During state 6, fake values continue to be replayed and any attempts to change device values are prevented for 6
+minutes and 58 seconds.
+State 7:
+Data is reset and the code returns to state 0.
+By closing all valves except the initial feed stage valves, UF6 will continue to flow into the system. This act alone
+may cause damage to the centrifuges themselves. However, the attack expects the pressure to reach five times the
+normal operating pressure. At this pressure, significant damage to the uranium enrichment system could occur and
+the UF6 gas could even revert to a solid.
+Whether the attack succeeded in this manner or not remains unclear. Even if the attack did succeed, the attackers
+decided to move to a different strategy in the Stuxnet 1.x versions, attacking the speed of the centrifuges instead.

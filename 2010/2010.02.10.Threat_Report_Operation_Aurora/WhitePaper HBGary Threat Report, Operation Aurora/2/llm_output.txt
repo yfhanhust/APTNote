@@ -1,0 +1,233 @@
+
+
+
+Sentence : DETECT
+This section of the report details how you can detect
+Operation Aurora in your Enterprise. The exploit and payload
+vehicle consists of the following components:
+
+
+JavaScript based exploit vector, known to exploit IE 6
+
+
+Shellcode component, embedded in the JavaScript
+
+
+Secondary payload server that delivers a dropper
+
+
+The dropper itself, which only used once and then deleted
+
+
+The backdoor program which is decompressed from
+the dropper
+
+
+JAVASCRIPT EXPLOIT CODE
+February 10, 2010 3
+JAVASCRIPT AND SHELLCODE
+The JavaScript based attack vector associated with
+Operation Aurora was published in the public domain in early
+January 2010. Microsoft details the vulnerability in Security
+Bulletin MS10-002. Internet Explorer 5.01, Internet Explorer
+6, Internet Explorer 6 Service Pack 1, Internet Explorer 7, and
+Internet Explorer 8 (except Internet Explorer 6 for supported
+editions of Windows Server 2003) are affected. Exploit code
+analyzed by HBGary reveals that only Internet Explorer 6
+was targeted during Operation Aurora. This vulnerability can
+be leveraged by attackers of varying skill levels due to the
+
+
+
+
+
+
+
+
+4 HB GARY THREAT REPORT: OPERATION AURORA
+public availability of the Metasploit module “ie_aurora.rb”.
+The exploit code used by the original attackers was quickly
+improved and added to Metasploit thus greatly expanding the
+potential number of attackers and reliability of code.
+The JavaScript performs a heap spray attack and injects
+the embedded shellcode described below. The JavaScript
+exploits the vulnerability in Internet Explorer by copying,
+releasing, and then referencing a Document Object Model
+(DOM) element.
+|JAVASCRIPT ARTIFACTS|PATTERN|
+|---|---|
+|Initial encrypted dropper download.Deleted f le.|C:\%appdata%\a.exe|
+|Decrypted dropper. Deleted f le.|C:\%appdata\b.exe|
+|JavaScript present in Internet Explorermemory space.||
+|Download URL present in internethistory during memory analysis.|http://demo1.ftpaccess.cc/demo/ad.jpg|
+|Other domains associatedwith Aurora.|sl1.homelinux.org360.homeunix.comftp2.homeunix.comupdate.ourhobby.comblog1.servebeer.com|
+The shellcode exists as a Unicode escaped variable (sc)
+in the malicious JavaScript listed below. Upon successful
+exploitation of Internet Explorer, the shellcode will download
+an obfuscated second stage executable from http://demo1.
+ftpaccess.cc/demo/ad.jpg which is the dropper. Note: these
+fi les are specifi c to the sample we analyzed at HBGary, Inc.
+The attackers must use a second stage download mechanism
+to achieve full system access due to memory constraints. It
+is unlikely that the fi nal payload could be delivered through
+the original exploit given these conditions. The dropper
+is XOR encrypted with a 0x95 key. The shellcode copies
+this encrypted binary to the user’s AppData directory as
+“a.exe”. The shellcode then decrypts “a.exe” and moves it
+to “b.exe” in the same directory. Then “b.exe” is executed.
+The following actionable intelligence can be used to identify
+exploit remnants in the heap space of Internet Explorer post
+exploitation attempt. These patterns can be searched for
+when doing memory analysis
+of a victim system.
+The following SNORT rules have been released by the Emerging
+Threats project to detected the fi nal payload command and
+control communications.
+DROPPER
+The initial dropper is merely a detonation package that
+decompresses an embedded DLL into the Windows system32
+directory and loads it as a service. The initial dropper is likely
+to be packed (UPX, etc). The dropper has an embedded DLL
+that is decompressed to the windows system32 directory. This
+DLL will be named to resemble existing services ( rasmon.
+dll, etc). In order to evade forensics, the fi le-time of the
+dropped DLL will be modifi ed to match that of an existing
+system DLL ( user32.dll, etc). The dropped DLL is loaded into
+its own svchost.exe process. Several registry keys are created
+and then deleted as part of this process. Finally, the dropper
+deletes itself from the system by using a dissolving batch fi le
+( DFS.BAT, etc).
+|SHELLCODE ARTIFACTS|PATTERN|
+|---|---|
+|Self-decrypting code usinga constant XOR value.|80 34 0B D8 80 34 0B D8|
+|Kernel32.dllsearching code.|64 A1 30 00 00 00 8B 40 0C 8B 70 1C|
+|Push Urlmon string to stackusing two push statements.|68 6F 6E 00 00 68 75 72 6C 6D|
+|ACTIONABLE INTELLIGENCE|PATTERN|
+|---|---|
+|Service Key & ValueNote: deleted after drop|SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost\Value: SysInsData: Ups??? (??? are three randomchars)|
+|Path to backdoorNote: deleted after stage 1|SYSTEM\CurrentControlSet\Services\Ups???\Parameters\Value: ServiceDLLData: (full path to the backdoor)|
+|Path to backdoorNote: persistent|SYSTEM\CurrentControlSet\Services\RaS???\Parameters\Value: ServiceDLLData: (full path to the backdoor)|
+|ACTIONABLE INTELLIGENCE|PATTERN|
+|---|---|
+|Potential variation|SYSTEM\CurrentControlSet\Services\RaS???\Parameters\Value: ServiceDLLData: %temp%\c_####.nls (where#### is a number)|
+|Potential variation|SYSTEM\CurrentControlSet\Services\RaS???\Parameters\Value: ServiceDLLData:%temp%\c_1758.nls|
+PAYLOAD
+The payload uses
+two-stage installation. GLANCE UNDER THE HOOD
+During stage one, the buffer after phase one XOR:
+mJ2bhcPExs7excLThcjExqurnauYq
+dropper will install the
+buffer after base64 decoding:
+payload as a service
+ÃÄÆÎÞÅÂÓ…ÈÄÆ«« «˜«Ÿ«“«†«š«š«ž«š«œ
+running under the
+name Ups??? (where
+??? are three random characters). Once executing, the
+payload will immediately delete the fi rst service and enter
+stage-two. During stage-two, the payload will register a new,
+second service under the name RaS??? (where ??? are three
+random characters). This new service will point to the same
+backdoor DLL, no new fi les are involved. Note: the three
+character prefi xes Ups and RaS can easily be modifi ed by
+the attacker.
+Once the new service is registered, the payload will access
+an embedded resource that is encrypted. The decryption goes
+through several phases. The encrypted data block contains
+the DNS name for the command and control server (homeunix.
+com, etc). This data block is confi gurable before the malware
+is deployed. The data block length is hard-coded (0x150 or
+336 bytes). During phase one, this data block is fed through
+a simple XOR (0x99), resulting in an ASCII-string. Next, the
+resulting ASCII-string is fed into a base64 decoding function,
+producing a binary string. Finally, the resulting base64
+decoded binary string is fed through another XOR (0xAB),
+resulting in clear-text. The three primary encryption loops are
+colored and marked in Figure 1 . The resulting clear-text buffer
+contains several fi elds in both ASCII and UNICODE, including
+the C&C server address.
+February 10, 2010 5
+Figure 1. Base64 and XOR Encryption Scheme
+GLANCE UNDER THE HOOD
+buffer after phase one XOR:
+mJ2bhcPExs7excLThcjExqurnauYq
+buffer after base64 decoding:
+ÃÄÆÎÞÅÂÓ…ÈÄÆ«« «˜«Ÿ«“«†«š«š«ž«š«œ
+6 HB GARY THREAT REPORT: OPERATION AURORA
+|ACTIONABLE INTELLIGENCE|PATTERN|
+|---|---|
+|C&C Server DNS| .homeunix.com (where * is any subdomain) .homelinux.com .ourhobby.com .3322.org .2288.org .8866.org .ath.cx .33iqst.com .dyndns.org .linode.com .ftpaccess.cc .f loups.info* .blogsite.org|
+The payload will create additional registry keys.
+|ACTIONABLE INTELLIGENCE|PATTERN|
+|---|---|
+|Additional Key|HKLM\Software\Sun\1.1.2\IsoTp|
+|Additional Key|HKLM\Software\Sun\1.1.2\AppleTlk|
+Other potential dropped fi les, as reported by McAfee:
+COMMAND AND CONTROL
+The payload communicates with its command and control
+server over port 443. The source port is randomly selected.
+While outbound traffi c appears to be HTTPS, the actual traffi c
+uses a weak custom encryption scheme. The command and
+control packets have a very specifi c format. [iv]
+command parms 0x00000001 payload len CRC KEY payload
+The payload section is encrypted with a key selected by
+using GetTickCount. This means each infected node has its own
+key. The key is embedded in the header of the packet, and is
+easily recovered.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Operation Aurora", "type" : "ACTO"},
+        {"id": 2, "description": "JavaScript based exploit vector", "type" : "EXEF"},
+        {"id": 3, "description": "IE 6", "type" : "OPPS"},
+        {"id": 4, "description": "Shellcode component", "type" : "EXEF"},
+        {"id": 5, "description": "Secondary payload server", "type" : "CCSH"},
+        {"id": 6, "description": "Dropper", "type" : "DOCF"},
+        {"id": 7, "description": "Backdoor program", "type" : "EXEF"},
+        {"id": 8, "description": "C:\\%appdata%\\a.exe", "type" : "TPTH"},
+        {"id": 9, "description": "C:\\%appdata%\\b.exe", "type" : "TPTH"},
+        {"id": 10, "description": "http://demo1.ftpaccess.cc/demo/ad.jpg", "type" : "URLS"},
+        {"id": 11, "description": "sl1.homelinux.org", "type" : "CCSH"},
+        {"id": 12, "description": "360.homeunix.com", "type" : "CCSH"},
+        {"id": 13, "description": "ftp2.homeunix.com", "type" : "CCSH"},
+        {"id": 14, "description": "update.ourhobby.com", "type" : "CCSH"},
+        {"id": 15, "description": "blog1.servebeer.com", "type" : "CCSH"},
+        {"id": 16, "description": "Metasploit module “ie_aurora.rb”", "type" : "APPS"},
+        {"id": 17, "description": "Windows system32 directory", "type" : "SYSP"},
+        {"id": 18, "description": "rasmon.dll", "type" : "DOCF"},
+        {"id": 19, "description": "user32.dll", "type" : "DOCF"},
+        {"id": 20, "description": "svchost.exe process", "type" : "APPS"},
+        {"id": 21, "description": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SvcHost\\Value: SysInsData: Ups???", "type" : "REGI"},
+        {"id": 22, "description": "SYSTEM\\CurrentControlSet\\Services\\Ups???\\Parameters\\Value: ServiceDLLData:", "type" : "REGI"},
+        {"id": 23, "description": "SYSTEM\\CurrentControlSet\\Services\\RaS???\\Parameters\\Value: ServiceDLLData:", "type" : "REGI"},
+        {"id": 24, "description": "%temp%\\c_####.nls", "type" : "TPTH"},
+        {"id": 25, "description": "homeunix.com", "type" : "CCSH"},
+        {"id": 26, "description": "3322.org", "type" : "CCSH"},
+        {"id": 27, "description": "2288.org", "type" : "CCSH"},
+        {"id": 28, "description": "8866.org", "type" : "CCSH"},
+        {"id": 29, "description": "ath.cx", "type" : "CCSH"},
+        {"id": 30, "description": "33iqst.com", "type" : "CCSH"},
+        {"id": 31, "description": "dyndns.org", "type" : "CCSH"},
+        {"id": 32, "description": "linode.com", "type" : "CCSH"},
+        {"id": 33, "description": "ftpaccess.cc", "type" : "CCSH"},
+        {"id": 34, "description": "floups.info", "type" : "CCSH"},
+        {"id": 35, "description": "blogsite.org", "type" : "CCSH"},
+        {"id": 36, "description": "HKLM\\Software\\Sun\\1.1.2\\IsoTp", "type" : "REGI"},
+        {"id": 37, "description": "HKLM\\Software\\Sun\\1.1.2\\AppleTlk", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 2, "target": 4, "rel_name" : "embeds"},
+        {"source": 4, "target": 6, "rel_name" : "downloads"},
+        {"source": 4, "target": 10, "rel_name" : "from URL"},
+        {"source": 6, "target": 7, "rel_name" : "decompresses"},
+        {"source": 7, "target": 8, "rel_name" : "writes to path"},
+        {"source": 7, "target": 9, "rel_name" : "writes to path"},
+        {"source": 6, "target": 17, "rel_name" : "installs in"},
+        {"source": 18, "target": 20, "rel_name" : "runs as service under"},
+        {"source": 21, "target": 4, "rel_name" : "created by"},
+        {"source": 22, "target": 7, "rel_name" : "points to"},
+        {"source": 23, "target": 7, "rel_name" : "points to"},
+        {"source": 25, "target": 10, "rel_name" : "C&C server for"},
+        {"source": 36, "target": 7, "rel_name" : "creates registry key"},
+        {"source": 37, "target": 7, "rel_name" : "creates registry key"}
+    ]
+}

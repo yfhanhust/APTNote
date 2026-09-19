@@ -1,0 +1,136 @@
+
+
+
+Sentence : Introduction
+The APT threat actor known as "Tick," "Bronze Butler," and "Redbaldknight" has conducted
+espionage campaigns since 2016 against East Asian countries such as Japan and South
+Korea [1]. Talos analyzed a recent campaign in which compromised websites located in
+South Korea and Japan were used as C2 servers for samples belonging to the malware
+family known as "Datper," which has the ability to execute shell commands on the victim
+machine and obtain hostnames and drive information. Talos found potential links in
+shared infrastructure between the malware families Datper, xxmm backdoor, and Emdivi,
+each of which has been attributed to this threat actor under one of the above three aliases.
+We obtained this Datper variant through VirusTotal. The sample, written in Delphi code,
+was submitted toward the end of July 2018. Although the exact attack vector is unclear,
+the threat actor appears to have selected a legitimate-but-vulnerable Korean laundry
+service website to host their C2, shown below.
+1/6
+Legitimate Korean laundry site used as Datper C2 host.
+The website, located at whitepia[.]co.kr, does not use SSL encryption or certificates. The
+specific URL used for C2 communication is:
+hxxp://whitepia[.]co[.]kr/bbs/include/JavaScript.php
+Once executed, the Datper variant creates a mutex object called "gyusbaihysezhrj" and
+retrieves several pieces of information from the victim machine, including system
+information and keyboard layout. Afterward, the sample attempts to issue an HTTP GET
+request to the above C2 server, which at the time of this writing, resolved to the IP
+111[.]92[.]189[.]19.
+An example of this request is:
+GET /bbs/include/JavaScript.php?ycmt=de4fd712fa7e104f1apvdogtw HTTP/1.1
+Accept: /
+Content-Type: application/x-www-form-urlencoded
+User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko
+Host: whitepia[.]co.kr
+Cache-Control: no-cache
+Unfortunately, at the time of this investigation, the C2 server was unavailable, preventing
+Talos from investigating C2 communications in greater detail. However, Talos was able to
+analyze a previous campaign from 2017, which employed a similar sample from this
+family and used a slightly different mutex, "d4fy3ykdk2ddssr." All samples in the diagram
+below, associated with the 2017 campaign, implemented mutex object "d4fy3ykdk2ddssr,"
+likely to prevent access from other processes during execution.
+2/6
+Structure of C2 communications from the 2017 campaign.
+The actor behind this campaign deployed and managed their C2 infrastructure mainly in
+South Korea and Japan. We confirmed that the actor periodically changed their C2
+infrastructure and appears to have a history of identifying and penetrating vulnerable
+websites located in these countries. In addition to whitepia[.]co[.]kr, we identified other
+instances of compromised websites used as C2 servers. It is possible the malware
+samples are being delivered using web-based attacks, such as drive-by downloads or
+watering hole attacks. Additionally, Talos identified hosts used as C2 servers that may not
+be connected to a compromised website. This indicates the possibility that the threat
+actor may have initially deployed their C2 server infrastructure on legitimately obtained
+(and potentially purchased) hosts.
+Overlaps in the compromised websites used as C2 domains suggest links to another
+malware family known as "xxmm backdoor" (or alternatively, "Murim" or "Wrim"), a
+malware family that allows an attacker to install additional malware. The GET request URI
+paths of xxmm backdoor and Datper are similar, as seen below:
+xxmm backdoor: hxxp://www.amamihanahana.com/diary/archives/a_/2/index.php
+Datper: hxxp://www.amamihanahana.com/contact/contact_php/jcode/set.html
+Based on the findings above, both tools have used the same websites located in Japan in
+their C2 infrastructure since 2016.
+The xxmm sample, shown on the right-hand side of the diagram above, has the hash
+397a5e9dc469ff316c2942ba4b503ff9784f2e84e37ce5d234a87762e0077e25 [2].
+The extracted PDB debug symbol paths from the sample are:
+C:\Users\123\Documents\Visual Studio
+2010\Projects\shadowWalker\Release\BypassUacDll.pdb
+3/6
+C:\Users\123\Documents\Visual Studio
+2010\Projects\shadowWalker\Release\loadSetup.pdb
+C:\Users\123\documents\visual studio 2010\Projects\xxmm2\Release\test2.pdb
+C:\Users\123\Desktop\xxmm3\x64\Release\ReflectivLoader.pdb
+In addition to the links between Datper and xxmm backdoor, a recent Datper variant
+compiled in March 2018 used a legitimate website as a C2, which resolved to the IP
+211[.]13[.]196[.]164. This same IP was used as C2 infrastructure by the Emdivi malware
+family — a trojan that opens a backdoor on the compromised machine — and was
+attributed to the threat actor behind the campaign "Blue termite" [3].
+Structure of 2018 Datper and Emdivi campaigns.
+Our passive DNS lookup data of Resource Records (RR) for domains used by Datper and
+Emdivi further suggest that this IP was used by both malware families.
+Resource record for Datper.
+Resource record for Emdivi.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Tick", "type" : "ACTO"},
+        {"id": 2, "description": "Bronze Butler", "type" : "ACTO"},
+        {"id": 3, "description": "Redbaldknight", "type" : "ACTO"},
+        {"id": 4, "description": "Datper malware family", "type" : "APPS"},
+        {"id": 5, "description": "xxmm backdoor malware family", "type" : "APPS"},
+        {"id": 6, "description": "Emdivi malware family", "type" : "APPS"},
+        {"id": 7, "description": "VirusTotal", "type" : "STOR"},
+        {"id": 8, "description": "Delphi code", "type" : "EXEF"},
+        {"id": 9, "description": "whitepia[.]co.kr", "type" : "CCSH"},
+        {"id": 10, "description": "hxxp://whitepia[.]co[.]kr/bbs/include/JavaScript.php", "type" : "URLS"},
+        {"id": 11, "description": "111[.]92[.]189[.]19", "type" : "CCSH"},
+        {"id": 12, "description": "Windows NT 6.1; WOW64; Trident/7.0; rv:11.0", "type" : "OPPS"},
+        {"id": 13, "description": "gyusbaihysezhrj", "type" : "REGI"},
+        {"id": 14, "description": "d4fy3ykdk2ddssr", "type" : "REGI"},
+        {"id": 15, "description": "hxxp://www.amamihanahana.com/diary/archives/a_/2/index.php", "type" : "URLS"},
+        {"id": 16, "description": "hxxp://www.amamihanahana.com/contact/contact_php/jcode/set.html", "type" : "URLS"},
+        {"id": 17, "description": "397a5e9dc469ff316c2942ba4b503ff9784f2e84e37ce5d234a87762e0077e25", "type" : "IOCS"},
+        {"id": 18, "description": "C:\\Users\\123\\Documents\\Visual Studio 2010\\Projects\\shadowWalker\\Release\\BypassUacDll.pdb", "type" : "SYSP"},
+        {"id": 19, "description": "C:\\Users\\123\\Documents\\Visual Studio 2010\\Projects\\shadowWalker\\Release\\loadSetup.pdb", "type" : "SYSP"},
+        {"id": 20, "description": "C:\\Users\\123\\documents\\visual studio 2010\\Projects\\xxmm2\\Release\\test2.pdb", "type" : "SYSP"},
+        {"id": 21, "description": "C:\\Users\\123\\Desktop\\xxmm3\\x64\\Release\\ReflectivLoader.pdb", "type" : "SYSP"},
+        {"id": 22, "description": "211[.]13[.]196[.]164", "type" : "CCSH"},
+        {"id": 23, "description": "Blue termite campaign", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "uses"},
+        {"source": 2, "target": 4, "rel_name" : "uses"},
+        {"source": 3, "target": 4, "rel_name" : "uses"},
+        {"source": 1, "target": 5, "rel_name" : "uses"},
+        {"source": 2, "target": 5, "rel_name" : "uses"},
+        {"source": 3, "target": 5, "rel_name" : "uses"},
+        {"source": 1, "target": 6, "rel_name" : "uses"},
+        {"source": 2, "target": 6, "rel_name" : "uses"},
+        {"source": 3, "target": 6, "rel_name" : "uses"},
+        {"source": 4, "target": 7, "rel_name" : "obtained from"},
+        {"source": 4, "target": 8, "rel_name" : "written in"},
+        {"source": 4, "target": 9, "rel_name" : "uses C2 server"},
+        {"source": 4, "target": 10, "rel_name" : "communicates with URL"},
+        {"source": 4, "target": 11, "rel_name" : "resolves to IP"},
+        {"source": 4, "target": 12, "rel_name" : "runs on OS"},
+        {"source": 4, "target": 13, "rel_name" : "creates mutex"},
+        {"source": 4, "target": 14, "rel_name" : "uses different mutex"},
+        {"source": 5, "target": 10, "rel_name" : "communicates with URL"},
+        {"source": 5, "target": 15, "rel_name" : "communicates with URL"},
+        {"source": 5, "target": 17, "rel_name" : "has hash"},
+        {"source": 5, "target": 18, "rel_name" : "has PDB path"},
+        {"source": 5, "target": 19, "rel_name" : "has PDB path"},
+        {"source": 5, "target": 20, "rel_name" : "has PDB path"},
+        {"source": 5, "target": 21, "rel_name" : "has PDB path"},
+        {"source": 6, "target": 22, "rel_name" : "uses C2 server"},
+        {"source": 4, "target": 22, "rel_name" : "also uses C2 server"},
+        {"source": 3, "target": 23, "rel_name" : "behind campaign"}
+    ]
+}

@@ -1,0 +1,77 @@
+
+
+
+Sentence : En Route with Sednit
+In most Xtunnel samples, the parser actually processes a command line hardcoded in the binary,
+without even looking for input parameters. Here are some examples of such command lines found
+in some samples:
+```
+   -Si 176.31.96.178 -Sp 443 -Pi 10.30.0.47 -Pp 8080 -SSL
+   -Si 46.183.216.209 -Sp 443 -Pi 10.30.0.11 -Pp 8080 -SSL
+   -Si 95.215.46.27 -Sp 443 -HTTP
+```
+The proxy IP addresses shown in these examples do not correspond
+to any known default proxy address, indicating that these binaries were likely
+compiled for specific targets.
+HTTP Persistent Connection (June 2015)
+In June 2015, a novel way to connect to the C&C server was introduced: an HTTP persistent
+connection [29] . When this feature is enabled, Xtunnel exchanges data with its C&C server
+over the HTTP protocol (encapsulated in TLS protocol), probably as a way to bypass firewalls.
+To open such a persistent connection, an HTTP GET request is encapsulated in TLS protocol and sent
+to the C&C server. This request comes with the HTTP header ~~Connection: keep-alive~~ to enable
+the persistent connection.
+Another HTTP request header hardcoded in Xtunnel is ~~Accept-Language:~~
+~~ru-RU,ru;q=0.8,en-US;q=0.6,en;q=0.4~~ ~~,~~ which interestingly contains
+the language code ~~ru-RU~~ . This header may have been copied from a request
+made from a computer whose default language is Russian.
+Code Obfuscation (July 2015)
+In July 2015, Xtunnel binaries changed drastically from a syntactic point of view, due to the introduction
+of code obfuscation. This obfuscation was applied only to Xtunnel-specific code, while statically
+linked libraries were left untouched. The method employed is a mix of classic obfuscation techniques,
+like insertion of junk code and opaque predicates [30] .
+Consequently, Xtunnel binaries are now about 2 MB in size, while the previous non-obfuscated versions
+were about 1 MB with most of that being the statically linked OpenSSL library. The obfuscated version
+is, of course, much harder to understand and, to illustrate that, the following Figures show the control
+flow graph (CFG) [31] of a small Xtunnel function, before and after obfuscation.
+Figure 27.1 Xtunnel CFG before obfuscation
+84
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sednit", "type" : "ACTO"},
+        {"id": 2, "description": "Xtunnel", "type" : "APPS"},
+        {"id": 3, "description": "176.31.96.178", "type" : "CCSH"},
+        {"id": 4, "description": "443", "type" : "NETP"},
+        {"id": 5, "description": "10.30.0.47", "type" : "CCSH"},
+        {"id": 6, "description": "8080", "type" : "NETP"},
+        {"id": 7, "description": "46.183.216.209", "type" : "CCSH"},
+        {"id": 8, "description": "10.30.0.11", "type" : "CCSH"},
+        {"id": 9, "description": "95.215.46.27", "type" : "CCSH"},
+        {"id": 10, "description": "HTTP protocol (encapsulated in TLS protocol)", "type" : "NETP"},
+        {"id": 11, "description": "TLS protocol", "type" : "NETP"},
+        {"id": 12, "description": "HTTP GET request", "type" : "TTPS"},
+        {"id": 13, "description": "Connection: keep-alive", "type" : "TTPS"},
+        {"id": 14, "description": "Accept-Language: ru-RU,ru;q=0.8,en-US;q=0.6,en;q=0.4", "type" : "TTPS"},
+        {"id": 15, "description": "Russian language", "type" : "COUN"},
+        {"id": 16, "description": "Code obfuscation techniques", "type" : "TTPS"},
+        {"id": 17, "description": "OpenSSL library", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "connects to"},
+        {"source": 2, "target": 4, "rel_name" : "uses port"},
+        {"source": 2, "target": 5, "rel_name" : "proxies through"},
+        {"source": 2, "target": 6, "rel_name" : "uses port"},
+        {"source": 2, "target": 7, "rel_name" : "connects to"},
+        {"source": 2, "target": 4, "rel_name" : "uses port"},
+        {"source": 2, "target": 8, "rel_name" : "proxies through"},
+        {"source": 2, "target": 6, "rel_name" : "uses port"},
+        {"source": 2, "target": 9, "rel_name" : "connects to"},
+        {"source": 2, "target": 4, "rel_name" : "uses port"},
+        {"source": 10, "target": 11, "rel_name" : "encapsulated in"},
+        {"source": 2, "target": 10, "rel_name" : "uses protocol"},
+        {"source": 2, "target": 12, "rel_name" : "sends request"},
+        {"source": 12, "target": 13, "rel_name" : "includes header"},
+        {"source": 12, "target": 14, "rel_name" : "includes header"},
+        {"source": 16, "target": 2, "rel_name" : "applied to"}
+    ]
+}

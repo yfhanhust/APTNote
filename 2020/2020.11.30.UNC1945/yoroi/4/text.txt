@@ -1,0 +1,36 @@
+Technical Analysis
+In this analysis, we want to deepen one of the post exploitation TTP used by the UNC1945
+group to solve the huge problem of running modern attack tools on legacy systems. Do to
+so, the group in fact is using a custom QEMU linux virtual machine instance containing
+all the necessary tools adopted to achieve its objective.
+This way all the operating system and dependencies issues become almost frictionless. In
+particular their portable virtual arsenal is based on QEMU images and looks like this:
+Figure. Virtual Arsenal Structure
+Let's go to analyze the various elements:
+bios.bin: is the QEMU seabios, an open source implementation of an x86 BIOS.
+core: is the original image of the Tiny Linux base
+efi-e1000.rom: QEMU custom ROM image.
+en-us: the mapping file for US keyboard layout.
+hda.mini.qcow2: QEMU QCOW2 Image (HD).
+kvmapic.bin : KVM in-kernel APIC support.
+qemu-system-i386: The QEMU PC System emulator;
+start.sh: the initialization script of the virtual machine.
+2/16
+The content of the starting script is quite simple:
+```
+!/bin/shif [ -z "$1" ];then ./qemu-system-i386 -m 166 -kernel vmlinuz -initrd
+core -hda hda.mini.qcow2 -append "tce=sda1 home=sda1 opt=sda1 noswap nozswap
+superuser" -net nic -net user,tftp=/,hostfwd=tcp::2222-:22 -curseselse ./qemusystem-i386 -m 166 -kernel vmlinuz -initrd core -hda hda.mini.qcow2 -append
+"tce=sda1 home=sda1 opt=sda1 noswap nozswap superuser" -net nic -net
+user,tftp=/,hostfwd=tcp::19227-:22 -vnc none >/dev/null 2>&1 &fi
+```
+The bash script is quite easy. It has the purpose to launch the QEMU emulator system: if
+no parameter is provided ($1), the script executes the first branch enabling port
+forwarding between guest 22 to host 2222, using the display library “curses”. This setup is
+to interact with the VM connecting through the host 2222 .
+Without any parameter, the script configures the access through the usage of SSH,
+because the “curses” library is not listed and the VNC server is disabled. However, both
+the branches allow communication through the SSH protocol, in the first case starting the
+communication at the port 2222, in the second at the port 19227.
+After the first overview of the configuration of the QEMU environment, we decided to
+deepen into the Virtual Machine by executing it.

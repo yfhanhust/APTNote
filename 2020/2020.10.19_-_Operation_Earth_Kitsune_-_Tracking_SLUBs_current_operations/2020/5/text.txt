@@ -1,0 +1,35 @@
+The Dropper DLL
+After the shellcode execution, a “dropper.dll” file is downloaded from the C&C server. The dropper has
+two objectives: to check if the system is protected, and to download three more samples and execute
+them. The following image shows the main dropper logic.
+11 | Operation Earth Kitsune: Tracking SLUB’s Current Operations
+Figure 12. The main dropper logic
+The dropper uses dynamic loading system libraries to resolve the API entry points and call those APIs
+dynamically. The first step is to initialize the API entry points. The following code section shows the
+dynamic initialization logic.
+Figure 13. System API initialization
+Note that all the strings are obfuscated with library names like “kernel32.dll” and “w2s_32.dll.”
+Once all the APIs are initialized, the dropper DLL checks for a list of known security software by comparing
+the current processes to a predefined list. Figure 14 shows the predefined list of security software.
+12 | Operation Earth Kitsune: Tracking SLUB’s Current Operations
+Figure 14. The list of predefined security software
+The list includes some of the most ubiquitous security products in the market, suggesting that the attacker
+is trying to infect unprotected users and avoid detection if possible. If the dropper detects any of the listed
+processes, it will abort execution
+If it doesn’t detect any of the processes, the dropper will start downloading three more samples using
+the same C&C communication format as the shellcode and connect to the same C&C server. The
+following images show a partial view of the request and responses with the C&C communication channel.
+Connection with the C&C server happens on port 53 over TCP, intending to be confused with DNS traffic.
+Figure 15. The dropper’s C&C communication
+The victim will send two sequences of bytes in separate packets. The first request is the size of the
+second request, while the second request is the file name to be retrieved. The original string name in the
+second request is NOTed before being sent (figure 15 shows an example of the real traffic). The server will
+then send the file back to the victim’s machine.
+The dropper will download three samples: “1.jpg,” “2.jpg,” and “3.jpg.” Each sample is executed as being
+downloaded without any additional conditions. This attack generates a lot of red flags, but since the
+attacker has already vetted the machine for security software — therefore minimizing the chance of user
+protection — the attacker can do a mass deployment of multiple components.
+13 | Operation Earth Kitsune: Tracking SLUB’s Current Operations
+The following code section shows the download samples being executed inside the
+DownloadAndExecuteSamples() function.
+Figure 16. Downloaded Samples Execution

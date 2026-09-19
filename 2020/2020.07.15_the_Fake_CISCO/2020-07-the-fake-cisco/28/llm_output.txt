@@ -1,0 +1,53 @@
+
+
+
+Sentence : 6.2 The MZIP file format
+Cisco delivers software updates for Catalyst devices as a single binary file. This meant updates for all system
+components were carried in this file, whether application software, bootloaders, or microcode. This warranted
+a closer look into the format of this file.
+The file format was identified with the first four bytes being "MZIP" and was referred to as such. Apparently, this
+was a "Cisco IOS MZIP compressed image" as noted on some sources on the Internet. No specifications were
+publicly available.
+Some existing tools [12] were found which served as a starting point for researching the format, however no tool
+was found which would handle unpacking of the images at hand. Naturally, the code that was responsible for
+loading MZIP files should serve as the best reference, so the already obtained genuine bootloader images could
+be used for that purpose. Quite a lot of references to MZIP were found in the HBOOT image, so the relevant
+parts were reverse engineered.
+On a very high level, the file format was very similar to what would be found in executable file formats – this
+could easily be seen from what mziptools was intended to output: some fixed header data including an entry
+point address as well as a collection of segments. This meant the file was simply a program image which was
+loaded and executed by the bootloader chain.
+Segments could also be optionally compressed with PKZIP or BZIP2. Judging by the presence of the usual
+BZh91AY... signature, data in our files was indeed compressed with BZIP2. As data is BZIP2 compressed, it was
+possible to apply usual tools such as binwalk for data carving and decompression of relevant sections. While this
+did not add much insight into the file format, it served as the first step to understand what was contained inside.
+While provisions were present for more complicated arrangements, the contents proved to be very simple: one
+code section and one data section.
+Some trailer data was also included. This contained some textual information possibly related to the build
+configuration and provided versioning information which we didn’t really need. Appended there, however, was
+the image signature apparently used to authenticate the image, likely to be RSA2048 judging by the size. The
+signature followed the same format used to authenticate both HBOOT and BROM images.
+To facilitate future research, a dedicated tool was also developed to unpack and recreate MZIP files.
+12 https://github.com/bvanheu/linux-cisco/tree/master/mziptools
+F-Secure.com | © F-Secure LABS 35
+PUBLIC
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "MZIP file format", "type" : "EXEF"},
+        {"id": 2, "description": "Cisco IOS MZIP compressed image", "type" : "DOCF"},
+        {"id": 3, "description": "HBOOT image", "type" : "EXEF"},
+        {"id": 4, "description": "BZIP2", "type" : "TAMP"},
+        {"id": 5, "description": "RSA2048 signature", "type" : "IOCS"},
+        {"id": 6, "description": "HBOOT and BROM images", "type" : "EXEF"},
+        {"id": 7, "description": "mziptools", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "is identified as"},
+        {"source": 2, "target": 3, "rel_name" : "analyzed in"},
+        {"source": 2, "target": 4, "rel_name" : "compressed with"},
+        {"source": 2, "target": 5, "rel_name" : "authenticated by"},
+        {"source": 2, "target": 6, "rel_name" : "related to"},
+        {"source": 7, "target": 1, "rel_name" : "used for unpacking"}
+    ]
+}

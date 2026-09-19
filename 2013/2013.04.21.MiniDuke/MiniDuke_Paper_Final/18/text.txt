@@ -1,0 +1,33 @@
+5.6 Decrypting the Twitter and Google usernames
+The process starts with removing the watermark, as described in the Removing the
+Watermark ↑ section. At this point, we can isolate the data, although it is encrypted.
+We proceed then with decrypting the 16-byte section that holds the Google username. The
+decryption key is obtained by computing the CRC on the unpacked code.
+The code starts at offset 0xC and spans until the beginning of the data section (which is 0x80
+bytes long).
+```
+code_crc = crc32(code_begin, code_end);
+for (i=3; i>=0; i--)
+{
+    ((DWORD)area1 + i*sizeof(DWORD)) ^= code_crc;
+    code_crc = ROR(code_crc, 8);
+}
+```
+Going further, the large area is decrypted with the following algorithm:
+```
+unsigned char c = 0;
+for (i=0; i<0x40; i++)
+{
+    c = c - 1;
+```
+11
+© 2013 Bitdefender
+```
+    area2[i] = (ROL(area2[i], c) - c ) ^ c;
+    if (area2[i] == '\0')
+    {
+        break;
+    }
+}
+```
+The result holds the Twitter link with the username.

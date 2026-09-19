@@ -1,0 +1,82 @@
+
+
+
+Sentence : Operation Blockbuster: Loaders, Installers and Uninstallers Report 21
+IndiaCharlie-Two uses the exact same function, sans the LoadLibrary call, that IndiaCharlie-One uses for extracting
+the RomeoFoxtrot-Two binary from its .data section and writing the file to disk. Just as IndiaCharlie-One does not have
+an encrypted payload, IndiaCharlie-Two’s RomeoFoxtrot-Two payload is in cleartext with the exception of two known
+samples that use simple XOR encoding. These two samples are believed to date from mid-Dec 2014 and are the same
+samples that have the likely false July 2009 compile dates discussed above.
+IndiaCharlie-Two installs the RomeoFoxtrot-Two malware as a service on the victim’s machine (Task #5) as an
+svchost-dependent service. IndiaCharlie-Two begins Task #5 by creating a new registry key under HKLM\SYSTEM\
+CurrentControlSet\Services\ with the generated name of the new service. The Parameters\ServiceDll
+value is set to point to the RomeoFoxtrot-Two binary on the victim’s machine. A new service group is added to the registry
+under HKLM\Software\Microsoft\Windows NT\CurrentVersion\SvcHost . The generated service name serves
+as both the new service group’s name and its only member. The newly generated service is added to the Windows service
+database by calling CreateServiceA which also adds the description of the service. Lastly,
+ChangeServiceConfig2A
+is called twice, once to add the description of the service and again to establish the behavior of the service in the
+event of an error (which is to simply restart the service). Finally, IndiaCharlie-Two activates the service by calling
+StartServiceA (Task #6).
+RomeoFoxtrot-Two is a server-mode RAT, and so it requires a listening port on the victim’s machine. In order to allow
+externally originating network connections, the Windows firewall must be modified by IndiaCharlie-Two to allow
+incoming connections. IndiaCharlie-Two attempts to poke a hole in the victim’s Windows firewall using two methods at
+the same time (Figure 4-2).
+ " dir=in action=allow
+cmd.exe /c netsh advfirewall firewall add rule name="
+service="  " enable=yes
+ " "  " enable
+Figure 4-2: Commands used by IndiaCharlie-Two to Open Ports on the Victim’s Firewall
+The first netsh command allows the service to bind to any port (that is available) and the Windows firewall then allows
+incoming connections to the bound port. This command is specific to Windows versions newer than Windows XP. The
+second netsh command appears to attempt to perform the same task to grant service access through the firewall of
+Windows XP computers, but a typo in the command (“ addallowedprogram ” instead of “ add allowedprogram ”)
+prevents the command from working.
+When IndiaCharlie-Two is activated as a service or as a standalone executable, a suicide script is generated and executed
+at the conclusion of the installation process. As with IndiaCharlie-One, the IndiaCharlie-Two binary is expendable and
+should be removed after execution based on the use of the suicide script. And, as with IndiaCharlie-One, the generation
+and execution of the suicide script occurs whether or not the loading of the RomeoFoxtrot-Two malware is successful.
+An interesting shift in design occurred between April 2015 and late August 2015 with regards to how information leaking
+strings are addressed. Prior to this, the values for the default service details as well as the strings used to construct the
+firewall disabling commands are in cleartext in IndiaCharlie-Two samples. But at the same time that the default service
+details change, the developers begin encrypting the strings for the default service details as well as the component that
+make up the firewall deactivation commands. The developers encrypt these important strings by applying a 64-byte XOR
+buffer to the strings as seen in Figure 4-3.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "IndiaCharlie-Two", "type": "ACTO"},
+        {"id": 2, "description": "RomeoFoxtrot-Two binary", "type": "EXEF"},
+        {"id": 3, "description": "svchost-dependent service", "type": "APPS"},
+        {"id": 4, "description": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\", "type": "REGI"},
+        {"id": 5, "description": "Parameters\\ServiceDll value", "type": "REGI"},
+        {"id": 6, "description": "HKLM\\Software\\Microsoft\\Windows NT\\CurrentVersion\\SvcHost", "type": "REGI"},
+        {"id": 7, "description": "Windows service database", "type": "SYSP"},
+        {"id": 8, "description": "CreateServiceA function", "type": "EXEF"},
+        {"id": 9, "description": "ChangeServiceConfig2A function", "type": "EXEF"},
+        {"id": 10, "description": "StartServiceA function", "type": "EXEF"},
+        {"id": 11, "description": "RomeoFoxtrot-Two server-mode RAT", "type": "APPS"},
+        {"id": 12, "description": "Windows firewall", "type": "FIRW"},
+        {"id": 13, "description": "netsh command (newer Windows versions)", "type": "EXEF"},
+        {"id": 14, "description": "netsh command (Windows XP)", "type": "EXEF"},
+        {"id": 15, "description": "Suicide script", "type": "EXEF"},
+        {"id": 16, "description": "Default service details strings", "type": "TAMP"},
+        {"id": 17, "description": "Firewall disabling commands strings", "type": "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "installs as a service"},
+        {"source": 1, "target": 4, "rel_name": "creates registry key under"},
+        {"source": 1, "target": 5, "rel_name": "sets value of"},
+        {"source": 1, "target": 6, "rel_name": "adds service group to"},
+        {"source": 1, "target": 7, "rel_name": "adds service to"},
+        {"source": 1, "target": 8, "rel_name": "calls function"},
+        {"source": 1, "target": 9, "rel_name": "calls function twice"},
+        {"source": 1, "target": 10, "rel_name": "activates service by calling"},
+        {"source": 1, "target": 12, "rel_name": "modifies to allow incoming connections"},
+        {"source": 1, "target": 13, "rel_name": "uses command"},
+        {"source": 1, "target": 14, "rel_name": "attempts to use command"},
+        {"source": 1, "target": 15, "rel_name": "generates and executes"},
+        {"source": 1, "target": 16, "rel_name": "encrypts strings for"},
+        {"source": 1, "target": 17, "rel_name": "encrypts strings for"}
+    ]
+}

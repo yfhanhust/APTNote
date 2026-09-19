@@ -1,0 +1,52 @@
+User mode agent analysis
+The user mode component of the Moriya rootkit has two purposes. One is to deploy the kernel mode component of the malware on the
+machine and the other is to leverage the covert communication channel created by it to read shell commands sent from the C&C server
+to the compromised machine and to respond to them. Since Moriya is a passive backdoor intended to be deployed on a server accessible
+from the internet, it contains no hardcoded C&C address and relies solely on the driver to provide it with packets filtered from the
+machine’s overall incoming traffic.
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 4/33
+5/7/2021 Operation TunnelSnake | Securelist
+The first order of business for the attacker when using Moriya is to gain persistence on the targeted computer. For this purpose, the user
+mode agent’s DLL contains an export function named Install, which is intended to create a service named ZzNetSvc with the description
+‘Network Services Manager’ and start it. In turn, the path to the user mode agent’s image is set to the registry key
+HKLM\System\CurrentControlSet\Services\ZzNetSvc\Parameters\ServiceDll so that it will be invoked from its ServiceMain export
+each time the service is initiated.
+Next, after the service is started, the agent will attempt to load the rootkit’s driver into the system. Its binary is bundled as two driver
+images within the DLL’s resource section, corresponding to 32- and 64-bit architectures, while in reality only one of them is written to
+disk. In the cases we analyzed, the agent DLLs were compiled for 64-bit systems, dropping a 64-bit driver to the drivers directory in the
+system path, under the name MoriyaStreamWatchmen.sys, hence the rootkit’s name.
+Fig. 2. Code that writes the Moriya driver to disk
+The agent uses a known technique whereby the VirtualBox driver (VBoxDrv.sys) is leveraged to bypass the Driver Signature
+Enforcement mechanism in Windows and load Moriya’s unsigned driver. DSE is an integrity mechanism mandating that drivers are
+properly signed with digital signatures in order for them to be loaded, which was introduced for all versions of Windows starting from
+Vista 64-bit. The technique used to bypass it was seen in use by other threat actors like Turla, Lamberts and Equation.
+Moriya’s user mode agent bypasses this protection with the use of an open-source code named DSEFIX v1.0. The user agent dumps an [1]
+embedded VBoxDrv.sys image of version 1.6.2 to disk and loads it, which is then used by the aforementioned code to map Moriya’s
+unsigned driver to kernel memory space and execute it from its entry point. These actions are made possible through IOCTLs
+implemented in VBoxDrv.sys that allow writing to kernel address space and executing code from it. Throughout this process, the bypass
+code is used to locate and modify a flag in kernel space named g_CiOptions, which controls the mode of enforcement.
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 5/33
+5/7/2021 Operation TunnelSnake | Securelist
+After the unsigned driver is loaded, the agent registers a special keyword that is used as a magic value, which will be sought in the first
+bytes of every incoming packet passed on the covert channel. This allows the rootkit to filter marked packets and block them for any
+application on the system other than the user mode agent. The registration of the value is done through a special IOCTL with the code
+0x222004 sent to the driver, where a typical magic string is pass12.
+Fig. 3. Registration of the packet magic value using a designated IOCTL
+Except for its covert channel communication feature, Moriya is capable of establishing a reverse shell session using an overt channel.
+For this purpose, it waits for a special packet that consists of a message with the structure connect  . The
+address and port are parsed and used by the agent to start a new connection to the given server, while creating a new cmd.exe process
+and redirecting its I/O to the connection’s socket. The handles for the newly created process and its main thread are destroyed to avoid
+detection.
+In any other case, the agent attempts to read the incoming TCP payload from the driver, which will be retrieved as soon as a designated
+packet with a magic number and shell command is received. An attempt is made to read the data with a plain ReadFile API function as a
+blocking operation, i.e., reading is accomplished only once the buffer in kernel mode is populated with data from a Moriya-related
+packet.
+Upon an incoming packet event, the agent creates a new cmd.exe process and redirects its I/O using named pipes. One pipe is used to
+read the retrieved shell command from the covert channel and the other is used to write the shell’s output (obtained from the stdout and
+stderr streams) back to it after execution. To write any data back, the agent uses the WriteFile API function with the driver’s handle.
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 6/33
+5/7/2021 Operation TunnelSnake | Securelist
+All traffic passed on the channel is encoded with a simple encryption scheme. Every sent byte has its payload, following the magic string,
+XORed with the value 0x05 and then negated. Following the same logic, to decode the incoming traffic’s payload, every byte of it should
+be first negated and then XORed with 0x05.
+Fig. 4. Code used for packet encoding

@@ -1,0 +1,59 @@
+
+
+
+Sentence : 21
+This is how we found the depp3353 account. In this new account there was
+another surprise waiting for us – a download folder with two new encrypted files,
+921.bin and 922.bin. Once decrypted, these turned out to be PE executables.
+Downloaded plugins: Cloud persistence
+The two new executables are plugins - quite similar to each other and obviously
+compiled on the same setup. They are lightweight and intended to pull specific
+survey information from their target. Of interest, both of the DLLs originally had
+the same internal name (78wO13YrJ0cB.dll). Presumably the same PE
+sanitization script and parameters were used on both.
+None of these plugins contain any means of CnC communication. Instead, when
+they are executed they are passed a pointer to a function to use for sending data
+back home. Neither are they ever written to disk. They are executed in memory
+only, and once they have completed the memory is freed. This makes these
+modules extremely stealthy, flexible and compatible with multiple toolsets
+independent of what CnC method is being used.
+921.bin retrieves several datapoints about the infected machine: Domain info; a
+list of running processes with all loaded modules in each; the list of installed
+software; and a complete hardware profile of the target machine. 922.bin
+compiles a dirwalk – a complete listing of every file path – of each fixed drive. All
+of this information is exfiltrated back via the same WebDAV connection.
+This model makes it possible to do the intrusion in steps, with verification stages
+in between; and the files will not be easily found on affected computers.
+Based on the information gathered from these modules, the attackers appear to
+move to the next stage of their attack by placing more new components on the
+WebDAV shares. Information about these uploads is limited by the fact that we
+do not have the AES keys to decrypt much of the uploaded data, but we have
+been able to see some upload patterns.
+What we assume to be third-stage plugins appear on the shares as .bin files of
+roughly 72kb. As with other plugins, these are downloaded and deleted from the
+share in one go. However, the next day, another .bin file of the same size will be
+uploaded to the share. This is a pattern that repeats itself over all live accounts. It
+seems that because the plugins exist in memory only, they are injected daily to
+ensure persistence on victim computers. Our theory is that this malware is a
+more typical datastealer, and we have observed that after this type of file is
+planted on the account, encrypted data uploads from compromised users
+increase.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "depp3353 account", "type" : "STOR"},
+        {"id": 2, "description": "921.bin and 922.bin (encrypted files)", "type" : "DOCF"},
+        {"id": 3, "description": "PE executables (decrypted files)", "type" : "EXEF"},
+        {"id": 4, "description": "Cloud persistence", "type" : "TTPS"},
+        {"id": 5, "description": "78wO13YrJ0cB.dll (internal name of DLLs)", "type" : "DOCF"},
+        {"id": 6, "description": "WebDAV connection", "type" : "CCSH"},
+        {"id": 7, "description": ".bin files (third-stage plugins, ~72kb)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "decrypted to"},
+        {"source": 3, "target": 5, "rel_name" : "has internal name"},
+        {"source": 3, "target": 6, "rel_name" : "exfiltrates via"},
+        {"source": 6, "target": 7, "rel_name" : "uploads"}
+    ]
+}

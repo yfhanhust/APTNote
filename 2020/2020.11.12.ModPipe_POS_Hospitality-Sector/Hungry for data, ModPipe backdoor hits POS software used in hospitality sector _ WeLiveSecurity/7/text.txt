@@ -1,0 +1,70 @@
+Main module
+The main module is mostly responsible for managing C&C communication and for handling
+received messages/commands, either from C&C or downloadable modules. To facilitate the
+communication with modules, the main module starts by creating a pipe with a randomly
+generated name formatted using the following format string:
+{%08X-%04X-%04X-%04X-%08X%04X}
+It then periodically checks the pipe for new messages using the PeekNamedPipe Windows
+API function. Messages are parsed and handled according to their content. For a full list of
+recognized pipe commands and messages see Table 3.
+Table 3. List of pipe message/command types
+Message
+code Description
+0x10000012 inject and execute received module in specified process
+0x10000013 data for C&C server (execution logs, stolen data, …)
+0x10000014 write requested configuration data to the file handle received in this message (most likely handle to named pipe created by some other module)
+(main config, network config, loader name, main module PID, ...)
+0x10000020 C&C commands (not encrypted) – see Table 4 for the full list of available
+commands
+0x10000022 set module status (or err code)
+0x10000023 set C&C communication time intervals
+0x10000024 close received list of handles
+0x10000025 get handle of the process with specified PID, duplicate it for some other
+specified process and send it through the received named pipe handle
+0x10000072 C&C commands (encrypted) – see Table 4 for the full list of available
+commands
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 14/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+For the detailed structure and format used for the messages transferred through the pipe
+refer to Figure 10.
+Figure 10. Structure of the main module’s named pipe messages
+For communication with its C&C server, the main module uses HTTP and port 80. Each of
+the dissected samples contained a list of potentially available servers from which one was
+randomly chosen. A list of all C&C addresses discovered over the course of our research is
+available in the Indicators of Compromise section.
+Messages sent to the C&C (see Figure 11) are constructed and encrypted within the main
+module’s code.
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 15/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+Figure 11. Structure of the messages sent to the C&C
+Before any communication with the C&C, the main module generates two clean URLs and
+uses them to check for an internet connection and a clean-looking cover for the malicious
+traffic. The URLs use the following format www.%domain%[.]com/?%rand%, where
+%domain% is randomly chosen from google, bing and yahoo and %rand% is a random 32bit unsigned integer represented in ASCII.
+Communication with the C&C is encrypted using AES in CBC mode with the following 128bit key: F45D076FEC641691A21F0C946EDA9BD5. Before encryption, C&C messages start
+with a 4-byte checksum, which is calculated as CRC32 (message) XORed with the first 4
+bytes of the AES key used to encrypt the message. In the case of the key mentioned above,
+this would be F4 5D 07 6F.
+The data is transmitted using the lightweight networking module, which is injected on
+demand and exits immediately after uploading or downloading the requested message. To
+select the process for injection, the main module enumerates running processes and assigns
+them a priority value between 3 and 6. Those with higher priority are injected first, based
+on the following criteria:
+Priority 6
+The highest priority, assigned to any process that has already been used
+successfully to inject a networking module, received a response from the C&C
+and that is still running under the same PID, name and CreationTime.
+Priority 5
+Process name with no extension that matches one of the following process
+names used for browsers: iexplore, opera, chrome, firefox
+Priority 4
+Process name with no extension that matches the following process names:
+explorer, svchost
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 16/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+Priority 3
+All the other running processes excluding the following system processes:
+system, lsass, csrss, lsm, winlogon, smss, wininit
+The main reason behind the priority list is to inject processes that are expected to
+communicate over the network and at the same time avoid system processes that might
+attract attention if caught communicating over the network.

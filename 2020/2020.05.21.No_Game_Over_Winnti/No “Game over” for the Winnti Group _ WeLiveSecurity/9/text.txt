@@ -1,0 +1,207 @@
+Original variant
+PipeMon is a modular backdoor where each module is a single DLL exporting a function called IntelLoader and is loaded
+using a reflective loading technique. Each module exhibits different functionalities that are shown in Table 2.
+https://www.welivesecurity.com/2020/05/21/no-game-over-winnti-group/ 3/16
+5/21/2020 No “Game over” for the Winnti Group | WeLiveSecurity
+The loader, responsible for loading the main modules (ManagerMain and GuardClient) is Win32CmdDll.dll and is located
+in the Print Processors directory. The modules are stored encrypted on disk at the same location with inoffensive-looking
+names such as:
+banner.bmp
+certificate.cert
+License.hwp
+JSONDIU7c9djE
+D8JNCKS0DJE
+B0SDFUWEkNCj.logN
+Note that .hwp is the extension used by Hangul Word Processor from Hangul Office, which is very popular in South
+Korea.
+The modules are RC4 encrypted and the decryption key Com!123Qasdz is hardcoded into each module. Win32CmDll.dll
+decrypts and injects the ManagerMain and GuardClient modules. The ManagerMain module is responsible for decrypting
+and injecting the Communication module, while the GuardClient module will ensure that the Communication module is
+running and reload it if necessary. An overview of how PipeMon operates is shown in Figure 2.
+Win32CmDll.dll first tries to inject the ManagerMain and GuardClient modules into a process with one of the following
+names: lsass.exe, wininit.exe or lsm.exe. If that fails, it tries to inject into one of the registered windows services
+processes, excluding processes named spoolsv.exe, ekrn.exe (ESET), avp.exe (Kaspersky) or dllhost.exe. As a last
+option, if everything else failed, it tries to use the processes taskhost.exe, taskhostw.exe or explorer.exe.
+The process candidates for Communication module injection must be in the TCP connection table with either 0.0.0.0 as
+the local address, or an ESTABLISHED connection and owning a LOCAL SERVICE token. These conditions are likely
+used to hide the Communication module into a process that is already communicating over the network so that the traffic
+from the Communication module would seem inconspicuous and possibly also whitelisted in the firewall. If no process
+meets the previous requirements, the ManagerMain module tries to inject the Communication module into explorer.exe.
+Processes belonging to the Windows Store Apps and processes named egui.exe (ESET) and avpui.exe (Kaspersky) are
+ignored from the selection.
+Table 2. PipeMon module descriptions and their respective PDB paths
+Mod‐
+ule
+Name Description PDB Path
+Win32
+Cmd‐
+Dll
+Guard
+Client
+Man‐
+ager‐
+Main
+Decrypts and loads the ManagerMain and GuardClient modules. S:\Monitor\Monitor_RAW\Lau
+ncher\x64\Release\Win32Cm
+dDll.pdb
+S:\Monitor\Monitor_RAW\libs\
+x64\Release\Win32CmdDl‐
+l.pdb
+Periodically checks whether the Communication module is running
+and loads it if not.
+Loads Communication module when executed. Contains encrypted
+C&C domain which is passed to the Communication module via
+named pipe.
+Can execute several commands based on the data received from
+the Communication module (mostly system information collecting,
+injecting payloads).
+S:\Monitor\Monitor_RAW\Clie
+nt\x64\Release\GuardClien‐
+t.pdb
+S:\Monitor\Monitor_RAW\Clie
+nt\x64\Release\Manager‐
+Main.pdb
+https://www.welivesecurity.com/2020/05/21/no-game-over-winnti-group/ 4/16
+5/21/2020 No “Game over” for the Winnti Group | WeLiveSecurity
+Mod‐
+ule
+Name Description PDB Path
+Com‐
+muni‐
+cation
+Responsible for managing communication between the C&C server
+and individual modules via named pipes.
+S:\Monitor\Monitor_RAW\Clie
+nt\x64\Release\Communica‐
+tion.pdb
+F:\PCC\trunk\Communication‐
+Client\x64\Release\Communi‐
+cation.pdb
+Additional modules can be loaded on-demand using dedicated commands (see below), but unfortunately, we weren’t
+able to discover any of them. The names of these modules are an educated guess based on the named pipes used to
+communicate with them:
+Screen
+Route
+CMD
+InCmd
+File
+Inter-module communication
+Inter-module communication is performed via named pipes, using two named pipes per communication channel between
+each individual module, one for sending and one for receiving. Table 3 lists the communication channels and their
+corresponding named pipes.
+Table 3. PipeMon communication channel and their respective named pipes
+Communication channel Named pipe
+Communication, Screen \.\pipe\ScreenPipeRead%CNC_DEFINED%
+\.\pipe\ScreenPipeWrite%CNC_DEFINED%
+Communication, Route \.\pipe\RoutePipeWriite%B64_TIMESTAMP%
+Communication, ManagerMain \.\pipe\MainPipeWrite%B64_TIMESTAMP%
+\.\pipe\MainPipeRead%B64_TIMESTAMP%
+GuardClient, ManagerMain \.\pipe\MainHeatPipeRead%B64_TIMESTAMP%
+Communication, InCmd \.\pipe\InCmdPipeWrite%B64_TIMESTAMP%
+\.\pipe\InCmdPipeRead%B64_TIMESTAMP%
+Communication, File \.\pipe\FilePipeRead%B64_TIMESTAMP%
+\.\pipe\FilePipeWrite%B64_TIMESTAMP%
+GuardClient, Communication \.\pipe\ComHeatPipeRead%B64_TIMESTAMP%
+Communication, CMD \.\pipe\CMDPipeRead
+\.\pipe\CMDPipeWrite
+The %CNC_DEFINED% string is received from the C&C server and %B64_TIMESTAMP% variables are base64
+encoded timestamps such as the ones shown in Table 4.
+Table 4. Example timestamps used with named pipes
+%BASE64_TIMESTAMP% Decoded timestamp
+MjAxOTAyMjgxMDE1Mzc= 20190228101537
+https://www.welivesecurity.com/2020/05/21/no-game-over-winnti-group/ 5/16
+5/21/2020 No “Game over” for the Winnti Group | WeLiveSecurity
+%BASE64_TIMESTAMP% Decoded timestamp
+MjAxOTA1MjEyMzU2MjQ= 20190521235624
+MjAxOTExMjExMjE2MjY= 20191121121626
+Figure 2. PipeMon IPC scheme (original PipeMon variant)
+C&C communication
+The Communication module is responsible for managing communications between the C&C server and the other
+modules via named pipes, similar to the PortReuse backdoor documented in our white paper on the Winnti arsenal.
+Its C&C address is hardcoded in the ManagerMain module and encrypted using RC4 with the hardcoded key
+Com!123Qasdz. It is sent to the Communication module through a named pipe.
+A separate communication channel is created for each installed module. The communication protocol used is TLS over
+TCP. The communication is handled with the HP-Socket library. All the messages are RC4 encrypted using the
+hardcoded key. If the size of the message to be transferred is greater than or equal to 4KB, it is first compressed using
+zlib’s Deflate implementation.
+https://www.welivesecurity.com/2020/05/21/no-game-over-winnti-group/ 6/16
+5/21/2020 No “Game over” for the Winnti Group | WeLiveSecurity
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+struct CCMSG
+{
+BYTE is_compressed;
+CMD cmd;
+};
+struct CMD
+{
+QWORD cmd_type;
+DWORD cmd_size;
+DWORD cmd_arg;
+BYTE data[cmd_size - 16];
+};
+struct beacon_msg
+{
+BYTE isCompressed = 0;
+CMD cmd_hdr;
+WCHAR win_version[128];
+WCHAR adapters_addrs[128];
+WCHAR adapters_addrs[64];
+WCHAR local_addr[64];
+WCHAR malware_version[64];
+WCHAR computer_name[64];
+}
+Figure 3. C&C message and beacon formats
+To initiate communication with the C&C server, a beacon message is first sent that contains the following information:
+OS version
+physical addresses of connected network adapters concatenated with %B64_TIMESTAMP%
+victim’s local IP address
+backdoor version/campaign ID; we’ve observed the following values
+“1.1.1.4beat”
+“1.1.1.4Bata”
+“1.1.1.5”
+Victim computer name
+https://www.welivesecurity.com/2020/05/21/no-game-over-winnti-group/ 7/16
+5/21/2020 No “Game over” for the Winnti Group | WeLiveSecurity
+The information about the victim’s machine is collected by the ManagerMain module and sent to the Communication
+module via the named pipe. The backdoor version is hardcoded in the Communication module in cleartext.
+The format of the beacon message is shown in Figure 3 and the supported commands are shown in Table 5.
+Table 5. List of commands
+Command type Command argument Description
+0x02 0x03 Install the File module
+0x03 0x03 Install the CMD module
+0x03 0x0B Install the InCmd module
+0x04 0x02 Queue command for the Route module
+0x04 0x03 Install the Route module
+0x05   - Send victim’s RDP information to the C&C server
+0x06 0x05 Send OS, CPU, PC and time zone information to the C&C server
+0x06 0x06 Send network information to the C&C server
+0x06 0x07 Send disk drive information to the C&C server
+0x07   - Send running processes information to the C&C server
+0x09   - DLL injection
+0x0C 0x15 Send names of "InCmd" pipes and events to the C&C server
+0x0C 0x16 Send name of "Route" pipe to the C&C server
+0x0C 0x17 Send names of "File" pipes to the C&C server
+* The argument supplied for this command type is ignored

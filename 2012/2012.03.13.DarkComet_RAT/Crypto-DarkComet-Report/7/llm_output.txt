@@ -1,0 +1,158 @@
+
+
+
+Sentence : Apply subst table
+accum = 0
+for k in range(len(src)):
+elem_a_idx = self._LS_BYTE(k + 1)
+accum += stable[elem_a_idx]
+elem_b_idx = self._LS_BYTE(accum)
+stable[elem_b_idx], stable[elem_a_idx] = \
+stable[elem_a_idx], stable[elem_b_idx]
+swap_sum = self._LS_BYTE(stable[elem_b_idx] + stable[elem_a_idx])
+src[k] ^= self._LS_BYTE(stable[swap_sum])
+@staticmethod
+def _LS_BYTE(value):
+return 0xff & value
+if name == 'main':
+if len(sys.argv) != 4 or sys.argv[1] not in ('-d', '-e'):
+print "usage: %s [-d|-e] SRC_TEXT KEY" % sys.argv[0]
+```
+Arbor Networks | 27
+```
+sys.exit(1)
+do_decrypt = bool(sys.argv[1] == '-d')
+src = sys.argv[2]
+key = sys.argv[3]
+print "%s: %s" % ("CRYPT" if do_decrypt else "PLAIN", src)
+cryptor = DarkCometCryptor(key)
+dst = cryptor.decrypt(src) if do_decrypt else cryptor.encrypt(src)
+print "%s: %s" % ("PLAIN" if do_decrypt else "CRYPT", dst)
+```
+Figure 23. darkcomet.py Crypto Module
+Applying our DarkComet encryption module against the observed traffic results in the following:
+```
+      C&C:
+  IDTYPE
+
+  Bot:
+
+  SERVER
+
+  C&C:
+
+  GetSIN192.10.8.64|27038511
+
+  Bot:
+
+  infoesComet|192.10.8.64 / [192.1.167.30] : 1604|SANDBOX7 /
+  Admin|27038511|29s|Windows XP Service Pack 2 [2600] 32 bit ( C:\
+  )|x||US|C:\WINDOWS\system32\cmd.exe|{16382783-b70c-71e4-11e0      28f8efc0696f-10806d6172}|127.43 MiB/256.09 MiB [128.22 MiB Free]|English
+  (United States) US / -- |10/9/2011 at 8:13:31 PM
+
+```
+Figure 24. Decrypted version of comms from Figure 2.
+Likewise, when a DarkComet C&C issues attacks command, the encrypted traffic on the wire looks like these examples:
+```
+185CB63BBE0EA3DF6D2A725936265160E391BC77F47FF46A3934CFB173AC
+```
+Arbor Networks | 28
+```
+185CB63BA31EA7C967297252432E5A7CFC96B261EB7EF4742533CEBF37A9C081
+185CB63BA503B9C967297252432E5A7CFC96B261EB7EF4742533CEBF37A9C081
+```
+But applying the decryption routine yields the following:
+```
+DDOSHTTPFLOOD192.168.100.254|5
+DDOSUDPFLOOD192.168.100.254:80|5
+DDOSSYNFLOOD192.168.100.254:80|5
+```
+Which corresponds to ordering an HTTP flood, a UDP flood, and a TCP flood, respectively, against target
+192.168.100.254, with each attack lasting for 5 seconds. Once the attacks are completed the DarkComet bot will
+respond with an encrypted status message such as the following:
+```
+1E4CAB2DA50FBBDB781F5336347B073DA9DCD936B46EB03B646DDAE366F7D5C76D3C0420A55906F524
+240A0F34D3A6384150
+```
+Which decrypts to the following:
+```
+BTRESULTSyn Flood|Syn task finished!|Administrator
+```
+As implied above, DarkComet supports three types of DDoS attacks: HTTP flooding, UDP flooding, and TCP flooding
+(mis-advertised as " SYNFLOOD "). The UDP and TCP volumetric floods are quite unremarkable and simply consist of
+random gibberish blasted at a target host and port. The HTTP flood also appears to be intended as a rudimentary GET
+flood with a minimalist HTTP request header. However, DarkComet's HTTP flood implementation happens to have not
+one, but two catastrophic bugs.
+First of all, the thread procedure that implements the DDOSHTTPFLOOD attack command, SendHttp_sub_485848(),
+uses the WinSock2 library's socket(), connect(), and send() APIs to send the following hard-coded HTTP
+flooding request:
+```
+GET / HTTP/1.1\r\n\r\n
+```
+Arbor Networks | 29
+At first glance, this looks like an (almost) valid, although minimalist, HTTP request that is terminated with a double
+carriage-return/line-feed ( CRLF ) combination. However, when one takes a closer look at the way DarkComet stores this
+string, we see that the \r and \n characters are not actually CR ( 0x0D ) and LF ( 0x0A ) bytes. Instead, they are literally
+comprised of the backslash ( 0x2F ), letter r ( 0x72 ), and letter n ( 0x6E ) bytes!
+Arbor Networks | 30
+Figure 25. Hard-coded HTTP request string HttpRequest_byte_485970
+If the HTTP request string had been encoded properly (ending with 0x0D0A0D0A ), the length of the string would have
+been 18. But instead, we see that it is 22 bytes in length. Due to this, DarkComet's attempt at an application layer attack is
+not close to a valid HTTP request per the RFCs.
+The second big mistake in the implementation of DarkComet's HTTP flood attack becomes apparent further down in the
+attack thread code, just before the (buggy) HTTP request payload is sent to the target via the send() API:
+Arbor Networks | 31
+Arbor Networks | 32
+Figure 26. Function EncryptAndSendData_sub_49393C()
+Unbelievably, DarkComet bot is accidentally encrypting the (buggy) GET request string at instruction 0x00493972 via a
+call to the already-reversed Encrypt_sub_44C34C() routine. The resulting (encrypted) HTTP request is then sent on
+its merry way to the DDoS target via the send() API call at instruction 0x0049399D .
+So the target web server ends up receiving gibberish instead of a well-formed HTTP request that might exhaust resources
+at the application layer. Due to these two serious flaws, DarkComet's HTTP flood attack reduces down to nothing more
+than a volumetric TCP flood against port 80, and a very weak one at that (a mere 22 bytes of TCP payload per flooding
+packet...) In fact, here is what the actual "HTTP flooding" traffic looks like:
+```
+      1B5DAD48D97ABFDB7F3612275C26342091CED63D8620
+  1B5DAD48D97ABFDB7F3612275C26342091CED63D8620
+
+  1B5DAD48D97ABFDB7F3612275C26342091CED63D8620
+
+```
+Clearly, this is very unlikely to bring any web server to its knees!
+Acknowledgements to Arbor Networks analyst Curt Wilson for his valuable insights and assistance with this article.
+Arbor Networks | 33
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DarkComet", "type" : "ACTO"},
+        {"id": 2, "description": "192.10.8.64", "type" : "CCSH"},
+        {"id": 3, "description": "27038511", "type" : "CCSH"},
+        {"id": 4, "description": "192.1.167.30", "type" : "CCSH"},
+        {"id": 5, "description": "SANDBOX7", "type" : "DOCF"},
+        {"id": 6, "description": "Windows XP Service Pack 2 [2600] 32 bit ( C:\\ )", "type" : "OPPS"},
+        {"id": 7, "description": "C:\\WINDOWS\\system32\\cmd.exe", "type" : "EXEF"},
+        {"id": 8, "description": "{16382783-b70c-71e4-11e0      28f8efc0696f-10806d6172}", "type" : "REGI"},
+        {"id": 9, "description": "127.43 MiB/256.09 MiB [128.22 MiB Free]", "type" : "TAMP"},
+        {"id": 10, "description": "English (United States) US / --", "type" : "TAMP"},
+        {"id": 11, "description": "192.168.100.254", "type" : "CCSH"},
+        {"id": 12, "description": "DDOSHTTPFLOOD192.168.100.254|5", "type" : "TTPS"},
+        {"id": 13, "description": "DDOSUDPFLOOD192.168.100.254:80|5", "type" : "TTPS"},
+        {"id": 14, "description": "DDOSSYNFLOOD192.168.100.254:80|5", "type" : "TTPS"},
+        {"id": 15, "description": "BTRESULTSyn Flood|Syn task finished!|Administrator", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "C&C server"},
+        {"source": 1, "target": 3, "rel_name" : "C&C port"},
+        {"source": 1, "target": 4, "rel_name" : "Bot IP"},
+        {"source": 5, "target": 6, "rel_name" : "runs on"},
+        {"source": 7, "target": 6, "rel_name" : "located in"},
+        {"source": 8, "target": 1, "rel_name" : "used by"},
+        {"source": 9, "target": 1, "rel_name" : "system memory"},
+        {"source": 10, "target": 1, "rel_name" : "system language"},
+        {"source": 1, "target": 11, "rel_name" : "DDoS target"},
+        {"source": 12, "target": 1, "rel_name" : "issued by"},
+        {"source": 13, "target": 1, "rel_name" : "issued by"},
+        {"source": 14, "target": 1, "rel_name" : "issued by"},
+        {"source": 15, "target": 1, "rel_name" : "status message"}
+    ]
+}

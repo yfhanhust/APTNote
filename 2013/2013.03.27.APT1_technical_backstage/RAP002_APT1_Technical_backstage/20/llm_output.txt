@@ -1,0 +1,62 @@
+
+
+
+Sentence : 3.3 Encryption key brute forcing
+The RAT uses a key to encrypt the communication. The password is set by the administrator and
+its default value is “admin”. After a quick search on the Internet, we know that Poison Ivy uses
+Camellia as encryption algorithm. The encryption is made with 16 bytes blocks. So we decided to
+choose the following approach:
+
+
+Send 100 bytes (with 0x00) to the daemon (same than in our scanner)
+
+
+Get the first 16 bytes as result from the server
+
+
+Here is the formula of the result:
+Ref. RAP002_APT1_Technical_backstage.1.0 Version 1.0 Page 8 of 48
+Type Public document
+Project APT1: technical backstage
+Title malware analysis
+Classification Public
+Result = Camellia(16*0x00, key)
+The result is not a printable value. Thus, we decided to make a base64 of this value and add the
+flag $camellia$ to identify the algorithm. Here is an example of result:
+```
+$camellia$ItGoyeyQIvPjT/qBoDKQZg==
+```
+To get the key, we developed a “John the Ripper” extension. “John the Ripper” is an open source
+password cracker. The source code can be downloaded here: http://www.openwall.com/john/.
+OpenSSL provides the camellia algorithm. The code source of the “John the Ripper” plugin to
+crack camellia hashes by using the OpenSSL library is available in the appendix.
+After compiling “John the Ripper”, a new format is available: camellia. Here is an example of a
+brute force session:
+The key is “pswpsw”. This key must be used in our homemade Metasploit exploit.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RAT", "type" : "APPS"},
+        {"id": 2, "description": "administrator", "type" : "ACTO"},
+        {"id": 3, "description": "Poison Ivy", "type" : "APPS"},
+        {"id": 4, "description": "Camellia", "type" : "TTPS"},
+        {"id": 5, "description": "daemon (scanner)", "type" : "APPS"},
+        {"id": 6, "description": "server", "type" : "CCSH"},
+        {"id": 7, "description": "$camellia$ItGoyeyQIvPjT/qBoDKQZg==", "type" : "IOCS"},
+        {"id": 8, "description": "John the Ripper", "type" : "APPS"},
+        {"id": 9, "description": "http://www.openwall.com/john/", "type" : "URLS"},
+        {"id": 10, "description": "OpenSSL", "type" : "APPS"},
+        {"id": 11, "description": "Metasploit", "type" : "APPS"},
+        {"id": 12, "description": "pswpsw", "type" : "IOCS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "uses"},
+        {"source": 1, "target": 5, "rel_name" : "communicates with"},
+        {"source": 5, "target": 6, "rel_name" : "sends to"},
+        {"source": 6, "target": 7, "rel_name" : "returns"},
+        {"source": 8, "target": 10, "rel_name" : "uses"},
+        {"source": 8, "target": 7, "rel_name" : "cracks"},
+        {"source": 8, "target": 9, "rel_name" : "downloaded from"},
+        {"source": 12, "target": 11, "rel_name" : "used in"}
+    ]
+}

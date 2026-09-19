@@ -1,0 +1,80 @@
+
+
+
+Sentence : 配置⽂件 .memcahce
+Linux.Dacls Bot 配置⽂件固定存放在 $HOME/.memcache ，⽂件内容固定为 0x8E20+4 个字节。如
+果 Bot 启动后找不到配置⽂件，就会根据样本中硬编码的信息，使⽤ AES 加密⽣成默认的配置⽂
+件，当 Bot 和 C2 通信后还会继续更新配置⽂件。
+数据结构
+我们把配置⽂件的数据结构信息定义为 struct_global_cfg ，这⾥存放了 Bot 运⾏参数， C2 信息，和
+插件信息等。
+struct struct_plugin_cfg_data
+{
+int plugin_id;
+int plugin_type;
+int unk3;
+char name[1040];
+};
+struct struct_c2_content
+{
+char content[2048];
+};
+struct struct_global_cfg
+{
+int session_id;
+int unk_const1;
+int sus_version_20190417;
+int connect_retry_sleep_time;
+char unk_array1[88];
+int c2_num;
+struct_c2_content c2_list[3];
+char unknown_filed_186C[14340];
+struct_plugin_cfg_data plug_cfg_data_list[15];
+};
+AES 加密算法
+AES ， CBC Mode
+Key ： A0 D2 89 29 27 78 75 F6 AA 78 C7 98 39 A0 05 ED
+IV ： 39 18 82 62 33 EA 18 BB 18 30 78 97 A9 E1 8A 92
+我们把配置⽂件解密后，可以看到配置⽂件中⼀些明⽂信息，例如：会话 ID ，版本信息，重新连接
+C2 时间， C2 信息等，当成功连接 C2 后配置⽂件会根据 C2 指令更新，⽐如在配置⽂件中增加 Bot ⽀
+持的插件信息，更新 C2 信息等。
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 5/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": ".memcache", "type" : "DOCF"},
+        {"id": 2, "description": "$HOME/.memcache", "type" : "SYSP"},
+        {"id": 3, "description": "Bot", "type" : "ACTO"},
+        {"id": 4, "description": "C2 server", "type" : "CCSH"},
+        {"id": 5, "description": "struct_global_cfg", "type" : "TAMP"},
+        {"id": 6, "description": "AES encryption algorithm", "type" : "APPS"},
+        {"id": 7, "description": "CBC Mode", "type" : "TTPS"},
+        {"id": 8, "description": "Key: A0 D2 89 29 27 78 75 F6 AA 78 C7 98 39 A0 05 ED", "type" : "IOCS"},
+        {"id": 9, "description": "IV: 39 18 82 62 33 EA 18 BB 18 30 78 97 A9 E1 8A 92", "type" : "IOCS"},
+        {"id": 10, "description": "Session ID", "type" : "TAMP"},
+        {"id": 11, "description": "Version information (sus_version_20190417)", "type" : "TAMP"},
+        {"id": 12, "description": "Reconnect C2 time", "type" : "TAMP"},
+        {"id": 13, "description": "C2 information", "type" : "CCSH"},
+        {"id": 14, "description": "struct_c2_content", "type" : "TAMP"},
+        {"id": 15, "description": "struct_plugin_cfg_data", "type" : "TAMP"},
+        {"id": 16, "description": "https://blog.netlab.360.com/dacls-the-dual-platform-rat/", "type" : "URLS"},
+        {"id": 17, "description": "Lazarus Group", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 3, "target": 2, "rel_name" : "creates if not exists"},
+        {"source": 3, "target": 4, "rel_name" : "communicates with"},
+        {"source": 1, "target": 5, "rel_name" : "contains structure"},
+        {"source": 5, "target": 6, "rel_name" : "encrypted by"},
+        {"source": 6, "target": 7, "rel_name" : "uses mode"},
+        {"source": 6, "target": 8, "rel_name" : "uses key"},
+        {"source": 6, "target": 9, "rel_name" : "uses IV"},
+        {"source": 1, "target": 10, "rel_name" : "contains"},
+        {"source": 1, "target": 11, "rel_name" : "contains"},
+        {"source": 1, "target": 12, "rel_name" : "contains"},
+        {"source": 1, "target": 13, "rel_name" : "contains"},
+        {"source": 5, "target": 14, "rel_name" : "contains"},
+        {"source": 5, "target": 15, "rel_name" : "contains"},
+        {"source": 17, "target": 3, "rel_name" : "uses"}
+    ]
+}

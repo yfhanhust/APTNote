@@ -1,0 +1,138 @@
+
+
+
+Sentence : Functions
+def encrypt_block(block, key, verbose=False):
+'''
+Encrypt a single 64-bit block using a given key
+@param block: list of two c_uint32s
+@param key: list of four c_uint32s
+'''
+assert len(block) == BLOCK_SIZE
+assert len(key) == KEY_SIZE
+sumation = c_uint32(0)
+delta = c_uint32(DELTA)
+for index in range(0, ROUNDS):
+sumation.value += delta.value
+block[0].value += ((block[1].value << 4) + key[0].value) ^ (block[1].value + s
+block[1].value += ((block[0].value << 4) + key[2].value) ^ (block[0].value + s
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 20/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+if verbose: print("\t--> Encrypting block round %d of %d" % (index + 1, ROUNDS
+ WATCH the MORPHICK MDR INTRO (https://vimeo.com/204217543)
+return block
+def decrypt_block(block, key, verbose=False):
+'''
+Decrypt a single 64-bit block using a given key
+@param block: list of two c_uint32s
+@param key: list of four c_uint32s
+'''
+assert len(block) == BLOCK_SIZE
+assert len(key) == KEY_SIZE
+sumation = c_uint32(SUMATION)
+delta = c_uint32(DELTA)
+for index in range(0, ROUNDS):
+block[1].value -= ((block[0].value << 4) + key[2].value) ^ (block[0].value + s
+block[0].value -= ((block[1].value << 4) + key[0].value) ^ (block[1].value + s
+sumation.value -= delta.value
+if verbose: print("\t<-- Decrypting block round %d of %d" % (index + 1, ROUNDS
+return block
+def to_c_array(data):
+''' Converts a string to a list of c_uint32s '''
+c_array = []
+for index in range(0, len(data)/4):
+chunk = data[index4:index4+4]
+packed = struct.unpack(">L", chunk)[0]
+c_array.append(c_uint32(packed))
+return c_array
+def to_string(c_array):
+''' Converts a list of c_uint32s to a Python (ascii) string '''
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 21/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+ WATCH the MORPHICK MDR INTRO (https://vimeo.com/204217543)
+output = ''
+for block in c_array:
+output += struct.pack(">L", block.value)
+return output
+def random_chars(nchars):
+chars = ''
+for n in range(0, nchars):
+chars += choice(ascii_letters + digits)
+return chars
+def add_padding(data, verbose=False):
+pad_delta = 4 - (len(data) % 4)
+if verbose:
+print(INFO + "Padding delta: %d" % pad_delta)
+data += random_chars(pad_delta)
+data += "%s%d" % (random_chars(3), pad_delta)
+return data
+def encrypt(data, key, verbose=False):
+'''
+Encrypt string using TEA algorithm with a given key
+'''
+data = add_padding(data, verbose)
+data = to_c_array(data)
+key = to_c_array(key.encode('ascii', 'ignore'))
+cipher_text = []
+for index in range(0, len(data), 2):
+if verbose:
+print(INFO + "Encrypting block %d" % index)
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 22/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+block = data[index:index + 2]
+ WATCH the MORPHICK MDR INTRO (https://vimeo.com/204217543)
+block = encrypt_block(block, key, verbose)
+for uint in block:
+cipher_text.append(uint)
+if verbose:
+print(INFO + "Encryption completed successfully")
+return to_string(cipher_text)
+def decrypt(data, key, verbose=False):
+data = to_c_array(data)
+key = to_c_array(key.encode('ascii', 'ignore'))
+plain_text = []
+for index in range(0, len(data), 2):
+if verbose:
+print(INFO + "Encrypting block %d" % index)
+block = data[index:index + 2]
+decrypted_block = decrypt_block(block, key, verbose)
+for uint in decrypted_block:
+plain_text.append(uint)
+data = to_string(plain_text)
+if verbose:
+print(INFO + "Decryption compelted successfully")
+return data
+def get_key(password=''):
+''' Generate a key based on user password '''
+if 0 == len(password):
+password = getpass.getpass(INFO + "Password: ")
+sha = sha256()
+sha.update(password + "Magic Static Salt")
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 23/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+sha.update(sha.hexdigest())
+ WATCH the MORPHICK MDR INTRO (https://vimeo.com/204217543)
+return ''.join([char for char in sha.hexdigest()[::4]])
+def encrypt_file(fpath, key, verbose=False):
+with open(fpath, 'rb+') as fp:
+data = fp.read()
+cipher_text = encrypt(data, key, verbose)
+fp.seek(0)
+fp.write(cipher_text)
+fp.close()
+def decrypt_file(fpath, key, verbose=False):
+with open(fpath, 'rb+') as fp:
+data = fp.read()
+plain_text = decrypt(data, key, verbose)
+fp.close()
+fp = open(fpath, 'w')
+fp.write(plain_text)
+fp.close()
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor", "type" : "URLS"},
+        {"id": 2, "description": "https://vimeo.com/204217543", "type" : "URLS"}
+    ],
+    "edges": []
+}

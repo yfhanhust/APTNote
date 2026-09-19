@@ -1,0 +1,74 @@
+
+
+
+Sentence : Initialization
+To start, the malware parses the configuration provided to it by the loader.
+Figure 26. Configuration sample
+Configuration structure is as follows:
+Struct RawConfig{
+_ DWORD protocolId;
+_ BYTE c2Strings [0x100];
+};
+The protocolId field indicates the protocol to be used for communicating with C2. There are a
+total of three possibilities:
+�  If protocolId equals 1, a TCP-based protocol will be used.
+�  If protocolId equals 2, the protocol will be HTTP-based.
+�  If protocolId equals 3, it will be HTTPS-based.
+The time stamp is calculated from the registry from the key SOFTWARE\Microsoft\Windows\
+CurrentVersion\Telephony (Perf0 value). If reading the time stamp is impossible, "temp" is added
+to the computer identifier.
+
+
+
+Figure 27. Generating computer ID
+
+
+
+20
+Next Hussar creates a window it will use for processing incoming messages.
+Figure 28. Creating dispatcher window
+Then the malware adds itself to the list of authorized applications in Windows Firewall, using the
+INetFwMgr COM interface.
+To complete initialization, Hussar creates a thread which connects to C2 and periodically polls
+for commands. The function running in the thread uses the WSAAsyncSelect API to notify the
+window that actions can be performed with the created connection (socket is "ready for reading,"
+"connected," or "closed").
+Figure 29. Communication between the open socket and the window
+In general, for transmitting commands, the malware uses the window and Windows messaging
+mechanism. The window handle is passed to the modules, and the dispatcher has branches not
+used by the stager, so we can assume that the modules can use the window for communication
+with C2.
+21
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "The malware", "type" : "EXEF"},
+        {"id": 2, "description": "Loader", "type" : "EXEF"},
+        {"id": 3, "description": "Configuration structure (RawConfig)", "type" : "TAMP"},
+        {"id": 4, "description": "protocolId field", "type" : "NETP"},
+        {"id": 5, "description": "C2 server", "type" : "CCSH"},
+        {"id": 6, "description": "TCP-based protocol", "type" : "NETP"},
+        {"id": 7, "description": "HTTP-based protocol", "type" : "NETP"},
+        {"id": 8, "description": "HTTPS-based protocol", "type" : "NETP"},
+        {"id": 9, "description": "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Telephony (Perf0 value)", "type" : "REGI"},
+        {"id": 10, "description": "Computer identifier", "type" : "TAMP"},
+        {"id": 11, "description": "Dispatcher window", "type" : "APPS"},
+        {"id": 12, "description": "Windows Firewall", "type" : "FIRW"},
+        {"id": 13, "description": "INetFwMgr COM interface", "type" : "OPPS"},
+        {"id": 14, "description": "Thread for C2 communication", "type" : "TAMP"},
+        {"id": 15, "description": "WSAAsyncSelect API", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "parses configuration from"},
+        {"source": 3, "target": 4, "rel_name" : "contains"},
+        {"source": 4, "target": 5, "rel_name" : "indicates protocol for communication with"},
+        {"source": 1, "target": 9, "rel_name" : "reads from registry key"},
+        {"source": 9, "target": 10, "rel_name" : "generates"},
+        {"source": 1, "target": 11, "rel_name" : "creates window for processing messages"},
+        {"source": 1, "target": 12, "rel_name" : "adds itself to authorized applications in"},
+        {"source": 12, "target": 13, "rel_name" : "uses interface"},
+        {"source": 1, "target": 14, "rel_name" : "creates thread for C2 communication"},
+        {"source": 14, "target": 5, "rel_name" : "connects to and polls commands from"},
+        {"source": 14, "target": 15, "rel_name" : "uses API to notify window about socket actions"}
+    ]
+}

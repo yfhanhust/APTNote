@@ -1,0 +1,170 @@
+Other pieces of malware on the radar
+https://securelist.com/moonbounce-the-dark-side-of-uefi-firmware/105468/ 3/17
+1/21/22, 9:00 PM MoonBounce: the dark side of UEFI firmware | Securelist
+In addition to MoonBounce, we found infections across multiple nodes in the same network by a known
+user-mode malware dubbed ScrambleCross, also known as SideWalk. This is an in-memory implant,
+implemented as position-independent code, that can communicate to a C2 server in order to exchange
+information and stage the execution of additional plugins in memory, of which none has been sighted in
+the wild yet. This malware was thoroughly covered by our colleagues at Trend Micro and ESET, so we
+will refer the reader to their excellent write-ups to understand its internals better.
+The position-independent code constituting ScrambleCross can be loaded in one of two ways, the first
+being a C++ DLL named StealthVector. It obtains the ScrambleCross shellcode by applying a modified
+ChaCha20 algorithm on an encrypted blob, which may reside as an additional file on disk or be
+embedded in the loader itself. We detected both variants of this loader in the network in question.
+StealthVector gets loaded through the introduction of a modified benign system DLL, in which the
+import address table is patched to append the malware’s DLL as a dependency. In one case, we observed
+such altered wbemcomn.dll (MD5: C3B153347AED27435A18E789D8B67E0A) file, which originally
+facilitates the functionality of WMI in Windows and was located in the directory %SYSTEM%\wbem. As
+a consequence, when the WMI service was initiated, the rogue version of this DLL forced the loading of a
+StealthVector image named wmiwk.dll.
+Appended IAT entry to a rogue wbemcomn.dll file which forces the loading of
+StealthVector upon initiation of the WMI service
+The table below specifies all instances of StealthVector that we detected in the targeted network, along
+with timestamp artefacts that might point to the date of their creation.
+C&C Address Compilation
+Timestamp
+Loader
+Filename
+Loader MD5 Shellcode
+Filename
+wbwkem.dll 4D5EB9F6F501B4F6EDF981A3C6C4D6FA compwm.bin dev.kinopoisksu[.]com Friday,
+12.06.2020
+08:25:02
+UTC
+wkbem.dll E7155C355C90DC113476DDCF765B187D pcomnl.bin Unknown Tuesday,
+24.03.2020
+09:09:21
+UTC
+https://securelist.com/moonbounce-the-dark-side-of-uefi-firmware/105468/ 4/17
+1/21/22, 9:00 PM MoonBounce: the dark side of UEFI firmware | Securelist
+wmiwk.dll 899608DE6B59C63B4AE219C3C13502F5 wmipl.dll ns.glbaitech[.]com Saturday,
+20.02.2021
+06:45:18
+UTC
+c_20344.nls 4EF90CEEF2CC9FF3121B34A9891BB28D – 217.69.10[.]104 Tuesday,
+24.03.2020
+09:09:21
+UTC
+c_20334.nls CFF2772C44F6F86661AB0A4FFBF86833 – st.kinopoisksu[.]com Tuesday,
+24.03.2020
+09:09:21
+UTC
+Another loader that we detected and is commonly used to load ScrambleCross is .NET based, referred to
+as StealthMutant. It works by decrypting a shellcode BLOB with AES-256 and injecting it to the address
+space of another process, using the process-hollowing technique. The injected process in every case we
+observed was msdt.exe (Microsoft Diagnostic Troubleshooting Wizard).
+StealthMutant is launched in one of two ways, which were partially described in other reports as well.
+The first way is by executing a launcher utility with the filename System.Mail.Service.dll (MD5:
+5F9020983A61446A77AF1976247C443D) through the command line as a service. This is outlined in the
+following commands typed by the attackers on one of the compromised systems:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+net start "iscsiwmi"
+sc stop iscsiwmi
+sc delete iscsiwmi
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Svchost" /v "iscsiwmi" /t
+REG_MULTI_SZ /d "iscsiwmi" /f
+sc create "iscsiwmi" binPath= "$system32\svchost.exe -k iscsiwmi" type= share start= auto
+error= ignore DisplayName= "iscsiwmi"
+SC failure "iscsiwmi" reset= 86400 actions= restart/60000/restart/60000/restart/60000
+sc description "iscsiwmi" ""iSCSI WMI Classes That Manage Initiators, Ports, Sessions and
+Connections""
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\iscsiwmi\Parameters" /f
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\iscsiwmi\Parameters" /v "ServiceDll" /t
+REG_EXPAND_SZ /d "$windir\Microsoft.NET\Framework64\v4.0.30319\System.Mail.Service.dll"
+/f
+net start "iscsiwmi"
+The launching utility in turn uses the .NET InstallUtil.exe application in order to execute the
+StealthMutant image, which has the filename Microsoft.Service.Watch.targets, and providing it with the
+encrypted ScrambleCross shellcode as an argument from a file named MstUtil.exe.config. The utility
+itself is a basic C++ program that achieves the aforementioned goal by issuing the following command
+line using the WinExec API:
+https://securelist.com/moonbounce-the-dark-side-of-uefi-firmware/105468/ 5/17
+1/21/22, 9:00 PM MoonBounce: the dark side of UEFI firmware | Securelist
+1 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe /logfile= /LogToConsole=false
+/ConfigFile=MstUtil.exe.config /U
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\Microsoft.Service.Watch.targets
+The second way to execute StealthMutant is through the creation of a scheduled task via a Windows
+batch script file named schtask.bat, as outlined below:
+1
+2
+3
+4
+5
+6
+@echo off
+cd /d "%~dp0"
+copy /Y Microsoft.Service.Watch.targets
+"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\Microsoft.Service.Watch.targets"
+copy /Y MstUtil.exe.config
+"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MstUtil.exe.config"
+schtasks /create /TN "\Microsoft\Windows\UNP\UNPRefreshListTask" /SC ONSTART /TR
+"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe /logfile= /LogToConsole=false
+/ConfigFile=MstUtil.exe.config /U
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\Microsoft.Service.Watch.targets" /F /DELAY
+0000:02 /RU SYSTEM /RL HIGHEST
+schtasks /run /TN "\Microsoft\Windows\UNP\UNPRefreshListTask"
+The following table lists known StealthMutant loader IOCs, together with their corresponding
+ScrambleCross shellcode files and contacted C2 addresses. It’s worth noting that most of the
+ScrambleCross shellcodes (loaded by both StealthMutant and StealthVector) reached out to the same
+server (i.e. ns.glbaitech[.]com) and that StealthMutant was observed in this campaign only from
+February, 2021.
+Loader MD5 C&C Address Compilation Timestamp
+0603C8AAECBDC523CBD3495E93AFB20C 92.38.178[.]246 Tuesday, 23.03.2021 08:00:44
+UTC
+ns.glbaitech[.]com
+8C7598061D1E8741B8389A80BFD8B8F5 ns.glbaitech[.]com Saturday, 20.02.2021 03:27:42
+UTC
+F9F9D6FB3CB94B1CDF9E437141B59E16 ns.glbaitech[.]com Wednesday, 08.12.2021 07:07:28
+UTC
+In addition to the above components, we found other stagers and post-exploitation malware implants
+during our research, some of which were attributed to or have been used by known Chinese-speaking
+threat actors:
+https://securelist.com/moonbounce-the-dark-side-of-uefi-firmware/105468/ 6/17
+1/21/22, 9:00 PM MoonBounce: the dark side of UEFI firmware | Securelist
+Microcin: a backdoor typically used by the SixLittleMonkeys threat actor, which we have been
+tracking since 2016. It is worth noting that since its inception, the SixLittleMonkeys group has
+been using Microcin against various targets, partly against high-profile entities based in Russia and
+Central Asia.
+The implants we observed in this campaign are shipped as DLLs that ought to run in the context of
+exe, with the primary intent of reading a C2 address from an encrypted configuration file stored in
+%WINDIR%\debug\netlogon.cfg and reaching out to the server to obtain a further payload.
+Interestingly, the Trojan holds a scheduling algorithm that would skip any work on Saturdays,
+checking the local time every hour to determine if Saturday has passed.
+Mimikat_ssp : a publicly available post-exploitation tool used to dump credentials and security
+secrets from exe, also used widely by various Chinese-speaking actors (e.g. GhostEmperor, which
+we reported on).
+Go implant: a formerly unknown backdoor used to contact a C2 server using a RESTful API,
+where a combination of a hardcoded IP address and a hypermedia directory path on the underlying
+server are used for information exchange. Both the IP and the server directory path are encrypted
+with AES-128 using a base64 encoded key stored in the backdoor’s image. The IP and directory
+path tuple are used during execution for:
+Initialising communications with the server;
+Sending information from the infected host;
+Requesting a specific server path containing a command for execution and downloading it;
+Sending back the result of the command’s execution to the C2 server.
+The commands retrieved from the server are also encrypted with AES-128, with the key stored in
+the command’s file itself. Command execution results are then encrypted using the same key. We
+found the following list of supported commands:
+Get list of drives;
+Get content list from a specified directory;
+Download a file from the C2 server;
+Write text to a given *.bat file and execute it;
+Run a shell command.
+It is important to note that we could not conclusively tie most of those additional pieces of malware to
+the intrusion set related to MoonBounce, with the exception of Microcin, where some timeline artefacts
+coincide with other events related to ScrambleCross, as outlined in the figure below. This suggests a lowconfidence connection between Microcin and MoonBounce and may indicate usage of shared resources
+between SixLittleMonkeys and APT41 or involvement of the former’s operators in the MoonBounce
+activity.
+https://securelist.com/moonbounce-the-dark-side-of-uefi-firmware/105468/ 7/17
+1/21/22, 9:00 PM MoonBounce: the dark side of UEFI firmware | Securelist
+Timeline of events related to artefacts found in the network containing the MoonBounce-
+infected machine

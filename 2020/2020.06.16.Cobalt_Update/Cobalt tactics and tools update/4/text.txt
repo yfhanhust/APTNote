@@ -1,0 +1,26 @@
+2.1. CobInt analysis
+Once the VHD is mounted, a user must manually run one of the files. The two files are identical in terms of functions. When run, either of the
+CobInt files downloads the main library from the C2 server as an HTML file.
+There are a few changes in comparison to the algorithm described by ProofPoint in 2018:
+Figure 12. Example of obfuscation of the main library
+First, all tags are removed and their contents are ignored.
+Figure 13. Tag removal
+Next, periods, commas, and spaces are processed. All characters after these symbols are uppercased (the value 0x20 is subtracted).
+Figure 14. Removing unnecessary characters and switching letters to uppercase
+Next, data is decoded from Base64 and decrypted by XOR with a 4-byte key that is initialized with the preceding value of the decrypted data at
+each iteration. At each iteration, the current round's 4 bytes are subtracted from those of the previous round, after which the key is the 4-byte value
+of the input buffer of the previous round.
+Once decryption finishes, the second-stage decryptor takes over. In essence, it consists of an XOR
+decryption cycle using a 4-byte key that is the same for the entire stage. The output of this stage will
+be a .dll library, which is the payload.
+Data decoded from Base64 is shown in Figure 16. A 4-byte preset for the first decryptor is
+highlighted in red and will remain the same during the second stage. The rest of the data is
+highlighted in yellow.
+Figure 15. First XOR level
+Figure 16. Data decoded from Base64
+The picture changes after decryption (Figure 17). The encryption key is clearly visible due to a long series of zeros in the executable file that, after
+encryption, contain the keystream in pure form.
+Figure 17. Data after removal of the first XOR level
+The second decryption gives us a valid PE file (Figure 18). We could not figure out the purpose of the first eight bytes: they are not used anywhere
+in the loader.
+Figure 18. Deobfuscated library

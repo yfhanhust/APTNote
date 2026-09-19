@@ -1,0 +1,35 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 19
+With observed compile dates going back to February 5, 2014, RomeoCharlie is one of the oldest R-C1-based RATs (see
+Section 2) in the Lazarus Group’s collection. A server-mode RAT, RomeoCharlie uses DNSCALC-style encoding for network
+communication and RSA encryption for client authentication. There are two observed variants, RomeoCharlie-One and
+RomeoCharlie-Two. The differences between the two are cosmetic in nature, as Table 5-1 illustrates:
+|FEATURE|ROMEOCHARLIE-ONE|ROMEOCHARLIE-TWO|
+|---|---|---|
+|Dynamic APIs Loaded|114 Functions from 10 DLLs|103 Functions from 4 DLLs|
+|Start of Execution|ServiceMain|DllMain|
+|Configuration Location|HKLM\SYSTEM\CurrentControlSet\Control\WMI\Security\xc123465-efff-87cc-37abcdef9|HKLM\SYSTEM\CurrentControlSet\Control\WMI\Security\ffcf3465-efff-87cc-37abcdef9|
+|Startup Delay|0 Seconds|3 Seconds|
+|Romeo-CoreOneCommands|19|20|
+Table 5-1: Key Differences between RomeoCharlie-One and RomeoCharlie-Two
+RomeoCharlie-One operates as a service DLL that dictates that the binary must conform to the basic guidelines of a Windows
+service – specifically, the export of the ServiceMain function. ServiceMain contains the necessary scaffolding code
+to ensure the Windows Services subsystem treats the binary as a legitimate service, but the function also contains several
+dynamic API loading functions for kernel32.dll, ws2_32.dll, advapi32.dll, oleaut32.dll, iphlpapi.dll,
+urlmon.dll, wininet.dll, user32.dll, shell32.dll, and shlwapi.dll . All said, RomeoCharlie-One loads 114
+different API functions into memory, but only 59 (approximately 52%) of these API functions are ever used by the malware.
+RomeoCharlie-One loads APIs from, but completely ignores, 6 of the 10 DLLs, indicating that the dynamic API loading
+functions are part of a larger library of code.
+RomeoCharlie-Two, on the other hand, does not require the complete Windows Services scaffolding as its sibling and
+therefore does not export ServiceMain, nor does it even contain a ServiceMain -type function. Instead, execution of
+the RomeoCharlie-Two code begins in DllMain as a newly generated thread. The RomeoCharlie-Two code begins with a
+3 second sleep delay before dynamically loading API functions from kernel32.dll, ws2_32.dll, advapi32.dll, and
+iphlpapi.dll . Of the 103 API functions that RomeoCharlie-Two loads, the malware uses 73 (approximately 71%) of the
+functions, a dramatic increase from RomeoCharlie-One.
+Both variants of RomeoCharlie begin, after the dynamic API loading, by loading their configuration from the registry
+into memory. IndiaBravo-RomeoCharlie generates and stores the configuration for RomeoCharlie under the registry
+branch HKLM\SYSTEM\CurrentControlSet\Control\WMI\Security . The key under which the configuration
+resides varies by variant: RomeoCharlie-One’s configuration exists under xc123465-efff-87cc-37abcdef9, while
+RomeoCharlie-Two’s configuration exists under ffcf3465-efff-87cc-37abcdef9 . Both configurations are the same
+size (120 bytes) and contain a minimal amount of information: the listening port, the name of the service name under
+which the RomeoCharlie malware is running, the number of authenticated connections (from clients) that have occurred,
+and a 64-bit random value (presumably a unique identifier for the infection).

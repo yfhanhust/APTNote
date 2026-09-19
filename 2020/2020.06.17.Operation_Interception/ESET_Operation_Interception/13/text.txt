@@ -1,0 +1,44 @@
+9 APPENDIX
+Below we present the modified version of the RC4 cipher used in the Stage 2 backdoor (see the sections
+Configuration and Message ID 1 – Obtain server’s ChaCha20 nonce ). We have added comments to highlight
+the differences between this algorithm and standard RC4. Despite these “errors” however, if data is
+encrypted and decrypted by this particular implementation, it will work.
+26 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+```
+       public static byte[] RC4Crypt(byte[] data, byte[] key)
+       {
+       int a, i, j, k;
+       int[] S;
+       byte[] result;
+   S = new int[256];
+   result = new byte[data.Length];
+
+   for (i = 0; i < 256; i++)
+   S[i] = i;
+
+   for (i = j = 0; i < 256; i++)
+   {
+   j = (j + S[i] + key[i % key.Length] + i) & 0xFF; // nonstandard: +i
+   S[i] = S[i] ^ S[j]; // Bug in the swap implementation
+   S[j] = S[j] ^ S[i]; // If i==j, the value will be 0 instead
+   S[i] = S[i] ^ S[j]; // of the original value.
+   }
+
+   for (a = i = j = 0; i < data.Length; i++)
+   {
+   a = (a + 1) & 0xFF;
+   j = (j + S[a] + a) & 0xFF; // nonstandard: +a
+   S[a] = S[a] ^ S[j]; // Bug in the swap implementation
+   S[j] = S[j] ^ S[a];
+   S[a] = S[a] ^ S[j];
+
+   k = S[(S[a] + S[j]) & 0xFF];
+   result[i] = (byte)(data[i] ^ k);
+   }
+
+   return result;
+
+   }
+
+```
+Figure 16 // Modified RC4 cipher used in the Stage 2 backdoor (rewritten in C#)

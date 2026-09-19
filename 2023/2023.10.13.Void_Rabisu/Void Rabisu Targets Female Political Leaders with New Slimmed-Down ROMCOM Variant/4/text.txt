@@ -1,0 +1,32 @@
+Malware analysis User-Agent-Based downloader
+The executable downloaded from the OneDrive folder is signed by a company called
+Elbor LLC (which was previously used to sign multiple malicious files) with a valid
+certificate. When executed, it pretends to be a self-extracting (SFX) archive and extracts
+56 pictures from its resource section to a folder when the user selects the “Extract”
+button:
+https://www.trendmicro.com/en_us/research/23/j/void-rabisu-targets-female-leaders-with-new-romcom-variant.html 3/11
+1/24/24, 4:34 PM Void Rabisu Targets Female Political Leaders with New Slimmed-Down ROMCOM Variant
+Figure 3. Fake window shown by the malware downloader
+https://www.trendmicro.com/en_us/research/23/j/void-rabisu-targets-female-leaders-with-new-romcom-variant.html 4/11
+1/24/24, 4:34 PM Void Rabisu Targets Female Political Leaders with New Slimmed-Down ROMCOM Variant
+Figure 4. Pictures dropped by the malware downloader from the event (gathered by the
+threat actor from various social media postings)
+The extracted photos were sourced by the malicious actor from individual posts on
+various social media platforms such as LinkedIn, X (formerly known as Twitter), and
+Instagram. While the victim is distracted with the pictures, the malware sends an HTTP
+GET request to https://mctelemetryzone[.]com/favicon.ico. The HTTP User-Agent string
+is checked on the server side, and if it matches the following string, a 122-KB file is
+downloaded:+
+“ Mozilla/5.0 (Windows NT 10.0; Win64; x64; Xbox; Xbox One) AppleWebKit/537.36
+(KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edge/44.18363.8131 ”
+The file is an XOR-encrypted PE file:
+https://www.trendmicro.com/en_us/research/23/j/void-rabisu-targets-female-leaders-with-new-romcom-variant.html 5/11
+1/24/24, 4:34 PM Void Rabisu Targets Female Political Leaders with New Slimmed-Down ROMCOM Variant
+Figure 5. XOR-encrypted, second stage payload
+The downloaded file can be decrypted with the following pseudocode:
+for (i=0; i<len; i++)
+data[i] = data[i] ^ 0xf0 * i
+The decrypted file is a 64-bit DLL that exports a CPLInit() function. The first stage
+downloader then loads this DLL to memory and calls this function. It’s important to
+highlight that this DLL never touches the disk. In other words, its download, decryption,
+and execution routines all happen in runtime in memory.

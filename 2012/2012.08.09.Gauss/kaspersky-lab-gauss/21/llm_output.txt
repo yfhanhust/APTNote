@@ -1,0 +1,280 @@
+
+
+
+Sentence : Winshell.ocx
+Name of the module used in Gauss: “Gauss”
+|File names|%system32%\winshell.ocx|
+|---|---|
+|Some known MD5|EF6451FDE3751F698B49C8D4975A58B57AC2799B5337B4BE54E5D5B03B2145724FB4D2EB303160C5F419CEC2E9F57850|
+|Image Size|405 504 (August 2011)417 792 (October 2011)401 408 (Dec 2011 - Jan 2012)|
+|Number of resources|6|
+|Resources|121,122,123,124,125,126|
+|Date of compilation|08.08.201103.10.201114.12.201105.01.2012|
+|Related fles|%temp%\ws1bin.datbrowser.jsbrowser.xulfleio.js chrome.manifestlppd.datinstall.rdfrssf.datlfm.datmppd.datpddp.dat|
+Creates events: “Global\SrvReportCondition”, “Global\DhwSyncEvent”, “Global\ShellSync”
+Interestingly, all three variants of the module that we have analyzed contain information about the location and names of
+the original projects:
+Variant Path to project files
+30
+|August 2011|d:\projects\gauss|
+|---|---|
+|October 2011|d:\projects\gauss_for_macis_2|
+|Dec 2011-Jan 2012|c:\documents and settings\famer\desktop\gauss_white_1|
+Contains encrypted debug information that includes the location and files of the project:
+c:\documents and settings\flamer\desktop\gauss _ white _ 1\utils\
+```
+Exceptions.h
+.\main.cpp
+.\Manager.cpp
+```
+c:\documents and settings\flamer\desktop\gauss _ white _ 1\utils\SmartPtr.h
+```
+.\Injector.cpp
+```
+c:\documents and settings\flamer\desktop\gauss _ white _ 1\gauss../Utils/ComUtils.h
+```
+.\History.cpp
+.\FirefoxPluginInstaller.cpp
+.\Telemetry.cpp
+.\Storage.cpp
+.\OsUtils.cpp
+.\ProcessSnapshot.cpp
+.\Event.cpp
+.\GaussThread.cpp
+.\Buffer.cpp
+.\RemoteMemoryBuffer.cpp
+.\File.cpp
+.\Mutex.cpp
+.\Waiter.cpp
+.\EveryoneSecurityAttributes.cpp
+.\Catcher.cpp
+.\BrowserConnector.cpp
+```
+c:\documents and settings\flamer\desktop\gauss _ white _ 1\minime../Utils/SmartPtr.h
+```
+.\Assigner.cpp
+.\IEAbstractElements.cpp
+.\FormExtractor.cpp
+.\COMAbstractDataTypes.cpp
+```
+The debug information which was accidentally forgotten by the developers provides some interesting details. For instance,
+the Windows username which compiled the project can be seen in the strings above as “flamer”.
+31
+DllMain starts a thread only if loaded by “explorer.exe”.
+Writes log file: %systemroot%\Temp\ws1bin.dat . Log file starts with magic number 0x0A86FD375, encrypted with
+1-byte XOR 0x46. Log file writer is guarded by mutex “Global\ShellSyncCom”.
+Reads registry key :
+```
+  SOFTWARE\Microsoft\Windows\CurrentVersion\Reliability
+ShutdownInterval = binary data
+```
+Checks Windows version and, onWindows Vista and Windows 7, it accesses %SystemDrive%\Users . On earlier versions,
+it uses %SystemDrive%\Documents and settings and gets list of directories there.
+Export “InitShellEx” : Enumerates all entries in HKEY _ USERS, removes all entries in
+SOFTWARE\Mozilla\Mozilla\Firefox for each user, searches for its log ws1bin.dat and removes it.
+Export “SetWindowEvent” : set event “Global\DhwSyncEvent”, wait for other thread to exit in 20 seconds, then terminate
+that thread.
+Export “ShellNotifyUser” : returns 1
+Export “ShellNotifyUserEx” : main export. Starts its main thread that should be monitored by the event “SetWindowEvent”
+and returns.
+Lists running processes and returns if “evil.exe” is running.
+Additionally logs the presence of the following registry keys :
+```
+  HKLM\SOFTWARE\KasperskyLab\AVP6”, “HKLM\SOFTWARE\KasperskyLab\
+protected\AVP7
+```
+Then it starts a loop searching for running instances of %systemroot%\explorer.exe . If found, it injects
+%systemroot%\system32\winshell.ocx (own body) into that process.
+It uses an interesting technique to inject itself into Explorer: it creates a remote thread with the address of “LoadLibraryW”
+API as its start address. The path to its ocx file is passed to the function as “lpParameter”.
+32
+Telemetry: It retrieves and logs the following:
+
+
+Computer name
+
+
+Windows OS version
+
+
+List of running processes
+
+
+List of directories in %PROGRAMFILES%
+
+
+Version of Internet Explorer browser
+
+
+Primary domain name
+
+
+Network adapter information
+
+
+Searches for Cookies directory, retrieves all cookie files and writes their contents into its log. Searches for cookies that
+contain the following strings:
+paypal
+mastercard
+eurocard
+visa
+americanexpress
+bankofbeirut
+eblf
+blombank
+byblosbank
+citibank
+fransabank
+yahoo
+creditlibanais
+amazon
+facebook
+gmail
+hotmail
+ebay
+maktoob
+Then, it retrieves Internet Explorer browsing history using IUrlHistoryStg::EnumUrls function, and tries to extract password
+and text fields from loaded pages.
+The Firefox plugin is written in several files, all of them are extracted and decrypted from the resources of the module.
+Resource Id File name of the Firefox Plugin component
+|121|browser.js|
+|---|---|
+|122|browser.xul|
+|123|fleio.js|
+|124|chrome.manifest|
+|125|lppd.dat|
+|126|install.rdf|
+Appends Firefox configuration file “prefs.js” with the following string, disabling Firefox “select your add-ons” window that is
+usually shown after each Firefox update:
+```
+ user _ pref(“extensions.shownSelectionUI”, true);
+```
+33
+Installs the Firefox extension, on Windows Vista and Windows 7 into,
+AppData\Roaming\Mozilla\Firefox\Profiles
+on earlier versions into Application Data\Mozilla\Firefox\Profiles . All files are written in a directory named
+“{a288cad4-7b24-43f8-9f4d-8e156305a8bc}”.
+The Firefox extension extracts the following data:
+
+
+Browsing history
+
+
+Passwords (saved and entered by the user)
+
+
+Cookies. The extension can be configured to look only for cookies of Google, Hotmail, Facebook, Yahoo
+
+
+```
+const Cc = Components.classes;
+const Ci = Components.interfaces;
+const EXTENSION _ ID = “{a288cad4-7b24-43f8-9f4d-8e156305a8bc}”;
+const EXTENSION _ PATH = DirIO.get(“ProfD”).path+”\extensions\”+
+EXTENSION _ ID;
+const QUERY _ ID = ‘YlU/X1gFa2Isb1YkcFMnP18u`1kkb1goYFUO
+akAgY1ULa1EjYlU/X1gPXWMyc18xYGM0b1UxalEsYVYgX1Uha18q
+dVEna18lYWQiDgob2QubmklYWQiDEjYGIkb2MvXWMyc18xY
+FwoclUlWgPblUlb/oSY18uY1wkFkjYT8tRV4ocFYkcFMnPVwr
+P18u`1kkb2gublk/’;
+const EXTENSION _ URL = “about:addons”;
+const EXTENSION _ XUL = “chrome://mozapps/content/extensions/
+extensions.xul”;
+const ERROR _ FILE = “rssf.dat”;
+const LOG _ FILE = “lfm.dat”;
+const OUTPUT _ FILE = “mppd.dat”;
+const VERSION _ FILE = “lddp.dat”;
+const MAX _ FILE _ SIZE = Math.pow(2,20)*10;
+const MEAN _ ROW _ SIZE = 100;
+const MAX _ ROW _ COUNT = (1/3)*(MAX _ FILE _ SIZE/MEAN _ ROW _ SIZE);
+```
+Part of browser.js code
+34
+The Firefox extension writes several log files in its directory:
+Log file name Description
+|rssf.dat|Browsing history|
+|---|---|
+|lfm.dat|Log fle|
+|mppd.dat|Collected passwords|
+|pddp.dat|Collected cookies|
+```
+File Version:    5.1.3700.0
+Product Version:  5.1.3700.0
+File OS:      NT (WINDOWS32)
+File Type:     DRV
+File SubType:    DRV SOUND
+File Date:     00:00:00 00/00/0000
+Language/Code Page: 1033/1200
+CompanyName:    Microsoft Corporation
+FileDescription:  Microsoft Windows Shell Component
+FileVersion:    5.1.3700.0
+InternalName:    winshell.ocx
+LegalCopyright:   © Microsoft Corporation. All rights reserved.
+OriginalFilename:  winshell.ocx
+ProductName:    Microsoft® Windows® Operating System
+ProductVersion:   5.1.3700.0
+```
+Version info “winshell.ocx”
+35
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "%system32%\\winshell.ocx", "type": "EXEF"},
+        {"id": 2, "description": "Gauss", "type": "ACTO"},
+        {"id": 3, "description": "MD5: EF6451FDE3751F698B49C8D4975A58B57AC2799B5337B4BE54E5D5B03B2145724FB4D2EB303160C5F419CEC2E9F57850", "type": "IOCS"},
+        {"id": 4, "description": "%temp%\\ws1bin.dat", "type": "DOCF"},
+        {"id": 5, "description": "browser.js", "type": "DOCF"},
+        {"id": 6, "description": "browser.xul", "type": "DOCF"},
+        {"id": 7, "description": "fleio.js", "type": "DOCF"},
+        {"id": 8, "description": "chrome.manifest", "type": "DOCF"},
+        {"id": 9, "description": "lppd.dat", "type": "DOCF"},
+        {"id": 10, "description": "install.rdf", "type": "DOCF"},
+        {"id": 11, "description": "rssf.dat", "type": "DOCF"},
+        {"id": 12, "description": "lfm.dat", "type": "DOCF"},
+        {"id": 13, "description": "mppd.dat", "type": "DOCF"},
+        {"id": 14, "description": "pddp.dat", "type": "DOCF"},
+        {"id": 15, "description": "%systemroot%\\Temp\\ws1bin.dat", "type": "DOCF"},
+        {"id": 16, "description": "%SystemDrive%\\Users", "type": "SYSP"},
+        {"id": 17, "description": "%SystemDrive%\\Documents and settings", "type": "SYSP"},
+        {"id": 18, "description": "explorer.exe", "type": "EXEF"},
+        {"id": 19, "description": "%systemroot%\\system32\\winshell.ocx", "type": "EXEF"},
+        {"id": 20, "description": "evil.exe", "type": "EXEF"},
+        {"id": 21, "description": "HKLM\\SOFTWARE\\KasperskyLab\\AVP6", "type": "REGI"},
+        {"id": 22, "description": "HKLM\\SOFTWARE\\KasperskyLab\\protected\\AVP7", "type": "REGI"},
+        {"id": 23, "description": "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Reliability\\ShutdownInterval", "type": "REGI"},
+        {"id": 24, "description": "Global\\ShellSyncCom", "type": "TAMP"},
+        {"id": 25, "description": "Global\\DhwSyncEvent", "type": "TAMP"},
+        {"id": 26, "description": "LoadLibraryW API", "type": "EXEF"},
+        {"id": 27, "description": "AppData\\Roaming\\Mozilla\\Firefox\\Profiles", "type": "SYSP"},
+        {"id": 28, "description": "Application Data\\Mozilla\\Firefox\\Profiles", "type": "SYSP"},
+        {"id": 29, "description": "{a288cad4-7b24-43f8-9f4d-8e156305a8bc}", "type": "TAMP"},
+        {"id": 30, "description": "prefs.js", "type": "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "used by"},
+        {"source": 1, "target": 3, "rel_name": "has hash"},
+        {"source": 1, "target": 4, "rel_name": "writes log"},
+        {"source": 1, "target": 5, "rel_name": "contains resource"},
+        {"source": 1, "target": 6, "rel_name": "contains resource"},
+        {"source": 1, "target": 7, "rel_name": "contains resource"},
+        {"source": 1, "target": 8, "rel_name": "contains resource"},
+        {"source": 1, "target": 9, "rel_name": "contains resource"},
+        {"source": 1, "target": 10, "rel_name": "contains resource"},
+        {"source": 1, "target": 15, "rel_name": "writes log"},
+        {"source": 1, "target": 16, "rel_name": "accesses directory"},
+        {"source": 1, "target": 17, "rel_name": "accesses directory"},
+        {"source": 1, "target": 18, "rel_name": "checks for"},
+        {"source": 1, "target": 19, "rel_name": "injects into"},
+        {"source": 1, "target": 20, "rel_name": "checks for"},
+        {"source": 1, "target": 21, "rel_name": "accesses registry key"},
+        {"source": 1, "target": 22, "rel_name": "accesses registry key"},
+        {"source": 1, "target": 23, "rel_name": "reads registry value"},
+        {"source": 1, "target": 24, "rel_name": "uses mutex"},
+        {"source": 1, "target": 25, "rel_name": "sets event"},
+        {"source": 1, "target": 26, "rel_name": "calls API"},
+        {"source": 1, "target": 27, "rel_name": "installs to directory"},
+        {"source": 1, "target": 28, "rel_name": "installs to directory"},
+        {"source": 1, "target": 29, "rel_name": "uses GUID"},
+        {"source": 1, "target": 30, "rel_name": "appends configuration file"}
+    ]
+}

@@ -1,0 +1,136 @@
+
+
+
+Sentence : The same malware behind four executables
+The first four executables listed in the previous paragraph were used as
+infection vectors in the new campaign we investigated. The samples appear as
+different payloads but further basic static analysis allowed us to discover that
+they are the same malware sample:
+The first two samples are identical, with the unique difference that the
+second one is packed using the UPX tool. Once unpacked it, we have
+discovered the same payload with also the same hash of the first sample
+The third and the fourth ones are the identical too, also in this the
+difference is that the fourth one is packed using the UPX tool.
+We can speculate that we have two different samples, then we were able
+to extract 2 files from the second family: a classic “.lnk” file and a “jpg”
+file.
+Figure 1 - Extracted files
+These files seem to be a classic img and a link, but actually the jpg file is the
+executable of the second sample and in the link file is hidden the following
+command:
+```
+%systemroot%\System32\cmd.exe /c copy 12-033-1589(1).rar
+C:\Users\Public\12-033-1589(1).exe || copy 12-033-1589(2).jpg
+C:\Users\Public\12-033-1589(1).exe & start C:\Users\Public\12-0331589(1).exe
+```
+upnphost.exe
+After executing the file, it contacts the IP “45.124.132.127” where it sends
+periodically some information gathered on the operative system, using the
+command line “cmd.exe /c tasklist & systeminfo”.
+CSE CyberSec Enterprise SPA
+Via G.B. Martini 6, Rome, Italy 00100, Italia
+Email: info@csecybsec.com
+Website: www.csecybsec.com
+According to the WHOIS records, the server is located in Hong Kong
+The information is sent to the command and control through HTTPS
+communication using a POST method.
+Figure 2 - POST traffic sniffed
+CSE CyberSec Enterprise SPA
+Via G.B. Martini 6, Rome, Italy 00100, Italia
+Email: info@csecybsec.com
+Website: www.csecybsec.com
+Once the malware has sent the information about the host configuration to
+the C2, it will download another file, “upnphost.exe”, stored in the path
+“%APPDATA%\Local\Temp” that probably is the final payload.
+Moreover, the executable implements a persistence mechanism by setting
+the registry key:
+Figure 3 - Registry key for persistence mechanism
+This other file contacts another command and control “46.183.218.37”,
+located in Latvia:
+Figure 4 - Whois information about 46.183.218.37
+CSE CyberSec Enterprise SPA
+Via G.B. Martini 6, Rome, Italy 00100, Italia
+Email: info@csecybsec.com
+Website: www.csecybsec.com
+Our submission to VirusTotal
+We also discovered that the “upnphost.exe” file was submitted to Virus Total
+by us, likely because the evasion technique implemented by the dropper.
+In order to analyze the dropper, we patched it. Once the patching was applied
+we was able to analyze the complete malicious behavior of the malware.
+Figure 5 - The patch point of the dropper
+The malicious code starts contacting the previously mentioned Command and
+Control and downloads this “upnphost.exe” file.
+Below the results we obtained submitting the patched version of the binary
+on VirusTotal:
+Figure 6 - VirusTotal score
+CSE CyberSec Enterprise SPA
+Via G.B. Martini 6, Rome, Italy 00100, Italia
+Email: info@csecybsec.com
+Website: www.csecybsec.com
+AutoIt Script
+The communication with the command and control is managed with a script
+written in the AutoIt language. This script is embedded in the “upnphost.exe ”
+file as resource, and, when it is launched, it communicates with this other
+server in HTTPS, sending some information about the victim’s computer.
+Figure 7 - Piece of decompiled code
+The above figure shows a piece of decompiled code of the AutoIt script,
+where the IP address and the path, with relative user agent are masqueraded
+in hexadecimal encoding.
+After decoding the parameters, we obtain the IP address, the path and the
+user agent used to contact the C&C and send back the information about the
+target system.
+|IP|https://46.183.218.37/|
+|---|---|
+|Path|community/wiki-self-signed/name-signed.php|
+|User agent|Mozilla/5.0 (Windows NT 6.1; WOW64; rv:25.0) Gecko/20100101 Firefox/25.0|
+|Method|POST|
+Another peculiarity, is the name of the function where is present the code for
+the HTTPS communication. It is “ checkupdate ()” and it seems that the
+malware is instructed to contact periodically the C&C waiting for new
+commands.
+The following picture shows the multi-stage attack:
+CSE CyberSec Enterprise SPA
+Via G.B. Martini 6, Rome, Italy 00100, Italia
+Email: info@csecybsec.com
+Website: www.csecybsec.com
+Figure 8 – The multistage attack scheme.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "First two executables", "type" : "EXEF"},
+        {"id": 2, "description": "UPX tool", "type" : "APPS"},
+        {"id": 3, "description": "Third and fourth executables", "type" : "EXEF"},
+        {"id": 4, "description": ".lnk file", "type" : "DOCF"},
+        {"id": 5, "description": "jpg file (malicious executable)", "type" : "EXEF"},
+        {"id": 6, "description": "%systemroot%\\System32\\cmd.exe", "type" : "EXEF"},
+        {"id": 7, "description": "12-033-1589(1).rar", "type" : "DOCF"},
+        {"id": 8, "description": "C:\\Users\\Public\\12-033-1589(1).exe", "type" : "EXEF"},
+        {"id": 9, "description": "45.124.132.127 (C2 server)", "type" : "CCSH"},
+        {"id": 10, "description": "cmd.exe /c tasklist & systeminfo", "type" : "EXEF"},
+        {"id": 11, "description": "%APPDATA%\\Local\\Temp", "type" : "TPTH"},
+        {"id": 12, "description": "upnphost.exe (final payload)", "type" : "EXEF"},
+        {"id": 13, "description": "Registry key for persistence mechanism", "type" : "REGI"},
+        {"id": 14, "description": "46.183.218.37 (C2 server)", "type" : "CCSH"},
+        {"id": 15, "description": "VirusTotal", "type" : "STOR"},
+        {"id": 16, "description": "AutoIt script", "type" : "EXEF"},
+        {"id": 17, "description": "https://46.183.218.37/community/wiki-self-signed/name-signed.php", "type" : "URLS"},
+        {"id": 18, "description": "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:25.0) Gecko/20100101 Firefox/25.0", "type" : "TAMP"},
+        {"id": 19, "description": "Hong Kong", "type" : "COUN"},
+        {"id": 20, "description": "Latvia", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "related to"},
+        {"source": 5, "target": 8, "rel_name" : "executes as"},
+        {"source": 6, "target": 7, "rel_name" : "copies from source"},
+        {"source": 6, "target": 8, "rel_name" : "copies to destination"},
+        {"source": 6, "target": 8, "rel_name" : "starts"},
+        {"source": 8, "target": 9, "rel_name" : "contacts C2 server"},
+        {"source": 8, "target": 10, "rel_name" : "executes command"},
+        {"source": 12, "target": 14, "rel_name" : "downloads from C2 server"},
+        {"source": 12, "target": 13, "rel_name" : "sets registry key for persistence"},
+        {"source": 12, "target": 9, "rel_name" : "contacts C2 server"},
+        {"source": 12, "target": 15, "rel_name" : "submitted to"},
+        {"source": 16, "target": 14, "rel_name" : "communicates with C2 server using HTTPS POST"},
+        {"source": 17, "target": 14, "rel_name" : "endpoint of communication"}
+    ]
+}

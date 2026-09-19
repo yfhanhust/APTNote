@@ -1,0 +1,41 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 26
+A stark departure from the design pattern found in Romeo-CoreOne-base families, RomeoEcho is a RAT that uses a more
+interactive command shell format for command identification. The RomeoEcho samples begin within the DllMain
+function by attempting to create a mutex named “ mutex_set_cookie ”. If RomeoEcho is unable to create the
+mutex due to the error condition ERROR_ALREADY_EXISTS, indicating that the named mutex already exists, the DLL
+framework will not activate the RomeoEcho operational core.
+Whether activated by DllMain or WinMain (for the standalone executable sample), the operational core of RomeoEcho
+is the same. Upon activation, the core binds to a listening port on the victim’s computer. The port number varies per
+samples with known port numbers being 1984, 4558, 2550, 3080, and 3579.
+When an incoming connection occurs, the first task the core performs is a handshake to establish the authenticity of the
+client making the connection. The handshake protocol consists of the core sending a constant ( 0x18D1F71F ) to the client
+in plaintext as a 4-byte (DWORD) data buffer. The client must respond with another constant ( 0xC46FF197 ) over the
+same socket, also in plaintext, otherwise RomeoEcho terminates the connection with the client. The client then transmits
+another 4-byte value to the core. This 4-byte value is the communications key for any further communication between
+the client and the RomeoEcho instance.
+Communication between the client and RomeoEcho, after the handshake, is encrypted using a bitwise roll, an XOR,
+and either an addition or a subtract operation (depending on the direction of the encryption). The communications key
+dictates the particulars of the transformation, as Figure 7-1 illustrates. The core of the transformation is an XOR/SUB or
+XOR/ADD in the same vein as the DNSCALC-style encoding.
+void DecryptBuffer(char *pvData, int dwLength)
+  {
+  for (int j = 0; j < dwLength; ++j )
+  {
+pvData[j] = (cryptoKey[1] ^ ROL(pvData[j], cryptoKey[2])) - cryptoKey[0];
+```
+  }
+}
+void EncryptBuffer(char *pvData, int dwLength)
+  {
+  for ( int j = 0; j < dwLength; ++j )
+  {
+```
+pvData[j] = ROR1( cryptoKey[1] ^ (cryptoKey[0] + pvData[j]), cryptoKey[2]);
+```
+  }
+}
+```
+Figure 7-1: RomeoEcho’s Communication Decryption/Encryption Functions
+With the communications key established and the handshake complete, RomeoEcho’s core activates the communications
+loop function. RomeoEcho is single-threaded and does not spawn a new thread for incoming connections. As a result,
+only one client can access a RomeoEcho-infected node at a time.

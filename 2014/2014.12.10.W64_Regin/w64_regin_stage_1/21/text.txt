@@ -1,0 +1,35 @@
+W64/Regin, Stage #1 11
+OPERATION_TYPE_DECRYPT receives as input argument the decryption key to be used. The length of the decryption key
+is hardcoded to 8 bytes.
+It might be of interest to the reader that the decryption functionality is not exclusively used for the payload, but also by
+Regin’s 64-bit stage #1 itself to decrypt the virtual machine program that it carries in its own body, albeit with a different
+decryption key.
+OPERATION_TYPE_DECOMPRESS
+One of the commands of the virtual machine is used to decompress data from one buffer into another. In the sample that
+was analyzed, only a single compression algorithm was supported, specifically NRV2E with an 8-bit buffer. Such algorithm
+is part of the UCL data compression library.
+The pseudo code for the handler OPERATION_TYPE_DECOMPRESS is provided in Algorithm 2. The OPERATION_TYPE_
+DECOMPRESS command receives as input argument the size of the output buffer.
+Algorithm 2: Pseudo code representation of the OPERATION_TYPE_DECOMPRESS handler
+Data : output_buf_size
+begin
+temp_pointer = payload_pointer;
+payload_pointer = AllocateMemory(output_buf_size);
+if output_buffer == NULL then
+exit_vm(error);
+end
+result = decompress_NRV2E_8(temp_pointer, output_buf_size, payload_pointer, &payload_size);
+if result != 0x0 then
+WipeAndFreeMemory(payload_pointer, payload_size);
+WipeAndFreeMemory(temp_pointer, output_buf_size);
+exit_vm(error);
+end
+Free_Memory(temp_buffer);
+temp_buffer = NULL;
+raw_byte_pointer += sizeof(VMOpcode) + sizeof(DWORD); return;
+end
+OPERATION_TYPE_VM_CLEAN
+This particular opcode is responsible for shutting down the virtual machine in a clean manner. The handler carefully
+overwrites the contents of both the payload buffer and auxiliary memory buffer if they are available and terminates the
+execution of the virtual machine program. While it would seem logical that this operation would be performed at the end
+of a VM execution, the program embedded in the sample does not make use of it.

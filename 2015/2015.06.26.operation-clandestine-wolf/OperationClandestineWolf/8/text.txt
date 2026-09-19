@@ -1,0 +1,86 @@
+Full Exploit Flow
+
+
+Create a new Video object
+
+
+Fetch the payload
+
+
+Attach the video to a new NetStream
+
+
+Spray the heap with Adobe Flash Player Vectors
+
+
+a.   Create a Vector containing 98688 Vectors containing 1022 uints
+b.   Set the first two dwords in each Vector to 0x41414141, 0x42424242
+
+Create holes for the controlled FLV object
+
+a.   Free approximately every 3 [rd] Vector in the spray
+
+Spray custom class objects for future control transfer
+
+a.   Define a new class CustomClass
+i.   Define a function victimFunction with lots of arguments
+b.   Create a Vector of 0x100 Vectors of 1007 references to an CustomClass instance
+
+Fetch and play the FLV exploit
+
+a.   The FLV file will allocate an attacker controlled object in one of the holes from step 5
+b.   The attacker controlled object will overwrite the length field of an adjacent vector
+
+
+Re-fill holes from step 5 with Vectors as in step 4
+
+
+Find the corrupted vector
+
+
+a.   Search through Vectors from step 4
+b.   Check the length of each Vector to find one that is abnormally large
+
+Corrupt a second Vector (Vector2)
+
+a.   Using the corrupted Vector from step 9 to read/write relative memory addresses
+i.   Search memory for an adjacent vector
+ii.   Overwrite the length field with 0x3fffffff
+iii.   Verify that a corrupted vector with length 0x3fffffff now exists in the spray
+
+
+If not, undo corruption and attempt to corrupt the next vector
+
+
+Decrypt shellcode and store it and the payload on the heap
+
+
+Overwrite the CustomClass.victimFunction function pointer
+
+
+a.   Find the sprayed CustomClass object instance references from step 6
+b.   The new function is a form of â€œpivotâ€​ that transfers control to the attacker
+
+Build ROP chain on the stack and call it
+
+a.   Find ROP gadgets in memory using Vector2
+i.   Including a call to kernel32!VirtualAlloc
+b.   Call the corrupted CustomClass.victimFunction from step 6.a.i
+i.   Arguments to the function are the gadgets of the ROP chain
+ii.   They are conveniently pushed onto the stack
+iii.   Corrupted vtable from step 12 calls a pivot
+
+The â€œpivotâ€​ just adds to to the stack pointer and returns because the ROP chain
+is on
+
+the stack
+
+ROP chain calls shellcode
+
+a.   Call kernel32!VirtualAlloc
+b.   jmp to shellcode
+
+Shellcode calls payload
+
+a.   Shellcode searches memory for the payload, which is stored inside an image
+b.   Shellcode decodes the payload by xoring each byte (that is not 0 or 0x17) with 0x17

@@ -1,0 +1,155 @@
+
+
+
+Sentence : Analysis – BalkanRAT
+The BalkanRAT part of the malicious Balkan- toolset is more complex compared to its backdoor
+accomplice. Its goal is to deploy a copy of the Remote Utilities software, which is commercial
+software by a Russian vendor, Remote Utilities, LLC, used for remote access to a computer or for
+remote administration. BalkanRAT also provides the attacker with the credentials needed for this
+remote access.
+BalkanRAT has several additional components to help load, install and conceal the existence of
+the RDS. They can add exceptions to the firewall, hide the RDS’s window and its tray icon, and
+hide the presence of related processes in the task manager.
+https://www.welivesecurity.com/2019/08/14/balkans-businesses-double-barreled-weapon/ 6/18
+8/15/2019 In the Balkans, businesses are under fire from a double ~~-~~ barreled weapon | WeLiveSecurity
+Figure 4. Components used in the campaign to deploy and hide the presence of the RDS
+
+The dropper first unpacks all components; a configuration file, the remote desktop software
+
+and a core component installing it, a userland rootkit, a GUI hider and a decoy PDF file.
+2. The dropper opens the PDF file so as not to arouse suspicion of the user.
+3. Covertly, the dropper executes the core component (32-bit) in the installation mode.
+
+The core component (32-bit) installs itself to be executed with each start, and adds
+
+exception to the firewall for the RDS. It executes commands inst1 and inst2 specified in the
+configuration file, and executes itself again, now in stealth mode.
+
+
+In this mode, the core component acts like a keylogger.
+
+
+The core component (32-bit) executes the 64-bit version of itself, in injection mode (if
+
+
+applicable).
+
+The core component (64-bit) injects the userland rootkit (64-bit) into task manager
+
+processes. The userland rootkit then hides presence of the malicious processes in the task
+manager.
+8. The core component (32-bit) executes the RDS. It repeatedly monitors and hides the RDS
+window (because it is a GUI application).
+
+The core component (32-bit) injects the userland rootkit (32-bit) into task manager
+
+processes. The userland rootkit then hides presence of the malicious processes in the task
+manager.
+10. The core component (32-bit) executes commands cmd1 and cmd2, as specified in the
+configuration file. One of such commands was seen executing a GUI hider, which is an
+AutoHotKey script hiding the tray icon of the RDS.
+Note: Some components are optional. Also, sometimes they are deployed as a set comprising an
+encrypted payload and the corresponding loader. We are omitting these details.
+The configuration file of BalkanRAT is in INI file format (similarly to BalkanDoor, which uses this
+format for backdoor commands), with one section named [CFG]. The INI file is used by the
+malware’ core component and the userland rootkit.
+https://www.welivesecurity.com/2019/08/14/balkans-businesses-double-barreled-weapon/ 7/18
+8/15/2019 In the Balkans, businesses are under fire from a double ~~-~~ barreled weapon | WeLiveSecurity
+inst1, inst2 Commands executed by the core component during installation
+cmd1, cmd2 Command executed by the core component main payload
+hproc List of processes that should be hidden by userland rootkit
+mproc List of processes where userland rootkit is injected
+Figure 5. BalkanRAT’s configuration file – properties (top) and example (below)
+BalkanRAT’s core is a multipurpose component (there are both a 32-bit and a 64-bit versions); it
+can be executed in various modes, determined by the command-line argument. Most significantly,
+it is used for installation of BalkanRAT, launching a userland rootkit and adding exceptions for the
+RDS component in the firewall.
+Argu‐
+ment
+Functionality
+/rhc Executes a batch file
+/fwl Adds exception to the firewall for the specified program
+/sreg Sets configuration data for the RDS in the registry (especially email address where the
+credentials should be sent)
+/inst Ensures persistence by adding itself to the [HKEY_CURRENT_USER\SOFTWARE\Mi‐
+crosoft\Windows NT\CurrentVersion\Windows] registry key under the “load” entry. Adds
+exception for the RDS to the local firewall. Executes itself again in the main mode (no
+arguments).
+/inj Injects the userland rootkit library into processes, as specified in the configuration file
+(none) Main mode. Executes the 64-bit version of itself (if applicable), injects the userland rootkit,
+executes the RDS and hides the window by changing its coordinates to values outside the
+screen.
+Another thread captures pressed keystrokes.
+The main part of the BalkanRAT malware is a copy of the Remote Utilities software for remote
+access. Instead of using the official version, BalkanRAT deploys a copy signed by a certificate of
+the attacker.
+The client side of the RDS running on the victim’s computer must know the unique ID and the
+password, both generated on the server side, to connect to the server. The RDS deployed by
+BalkanRAT is configured in such a way that the password is the same for all victims, and the
+generated unique ID is sent to the attacker’s email address by the tool itself.
+Since the tool BalkanRAT misuses is legitimate, it leverages the genuine Remote Utilities’
+infrastructure for this communication (rutils.com, server.rutils.com); due to this, the
+communication may seem legitimate to the user – and to security products.
+https://www.welivesecurity.com/2019/08/14/balkans-businesses-double-barreled-weapon/ 8/18
+8/15/2019 In the Balkans, businesses are under fire from a double ~~-~~ barreled weapon | WeLiveSecurity
+As a result, the attacker has obtained credentials to access the compromised computer via the
+Remote Utilities software. Using this tool, they can broadcast the screen to monitor the activity of
+the user and manually take over the compromised computer.
+Figure 6. A window the victim never sees. With a legitimate copy of Remote Utilities, this
+window is visible; however, BalkanRAT will hide it using the GUI hider feature.
+To remain stealthy, BalkanRAT uses the GUI hider feature. In most samples (some older ones are
+an exception), it is implemented as an AutoHotKey script, compiled into an executable file so that
+it can be run on a computer even if AutoHotKey is not installed there. The purpose of this script is
+to hide the tray icon of the RDS client.
+Figure 7. AutoHotKey script embedded in the resource section of the executable
+Another notable feature used by BalkanRAT to stay hidden is the ability to hide processes from
+the user.
+https://www.welivesecurity.com/2019/08/14/balkans-businesses-double-barreled-weapon/ 9/18
+8/15/2019 In the Balkans, businesses are under fire from a double ~~-~~ barreled weapon | WeLiveSecurity
+To achieve this, userland rootkit libraries are injected in processes hardcoded in the configuration
+file. The userland rootkit hooks the NtQuerySystemInformation function for the process in which it
+is injected. In case SystemProcessInformation is queried, it filters out all entries for processes
+with the names specified in the configuration file. As a result, conventional task manager utilities
+will not display the processes the attackers want to keep hidden from the user.
+Figure 8. With the userland rootkit injected, some processes are missing in the list (left). Without the rootkit, the processes
+are visible (right).
+Naturally, the list of processes that will be hidden contain mostly ones belonging to BalkanRAT.
+However, we have also seen names like “weather.exe” or “preserve.exe” in the list – which belong
+to the BalkanDoor backdoor. This finding supports the belief these two tools are indeed used
+together.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BalkanRAT", "type" : "APPS"},
+        {"id": 2, "description": "Remote Utilities software", "type" : "APPS"},
+        {"id": 3, "description": "Remote Utilities, LLC", "type" : "ACTO"},
+        {"id": 4, "description": "Russian vendor", "type" : "COUN"},
+        {"id": 5, "description": "RDS (Remote Desktop Software)", "type" : "APPS"},
+        {"id": 6, "description": "Configuration file", "type" : "DOCF"},
+        {"id": 7, "description": "Userland rootkit", "type" : "EXEF"},
+        {"id": 8, "description": "GUI hider (AutoHotKey script)", "type" : "EXEF"},
+        {"id": 9, "description": "Decoy PDF file", "type" : "DOCF"},
+        {"id": 10, "description": "Firewall", "type" : "FIRW"},
+        {"id": 11, "description": "Task manager processes", "type" : "APPS"},
+        {"id": 12, "description": "[HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows]", "type" : "REGI"},
+        {"id": 13, "description": "Email address for credentials", "type" : "MAIL"},
+        {"id": 14, "description": "Unique ID and password", "type" : "TAMP"},
+        {"id": 15, "description": "rutils.com", "type" : "URLS"},
+        {"id": 16, "description": "server.rutils.com", "type" : "URLS"},
+        {"id": 17, "description": "BalkanDoor backdoor", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 5, "rel_name" : "deploys"},
+        {"source": 1, "target": 6, "rel_name" : "uses"},
+        {"source": 1, "target": 7, "rel_name" : "injects into task manager processes"},
+        {"source": 1, "target": 8, "rel_name" : "executes"},
+        {"source": 1, "target": 9, "rel_name" : "opens to hide activity"},
+        {"source": 1, "target": 10, "rel_name" : "adds exceptions to"},
+        {"source": 1, "target": 12, "rel_name" : "modifies registry key for persistence"},
+        {"source": 1, "target": 13, "rel_name" : "sends credentials to"},
+        {"source": 1, "target": 14, "rel_name" : "generates and uses"},
+        {"source": 5, "target": 15, "rel_name" : "communicates with"},
+        {"source": 5, "target": 16, "rel_name" : "communicates with"},
+        {"source": 17, "target": 14, "rel_name" : "uses same unique ID and password"}
+    ]
+}

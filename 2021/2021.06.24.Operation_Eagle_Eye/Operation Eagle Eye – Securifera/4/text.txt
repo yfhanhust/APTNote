@@ -1,0 +1,31 @@
+Exploitation – HP iLO (CVE-2017-12542)
+While my scanner was still enumerating endpoints on the CommandPost, I went ahead and fired up the iLO
+exploit to confirm whether or not the target was actually exploitable. Sure enough, I was able to create a new
+admin user and login.
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 6/20
+6/24/2021 Operation Eagle Eye – Securifera
+We now have privileged access to an iLO web management portal of some unknown web server. Outside of
+getting some server statistics and being able to turn the server on and off, what can we actually do that’s useful
+from an attacker’s perspective? Well for one we can utilize the remote console feature. HP iLOs actually have
+two ways to do this, one via Java web start from the web interface and one over SSH (which shares the
+credentials for the web interface).
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 7/20
+6/24/2021 Operation Eagle Eye – Securifera
+Loading up the remote console via Java for this iLO reveals that this server is actually a Fidelis Direct Sensor
+appliance. Access to the remote console in itself is not super useful since you still have to have credentials to
+login to the server. However, when you bring up the Java web start remote console you’ll notice a menu that
+says “Virtual Drives”. What this menu allows you to do is to remotely mount a ISO of your choosing.
+With the ability to mount a custom ISO remotely, this introduces a possible avenue to gain code execution. If the
+target server does not have a BIOS password and doesn’t utilize full disk encryption, we should be able to boot
+to an ISO we supply remotely and gain access to the server’s file system. This technique definitely isn’t subtle
+as we have to turn off the server but maybe the system owner won’t notice if the outage is brief
+If you are reading this there’s a good chance you’ll be attempting to pull this off through some sort of proxy/C2
+comms mid-operation rather than physically sitting at a system on the same network. This makes the choice of
+ISO critical since network bandwidth is limited. A live CD image that is as small as possible is ideal. I originally
+tried a 30MB TinyCore linux but eventually landed on the 300 MB Puppy Linux since it comes with a lot more
+features out-of-the-box. Once the OS loaded up I mounted the filesystem and confirmed access to critical files.
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 8/20
+6/24/2021 Operation Eagle Eye – Securifera
+Since the device had SSH enabled, I decided the easiest mechanism for compromise would be to simply add a
+SSH public key to the root user’s authorized key file. The “sshd_config” also needed to be updated to allow root
+login and enable public key authentication.

@@ -1,0 +1,42 @@
+RShell Mach-O implant
+https://blog.sekoia.io/luckymouse-uses-a-backdoored-electron-app-to-target-macos/ 3/9
+8/15/22, 4:14 PM LuckyMouse uses a backdoored Electron app to target MacOS - SEKOIA.IO Blog
+The downloaded implant, named RShell by its developers, is written in C++ and embeds
+the Boost.Asio and nlohmann/json libraries. This backdoor uses BJSON (Binary JSON)
+over TCP sockets to communicate with its command and control server, without any
+encryption and does not display a persistence mechanism.
+Upon execution, RShell backdoor attempts to connect with the C2 server. This “Hello
+message” to the C2 server contains:
+a random GUID, added to each response to the C2 server
+the hostname
+the IPv4 adresses
+the type of connection (“login” for instance)
+the current username
+the kernel version.
+Figure 4. Hello packet from the implant.
+RShell backdoor accepts two “types” of commands: “cmd” and “file”.
+The group “cmd” contains three commands:
+init(): start a bash
+data(data): write data to the bash
+close(): ends up the bash.
+The second type of commands, “file”, enable interactions with the filesystem:
+dir(path): returns a list of files and subdirectories for the specified path
+init(): returns a list of files and subdirectories for the root filesystem (equivalent to
+dir(“/”))
+down(path): opens a file in binary and read-only mode and returns the size of the
+file
+read(path): reads the specified file. The file must first have been opened with the
+down command
+upload(path): opens a file in binary and write-only mode
+write(data, path): writes data to the specified file. As for the read command, the file
+must first have been opened with the upload command before
+del(path): delete the specified file or directory
+https://blog.sekoia.io/luckymouse-uses-a-backdoored-electron-app-to-target-macos/ 4/9
+8/15/22, 4:14 PM LuckyMouse uses a backdoored Electron app to target MacOS - SEKOIA.IO Blog
+close(path): closes the file
+The following figures present an example of request and response for the dir command.
+Figure 5. Example of dir request
+Figure 6. Example of dir response
+A keepalive message is sent to the C2 server every 40 seconds. The server must echo this
+message. Based on this observation, we created a Suricata rule to spot this threat in your
+network flows (see Appendix).

@@ -1,0 +1,75 @@
+
+
+
+Sentence : Modules
+Each module is a valid MZPE file mapped in the address space of the same process as the shell
+code. Also the module can export the GetClassObject symbol, which receives control when run
+(if required).
+Each module has its own descriptor created by a command from C2. The C2 server sends a byte
+array (0x15) describing the module. The array contains information on the module: whether the
+module needs to be launched via export, module type (in other words, whether it needs pipes
+for communicating with C2), module size, entry point RVA (used if there is no flag for launching
+via export), and module data decryption key. The key is, by and large, the data used to format
+the actual key.
+Figure 21. Module decryption
+We should also point out that decryption takes place only if modKey is not equal to the 7AC9h
+constant hard-coded in the shellcode. This check affects only the decryption process. If modKey
+does equal the constant, the malware will immediately start loading the module. This means the
+module is not encrypted.
+14
+Each module is launched in a separate thread created specially for that purpose. Launching with
+pipes looks as follows:
+�  The malware creates a thread for the module, starts mapping the module, and gives it control inside the newly created thread.
+�  The malware creates a new connection to the current working C2.
+�  The malware creates a pipe with the name derived from the following format string: \\.\
+pipe\windows@#%02XMon (%02X is replaced by a value that is received from С2 at the same
+time as the command for launching the module).
+�  The malware launches two threads passing data from the pipe to C2 and vice versa,
+
+using the connection created during the previous step. Two more pipes, \.\pipe\win
+dows@#%02Xfir and \.\pipe\windows@#%02Xsec, are created inside the threads. The pipe
+ending in "fir" is used to pass data from the module to C2. The pipe ending in "sec" is used
+to pass data and commands from C2 to the modules.
+The second thread processing the commands from C2 to the modules has its own handler. This
+is described in more details in the Commands section. For now we can only say that one of the
+commands can start a local asynchronous TCP server. That server will accept data from whoever
+connects to it, send it to C2, and forward it back from C2. It binds to 127.0.0.1 at whichever port it
+finds available, starting from 5000 and trying possible ports one by one.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Module", "type" : "EXEF"},
+        {"id": 2, "description": "Shell code", "type" : "EXEF"},
+        {"id": 3, "description": "GetClassObject symbol", "type" : "REGI"},
+        {"id": 4, "description": "C2 server", "type" : "CCSH"},
+        {"id": 5, "description": "Byte array (0x15)", "type" : "DOCF"},
+        {"id": 6, "description": "Module size", "type" : "TAMP"},
+        {"id": 7, "description": "Entry point RVA", "type" : "TAMP"},
+        {"id": 8, "description": "Module data decryption key", "type" : "DOCF"},
+        {"id": 9, "description": "modKey (7AC9h)", "type" : "TAMP"},
+        {"id": 10, "description": "Thread for the module", "type" : "TAMP"},
+        {"id": 11, "description": "New connection to C2", "type" : "NETP"},
+        {"id": 12, "description": "\\\pipe\windows@#%02XMon", "type" : "SYSP"},
+        {"id": 13, "description": "\\\pipe\windows@#%02Xfir", "type" : "SYSP"},
+        {"id": 14, "description": "\\\pipe\windows@#%02Xsec", "type" : "SYSP"},
+        {"id": 15, "description": "Local asynchronous TCP server", "type" : "NETP"},
+        {"id": 16, "description": "127.0.0.1:5000+", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "mapped in address space of"},
+        {"source": 1, "target": 3, "rel_name" : "exports symbol"},
+        {"source": 1, "target": 4, "rel_name" : "command from C2 creates descriptor for"},
+        {"source": 4, "target": 5, "rel_name" : "sends byte array to module"},
+        {"source": 5, "target": 6, "rel_name" : "contains information on"},
+        {"source": 5, "target": 7, "rel_name" : "contains information on"},
+        {"source": 5, "target": 8, "rel_name" : "contains decryption key for"},
+        {"source": 1, "target": 9, "rel_name" : "compares modKey to constant"},
+        {"source": 4, "target": 10, "rel_name" : "creates thread for module"},
+        {"source": 10, "target": 11, "rel_name" : "creates new connection to C2"},
+        {"source": 4, "target": 12, "rel_name" : "sends value for pipe name format"},
+        {"source": 4, "target": 13, "rel_name" : "uses pipe ending in 'fir'"},
+        {"source": 4, "target": 14, "rel_name" : "uses pipe ending in 'sec'"},
+        {"source": 4, "target": 15, "rel_name" : "commands to start TCP server"},
+        {"source": 15, "description": "binds to", "rel_name" : "127.0.0.1:5000+"}
+    ]
+}

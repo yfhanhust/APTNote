@@ -1,0 +1,61 @@
+
+
+
+Sentence : Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 50
+When activated with the –i command line argument in order to induce the service installation mode, SierraAlfa follows a
+very simple series of steps to install the WinsSchMgmt service on the victim’s computer:
+
+Call CreateServiceW to add a new service ( WinsSchMgmt ) to the victim’s computer with the description “ Windows
+
+Schedule Management Service ” and set the command line argument for the service’s binary to –k .
+
+Call to, again, set the description to “ Windows Schedule Management
+ChangeServiceConfig2A
+
+Service ”.
+
+
+Call to set the on-failure retry modes.
+ChangeServiceConfig2A
+
+
+Open a handle to the new service and call StartServiceW to activate the service.
+
+
+Terminate silently.
+
+
+SierraAlfa does not attempt to move its binary prior to installing itself as a service on the victim’s computer. The inclusion
+of the –k argument for the service ensures that upon activation by the Windows Services system, SierraAlfa activates its
+service handler. The service handler, aside from the normal Window services scaffolding, calls the function of SierraAlfa
+that kicks off the propagation functionality of the malware.
+The propagation functionality begins by dropping a file on the victim’s system and loading another into memory. The
+payload files of SierraAlfa are appended to the end of the SierraAlfa binary in a stacked fashion, preceded by a table of
+contents data structure. The location for the start of the table of contents and the stacked files that follow is determined
+by the last 4 bytes (DWORD) of the SierraAlfa binary. The 4 bytes at the end of the binary define the distance from the
+beginning of the binary to the beginning of the table of contents. The table of contents specifies both the actual size and
+the compressed size for each of the payload components that SierraAlfa drops or loads. Figure 14-2 visualizes the format
+of the payload’s organization. The payload contains two files: a WhiskeyAlfa executable and a text file containing a list of
+target servers. The WhiskeyAlfa executable is always compressed with Zlib, while the target list may be either compressed
+using Zlib or simply stored. If the decompressed size and the size of the target list are not equal, SierraAlfa assumes the
+list is compressed and attempts to decompress the list in memory. Otherwise, the contents of the list are XOR’d with 0x67
+to reveal the original content.
+Figure 14-2: SierraAla’s Stacked Payload Layout
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SierraAlfa", "type" : "ACTO"},
+        {"id": 2, "description": "WinsSchMgmt service", "type" : "OPPS"},
+        {"id": 3, "description": "Windows Services system", "type" : "SYSP"},
+        {"id": 4, "description": "WhiskeyAlfa executable", "type" : "EXEF"},
+        {"id": 5, "description": "Text file containing a list of target servers", "type" : "DOCF"},
+        {"id": 6, "description": "Zlib", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "installs service"},
+        {"source": 3, "target": 1, "rel_name" : "activates service handler of"},
+        {"source": 1, "target": 4, "rel_name" : "drops executable"},
+        {"source": 1, "target": 5, "rel_name" : "loads file into memory"},
+        {"source": 4, "target": 6, "rel_name" : "compressed with"}
+    ]
+}

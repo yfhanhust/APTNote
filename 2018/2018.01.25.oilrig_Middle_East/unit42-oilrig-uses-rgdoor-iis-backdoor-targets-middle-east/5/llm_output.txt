@@ -1,0 +1,84 @@
+
+
+
+Sentence : Listening for Commands
+We analyzed RGDoor samples and found that the “RegisterModule” function does very little other than calling the
+IHttpModuleRegistrationInfo::SetRequestNotifications method. According to MSDN (https://msdn.microsoft.com/enus/library/ms693045(v=vs.90).aspx), the SetRequestNotifications function has the following prototype, which allows a
+developer to configure the module to handle GET requests (dwRequestNotifications) and/or POST requests
+(dwPostRequestNotifications):
+SetRequestNotifications(
+IN IHttpModuleFactory * pModuleFactory,
+IN DWORD        dwRequestNotifications,
+IN DWORD        dwPostRequestNotifications
+)
+In RGDoor, the code calls this function with arguments that ignore inbound HTTP GET requests, but act on all HTTP POST
+requests seen by the IIS server, even POST requests issued over HTTPS. RGDoor calls this function with the following
+arguments, the third of which (dwPostRequestNotifications) is set to “RQ_BEGIN_REQUEST”, which is an event triggered
+immediately after IIS receives the POST request:
+SetRequestNotifications(pModuleFactory,0,RQ_BEGIN_REQUEST)
+RGDoor is notified immediately when the IIS server receives an inbound HTTP POST request. RGDoor parses these POST
+requests, specifically looking for the HTTP “Cookie” field by accessing the HTTP header with the following function call:
+pHttpContext­>GetRequest()­>GetHeader(“Cookie”,NULL)
+After accessing the cookie field, RGDoor parses this field by looking for the string “RGSESSIONID=”, which is the basis for
+the name RGDoor. If present, the code uses the two-bytes immediately following the “RGSESSIONID=” string as a
+decryption key, specifically treating the two character bytes as a single hexadecimal byte. For instance, the two-byte key of
+“00” would represent the hexadecimal value of 0x00, where “FF” would represent 0xff, and so on. The key is followed by a
+Base64 encoded string that contains ciphertext. The following represents the structure of the cookie filed in inbound
+RGDoor requests:
+RGSESSIONID=[two­bytes for key][Base64 encoded ciphertext]
+RGDoor decodes the Base64 encoded string and then decrypts the decoded string using a custom algorithm. The custom
+algorithm iterates through the ciphertext using the ‘pxor’ instruction to XOR each byte of ciphertext with the single-byte
+hexadecimal value from the two-byte character key provided in the cookie field.
+The code will parse the cleartext looking for one of three commands: “cmd$”, “upload$” and “download$”. The code treats
+the string immediately following the command as the command’s argument. Table 1 provides the arguments and further
+details on the three commands.
+|cmd$[command toexecute]|Uses “popen” to run the specifiedcommand. It enters a loop that calls“fgets” to get the command results. Theloop finishes when a call to “feof”designates the end of the commandresults, which are relayed back to the actorvia the HTTP response.|
+|---|---|
+|upload$[path to ﬁle]|Gets the length of uploaded data bychecking the “Content-Length” ﬁeld withinthe HTTP request. Uses theIHttpRequest::GetRemainingEntityBytesand IHttpRequest::ReadEntityBodymethods to obtain base64 encoded datawithin the body of the HTTP POST request.The code decrypts the decoded data usingthe XOR algorithm and writes the data tothe speciﬁed ﬁle. It will respond to thisrequest with either “write done ⧵r⧵n” or“can’t open ﬁle: “.|
+|download$[path toﬁle]|Reads a speciﬁed ﬁle and encrypts it withthe XOR algorithm, Base64 encodes theciphertext and sends the data back to theactor via the HTTP response.|
+Table 1 Commands available within RGDoor
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RGDoor", "type" : "APPS"},
+        {"id": 2, "description": "RegisterModule function", "type" : "EXEF"},
+        {"id": 3, "description": "IHttpModuleRegistrationInfo::SetRequestNotifications method", "type" : "EXEF"},
+        {"id": 4, "description": "HTTP GET requests", "type" : "NETP"},
+        {"id": 5, "description": "HTTP POST requests", "type" : "NETP"},
+        {"id": 6, "description": "IIS server", "type" : "APPS"},
+        {"id": 7, "description": "RQ_BEGIN_REQUEST event", "type" : "TTPS"},
+        {"id": 8, "description": "HTTP Cookie field", "type" : "REGI"},
+        {"id": 9, "description": "RGSESSIONID string", "type" : "REGI"},
+        {"id": 10, "description": "Base64 encoded ciphertext", "type" : "DOCF"},
+        {"id": 11, "description": "Custom XOR decryption algorithm", "type" : "EXEF"},
+        {"id": 12, "description": "cmd$ command", "type" : "TTPS"},
+        {"id": 13, "description": "upload$ command", "type" : "TTPS"},
+        {"id": 14, "description": "download$ command", "type" : "TTPS"},
+        {"id": 15, "description": "Content-Length field in HTTP request", "type" : "REGI"},
+        {"id": 16, "description": "HTTP response to actor", "type" : "MAIL"},
+        {"id": 17, "description": "popen function", "type" : "EXEF"},
+        {"id": 18, "description": "fgets function", "type" : "EXEF"},
+        {"id": 19, "description": "feof function", "type" : "EXEF"},
+        {"id": 20, "description": "IHttpRequest::GetRemainingEntityBytes method", "type" : "EXEF"},
+        {"id": 21, "description": "IHttpRequest::ReadEntityBody method", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "calls"},
+        {"source": 3, "target": 4, "rel_name" : "ignores"},
+        {"source": 3, "target": 5, "rel_name" : "handles"},
+        {"source": 1, "target": 6, "rel_name" : "runs on"},
+        {"source": 7, "target": 5, "rel_name" : "triggers on"},
+        {"source": 1, "target": 8, "rel_name" : "parses"},
+        {"source": 8, "target": 9, "rel_name" : "contains"},
+        {"source": 8, "target": 10, "rel_name" : "contains"},
+        {"source": 1, "target": 11, "rel_name" : "uses for decryption"},
+        {"source": 12, "target": 17, "rel_name" : "uses to execute command"},
+        {"source": 12, "target": 18, "rel_name" : "uses to get command results"},
+        {"source": 12, "target": 19, "rel_name" : "uses to check end of command results"},
+        {"source": 12, "target": 16, "rel_name" : "sends response back to actor via"},
+        {"source": 13, "target": 15, "rel_name" : "checks for content length in"},
+        {"source": 13, "target": 20, "rel_name" : "uses to get remaining entity bytes"},
+        {"source": 13, "target": 21, "rel_name" : "uses to read entity body"},
+        {"source": 14, "target": 16, "rel_name" : "sends encrypted file back via"}
+    ]
+}

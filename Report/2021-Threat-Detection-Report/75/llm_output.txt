@@ -1,0 +1,156 @@
+
+
+
+Sentence : Detection
+Collection requirements
+Command-line monitoring
+Data sources that show process execution and command-line arguments ( EDR
+tools, Sysmon, Windows Event Logs) are likely your best source of observing
+and detecting malicious use of Ingress Tool Transfer. These tools will allow
+you to look for a download or transfer taking place, as well as provide leads for
+further investigation. Using command-line arguments, you can examine remote
+systems and content used to facilitate the transfer. For example, PowerShell
+and ~~curl~~ command lines often include URLs used to host remote content for
+download and execution. This data point provides an interesting pivot at which
+to proceed during investigations.
+Process monitoring
+EDR tools and other data sources that show process telemetry can also be
+useful in identifying malicious use. As a rule, more data is usually better than
+less. In ideal scenarios, we recommend process monitoring tools that provide
+process name, command-line arguments, file modifications, DLL module loads,
+and network connections. The sum of this telemetry helps paint a picture of
+what capabilities exist inside unknown processes or scripts.
+Network connections
+Telemetry showing network connections is often essential during investigations.
+While network connections on their own aren’t suspicious, combining network
+connection data with the known and expected behaviors of processes can yield
+breathtaking results. In addition, correlating network connections with other
+data points—such as file modifications or time of day—can help suspicious
+activity stand out from the crowd. A good example of this correlation would
+be ~~certutil.exe~~ making network connections. On its own, the utility doesn’t
+typically make connections, but it may make file modifications. If a network
+connection occurs from ~~certutil.exe~~ alongside the file modifications, you can
+more reasonably assess that ~~certutil.exe~~ enabled Ingress Tool Transfer.
+Packet capture
+Finally, web filters, firewalls, and Intrusion Prevention Systems (IPS) that are
+capable of performing deep content inspection can be useful for identifying
+executables and DLLs being transferred into the network. Despite adversaries’
+l [T1105: Ingress Tool Transfer]
+i
+67
+2021 Threat Detection Report
+attempts at obfuscation, well constructed security architecture can enable
+defenders to spot useful patterns in traffic ingressing to the network from
+adversary-controlled systems. Good examples of these patterns include ~~MZ~~
+headers in executable content and portions of script content. This sort of data
+enables defenders to also use additional types of analytics or rules, such as
+those for Snort or Suricata detections. By supplementing endpoint detection
+capabilities with network data, your security team can become a relentless
+defensive force.
+Detection opportunities
+Suspicious commands
+By far the most fruitful method by which we have identified malicious Ingress
+Tool Transfer use is examining PowerShell command lines for keywords and
+certain patterns.
+Look for the execution of ~~powershell.exe~~ with command lines containing the
+following keywords:
+• ~~downloadstring~~
+• ~~downloaddata~~
+• ~~downloadf~~ i ~~le~~ to a temporary/non standard location (temp or appdata) or in
+combination with execution ( ~~invoke-expression~~ )
+You should also consider alerting on certain patterns in PowerShell command
+lines, like ~~bitsadmin.exe~~ with download in the command line or ~~certutil~~ using
+~~urlcache~~ or with ~~split~~ in the command line.
+Another suspicious command pattern that warrants monitoring is ~~curl~~ or ~~wget~~
+making an external network connection immediately followed by writing or
+modifying an executable file, particularly to a temp location.
+Other LOLBINs such as ~~mshta.exe~~, ~~csc.exe~~, ~~msbuild.exe~~, or ~~regsvr32.exe~~
+making external network connections to URLs ending with an executable
+or image extension, suspicious domains, and/or unusual IP addresses are
+inherently suspicious and warrant monitoring.
+Weeding out false positives
+The majority of the telemetry patterns above can also manifest in development
+pipelines and systems management tools. Given this, and as is the case for many
+detection ideas in this report, you may want to do an environment audit and
+figure out if these potentially suspicious behaviors are being employed by any
+legitimate tools or people in your environment.
+l [T1105: Ingress Tool Transfer]
+i
+i
+Bodkins
+I N C I D E N T
+H A N D L E R
+As an incident handler, Adina works
+alongside security and IT teams
+advising on ways to improve their
+security posture and eradicate cyber
+threats. Previously her work included
+investigating threats, building
+automated response plans, and
+improving security policies. She enjoys
+solving puzzles, breaking down complex
+ideas, and educating others on the
+importance of cyber safety.
+Zack Fink
+I N C I D E N T
+H A N D L E R
+Zack is an Incident Handler at Red
+Canary. His IT and security experience
+ranges from small businesses to Fortune
+50 organizations. When not in front of
+a keyboard, he’s often found trudging
+through the frozen tundra of the Upper
+Midwest, occasionally on horseback.
+68
+2021 Threat Detection Report
+Once you understand legitimate use cases, you can tune those out as exceptions
+and focus your detection efforts on seeking out behaviors that are more likely to
+represent malicious instances of Ingress Tool Transfer.
+l [T1105: Ingress Tool Transfer]
+2021 Threat Detection Report
+T E C H N I Q U E T 1 5 6 9
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PowerShell", "type" : "APPS"},
+        {"id": 2, "description": "curl", "type" : "APPS"},
+        {"id": 3, "description": "wget", "type" : "APPS"},
+        {"id": 4, "description": "bitsadmin.exe", "type" : "EXEF"},
+        {"id": 5, "description": "certutil.exe", "type" : "EXEF"},
+        {"id": 6, "description": "mshta.exe", "type" : "EXEF"},
+        {"id": 7, "description": "csc.exe", "type" : "EXEF"},
+        {"id": 8, "description": "msbuild.exe", "type" : "EXEF"},
+        {"id": 9, "description": "regsvr32.exe", "type" : "EXEF"},
+        {"id": 10, "description": "MZ headers", "type" : "TAMP"},
+        {"id": 11, "description": "URLs used to host remote content for download and execution", "type" : "URLS"},
+        {"id": 12, "description": "EDR tools", "type" : "APPS"},
+        {"id": 13, "description": "Sysmon", "type" : "APPS"},
+        {"id": 14, "description": "Windows Event Logs", "type" : "DOCF"},
+        {"id": 15, "description": "network connections", "type" : "NETP"},
+        {"id": 16, "description": "Ingress Tool Transfer (T1105)", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 11, "rel_name" : "downloads from"},
+        {"source": 4, "target": 11, "rel_name" : "downloads from"},
+        {"source": 5, "target": 11, "rel_name" : "downloads from"},
+        {"source": 6, "target": 11, "rel_name" : "connects to"},
+        {"source": 7, "target": 11, "rel_name" : "connects to"},
+        {"source": 8, "target": 11, "rel_name" : "connects to"},
+        {"source": 9, "target": 11, "rel_name" : "connects to"},
+        {"source": 3, "target": 11, "rel_name" : "downloads from"},
+        {"source": 2, "target": 11, "rel_name" : "downloads from"},
+        {"source": 5, "target": 10, "rel_name" : "creates or modifies"},
+        {"source": 16, "target": 1, "rel_name" : "uses"},
+        {"source": 16, "target": 4, "rel_name" : "uses"},
+        {"source": 16, "target": 5, "rel_name" : "uses"},
+        {"source": 16, "target": 6, "rel_name" : "uses"},
+        {"source": 16, "target": 7, "rel_name" : "uses"},
+        {"source": 16, "target": 8, "rel_name" : "uses"},
+        {"source": 16, "target": 9, "rel_name" : "uses"},
+        {"source": 16, "target": 3, "rel_name" : "uses"},
+        {"source": 16, "target": 2, "rel_name" : "uses"},
+        {"source": 15, "target": 14, "rel_name" : "monitored by"},
+        {"source": 15, "target": 13, "rel_name" : "monitored by"},
+        {"source": 15, "target": 12, "rel_name" : "monitored by"}
+    ]
+}

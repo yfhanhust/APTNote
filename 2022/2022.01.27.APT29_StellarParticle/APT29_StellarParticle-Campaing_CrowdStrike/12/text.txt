@@ -1,0 +1,52 @@
+O365 Built-in Service Principal Hijacking
+The threat actor connected via Remote Desktop from a Domain Controller to a vCenter server
+and opened a PowerShell console, then used the PowerShell command -ep bypass to
+circumvent the execution policy. Using the Windows Azure Active Directory PowerShell
+Module, the threat actor connected to the victim’s O365 tenant and began performing
+enumeration queries. These queries were recorded in text-based logs that existed under the
+path
+C:\Users\<user>\AppData\Local\Microsoft\Office365\Powershell\ .
+Similar logs (for Azure AD instead of O365) can be found under the path:
+C:\Users\<user>\AppData\Local\Microsoft\AzureAD\Powershell\ .
+While the logs didn’t include what data was returned by the queries, they did provide some
+insight such as the user account used to connect to the victim’s O365 tenant (which was not
+the same as the user the threat actor used to RDP to the vCenter server). The logs contained
+commands issued and the count of the results returned for a specific command. The
+commands included enumeration queries such as:
+9/21
+In this case, however, the most significant and concerning log entry was one that indicated the
+command AddServicePrincipalCredentials was executed. By taking the timestamp that
+the command was executed via the PowerShell logs on the local system, CrowdStrike
+analyzed the configuration settings in the victim’s O365 tenant and discovered that a new
+secret had been added to a built-in Microsoft Azure AD Enterprise Application, Microsoft
+StaffHub Service Principal, which had Application level permissions. Further, the newly
+added secret was set to remain valid for more than a decade . This data was acquired by
+exporting the secrets and certificates details for each Azure AD Enterprise Application.
+The Service Principal (now renamed to Microsoft Teams Shifts ) had the following
+permissions at the time the configuration settings were collected:
+CrowdStrike was unable to find Microsoft documentation, but based on open-source
+research, this application likely had the following permissions around the time of registration: 7
+The most notable permissions above are the Mail.Read, Files.Read and
+Member.ReadWrite permissions. These permissions would allow the threat actor to use the
+Microsoft Staffhub service principal to read all mail and SharePoint/OneDrive files in the
+organization, as well as create new accounts and assign administrator privileges to any
+account in the organization.
+By running the commands from within the victim’s environment, MFA requirements were
+bypassed due to conditional access policies not covering Service Principal sign-ins at this
+point of time. However, as explained earlier, the threat actor managed to continue to access 8
+the victim’s cloud environment even when the victim enforced MFA for all connections
+regardless of source.
+10/21
+While the bulk of the evidence for this activity came from the text-based O365 PowerShell
+logs, the NTUSER.DAT registry hive for the user that was running the PowerShell cmdlets also
+included information on the accounts that were used to authenticate to the cloud. This
+information was stored under the registry path. Below is an example of the registry data:
+Figure 6. Example registry entry showing target O365 email accounts
+The same WSMan connection string was also located in the user’s NTUSER.DAT registry
+hive under the path:
+Figure 7. WSMan connection string registry location
+While not strictly related to the O365 PowerShell activity, the Windows Event Log
+Microsoft-Windows-WinRM%4Operational.evtx also included information on connection
+attempts made to external O365 tenants. This information was logged under Event ID 6.
+Below is an example of what the event included:
+Figure 8. Windows Event Log entry showing connection to O365 tenants

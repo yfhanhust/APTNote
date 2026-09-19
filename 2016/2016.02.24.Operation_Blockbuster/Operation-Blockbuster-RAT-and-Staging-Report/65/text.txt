@@ -1,0 +1,49 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 59
+With a list of username and passwords ready for the specific target, the attack thread attempts to bruteforce the target.
+SierraBravo-One attempts to pull a list of valid usernames from the target host by calling the NetUserEnum API
+function. If successful, the bruteforcing process uses the names returned from NetUserEnum instead of the variations
+of Administrator . Regardless of which usernames list is used, the bruteforce process does not use the Windows SMB
+API functions but rather performs the SMB interaction manually through SMB packet crafting. For each username and
+password combination, SierraBravo-One attempts to login to the target through the root Windows share (e.g. \\1.1.1.1 )
+until a successful combination is found or the set of combinations is exhausted.
+If successful in finding a vulnerable account on the targeted machine, SierraBravo-One attempts to install itself and its
+payload malware (typically, the payload malware is the instance of SierraJuliett-MikeOne running on the same machine as
+the SierraBravo-One infection). The procedure for infecting a vulnerable machine is as follows:
+
+Connect to the root share on the targeted host using the username and password obtained from the bruteforcing
+
+process by using the Windows SMB API.
+
+Create a service on the targeted host as RPCEvent {random decimal number} with one of the following command
+
+lines in order to establish a new share named $adnim on the targeted machine. Note the misspelling of the new
+share. The developer(s) specifically mislabeled the share to be close to the legit admin$ share. The use of the GRANT
+parameter occurs on targets who report their operating system as any value other than Windows 5.0, Windows
+5.1, or Windows 2002 (e.g., non-Windows NT based computers).
+cmd.exe /q /c net share adnim$=%SystemRoot% /GRANT :{username} ,FULL
+Figure 15-1: SierraBravo-One Share Command for Victims Using Windows 2000 or later
+cmd.exe /q /c net share adnim$=%SystemRoot%
+Figure 15-2: SierraBravo-One’s Share Command for Victims running Non-Windows NT Computers
+
+
+Copy the payload malware to targeted host’s %SYSDIR% directory via the new adnim$ share.
+
+
+Reads the local SierraJuliett-MikeOne’s seed list file ( mssscardprv.ax ) to obtain the first IP and port in the list.
+
+
+Create a new service called HelpEvent {same random decimal number as step #2} with the command line seen in
+
+
+Figure 15-1 in order to activate the SierraJuliett-MikeOne payload on the targeted machine.
+cmd.exe /c {Binary Name} {IP of Seed Node} {Port of Seed Node}
+Figure 15-3: SierraBravo-One’s SierraJuliett-MikeOne Activation Command
+
+The adnim$ share is deleted by issuing the command seen in Figure 15-4 under the same HelpEvent {...} service.
+
+cmd.exe /q /c net share adnim$ /delete
+Figure 15-4: SierraBravo-One’s Command to Delete the Previously Established Share
+After the installation (or attempted installation) of the SierraJuliett-MikeOne malware on the target machine,
+SierraBravo-One attempts to determine if the Windows Terminal Services port (3389) is accessible on the target. In order
+to make the accessibility determination, SierraBravo-One merely attempts to connect to the port. If the connection is
+successful (without any data transfer), SierraBravo-One considers the port available.

@@ -1,0 +1,122 @@
+
+
+
+Sentence : Lancer – An Installation Script
+While attempting to locate subtle differences in code between PWNLNX1 and PWNLNX2,
+BlackBerry researchers examined the C2 protocol to assess whether any modifications
+were made from the earlier implants. Upon closer inspection of the custom network
+protocol, an additional modification was inserted into one of the implants BlackBerry
+researchers associate with BRONZE UNION / APT27 (based upon C2) was observed.
+In this particular sample, one of the first items that will be communicated by the implant
+to the C2 is an encoded version of the string, “LinuxOK”. Fortunately, it turned out that
+this case-sensitive string was a lot less common than one would think.
+After some additional digging, BlackBerry researchers identified a set of Windows PEs
+named “lancer.exe”. These files turned out to be the Control Panel (discussed below)
+used to issue commands to this particular set of backdoors. The binaries utilized the
+exact same XOR key - “CB2FA36AAA9541F0” – for encoding network traffic as the key
+observed in both families of implants.
+Building on these discoveries, BlackBerry researchers identified a compressed bash
+shell script inside of another shell script that was responsible for installing the rootkit
+component of this particular variant on victim systems:
+“e60a3a93f3930dd13b5cb115d68e4989199e366212b9809f8fc87aaa54e8e683”.
+The initial script would write itself into a new file beginning at line 44 using the
+following command: “tail -n +44”. Then it would decompress the content using “gzip
+-cd” before executing the result. A similar script first appeared online in December of
+2014 (PrudentWoo, 2014), and that original code has been reused in a number of both
+malicious and benign scripts.
+D E C A D E O F T H E R A T S 20
+The installer script was over 400 lines long, including comments, and referred to itself
+internally as “Lancer Remote Online Compilation System v2.0”, which aligned with the
+naming scheme used in the Windows-based controllers (lancer.exe):
+Figure 7: The Installation Script Referred to Itself as “Lancer” Remote Online Compilation System
+The script was designed to run on both CentOS/RedHat systems and Debian/Ubuntu
+systems. It came complete with a number of broken English phrases, misspellings, and
+word swaps like “being” and “begin.” The version number indicated that there was likely
+more than one revision of this online build system. The script additionally confirmed
+earlier suspicions that at least one online build environment existed for compiling and
+delivering the custom LKM rootkits (Group 1).
+Three additional command line arguments were required for it to execute properly: a
+“username”, a “build”, and a third variable referenced as “force_mode”, which would
+force the build server to ignore an existing build for the current kernel and rebuild the
+LKM rootkit. The script communicated to one of two hosts depending on whether the
+installed kernel was 32-bit or 64-bit: “3232.3389[.]la” and “6464.3389[.]la” respectively.
+A combination of command line “curl” and “wget” commands were used to interact
+with the remote build server. If not present, a message would be printed to the console
+containing the commands to install the packages via “yum” or “apt-get”. If current kernel
+headers were not present on the system a similar message would be printed showing
+how to install them. The inclusion of these messages indicated the attacker(s) using
+the script were likely not the creator(s). The script would first authenticate to the remote
+server with the supplied command line arguments similar to the pseudo request below:
+GET /build/auth?args=username|build
+This would be followed by a check to see if an existing LKM was already compiled for
+the current header version:
+GET /build/check?args=version|kernel|force_mode&token={ result from auth request }
+If found, it would download, decompress, and install the module via an included “install.
+sh” script. Otherwise, the kernel headers would be compressed to /tmp/header.tar.gz
+and uploaded via a curl POST request to “/build/accept” with a number of additional
+arguments sent as form fields. Once uploaded successfully, another request would be
+made to the build server to compile the rootkit:
+GET /build/compiler?args=version|kernel|version_text&token={result from auth request}
+Once this process completed, the script would download the newly created LKM
+package, decompress, then install the module via the included “install.sh” script. It
+turned out this package of Gzip-compressed tarball would also contain the backdoors
+which were unique depending on which user was specified from the command line.
+D E C A D E O F T H E R A T S 21
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PWNLNX1", "type" : "APPS"},
+        {"id": 2, "description": "PWNLNX2", "type" : "APPS"},
+        {"id": 3, "description": "BRONZE UNION / APT27", "type" : "ACTO"},
+        {"id": 4, "description": "C2 protocol", "type" : "NETP"},
+        {"id": 5, "description": "lancer.exe", "type" : "EXEF"},
+        {"id": 6, "description": "Control Panel", "type" : "APPS"},
+        {"id": 7, "description": "XOR key - “CB2FA36AAA9541F0”", "type" : "TAMP"},
+        {"id": 8, "description": "“e60a3a93f3930dd13b5cb115d68e4989199e366212b9809f8fc87aaa54e8e683”", "type" : "IOCS"},
+        {"id": 9, "description": "“tail -n +44” command", "type" : "EXEF"},
+        {"id": 10, "description": "gzip -cd command", "type" : "EXEF"},
+        {"id": 11, "description": "Lancer Remote Online Compilation System v2.0", "type" : "APPS"},
+        {"id": 12, "description": "CentOS/RedHat systems", "type" : "OPPS"},
+        {"id": 13, "description": "Debian/Ubuntu systems", "type" : "OPPS"},
+        {"id": 14, "description": "“username” command line argument", "type" : "TAMP"},
+        {"id": 15, "description": "“build” command line argument", "type" : "TAMP"},
+        {"id": 16, "description": "“force_mode” command line argument", "type" : "TAMP"},
+        {"id": 17, "description": "3232.3389[.]la", "type" : "CCSH"},
+        {"id": 18, "description": "6464.3389[.]la", "type" : "CCSH"},
+        {"id": 19, "description": "curl command", "type" : "EXEF"},
+        {"id": 20, "description": "wget command", "type" : "EXEF"},
+        {"id": 21, "description": "yum package manager", "type" : "APPS"},
+        {"id": 22, "description": "apt-get package manager", "type" : "APPS"},
+        {"id": 23, "description": "install.sh script", "type" : "EXEF"},
+        {"id": 24, "description": "/build/auth?args=username|build", "type" : "URLS"},
+        {"id": 25, "description": "/build/check?args=version|kernel|force_mode&token={ result from auth request }", "type" : "URLS"},
+        {"id": 26, "description": "/build/accept", "type" : "URLS"},
+        {"id": 27, "description": "/build/compiler?args=version|kernel|version_text&token={result from auth request}", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "uses"},
+        {"source": 2, "target": 4, "rel_name" : "uses"},
+        {"source": 3, "target": 5, "rel_name" : "controls"},
+        {"source": 5, "target": 6, "rel_name" : "part of"},
+        {"source": 5, "target": 7, "rel_name" : "uses"},
+        {"source": 8, "target": 11, "rel_name" : "contained in"},
+        {"source": 9, "target": 11, "rel_name" : "used by"},
+        {"source": 10, "target": 11, "rel_name" : "used by"},
+        {"source": 12, "target": 11, "rel_name" : "runs on"},
+        {"source": 13, "target": 11, "rel_name" : "runs on"},
+        {"source": 14, "target": 11, "rel_name" : "required by"},
+        {"source": 15, "target": 11, "rel_name" : "required by"},
+        {"source": 16, "target": 11, "rel_name" : "required by"},
+        {"source": 17, "target": 11, "rel_name" : "communicates with"},
+        {"source": 18, "target": 11, "rel_name" : "communicates with"},
+        {"source": 19, "target": 11, "rel_name" : "used by"},
+        {"source": 20, "target": 11, "rel_name" : "used by"},
+        {"source": 21, "target": 11, "rel_name" : "installs via"},
+        {"source": 22, "target": 11, "rel_name" : "installs via"},
+        {"source": 23, "target": 11, "rel_name" : "used by"},
+        {"source": 24, "target": 17, "rel_name" : "sends to"},
+        {"source": 25, "target": 17, "rel_name" : "checks with"},
+        {"source": 26, "target": 17, "rel_name" : "uploads to"},
+        {"source": 27, "target": 17, "rel_name" : "compiles via"}
+    ]
+}

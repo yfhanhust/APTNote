@@ -1,0 +1,70 @@
+
+
+
+Sentence : DrvIX: A Custom BYOVD Loader
+The first custom tool the attackers used was a binary named agmt.exe, which was
+compiled on Oct. 7. According to its PDB path
+(C:\Users\dude\source\repos\drvix\x64\Release\drvix.pdb), it appears that this tool’s
+original name is drvIX (shown in Figure 38).
+Figure 38. agmt.exe PDB path and compilation date.
+However, according to the binary help function shown in Figure 39, the name is Drvtopia.
+Figure 39. DrvIX help section mentions Drvtopia.
+Agmt.exe is a custom loader and operator for the GMER driver, gmer64.sys (renamed to
+AGMT.sys). GMER’s original intended purpose is to detect and remove rootkits; however,
+threat actors can also leverage it to remove security products. Using agmt.exe, the
+attackers can specify the PID of the target process they wish to terminate via the
+command line.
+Agmt.exe starts by registering GMER a new kernel driver (agmt.sys) as a service named
+AGMT and starting it, which in turn causes the operating system to load the driver into the
+kernel.
+To communicate and abuse the GMER functionality of terminating processes, agmt.exe
+retrieves a device handle to GMER’s device object as shown in Figure 40.
+Figure 40. Agmt.exe opens a handle to the GMER device object.
+https://unit42.paloaltonetworks.com/agonizing-serpens-targets-israeli-tech-higher-ed-sectors/ 23/29
+1/16/24, 1:00 PM Agonizing Serpens (Aka Agrius) Targeting the Israeli Higher Education and Tech Sectors
+Then, agmt.exe uses DeviceIoControl Windows API with the control code 0x9876C094,
+while specifying the PID in the Input_Buffer parameter of the call (shown in Figure 41).
+Figure 41. Agmt.exe communicates with the GMER driver for terminating processes.
+DeviceIoControl allows user mode processes to directly communicate with kernel drivers,
+allowing the processes to request the drivers to service certain operations for them.
+In the case of agmt.exe, the DeviceIoControl API call triggers a process termination
+operation for the GMER driver. Figure 44 shows that by inspecting the GMER driver, we
+can determine that the functionality of the 0x9876C094 control code is to terminate the
+target process provided by PID.
+Figure 42. GMER 0x9876C094 control code
+functionally.
+The function opens a handle to the target process PID using ZwOpenProcess and then
+terminates it by calling ZwTerminateProcess.
+The attempt to leverage the GMER driver failed, as shown in Figure 43 below.
+Figure 43. Loading of the GMER driver being blocked by the Cortex XDR Platform.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "agmt.exe", "type" : "EXEF"},
+        {"id": 2, "description": "DrvIX (original name)", "type" : "TAMP"},
+        {"id": 3, "description": "Drvtopia (alternative name)", "type" : "TAMP"},
+        {"id": 4, "description": "gmer64.sys", "type" : "EXEF"},
+        {"id": 5, "description": "AGMT.sys", "type" : "EXEF"},
+        {"id": 6, "description": "GMER driver", "type" : "TAMP"},
+        {"id": 7, "description": "C:\\Users\\dude\\source\\repos\\drvix\\x64\\Release\\drvix.pdb", "type" : "SYSP"},
+        {"id": 8, "description": "AGMT (service name)", "type" : "TAMP"},
+        {"id": 9, "description": "DeviceIoControl API", "type" : "APPS"},
+        {"id": 10, "description": "0x9876C094 (control code)", "type" : "TAMP"},
+        {"id": 11, "description": "ZwOpenProcess function", "type" : "APPS"},
+        {"id": 12, "description": "ZwTerminateProcess function", "type" : "APPS"},
+        {"id": 13, "description": "Cortex XDR Platform", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 7, "rel_name" : "has PDB path"},
+        {"source": 1, "target": 4, "rel_name" : "renames to"},
+        {"source": 1, "target": 5, "rel_name" : "registers as service"},
+        {"source": 1, "target": 8, "rel_name" : "starts service"},
+        {"source": 1, "target": 6, "rel_name" : "communicates with"},
+        {"source": 9, "target": 6, "rel_name" : "uses to communicate with"},
+        {"source": 9, "target": 10, "rel_name" : "uses control code"},
+        {"source": 10, "target": 6, "rel_name" : "triggers process termination in"},
+        {"source": 11, "target": 6, "rel_name" : "opens handle to process in"},
+        {"source": 12, "target": 6, "rel_name" : "terminates process in"},
+        {"source": 6, "target": 13, "rel_name" : "blocked by"}
+    ]
+}

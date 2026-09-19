@@ -1,0 +1,178 @@
+
+
+
+Sentence : Serialization:
+This was more complex. Both the client and server uses the same API, but the client serializer
+cannot serialize server objects, because they are not the same as their “mirrored” objects
+inside the client. In some cases these objects are completely different, for example the server�
+commands to get the file system.�
+Our solution is to:
+1. Translate on the fly the objects the server send to mirrored matching client objects (will�
+not work if client doesn’t have this object, or renamed it).
+2. Copy the content from the server object into the new client object (will not work if client
+implementation is different).�
+3. Serialize the client object (which will be later encrypted and sent).
+4. Deserialize the decrypted response into another client response object.
+5. Translate the client response object into the server version of the client response object.
+6. Copy the contents from the client response object into the translated server object.
+7. Return the translated object.
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+public static void SerializeWrapper(Stream stream, object data)
+{
+System.Reflection.Assembly assembly = System.Reflection.Assembly.LoadFile(@"C:\Users\user
+oadClient\resource.bin.open.exe");
+Type serializerType = assembly.GetType("_.Cr.NetSerializer.Serializer");
+System.Reflection.PropertyInfo serInstanceProp = serializerType.GetProperty("Instace");
+object serInstance = serInstanceProp.GetGetMethod().Invoke(null, new object[] { });
+System.Reflection.MethodInfo serializeMet = serializerType.GetMethod("Serialize");
+Type typeOfData = data.GetType(); string typeOfDataFullName = typeOfData.FullName;
+string typeOfDataFullNameNew = typeOfDataFullName.Replace("xServer.Core", "_.Cr");
+Type packType = assembly.GetType(typeOfDataFullNameNew);
+object pacTypeInstance = packType.GetConstructor(new Type[] { }).Invoke(new object[] { })
+// now try to copy data into the instance
+foreach (FieldInfo fieldOfClient in packType.GetFields())
+{
+string fieldName = fieldOfClient.Name;
+FieldInfo fieldOfServer = typeOfData.GetField(fieldName);
+PropertyInfo PropOfServer = typeOfData.GetProperty(fieldName);
+object serverValue = null;
+if (fieldOfServer != null) {
+serverValue = fieldOfServer.GetValue(data);
+} else if (PropOfServer != null) {
+serverValue = PropOfServer.GetValue(data,null);
+} fieldOfClient.SetValue(pacTypeInstance, serverValue);
+}
+foreach (PropertyInfo fieldOfClient in packType.GetProperties())
+{
+string fieldName = fieldOfClient.Name;
+FieldInfo fieldOfServer = typeOfData.GetField(fieldName);
+PropertyInfo PropOfServer = typeOfData.GetProperty(fieldName);
+object serverValue = null;
+if (PropOfServer != null) {
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+serverValue = PropOfServer.GetValue(data, null);
+}
+else if (fieldOfServer != null) {
+serverValue = fieldOfServer.GetValue(data);
+}
+fieldOfClient.SetValue(pacTypeInstance, serverValue,null);
+}
+serializeMet.Invoke(serInstance, new object[] { stream, pacTypeInstance });
+}
+public static object DeserializeWrapper(Stream stream) {
+System.Reflection.Assembly assembly = System.Reflection.Assembly.LoadFile(@"C:\Users\use
+oadClient\resource.bin.open.exe");
+Type serializerType = assembly.GetType("_.Cr.NetSerializer.Serializer");
+System.Reflection.PropertyInfo serInstanceProp = serializerType.GetProperty("Instace");
+object serInstance = serInstanceProp.GetGetMethod().Invoke(null, new object[] { });
+System.Reflection.MethodInfo DeserializeMet = serializerType.GetMethod("Deserialize");
+object ob = DeserializeMet.Invoke(serInstance, new object[] { stream });
+Type typeOfPacket = ob.GetType(); string typeOfPacketFullName = typeOfPacket.FullName;
+string typeOfPacketFullNameNew = typeOfPacketFullName.Replace("_.Cr", "xServer.Core");
+System.Reflection.Assembly currentAssembly = Assembly.GetExecutingAssembly();
+Type packTypeServ = currentAssembly.GetType(typeOfPacketFullNameNew);
+object pacTypeInstance = packTypeServ.GetConstructor(new Type[] { }).Invoke(new object[]
+// now try to copy data into the instance
+foreach (FieldInfo fi in typeOfPacket.GetFields()) {
+string fieldName = fi.Name;
+FieldInfo fiServ = packTypeServ.GetField(fieldName);
+if (fiServ != null) {
+object clientSentValue = fi.GetValue(ob);
+fiServ.SetValue(pacTypeInstance, clientSentValue);
+}
+}
+foreach (PropertyInfo fi in typeOfPacket.GetProperties()) {
+string fieldName = fi.Name;
+PropertyInfo fiServ = packTypeServ.GetProperty(fieldName);
+if (fiServ != null) {
+object clientSentValue = fi.GetValue(ob,null);
+fiServ.SetValue(pacTypeInstance, clientSentValue,null);
+}
+}
+return pacTypeInstance;
+}
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "C:\\Users\\useroadClient\\resource.bin.open.exe", "type" : "EXEF"},
+        {"id": 2, "description": "_.Cr.NetSerializer.Serializer", "type" : "APPS"},
+        {"id": 3, "description": "xServer.Core", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loads"},
+        {"source": 2, "target": 3, "rel_name" : "interacts with"}
+    ]
+}

@@ -1,0 +1,158 @@
+Main program
+The main program’s internal name is msdocuments but the attackers rename it depending on
+the social engineering theme used against the target. We have observed names like
+securescan.exe and wservices.exe . The original internal version we analyzed was 1.0.0.0,
+which implements a primitive communication protocol with the C&C server that only supports
+updates. This communication happens through a high TCP port; ports 1337, 9990, 9999 and
+others have been observed. Once the client connects for the first time to the server, it stays
+quiet. Then the server responds with a string: “info=command”, which the client does not
+immediately reply to. After a brief moment, the client starts sending the following command:
+updatc=  |    | WINDOWS  
+In this command, the client is requesting an update for the infected computer.  refers to
+the logged in user name and  to the hostname of the infected PC. “WINDOWS” is a
+12
+Trend Micro | Operation C-Major: Information Theft Campaign Targets Military Personnel in India
+hardcoded string, although we have not seen other OS ports of this Trojan.  is a
+key string that the client assigns based on an analysis of the process list. If no active antivirus
+program is found, this string is “Not.Found”. Otherwise, there are a few strings, like
+“[Kaspersky]”, “[Symantec]”, “[Microsoft-Security-Essentials]” or a generic “[Anti-Malware”].
+Trend Micro is not on the list, although an Indian vendor's AV is: “[Quick-Heal]”. Perhaps this is
+a reflection of the AV market share of the region the developer is from or where the expected
+target might be.
+The reply to the update request coming from the server is the following:
+updatc=client=\wservices.exe
+This binary is an updated version of the main program, which will replace the older version. The
+malware writes the new version to disk and starts it up.
+The new malware sample has a version number 1.0.0.6 and the communication protocol is
+much more comprehensive. Whereas the old one had only three commands ( updatec, info, and
+upsecs ), this new one supports 40.
+The downloader program seems to be the spearhead part of the attack, but the new version
+looks like the real client. Each of the EXEs in this attack group seem to have an internal name
+assigned to them. In this case, the downloader’s is DOSERS and the main client program’s is
+FORYUO ”. This string will later be used as a prefix of each command, perhaps to identify the
+version of the client.
+Once the new client starts up, it establishes again a TCP connection with the same server and
+port and stays quiet. As usual, the server responds with an “info=command”, which the client
+doesn’t immediately respond to. The client then sends a full info command, telling the server
+more information. This is the command observed:
+FORYUOR-info=user ||||||
+FORYUOR-uklog>
+FORYUOR-sndps>
+FORYUOR-secup>
+FORYUOR-audio>
+FORYUOR-usbdiv>
+FORYUOR-sapp=httpscan<\Scaner>
+FORYUOR-kapp=svehost<\services>
+FORYUOR-uapp=udriver<\Drivers>
+FORYUOR-papp=servicescan<\services>
+FORYUOR-mapp=httpservice<\Windows Data>||c:\Documents and
+Settings\user\Application Data\Windows Data\
+13
+Trend Micro | Operation C-Major: Information Theft Campaign Targets Military Personnel in India
+ refers to the MAC address of the network card used to connect.  refers to the
+client version. In our sample, this was “Microsoft-1.0.0.6”. The rest of the fields point to the
+many modular components of the attack. “uklog” refers to the keylogger binary, “sndps” to the
+sound binary, “secup” to the backup client process, “audio” to the audio driver and “usbdi” to the
+filestealing module. On first call, this set of commands is empty, as shown above, although the
+directory paths assigned to them are already decided and set up by the client program. The
+path where each of them will reside, are sent in the last few lines (the commands “sapp” (the
+backup program), “kapp” (the keylogger), “uapp” (the file stealing module), “papp” (a password
+stealing module not requested although the path is already set up) and “mapp” (the main
+application).
+The response to this message coming from the C&C server brings all the binaries that the client
+has requested (keylogger, sound module, audio driver, filestealing module and backup module):
+uclntn=98
+uklog=loger=\svshost.exe
+secup=client=\servicescan.exe
+audio=mcaudio=\Naudio.dll
+update=usbdriver=\udriver.exe
+The TCP connection is left open and the C&C server will be sending a ping command at
+specified intervals to keep it that way:
+clping=Ping
+Other commands supported by the 1.0.0.6 version of the clients shed more light on what the
+purpose of this threat really is. Here is a list of all the commands and a brief explanation of their
+functionality:
+  afile: Functionality not identified
+
+  - audio: Updates the audio driver
+
+  clping: Sets last communication time to current time
+
+  clrklg: Stops and deletes the keylogger module
+
+  - cnls: Enables “Cnls” capability
+
+  - cscreen: Takes screenshot and uploads it to server
+
+  - delt: Deletes a file on disk
+
+14
+Trend Micro | Operation C-Major: Information Theft Campaign Targets Military Personnel in India
+  - dirs: Lists drives in the system, then uploads results to server
+
+  - dowf: Downloads a file from the server
+
+  - dowr: Downloads a remote executable file and runs it
+
+  - endpo: It quits the main program
+
+  file: Uploads a file to the server
+
+  - filsz: Provides filesize
+
+  fldr: Lists folders on disk, then uploads it to server
+
+  - fles: Searches files on disk
+
+  info: Sends pc info (MAC, user, hostname, AV, etc.)
+
+  klgs: No functionality. Possibly a remnant of an older version.
+
+  listf: Looks for files with certain extensions on any disk
+
+  mesg: Send a message to the user. It displays a MessageBox
+
+  - passl: Runs password logger, then uploads results to server
+
+  - procl: Lists all windows processes and uploads the results to server
+
+  runf: Runs an executable in a separate process
+
+  rupth: Sends back the path where the main program is located
+
+  - savaf: Saves a remote file to the infected PC
+
+  - scren: Takes a screenshot
+
+  - scrsz: Sets screenshot size
+
+  - secup: Updates the backup module
+
+  - sndpl: Updates password logger, runs it and uploads results to server
+
+  - sndps: Updates password stealing module
+
+  splitr: Splits a file in pieces. Possibly to steal bigger files more efficiently.
+
+  - stops: Disables screenshot capability
+
+  stpre: Stops audio recording
+
+  stsre: Starts audio recording
+
+  - sysky: Uploads keylogs to server
+
+  thumb: Saves an image to disk (of the current application, possibly)
+
+  uclntn: Sets a version number in the registry. It looks like a sequential number
+
+  - udlt: Downloads a "remove user" module and runs it
+
+  - uklog: Updates the keylogger module
+
+  - updatc: Updates main module
+
+  updatu or usbwrm: Updates file stealing module
+
+15
+Trend Micro | Operation C-Major: Information Theft Campaign Targets Military Personnel in India

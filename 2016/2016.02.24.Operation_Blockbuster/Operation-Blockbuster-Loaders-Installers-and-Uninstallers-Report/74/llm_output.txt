@@ -1,0 +1,74 @@
+
+
+
+Sentence : Operation Blockbuster: Loaders, Installers and Uninstallers Report 58
+```
+  i = dwDataKeyIndex;
+do
+{
+  *p++ ^= commKey[i];
+  i = dwDataKeyIndex++ + 1;
+  if ( dwDataKeyIndex == 4 )
+  {
+i = 0;
+dwDataKeyIndex = 0;
+  }
+  --dwBytesRemaining;
+  }
+  while ( dwBytesRemaining );
+```
+Figure 17-2: LimaDelta’s Communication Encryption/Decryption Scheme’s Code
+It is interesting that the developer(s) of LimaDelta paid attention to the SysInternal tools while there is no other indication
+within the LimaDelta code base that tools such as debuggers are of any concern. The method by which LimaDelta
+determines if the SysInternal tools are present and active on the victim’s computer is the identification of window class
+names from the tools. For the tool Process Monitor, LimaDelta looks for the window class PROCMON_WINDOW_CLASS
+while for Registry Monitor and File Monitor—two tools that have been out of active circulation since September 19,
+2009 due to their integration into Process Monitor—LimaDelta looks for the window class 18467-41 . Conceivably, the
+inclusion of an indicator that these tools were active at the time of the infection could change the behavior of the C2
+server’s responses, but without an active C2 server to test against, this is only a theory.
+Task 2 consists of LimaDelta receiving the name for a file to store on the victim’s computer, uploading the contents of the
+file to the C2 server, receiving a data blob, and saving the data to the same file on the victim’s disk. It is not immediately
+clear the purpose of the file that LimaDelta and the C2 server exchange, but there is a limitation that the file cannot
+exceed 100 bytes. The content of the file is not used by LimaDelta, and without a filename it is not possible to speculate as
+to what malware family it may relate to.
+The C2 server is not the ultimate end point from which LimaDelta receives the binary to load. Instead, the next task (Task
+3) consists of LimaDelta receiving a DWORD containing the number of download server records that the C2 server is
+going to send, followed by the download server records themselves. LimaDelta accepts a maximum of 10 download server
+records. The records are 6 bytes in length, with the first four bytes being the IP address of the download server and the
+last two bytes being the port the download server listens to. Following the download of server records, the C2 server sends
+another 4-byte value identifying the number of bytes that the C2 server is going to transmit. The C2 server then transmits
+up to 1KB of data which becomes the basis for the configuration data that LimaDelta passes to the installation function in
+Task 8. The connection to the C2 server is terminated upon completion of the data blob transfer.
+LimaDelta uses the same function to randomly select from the provided download server records and perform the
+same form of authentication as was done when the malware contacted the C2 server (Task 4). Following a successful
+authentication to a download server, LimaDelta sends another system information packet to the download server as it did
+with the C2 server (Task 5), with the exception that the optional payload section now contains the first 14 bytes of the data
+blob to be passed to the installation function.
+After LimaDelta sends the system information data (along with the additional 14-byte payload), the download server will
+respond with a 16-byte array. The contents of the 16-byte array are disregarded by all variants except LimaDelta-One,
+which ultimately passes the array to the installation function. LimaDelta must generate a filename before the file can be
+loaded into memory. The name that LimaDelta generates is variant-specific, but it is always sent as a .dll .
+In order to transfer the DLL (Task 6), LimaDelta receives a 4-byte value, a DWORD, indicating the size of the file from the
+download server. LimaDelta receives the file in 12288 byte transmissions from the download server. To confirm the file was
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "LimaDelta", "type" : "ACTO"},
+        {"id": 2, "description": "SysInternal tools", "type" : "APPS"},
+        {"id": 3, "description": "Process Monitor", "type" : "APPS"},
+        {"id": 4, "description": "Registry Monitor", "type" : "APPS"},
+        {"id": 5, "description": "File Monitor", "type" : "APPS"},
+        {"id": 6, "description": "C2 server", "type" : "CCSH"},
+        {"id": 7, "description": "download server records", "type" : "CCSH"},
+        {"id": 8, "description": ".dll file", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "checks for presence of"},
+        {"source": 2, "target": 3, "rel_name" : "includes"},
+        {"source": 2, "target": 4, "rel_name" : "includes"},
+        {"source": 2, "target": 5, "rel_name" : "includes"},
+        {"source": 1, "target": 6, "rel_name" : "communicates with"},
+        {"source": 1, "target": 7, "rel_name" : "receives from"},
+        {"source": 1, "target": 8, "rel_name" : "downloads"}
+    ]
+}

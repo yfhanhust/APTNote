@@ -1,0 +1,125 @@
+6. Attack details – dictionary and scripts
+The file dstrlog.dat contains a ClanDB for names and terms used by the malware, an SQLite
+database used for attacks. This file is loaded through libclandb.lua by SQL commands, and
+the database is accessed using Lua scripts. We disclose detailed description of the SQLite
+database to show the SQL tables used for attacks. The attackers even take care of versions,
+and update the structure if necessary. The sample below shows a version upgrade script.
+```
+if userVer == 1 or userVer == 2 then l_26_0:exec("\n
+ALTER TABLE entities ADD COLUMN tool_id INTEGER NULL;\n
+ALTER TABLE entities ADD COLUMN first_update_dt DATETIME INTEGER NULL;\n
+ALTER TABLE entities ADD COLUMN last_update_dt DATETIME INTEGER NULL;\n
+ALTER TABLE entities ADD COLUMN last_ip_update_dt DATETIME INTEGER NULL;\n
+ALTER TABLE metadata ADD COLUMN first_update_dt DATETIME INTEGER NULL;\n
+ALTER TABLE metadata ADD COLUMN last_update_dt DATETIME INTEGER NULL;\n
+ALTER TABLE attack_log ADD COLUMN home_id INTEGER NULL;\n
+ALTER TABLE attack_log ADD COLUMN date_dt DATETIME INTEGER NULL;\n
+ALTER TABLE attack_queue ADD COLUMN min_attack_interval INTEGER NULL;\n
+ALTER TABLE attack_queue ADD COLUMN home_id INTEGER NULL;\n      ALTER TABLE
+attack_queue ADD COLUMN last_try_date_dt DATETIME INTEGER NULL;\n
+ALTER TABLE attack_queue ADD COLUMN igno
+re_max BOOLEAN INTEGER NOT NULL DEFAULT 0;\n\n\t\t\tCREATE TABLE IF NOT EXISTS
+cruise_attack_log (\n\t\t\t log_id INTEGER NOT NULL REFERENCES
+attack_log(line_id),\n\t\t\t user_sid TEXT NOT NULL,\n\t\t\t usersKyWIper TEXT
+NULL\n\t\t\t);\n\n
+\t\t\tCREATE TABLE IF NOT EXISTS options_per_entity (\n\t\t\t entity_id INTEGER
+NOT NULL,\n\t\t\t attack_type TEXT NOT NULL,\n\t\t\t cred_id INTEGER
+NULL,\n\t\t\t retries_left INTEGER NULL\n\t\t\t);\n\n      CREATE TABLE IF
+NOT EXISTS attack_params (\n         attack_queue_id INTEGER NOT NULL,\n
+name TEXT NOT NULL,\n
+value NUMERIC NULL,\n\n
+PRIMARY KEY(attack_queue_id, name)\n      );")
+```
+Figure 42 – ClanDB update if version is too old
+There are a number of names and phrases in the database used in the code of the malware.
+Deeper analysis is needed to fully understand all these references. Here, we include the
+result of our initial investigation with a note that these interpretations might not be correct.
+Boost: Possibly information gathering based on enquiries received from remote parties.
+Flame : Common name for attacks, most likely by exploits. Ef_trace.txt relation.
+%temp%\dat3C.tmp and %systemroot%\temp\msdclr64.ocx related.
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 44
+Flask : Attacks can be Jimmy or Flask. Probably Flask is one flame. Not sure.
+Jimmy : A specific CLAN attack type, but also a flame. CLAN probably refers to a local
+network attack while flame can be anything. Based on dll:
+“c:\Projects\Jimmy\jimmydll_v2.0\JimmyForClan\Jimmy\bin\srelease\jimmydll\inds
+vc32.pdb” reference can be found in it
+Movefile: No information
+Munch : Installation/propagation mechanism related to windows update and web
+downloads. Strings and possibly code can be found in mscrypt.dat
+```
+MUNCH.GENERIC_BUFFERS.4.data.PATTERN
+?/windowsupdate/?/?elf?pdate/WSUS3/x86/Vista/WUClient-SelfUpdate
+ActiveX~31bf3856ad364e35~x86~~7.0.6000.381.cab??
+v6/windowsupdate/redir/wuredir.cab
+v7/windowsupdate/redir/wuredir.cab
+v8/windowsupdate/redir/muv3wuredir.cab
+v9/windowsupdate/redir/muv4wuredir.cab
+VISTA_7_VERSION_S
+*/version_s.xml
+MUIDENT
+muident.cab
+/windowsupdate/?/?elf?pdate/WSUS3/x86/Vista/wsus3setup.cab
+download.windowsupdate.com/v6/windowsupdate/?/SelfUpdate/AU/x86/XP/en/wusetup.cab
+/v9/windowsupdate/?/SelfUpdate/AU/x86/W2KSP2/*/wusetup.cab
+/v9/windowsupdate/?/?elf?pdate/WSUS3/x86/Other/wsus3setup.cab
+v7/windowsupdate/redir/wuredir.cab
+v9/windowsupdate/redir/muv4wuredir.cab
+```
+Figure 43 – Munch attack related interesting strings
+SFS : Storage files. Some DAT files, like ntcache.dat, lmcache.dat.
+Snack : Related to Munch attack, possibly part of local propagation by exploit.
+Spotter : Possibly some scanner
+Transport : Replication method. Exploit-based propagation is most likely called flame, while
+that based on bad access permissions is a “Transport”. E.g. “NU” or “NUSystem”
+refers to “net use” way of propagation.
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 45
+Figure 44 – Net use based propagation targets get configured
+Euphoria : “EuphoriaApp” handling. Related to a “Flame” attack. Related to “mediaId”.
+Possibly file leaking after successful attack.
+BUENO_FLAME_DLL_KEY – pointer to a large 1 MB binary in wpgfilter.dat
+CONFIG_TABLE : Referred from Lua code for configuration directives. Contains lot of
+parameters for attacks. Not sure which configuration is that.
+Headache : Related to multiple attacks, possibly additional parameters or properties of the
+attacks.
+Multiple phrases are related to animals in the malware:
+Gator : Windowsupdate based internet-check. If everything successful, things go on. If not,
+then there is a minimum and maximum waiting time defined, and a multiplier to
+increase retries slowly.
+Goat : Possibly C&C communications to GOAT servers
+Frog : ??
+Beetlejuice : ??
+Microbe : ??
+Weasel : ??
+Great work is going on the topic! on 30/05 new information was published by Kasperksy
+It’s available at https://www.securelist.com/en/blog?weblogid=208193538#w208193538
+We updated this document to reflect up-to-date information on 30/05/2012.
+So from Kaspersky:
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 46
+Here is a brief overview of the available units. The names were extracted from the binary and
+|Here is a brief ove the 146 resource.|erview of the available units. The names were extracted from the binary and|
+|---|---|
+|Beetlejuice|~~Bluetooth: enumerates devices around the infected machine.~~May turn itself into a “beacon”: announces the computer as a discoverabledevice and encode the status of the malware in device information usingbase64.|
+|Microbe|~~Records audio from existing hardware sources. Lists all multimedia devices,~~stores complete device configuration, tries to select suitable recordingdevice.|
+|Infectmedia|~~Selects one of the methods for infecting media, i.e. USB disks. Available~~methods: Autorun_infector, Euphoria.|
+|Autorun_infector|~~Creates “autorun.inf” that contains the malware and starts with a custom~~“open” command. The same method was used by Stuxnet before itemployed the LNK exploit.|
+|Euphoria|~~Create a “junction point” directory with “desktop.ini” and “target.lnk” from~~LINK1 and LINK2 entries of resource 146 (were not present in the resourcefile). The directory acts as a shortcut for launching Flame.|
+|Limbo|~~Creates backdoor accounts with login “HelpAssistant” on the machines~~within the network domain if appropriate rights are available.|
+|Frog|~~Infect machines using pre-defined user accounts. The only user account~~specified in the configuration resource is “HelpAssistant” that is created bythe “Limbo” attack.|
+|~~Munch~~|~~HTTP server that responds to “/view.php” and “/wpad.dat” requests.~~|
+|Snack|~~Listens on network interfaces, receives and saves NBNS packets in a log~~file. Has an option to start only when “Munch” is started. Collected data isthen used for replicating by network.|
+|Boot_dll_loader|~~Configuration section that contains the list of all additional modules that~~should be loaded and started.|
+|~~Weasel~~|~~Creates a directory listing of the infected computer.~~|
+|~~Boost~~|~~Creates a list of “interesting” files using several filename masks.~~|
+|~~Telemetry~~|~~Logging facilities~~|
+|Gator|~~When an Internet connection becomes available, it connects to the C&C~~servers, downloads new modules, and uploads collected data.|
+|Security|~~Identifies programs that may be hazardous to Flame, i.e., anti-virus~~programs and firewalls.|
+|~~Bunny~~DbqueryDrillerHeadacheGadget|The purpose of these modules is not yet known.|
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 47

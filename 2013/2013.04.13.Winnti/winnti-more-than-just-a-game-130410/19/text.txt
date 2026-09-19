@@ -1,0 +1,58 @@
+First Step Analysis
+Quick search through the dumped processes revealed IP addresses mentioned by the company's security officers.
+Suspected malicious IP address in svchost.exe memory of Machine #1.
+Suspected malicious IP address in svchost.exe memory of Machine #2.
+PAGE 26| “Winnti” | More than just a game
+We checked memory around location of the IP address and found no signs of executable code. The memory was
+most likely dynamically allocated on process heap and used as a temporary storage of resolved domain name. That
+is why we had to find another indicator of malicious module related to those IP addresses.
+We initiated a port scan of the suspected hosts in parallel to memory analysis. Below is the result on the time of
+scanning:
+Nmap scan report for 113.196.70.169
+Host is up (0.29s latency).
+Not shown: 997 filtered ports
+PORT   STATE SERVICE    VERSION
+21/tcp  open  ftp      Xlight ftpd 2.0
+80/tcp  closed http
+3389/tcp open  ms-wbt-server Microsoft Terminal Service
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+The server was running Windows Terminal Service or was used as a proxy linked to some Terminal Server.
+Establishing connection via RDP client usually reveals default system locale which is used on welcome screen.
+Below is what we found upon connection:
+Chinese locale on terminal server welcome screen at 113.196.70.169
+PAGE 27| “Winnti” | More than just a game
+Checking one of IP addresses on robtex.com brought two possible domain names:
+Robtex shared host names for IP 113.196.70.169.
+One of these domains was found in the memory of dumped svchost process.
+Domain name related to the suspected IP address on Machine #2.
+Part of executable configuration seen in svchost memory dump of Machine #1.
+PAGE 28| “Winnti” | More than just a game
+Googlefiles.net domain was also found in svchost dump of the Machine #1. Besides that, several other domain
+names were discovered in the same memory block:
+service.interdriver.net
+service.googlefiles.net
+service.dell-support.org
+service.hp-supports.com
+Next step was to locate the nearest PE header in the memory of svchost and extract the executable module. After
+fixing alignment of the sections the file was ready for further static analysis.
+Date and time from PE header showed that the executable was prepared about a year before current attack was
+revealed:
+TimeDateStamp:  "2011-10-13 07:21:50"
+The executable was a 64-bit application which means that the attackers had already known that CompanyXYZ used
+64-bit systems.
+The IP address 188.120.246.88, which was seen in suspicious connection was also checked. Connecting to the port
+80 of that address with simple TCP client displayed an HTTP GET request:
+GET /G-Content_XYZ.rar HTTP/1.1
+Accept: /
+Cache-Control: no-cache
+Connection: Keep-Alive
+Host: 127.0.0.1:81
+Pragma: no-cache
+Range: bytes=23021988299-27335921161
+Referer: http://127.0.0.1:81
+User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)
+Usually the request is sent by the connecting client, but here the chat between client and server is obviously
+inversed. That is probably done by the attackers’ tunneling setup which established a TCP connection with some
+local web server within the company network and an external host that received the stolen data. According to the
+request, the attackers were downloading a file called G-Content_XYZ.rar, which seems to be an archive of over
+25Gb long. The transfer process was instantly interrupted by Security Officers of the company.

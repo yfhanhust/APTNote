@@ -1,0 +1,105 @@
+
+
+
+Sentence : 五、 安装植入：无自启动，如何持久？
+在持续化攻击对抗中， APT 组织比较难解决的问题之一是开机启动。因为一旦木马通过
+修改注册表、服务、计划任务等方式实现自启动，往往也触发杀毒软件的主动防御功能，会
+给用户以警觉，并且木马会很容易进入杀毒软件的视野。
+1） 修改快捷方式
+在 APT-C-12 中，释放的 RAT 首先会修改开始菜单的程序里面的所有快捷方式，指向
+rundll32 ，加载起来后门 dll ，同时实现快捷方式的正常功能，所以很难发现异常。
+图 20 实现相关功能的恶意批处理脚本部分截图（APT-C-12 组织）
+2） 利用 DLL 劫持
+在 Windows 操作系统中，可执行文件 EXE 在执行过程中，往往需要加载动态链接库 DLL ，
+加载优先顺序是：当前目录、系统目录、环境变量。在 WindowsXP 操作系统中，并没有对
+系统 DLL 加以特殊限制，使得木马可以在当前可执行 EXE 目录中伪装系统 DLL ，在可执行文
+件 EXE 执行过程中，正因加载顺序机制，会优先加载当前目录下同名伪装的 DLL 。（在
+Windows7 等后期操作系统中，加载系统 DLL 时默认从系统目录加载，默认情况下无法使用
+该漏洞）
+在 APT-C-01 攻击中，攻击者先伪造一个系统同名的 DLL ，提供同样的输出表，每个输出
+函数转向真正的系统 DLL 。程序调用系统 DLL 时会先调用当前目录下伪造的 DLL ，完成相关
+15 Hacking Team “军火库”泄漏企业需高度警惕漏洞攻击， http://bobao.360.cn/news/detail/1740.html
+21
+功能后，再跳到系统 DLL 同名函数里执行。木马作者将用于劫持的 DLL 释放到事先预知的开
+机会启动的第三方程序目录中，实现开机启动木马的目的。
+|应用名称|具体路径|
+|---|---|
+|搜狗输入法|C:\program files\sogouinput\components\xxx.dll|
+|阿里旺旺|C:\program files\aliwangwang\8.00.34c\xxx.dll|
+表 9 第三方程序目录示例（APT-C-01 组织）
+当用户下次开机或重启时进入系统时，第三方软件会自动启动，但是由于 DLL 劫持漏洞
+的存在，也就自动加载了木马。操作系统在执行 EXE 之前，先会初始化 DLL 环境， DLLMain
+函数会在 EXE 程序 Main 函数执行之前优先被执行。木马作者正是利用了这点，把恶意代码
+编写到 DLLMain 中，这样做就能在很大概率上保证木马比杀毒软件的 EXE 进程优先执行。而
+在开机启动的瞬间，杀毒软件有可能还没有完成初始化过程，主动防御和自我保护功能往往
+还没有生效。木马正是利用这短暂的时机，释放并启动下一步所需要的另一个驱动级木马。
+3） 无自启动
+卡巴斯基发布的 Duqu2.0 报告中，我们可以看到 Duqu2.0 只存活在内存当中，为了达到
+其持久性攻击者选择长时间运行的服务器。从 Duqu2.0 这个实例，我们不仅仅看到了从单一
+机器突破到感染整个网络的过程，另外也体会到攻击者的自信。
+我们发现的如 APT-C-00 、 APT-C-05 、 APT-C-12 等 APT 组织中，所使用的部分 RAT 也是没
+有自启动功能的，这些 RAT 并非单一的功能模块，而是完整独立的后门程序。没有自启动，
+被感染机器在重启之后，恶意代码则无法在自动执行，那是这些 APT 组织如同 Duqu2.0 放
+弃了持久性？还是另有其他途径可以重新感染？目前我们推测大概有以下几种可能性：
+a ）人工职守：也就是一旦初始攻击成功之后，攻击者会第一时间判断目标的价值，是
+否需要保留进行下一步横向移动，还是放弃。也就是当人工介入该环节，则可以下发另一种
+完全不同具备持久化的 RAT 。我们更倾向于这种推测。
+b ）依赖原始母体文件： RAT 的释放和植入一般由另一个 PE 恶意程序或利用漏洞，其中
+PE 恶意程序一般伪装为文档形态。从我们监控的情况来看，部分母体程序在释放了 RAT 后，
+本身并无变化，如果被感染用户没有察觉，则还会将该母体认为是正常的文档。也就是攻击
+者需等待被感染用户再次执行母体程序，才能造成二次感染。但我们认为攻击者以这种初衷
+的可能比较少。
+c ）其他方法再次感染：或者借助一些其他方法进行感染，且攻击者有信心保证能成功
+再次感染。相关方法如利用 0day 漏洞、获得篡改网络流量权限等。
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "APT 组织", "type": "ACTO"},
+        {"id": 2, "description": "RAT (远程访问木马)", "type": "APPS"},
+        {"id": 3, "description": "注册表", "type": "REGI"},
+        {"id": 4, "description": "服务", "type": "SYSP"},
+        {"id": 5, "description": "计划任务", "type": "TPTH"},
+        {"id": 6, "description": "开始菜单的程序里面的所有快捷方式", "type": "TPTH"},
+        {"id": 7, "description": "rundll32", "type": "EXEF"},
+        {"id": 8, "description": "后门 dll", "type": "DOCF"},
+        {"id": 9, "description": "DLL 劫持漏洞", "type": "TTPS"},
+        {"id": 10, "description": "Windows 操作系统", "type": "OPPS"},
+        {"id": 11, "description": "EXE 可执行文件", "type": "EXEF"},
+        {"id": 12, "description": "DLL 动态链接库", "type": "DOCF"},
+        {"id": 13, "description": "系统目录", "type": "TPTH"},
+        {"id": 14, "description": "环境变量", "type": "SYSP"},
+        {"id": 15, "description": "WindowsXP 操作系统", "type": "OPPS"},
+        {"id": 16, "description": "Windows7 操作系统", "type": "OPPS"},
+        {"id": 17, "description": "DLLMain 函数", "type": "EXEF"},
+        {"id": 18, "description": "EXE 程序 Main 函数", "type": "EXEF"},
+        {"id": 19, "description": "搜狗输入法", "type": "APPS"},
+        {"id": 20, "description": "阿里旺旺", "type": "APPS"},
+        {"id": 21, "description": "C:\\program files\\sogouinput\\components\\xxx.dll", "type": "SYSP"},
+        {"id": 22, "description": "C:\\program files\\aliwangwang\\8.00.34c\\xxx.dll", "type": "SYSP"},
+        {"id": 23, "description": "卡巴斯基发布的 Duqu2.0 报告", "type": "DOCF"},
+        {"id": 24, "description": "Duqu2.0", "type": "APPS"},
+        {"id": 25, "description": "内存", "type": "SYSP"},
+        {"id": 26, "description": "服务器", "type": "EXEF"},
+        {"id": 27, "description": "APT-C-00 组织", "type": "ACTO"},
+        {"id": 28, "description": "APT-C-05 组织", "type": "ACTO"},
+        {"id": 29, "description": "APT-C-12 组织", "type": "ACTO"},
+        {"id": 30, "description": "PE 恶意程序", "type": "EXEF"},
+        {"id": 31, "description": "文档形态", "type": "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "使用"},
+        {"source": 2, "target": 3, "rel_name": "修改"},
+        {"source": 2, "target": 4, "rel_name": "创建或修改"},
+        {"source": 2, "target": 5, "rel_name": "创建或修改"},
+        {"source": 2, "target": 6, "rel_name": "修改"},
+        {"source": 7, "target": 8, "rel_name": "加载"},
+        {"source": 11, "target": 12, "rel_name": "需要加载"},
+        {"source": 10, "target": 13, "rel_name": "从...加载 DLL"},
+        {"source": 10, "target": 14, "rel_name": "使用"},
+        {"source": 9, "target": 15, "rel_name": "利用漏洞于"},
+        {"source": 2, "target": 21, "rel_name": "释放到"},
+        {"source": 2, "target": 22, "rel_name": "释放到"},
+        {"source": 30, "target": 2, "rel_name": "释放和植入"},
+        {"source": 30, "target": 31, "rel_name": "伪装为"}
+    ]
+}

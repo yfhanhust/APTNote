@@ -1,0 +1,90 @@
+Operating principle
+First, the backdoor receives the address of the VirtualProtect() function by hash. It then
+uses this address to change access rights to PAGE_EXECUTE_READWRITE, starting from the
+function at 0x10001000 and ending with the entire .text section:
+Getting the function’s address by the hash passed as a parameter:
+Script to get a function by hash:
+```
+ import pefile
+ror = lambda val, r_bits, max_bits: \
+```
+```
+ ((val & (2**max_bits-1)) >> r_bits%max_bits) | \
+(val << (max_bits-(r_bits%max_bits)) & (2**max_bits-1))
+max_bits = 32
+library_path_list = [...] # absolute path dlls
+def get_func_addr(hash):
+for library_path in library_path_list:
+library = library_path.split('\')
+name_dll = library[len(library) - 1].upper() + b'\x00'
+hash_name_dll = 0
+for i in name_dll:
+hash_name_dll = ord(i) + ror(hash_name_dll, 0x0D, max_bits)
+hash_name_dll = 0 + ror(hash_name_dll, 0x0D, max_bits)
+pe = pefile.PE(library_path)
+for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
+func_name = exp.name + b'\x00'
+hash_name_func = 0
+for i in func_name:
+hash_name_func = ord(i) + ror(hash_name_func, 0x0D,
+ max_bits)
+if (hash_name_dll + hash_name_func == hash):
+print '{}-> 0x{:08x} -> {}'.format(name_dll, hash,
+ exp.name)
+return
+```
+Changing the permissions to PAGE_EXECUTE_READWRITE was necessary to decrypt the code
+using the XOR operation:
+One version of the backdoor has dynamic XOR encryption. It has decryption at the beginning of
+the function:
+And with encryption at the end of the function:
+Facilitating the script’s work for IDAPython:
+```
+ import idaapi
+def xor_dec(address, count, key):
+for i in xrange(count):
+idaapi.patch_dword(address, idaapi.get_dword(address) ^ key)
+key += idaapi.get_dword(address)
+address += 4
+```
+Before performing malicious actions, the backdoor, as in the case of VirtualProtect(),
+receives functions’ addresses that it needs to work
+Received features:
+|Function name|Hash|
+|---|---|
+|CloseHandle|0x528796C6|
+|CreateFileA|0x4FDAF6DA|
+|DeleteFileA|0x13DD2ED7|
+|ExitProcess|0x56A2B5F0|
+|GetAdaptersInfo|0x62C9E1BD|
+|GetModuleFileNameA|0xFE61445D|
+|GetSystemDirectoryA|0x60BCDE05|
+|LoadLibraryA|0x726774C|
+|ReadFile|0xBB5F9EAD|
+|Function name|Hash|
+|---|---|
+|RegCloseKey|0x81C2AC44|
+|RegDeleteValueA|0x3846A3A8|
+|RegEnumValueA|0x2EC95AA4|
+|RegOpenKeyExA|0x3E9E3F88|
+|RegQueryValueExA|0x8FF0E305|
+|VirtualAlloc|0xE553A458|
+|VirtualFree|0x300F2F0B|
+|VirtualProtect|0xC38AE110|
+|WinExec|0x876F8B31|
+|WriteFile|0x5BAE572D|
+In addition, the backdoor checks if it is executed in a sandbox:
+After receiving the function addresses and checking for execution in the sandbox,
+BackDoor.PlugX.93 removes the updatecfgSetup task from the task scheduler:
+The key for shellcode encryption is MD5 from the following registry key values:
+```
+ HKLM\Software\Microsoft\Windows NT\CurrentVersion\InstallDate
+HKLM\System\ControlSet001\Control\ComputerName\ComputerName
+```
+The shellcode is stored in the following registry keys:
+```
+ HKLM\Software\BINARY
+HKCU\Software\BINARY
+```
+Before running the shellcode, it’ll be decrypted in 2 steps: first, using the RC4 algorithm:
+then, with XOR:

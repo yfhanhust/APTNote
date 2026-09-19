@@ -1,0 +1,32 @@
+HTTP C2 Communications
+ISMAgent prioritizes HTTP as its mechanism to communicate with the C2 server, but if it is
+unable to reach the C2 server it will switch to the DNS tunneling mechanism. To carry out its
+HTTP C2 communications, the Trojan prepends “www.” to the configured C2 domain and�
+issues a DNS query to resolve this domain. The Trojan will use the resolved IP address as the
+host in the HTTP beacon request.
+For instance, the sample used in this attack was configured to use ntpupdateserver[.]com for�
+its C2 server. The HTTP C2 process would attempt to resolve the domain
+“www.ntpupdateserver[.]com”, which resolved to 142.54.179[.]90, so the Trojan would use the
+string “http:/w” as the basis of the C2 URL. The initial beacon sent from the Trojan to the C2
+server using a URL structured in the following way:
+1 http://[IP of C2 domain]/action2/[base64 encoded hostname\username]
+The C2 server will respond to this request with a command string using the previously
+mentioned format. During the attack on the technology organization, we observed the C2
+server issuing the following command:
+1 2983b983-0acd-42db-9d86-0b096af5f369#command##systeminfo && ipconfig /all &&am
+If the C2 server provides a command to execute on the system, the Trojan executes it using
+cmd.exe and writes the output to %TEMP%\runlog[random number].tmp. The Trojan will read
+this runlog file and send it to the C2 server via an HTTP POST request to a URL structured as�
+follows:
+1 http://[IP of C2 domain]/response/[base64 encoded hostname\username]/[GUID provided by C2]
+The HTTP POST request contains an anomalous boundary value of “myboundary” and
+hardcoded filename value of “a.a”, as seen below, which may be used to generate detection�
+signatures for this behavior:
+While we did not observe the C2 server attempting to run additional commands via
+ISMAgent, we were able to analyze the Trojan itself to determine the functionality of its
+available commands. If the command string contains a URL to download a file to the system,�
+the Trojan will simply use the URLDownloadToFileA function to download and save the file to�
+the target system in the %TEMP% folder. If the C2 server provides a path to a file it wishes to�
+upload from the system, the Trojan will open the file, read its contents, and then upload its�
+contents via an HTTP POST to the following URL:
+1 http://[IP of C2 domain]/upload/[base64 encoded hostname\username]/[GUID provided by C2]

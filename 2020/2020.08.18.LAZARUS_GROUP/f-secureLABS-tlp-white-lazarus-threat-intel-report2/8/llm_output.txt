@@ -1,0 +1,82 @@
+
+
+
+Sentence : MAIN IMPLANTS
+The main implants both contain the capability to download additional files, decompress data in memory,
+initiate C2 communication, execute arbitrary commands, and steal credentials from a number of sources. The
+implants were also observed being used to connect to the network backdoor implants on other target hosts.
+|Sample Name(s)|SHA256|Compile Time|
+|---|---|---|
+|lssvc.dll|519f100ddc98cfb9aca3e13c0095bddeadf11c50397096953171d042ca376fbd|2019-03-2104:16:06|
+|ntuser.cat|831ba6efa4a49eb1c7ff749fe442b393c5a614f383bf1efb52512a183b4362fc|2019-03-2104:16:07|
+“ LSSVC.dll ” (519f100ddc98cfb9aca3e13c0095bddeadf11c50397096953171d042ca376fbd) was dropped
+into the System32 directory and loaded in to the lsass.exe process. Analysis indicates that this file has the
+capability to be loaded in multiple ways. The implant is a x64 DLL and contains the Zlib 1.2.7 and Libcurl 7.47.1
+software libraries, suggesting it is capable of downloading and decompressing additional data.
+Once loaded, it will read and decrypt configuration information from a 6,816 byte “.sdb” file stored in
+“%WINDIR%\AppPatch\”. The samples F-Secure analysed were specifically looking for configuration files with
+the name “mscmain.sdb” or “msomain.sdb”, and were decrypted using the RC4 key “F9 5E 06 0B E3 1B 18 03
+24 3F 00 CC DE AB F6 93 1B 2A CB 5B 6A C3 67 36 62 60 EC 82 46 37 D2 4A”. The implant also has the ability
+to encrypt and write this data to disk, allowing Lazarus Group to update this information when required.
+The “.sdb” file contained C2 information as well as a hardcoded target specific directory
+(“ _C:\Users\\AppData\Roaming\Microsoft\CLR_ ”) referencing additional malicious files. Though
+the “LSSVC.dll” variant of this implant does not appear to have the capability to interact further with these files.
+“NTUSER.cat” (831ba6efa4a49eb1c7ff749fe442b393c5a614f383bf1efb52512a183b4362fc) is another x64
+DLL similar to “LSSVC.dll”. However, this variant was dropped in the “C:\Users\” directory and is not designed
+to be loaded into the lsass.exe process.
+“NTUSER.cat” uses the same software libraries as “LSSVC.dll” and also reads configuration information from the
+same “.sdb” files; however, this implant has the additional capability to load the referenced files from disk and
+inject them into another process. The files were loaded using the following steps:
+
+
+Read the file into a memory buffer
+
+
+The first 0x80 bytes are read, but only the first 0x60 bytes are interpreted as the RC4 key to decrypt the
+
+
+remainder of the file
+
+
+Decrypt the data using this key and the RC4 algorithm
+
+
+If the resulting data is a PE file, it is injected and loaded in to the “explorer.exe” process.
+
+
+The copies of these additional files retrieved by F-Secure had been overwritten with random data in order to
+prevent further analysis.
+F-Secure.com | © F-Secure LABS 12
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "lssvc.dll", "type" : "EXEF"},
+        {"id": 2, "description": "519f100ddc98cfb9aca3e13c0095bddeadf11c50397096953171d042ca376fbd", "type" : "IOCS"},
+        {"id": 3, "description": "System32 directory", "type" : "SYSP"},
+        {"id": 4, "description": "lsass.exe process", "type" : "APPS"},
+        {"id": 5, "description": "Zlib 1.2.7 and Libcurl 7.47.1 software libraries", "type" : "APPS"},
+        {"id": 6, "description": ".sdb file (mscmain.sdb or msomain.sdb)", "type" : "DOCF"},
+        {"id": 7, "description": "RC4 key: F9 5E 06 0B E3 1B 18 03 24 3F 00 CC DE AB F6 93 1B 2A CB 5B 6A C3 67 36 62 60 EC 82 46 37 D2 4A", "type" : "TAMP"},
+        {"id": 8, "description": "C2 information", "type" : "CCSH"},
+        {"id": 9, "description": "_C:\\Users\\AppData\\Roaming\\Microsoft\\CLR_", "type" : "SYSP"},
+        {"id": 10, "description": "ntuser.cat", "type" : "EXEF"},
+        {"id": 11, "description": "831ba6efa4a49eb1c7ff749fe442b393c5a614f383bf1efb52512a183b4362fc", "type" : "IOCS"},
+        {"id": 12, "description": "C:\\Users\\ directory", "type" : "SYSP"},
+        {"id": 13, "description": "explorer.exe process", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has hash"},
+        {"source": 1, "target": 3, "rel_name" : "dropped in"},
+        {"source": 1, "target": 4, "rel_name" : "loaded into"},
+        {"source": 1, "target": 5, "rel_name" : "uses libraries"},
+        {"source": 1, "target": 6, "rel_name" : "reads and decrypts"},
+        {"source": 6, "target": 7, "rel_name" : "decrypted using key"},
+        {"source": 6, "target": 8, "rel_name" : "contains C2 information"},
+        {"source": 6, "target": 9, "rel_name" : "references directory"},
+        {"source": 10, "target": 11, "rel_name" : "has hash"},
+        {"source": 10, "target": 12, "rel_name" : "dropped in"},
+        {"source": 10, "target": 5, "rel_name" : "uses libraries"},
+        {"source": 10, "target": 6, "rel_name" : "reads and decrypts"},
+        {"source": 6, "target": 13, "rel_name" : "loads into"}
+    ]
+}

@@ -1,0 +1,51 @@
+Components and Communication Protocol
+Once the tampered installer is downloaded and executed, it will drop 4 files: the Legit Setup, the Launcher and
+Persistence component, the Exfiltration and Command Execution component and the File Searcher component.
+The first executed file is the original installer, which will be prompted to the user so that they would not suspect
+anything. All malicious actions are performed in the background.
+All of these 4 components are encrypted in the resource section of the initial dropper. Each resource has an 8-byte
+header that tells the dropper the size of the executable and the component type.
+A summary of the installation process is illustrated in the figure below:
+After the Launcher component is dropped into the %SYSTEM% folder, it is executed by calling the function responsible
+for creating a new service. The name of the service is a common one, either replacing a non-vital system service
+( Print Spooler ) or having a name that does not raise any suspicions ( Registry Maintenance Server ). The
+service will be used as a persistence mechanism and will execute the Launcher component.
+The dropper starts the service and will drop the rest of the executables.
+The Launcher component executes the Exfiltration and Command Execution component, usually placed in the same
+system folder, and waits for an uninstall event.
+The Exfiltration component is responsible for running the File Searcher component and for exfiltrating the files to the
+C&C server through a POST request. It regularly asks the C&C server for download and execution commands or an
+uninstall command. The last one, if received, will be sent as an event to the Launcher component. The get_command is
+sent as POST request with an argument called name that contains a tag. This tag is used as a form of authentication
+and is influenced by the compilation time of the file. In our tests, the servers always seem to respond with a 404 if
+asked for a command.
+The File Searcher component loops through every drive and looks for files with certain extensions. The malicious binary
+has an extension list embedded (usually identifying different types of documents). If a file with an extension from that
+list is found, it will be copied into a temporary zip archive. After completing adding the files to the archive, it will split it
+8
+Bitdefender Whitepaper
+StrongPity APT - Revealing Trojanized Tools, Working Hours and Infrastructure
+into hidden .sft encrypted files. The .sft files are read by the Exfiltration component, sent to the C&C server and deleted
+from the disk.
+After the exfiltration process is completed, the Exfiltration component will wait for further commands as described
+above.
+As mentioned earlier, the files that will be exfiltrated are first copied into a zip file. This zip file will be encrypted into
+multiple .sft files as follows:
+
+
+The File Searcher component will read 2048 bytes from the zip file
+
+
+For each byte it will apply a xor operation between the least significant 4 bits and the most significant 4 bits and it
+will write the result in the .sft file
+
+
+The first two steps are repeated a maximum of 53 times
+
+
+If the zip file still has unprocessed data, a new .sft file will be created
+
+
+For each zip file, the first .sft file will have a N prepended as a first character, the rest of the .sft files which complete
+an archive will have an O prepended.
+

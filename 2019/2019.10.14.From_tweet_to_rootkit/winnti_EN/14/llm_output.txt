@@ -1,0 +1,90 @@
+
+
+
+Sentence : NDIS hooks and network injections
+The rootkit have some interesting network capabilities, it position itself at the NDIS level to
+communicate directly with the network card. Globally, the references to NDIS functions and hooks
+from the driver’s EntryPoint are the following:
+@ExaTrack http://www.exatrack.com Page 8
+The registerNdisProtocolDriver function will firstly search the TCPIP instance in the NDIS
+protocols. This process is done with a simple linked list.
+This code walks the registered protocols, once TCPIP (here tcp_ip_ustr ) is found, two functions will
+be hooked, ReceiveNetBufferLists and ProtSendNetBufferListsComplete . Those functions are
+used to receive and send packets of the associated protocol.
+The hook_ReceiveNetBufferLists function receives packets from the network adapter. Each
+packet’s content will be analyzed and verified against the configuration of the driver, if a precise
+format is respected some of the rootkit abilities will be enabled.
+It’s interesting to note that the rootkit have his own network packet parser.
+Firstly it checks if packet’s size is greater than 0x35 bytes: all TCP packets are larger this size. Next,
+the protocol type must be 0x800, this value represent the IP protocol. Then, the rootkit checks if the
+IP version is 4 (for IPv4) and that the next protocol is TCP.
+Then, the IP source address (so the remote server) is compared with a gobal variable. This variable
+can be setup with the IoCtl command SetIpAndPort . It is mandatory to announce the C&C‘s IP
+address to trigger the whole parsing of the packet.
+@ExaTrack http://www.exatrack.com Page 9
+Registering the IP address through an IoCtl command is operated like this:
+And checks of the source’s IP address:
+Lastly, a checksum is operated on the packet’s data:
+This « checksum » is a simple XOR operation between the first DWORD and the third DWORD of the
+data, followed by a rotation of 0x10 and the result is stored in the fourth DWORD.
+If this check is validated, the rootkit will reference the current handle ( OpenQueue ) in a global
+variable. This variable will be used to send raw packets on the network.
+We think those checks aims to probe if the remote server can be contacted and to identify which
+interface need to be used to send raw packets on the network.
+Once all the conditions are met we can send raw packets directly on the identified network interface.
+This can be achieve by using the IoCtl command send_packet (0x400) containing the data to send. As
+you can see, we were able to use the driver to send an arbitrary packet on the network.
+@ExaTrack http://www.exatrack.com Page 10
+To summarize, if we want to send raw packets on the network we need:
+
+
+To load the driver
+
+
+To communicate with \Device\Null
+
+
+Send an IOCTL to configure the IP address/port of C&C
+
+
+Exchange with the C&C to grab a checksum who validate the network interface to use
+
+
+Send an IOCTL to emit raw packets
+
+
+The steps to send this raw packet can be summed up by the following schema:
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "NDIS hooks and network injections", "type" : "TTPS"},
+        {"id": 2, "description": "rootkit", "type" : "EXEF"},
+        {"id": 3, "description": "NDIS level", "type" : "NETP"},
+        {"id": 4, "description": "network card", "type" : "MTCP"},
+        {"id": 5, "description": "registerNdisProtocolDriver function", "type" : "EXEF"},
+        {"id": 6, "description": "TCPIP instance", "type" : "NETP"},
+        {"id": 7, "description": "ReceiveNetBufferLists function", "type" : "EXEF"},
+        {"id": 8, "description": "ProtSendNetBufferListsComplete function", "type" : "EXEF"},
+        {"id": 9, "description": "network adapter", "type" : "MTCP"},
+        {"id": 10, "description": "rootkit’s network packet parser", "type" : "TTPS"},
+        {"id": 11, "description": "IP source address (remote server)", "type" : "CCSH"},
+        {"id": 12, "description": "SetIpAndPort IoCtl command", "type" : "EXEF"},
+        {"id": 13, "description": "checksum operation", "type" : "TTPS"},
+        {"id": 14, "description": "OpenQueue handle", "type" : "SYSP"},
+        {"id": 15, "description": "\\Device\\Null", "type" : "SYSP"},
+        {"id": 16, "description": "send_packet IoCtl command (0x400)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "positions at"},
+        {"source": 2, "target": 9, "rel_name" : "communicates with"},
+        {"source": 5, "target": 6, "rel_name" : "searches for"},
+        {"source": 7, "target": 9, "rel_name" : "receives packets from"},
+        {"source": 10, "target": 2, "rel_name" : "is part of"},
+        {"source": 10, "target": 11, "rel_name" : "compares with"},
+        {"source": 11, "target": 12, "rel_name" : "configured by"},
+        {"source": 13, "target": 7, "rel_name" : "applies to packets from"},
+        {"source": 14, "target": 2, "rel_name" : "referenced in"},
+        {"source": 2, "target": 15, "rel_name" : "communicates with"},
+        {"source": 16, "target": 2, "rel_name" : "used to send packets by"}
+    ]
+}

@@ -1,0 +1,36 @@
+Null session pipes backdoor
+Samples:
+|MD5|Size|Format|Bits|Linker|Compilationtimestamp|
+|---|---|---|---|---|---|
+|F3B9C454B799E2FE6F09B6170C81FF5C|34304|DLL|64|9.0|2013.01.04 05:33:21|
+|0C12E834187203FBB87D0286DE903DAB|26624|EXE|32|11.0|2015.02.24 09:46:02|
+|72B03ABB87F25E4D5A5C0E31877A3077|26624|EXE|32|11.0|2015.02.24 09:46:02|
+|76DB7E3AF9BE2DFAA491EC1142599075|27648|EXE|32|11.0|2015.08.25 10:20:40|
+|5D41719EB355FDF06277140DA14AF03E|34816|DLL|64|9.0|2015.10.01 18:04:26|
+|A277F018C2BB7C0051E15A00E214BBF2|34816|DLL|64|12.0|2015.12.14 15:06:11|
+The DLL may be a Security Provider, Print Provider, or an EXE file.
+The package is wrapped in a PE module that activates the standard blob. It usually contains the binary and
+the configuration file. The configuration file contains: the pipe name, the 2048-bit RSA public key and
+exponent.
+The module creates a named pipe using a name provided in the config:
+[HKLM\SYSTEM\CurrentControlSet\Services\lanmanserver\parameters] NullSessionPipes
+If the values does not contain the name of the pipe provided in the config, it appends it to the list and updates
+the registry value.
+Then it creates the pipe \.\PIPE\%pipe_name% and waits for incoming connections on the pipe.
+Once an incoming connection is accepted, it performs a key exchange based on the RSA key provided by the
+configuration, and using two hardcoded 16-byte “magic” strings as challenge-response markers. After the
+handshake succeeds, it uses two 128-bit session keys for encrypting further communication with AES.
+After that, the module is expects to receive the encrypted commands from the pipe:
+|1|Read arbitrary file's contents and optionally delete it after|
+|---|---|
+|2|Write arbitrary file|
+|3|Enumerate files in a directory|
+|4|Delete a file|
+|5|Launch a standard 0xC102AA02 blob provided by the server|
+|6|none|
+For any inquiries, contact intelreports@kaspersky.com Page 7 of 33
+The ProjectSauron APT. Technical analysis
+|7|Bind on socket and wait incoming connection or connect to a remote host|
+|---|---|
+|8|Bind or connect and execute the succeeding shellcode passing the socket handle to it|
+|9|Identify if the machine is 64-bit or not|

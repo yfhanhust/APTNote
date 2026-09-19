@@ -1,0 +1,64 @@
+
+
+
+Sentence : Configuration
+The configuration data for DePriMon’s third stage has 27 members, which is an unusually large
+number for a downloader. It is encrypted with AES-256 and embedded in the binary.
+During the first run, DePriMon’s third stage (the downloader itself) decrypts the configuration data
+with Key 2 (see the IoCs section), encrypts it with Key 3 and stores the encrypted configuration
+file in a temporary folder. The filename for the configuration file is created via the following
+process: Starting with the second byte, the value of Key 2 is transformed into a number in base
+36 but encoded using custom alphabet “abc…xyz012…789”. The extension of the configuration
+file is “.tmp”.
+An example of a configuration file path: %temp%\rb1us0wm99sslpa1vx.tmp.
+During the second run, the downloader reads the configuration data from the file, not from itself –
+this way, the attacker can easily update the configuration.
+Thanks to its secure design, the configuration is not left in memory in unencrypted form. Every
+time the downloader needs to use some element of the configuration file, it decrypts the
+configuration file, retrieves the member and encrypts the file again.
+This design protects the malware’s primary function – C&C communication – against memory
+forensics.
+https://www.welivesecurity.com/2019/11/21/deprimon-default-print-monitor-malicious-downloader/ 3/8
+3/4/2020 Registers as “Default Print Monitor”, but is a malicious downloader. Meet DePriMon | WeLiveSecurity
+Figure 2. Part of the code as seen by the Hex-Rays decompiler, which illustrates how the DePriMon malware
+decrypts the configuration file, saves a few members to local variables and encrypts it again
+Of interest in the configuration file are:
+Two entries for usernames and two members for passwords – for the proxy server if it is set
+on the machine. It means attackers are preparing to further their attack via a proxy with
+credentials. However, we haven’t seen functionality for stealing these details, so it appears
+that it is done in another phase of the attack.
+Three entries for three C&C servers – each of them used on a different occasion.
+Three entries for three ports – each of them used on a different occasion.
+Flags indicating whether the downloader initializes a connection through Security Support
+Provider Interface (SSPI) with a possible proxy or only with a socket (described later).
+It should be noted that besides C&C servers extracted from malware samples, we identified
+additional domains and servers likely related to this malware.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DePriMon’s third stage", "type" : "EXEF"},
+        {"id": 2, "description": "AES-256", "type" : "TTPS"},
+        {"id": 3, "description": "Key 2", "type" : "IOCS"},
+        {"id": 4, "description": "Key 3", "type" : "IOCS"},
+        {"id": 5, "description": "Configuration file in temporary folder", "type" : "DOCF"},
+        {"id": 6, "description": "%temp%\\rb1us0wm99sslpa1vx.tmp", "type" : "TPTH"},
+        {"id": 7, "description": "C&C communication", "type" : "TTPS"},
+        {"id": 8, "description": "Default Print Monitor (malicious downloader)", "type" : "EXEF"},
+        {"id": 9, "description": "Proxy server", "type" : "CCSH"},
+        {"id": 10, "description": "C&C servers", "type" : "CCSH"},
+        {"id": 11, "description": "Ports for C&C communication", "type" : "NETP"},
+        {"id": 12, "description": "Security Support Provider Interface (SSPI)", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "decrypts with"},
+        {"source": 1, "target": 4, "rel_name" : "encrypts with"},
+        {"source": 1, "target": 5, "rel_name" : "stores in"},
+        {"source": 1, "target": 6, "rel_name" : "creates file path"},
+        {"source": 1, "target": 7, "rel_name" : "protects primary function"},
+        {"source": 8, "target": 1, "rel_name" : "registers as"},
+        {"source": 9, "target": 1, "rel_name" : "uses for further attack via"},
+        {"source": 10, "target": 1, "rel_name" : "uses for C&C communication"},
+        {"source": 11, "target": 10, "rel_name" : "used on different occasions"},
+        {"source": 12, "target": 1, "rel_name" : "initializes connection through"}
+    ]
+}

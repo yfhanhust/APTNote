@@ -1,0 +1,61 @@
+
+
+
+Sentence : Communication with the C2
+The malware communicates with the C2 server over a TCP socket. The traffic is made to
+look like HTTP traffic. Figure 11 shows a pseudo-code representation of the function
+used by the malware to prepare data that is to be sent to the C2 server. First, it fills the
+buffer with null bytes. The request body is XORed against a key. The malware uses the
+buffer length as the key. This value is also passed into the function as the “total_length”
+argument.
+Figure 11: Function for preparing data to be sent to the C2 server
+The same logic is used to decrypt the response body from the C2 server. From the
+response, the malware extracts “JSESSIONID”, “Content-Length”, “Total-Length” and
+the response body. The data is added to a struct with the following layout:
+0x0 JSESSIONID as int
+0x8 Content-Length as long
+0x10 Total-Length as long
+0x18 Response body
+https://www.intezer.com/blog/malware-analysis/new-linux-backdoor-redxor-likely-operated-by-chinese-nation-state-actor/ 11/19
+3/12/2021 Linux Backdoor RedXOR Likely Operated by Chinese Nation-State
+The content length is the length of the response body but also used as the key. The total
+length value is used as a constant which is added to the key in each iteration. The
+JSESSIONID value holds the command ID for the job the C2 wants the malware to
+perform.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "The malware", "type" : "EXEF"},
+        {"id": 2, "description": "C2 server", "type" : "CCSH"},
+        {"id": 3, "description": "TCP socket", "type" : "NETP"},
+        {"id": 4, "description": "HTTP traffic", "type" : "NETP"},
+        {"id": 5, "description": "buffer with null bytes", "type" : "TAMP"},
+        {"id": 6, "description": "request body", "type" : "TAMP"},
+        {"id": 7, "description": "XORed against a key", "type" : "TAMP"},
+        {"id": 8, "description": "buffer length as the key", "type" : "TAMP"},
+        {"id": 9, "description": "total_length argument", "type" : "TAMP"},
+        {"id": 10, "description": "response body from C2 server", "type" : "TAMP"},
+        {"id": 11, "description": "JSESSIONID", "type" : "REGI"},
+        {"id": 12, "description": "Content-Length", "type" : "REGI"},
+        {"id": 13, "description": "Total-Length", "type" : "REGI"},
+        {"id": 14, "description": "struct layout", "type" : "TAMP"},
+        {"id": 15, "description": "command ID for the job", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "communicates with"},
+        {"source": 3, "target": 4, "rel_name" : "mimics"},
+        {"source": 1, "target": 5, "rel_name" : "fills with null bytes"},
+        {"source": 6, "target": 7, "rel_name" : "XORed against key"},
+        {"source": 8, "target": 7, "rel_name" : "used as key"},
+        {"source": 9, "target": 1, "rel_name" : "passed into function"},
+        {"source": 2, "target": 10, "rel_name" : "sends response body to"},
+        {"source": 10, "target": 11, "rel_name" : "extracts from response"},
+        {"source": 10, "target": 12, "rel_name" : "extracts from response"},
+        {"source": 10, "target": 13, "rel_name" : "extracts from response"},
+        {"source": 14, "target": 11, "rel_name" : "contains at offset 0x0"},
+        {"source": 14, "target": 12, "rel_name" : "contains at offset 0x8"},
+        {"source": 14, "target": 13, "rel_name" : "contains at offset 0x10"},
+        {"source": 14, "target": 10, "rel_name" : "contains at offset 0x18"},
+        {"source": 11, "target": 15, "rel_name" : "holds"}
+    ]
+}

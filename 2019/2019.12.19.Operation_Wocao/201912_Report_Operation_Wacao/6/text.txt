@@ -1,0 +1,75 @@
+2 Modus operandi
+This section summarizes the actor’s tactics and techniques for obtaining an
+initial foothold, lateral movement and persistence. A full detailed overview of the
+actor’s Tactics Techniques and Procedures (TTPs) mapped to the MITRE ATT&CK
+framework can be found in chapter 6.
+Initial Access
+In several cases the initial access point into a victim network was a vulnerable webserver, often
+versions of JBoss. Such vulnerable servers were observed to often already be compromised with
+webshells, placed there by other threat actors. The actor actually leverages these other webshells
+for reconnaissance and initial lateral movement activity. After this initial reconnaissance the actor
+uploads one of its own webshells to the webserver. Access as initially obtained to the compromised
+webserver, for example through the uploaded webshell, is kept by the actor as a precaution in the
+event of losing the other primary method of persistent access, for example if the credentials for VPN
+accounts were to be reset.
+Lateral Movement
+Once an initial foothold is established, the actor moves laterally through the network using wellknown and well-documented methods, such as dumping credentials from memory and accessing
+password managers on compromised systems.
+The actor specifically targets systems and people based on their role and associated privilege levels
+within the organization. This method enables the actor to persistently and quickly obtain access to
+highly privileged accounts, such as enterprise and domain administrators. Once such privileges have
+been obtained, the actor directly shifts their means of persistence. Instead of having to rely on their
+persistent malicious backdoors as command and control channel – a channel that’s essentially not
+supposed to be there and subject to discovery by the victim – the actor uses the stolen credentials to
+connect to the victim’s network using the corporate VPN solution.
+2FA abuse
+In one case, for VPN persistence, the actor did show evidence of using novel techniques. In this
+case VPN access to a victim’s network was protected by 2 factor authentication (2FA), which
+normally protects an asset from simple credential theft. In this case, however, the actor abused this
+implementation of 2FA control with a technique that, as far as Fox-IT could determine, was developed
+by the actor themselves. This use of VPN access in combination with 2FA as method of persistence to
+a victim’s network is explained in more detailed in paragraph 6.3.2.
+Backdoors, Open source tools & Exfiltration
+With access to the victim’s network through legitimate VPN accounts and the stolen credentials
+to highly privileged accounts in one or multiple domains the actor then uses a mix of (custom
+developed) backdoors and open source tools to connect to and through compromised systems,
+described in more depth in chapter 5.
+Upon compromising a system, before deploying their custom backdoor, the actor sometimes utilizes
+a custom reconnaissance script. This script collects, among other things, installed software, running
+processes and open connections. Then after deploying the backdoor, the actor manually starts
+Fox-IT | Operation Wocao | 5
+identifying and collecting information and data on the system. Several custom tools are used to aid in
+this effort. For example, a tool that outputs a recursive directory listing in a specific format allows the
+actor to quickly find files and directories of interest. The actor then compresses all the files of interest
+with WinRAR, sometimes copying or staging them in a temporary directory. These WinRAR archives
+are then downloaded using the download functionality of one of their custom backdoor. Finally, the
+actor securely removes all created executables and files, and the backdoor is closed.
+2.1 Activity on an average ‘working day’
+Another way to look at the previously described modus operandi is through the lens of a typical
+“working day”. In this example the actor already has access to a victim’s network and is in the process
+of searching for, identifying and collecting information of interest to the actor. During this process an
+actor, on a typical day, would:
+1. Connect to the victim’s VPN concentrator using stolen credentials and possibly a 2FA token.
+2. Move laterally by deploying the custom XServer² backdoor via PowerShell on multiple servers.
+3. Identify targets of interest. At this point, the actor usually takes two different paths: one to gain
+additional privileges and collect more credentials, or one to identify and collect information and
+data of interest.
+a. When looking to gain additional privileges, connect to a domain controller using the XServer
+backdoor and query the domain controller’s event logs for the usernames of highly privileged
+administrators.
+b. Otherwise, identify servers or workstations that may contain interesting data.
+4. Compromise the identified targets:
+a. Run a reconnaissance script to explore the victim’s system, checking for missing Windows
+patches and running security software.
+b. Execute WMI commands in search of relevant information such as password manager
+databases and Office documents.
+c. Deploy a keylogger to retrieve the password for the victim’s password manager.
+d. Run or deploy other tooling as necessary to complete the goal.
+5. Exfiltrate such relevant information from the system, by downloading a single file or by
+compressing multiple files into a RAR archive.
+6. Securely delete the deployed tools and exfiltrated compressed archives to hinder a forensic
+investigation.
+
+Custom tool developed by the actor to provide ‘tunneling’ capabilities
+
+6 | Fox-IT | Operation Wocao

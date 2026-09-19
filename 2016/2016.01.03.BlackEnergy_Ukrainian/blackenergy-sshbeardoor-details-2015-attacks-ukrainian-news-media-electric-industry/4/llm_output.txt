@@ -1,0 +1,46 @@
+
+
+
+Sentence : Backdoored SSH server
+In addition to the malware families already mentioned, we have discovered an interesting sample used by
+the BlackEnergy group. During our investigation of one of the compromised servers we found an
+application that, at first glance, appeared to be a legitimate SSH server called �Dropbear SSH.
+In the order to run the SSH server, the attackers created a VBS file with the following content:�
+Set WshShell = CreateObject(“WScript.Shell”)
+WshShell.CurrentDirectory = “C:\WINDOWS\TEMP\Dropbear\”
+WshShell.Run “dropbear.exe -r rsa -d dss -a -p 6789″, 0, false
+As is evident here, the SSH server will accept connections on port number 6789. By running SSH on the
+server in a compromised network, attackers can come back to the network whenever they want.
+However, for some reason this was not enough for them. After detailed analysis we discovered that the
+binary of the SSH server actually contains a backdoor.
+Figure 4 – Backdoored authentication function in SSH server
+As you can see in Figure 4, this version of Dropbear SSH will authenticate the user if the password
+passDs5Bu9Te7 was entered. The same situation applies to authentication by key pair – the server
+contains a pre-defined constant public key and it allows authentication only if a particular private key is�
+used.
+Figure 5 – The embedded RSA public key in SSH server
+ESET security solutions detect this threat as Win32/SSHBearDoor.A trojan .
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BlackEnergy group", "type" : "ACTO"},
+        {"id": 2, "description": "Dropbear SSH server", "type" : "APPS"},
+        {"id": 3, "description": "VBS file", "type" : "DOCF"},
+        {"id": 4, "description": "C:\\WINDOWS\\TEMP\\Dropbear\\", "type" : "SYSP"},
+        {"id": 5, "description": "dropbear.exe", "type" : "EXEF"},
+        {"id": 6, "description": "port 6789", "type" : "NETP"},
+        {"id": 7, "description": "passDs5Bu9Te7", "type" : "TAMP"},
+        {"id": 8, "description": "pre-defined constant public key", "type" : "TAMP"},
+        {"id": 9, "description": "Win32/SSHBearDoor.A trojan", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "used"},
+        {"source": 1, "target": 3, "rel_name" : "created"},
+        {"source": 3, "target": 4, "rel_name" : "sets current directory to"},
+        {"source": 3, "target": 5, "rel_name" : "runs"},
+        {"source": 2, "target": 6, "rel_name" : "listens on"},
+        {"source": 7, "target": 2, "rel_name" : "authenticates with password"},
+        {"source": 8, "target": 2, "rel_name" : "uses for key pair authentication"},
+        {"source": 9, "target": 2, "rel_name" : "detects as"}
+    ]
+}

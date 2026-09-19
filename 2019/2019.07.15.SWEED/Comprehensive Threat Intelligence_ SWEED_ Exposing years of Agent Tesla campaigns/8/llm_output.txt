@@ -1,0 +1,63 @@
+
+
+
+Sentence : 2019: Office macros and AutoIT droppers
+Beginning in 2019, the campaigns associated with SWEED began leveraging malicious
+Office macros. As with previous attacks, they are leveraging spear-phishing emails and
+malicious attachments to initiate the infection process.
+https://blog.talosintelligence.com/2019/07/sweed-agent-tesla.html 5/22
+7/19/2019 Talos Blog || Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: SWEED: Exposing years of Agent Tesla campaigns
+The attached XLS contains an obfuscated VBA macro, which executes a PowerShell
+script using a WMI call. The PowerShell script is also obfuscated using XOR operations
+to hide its code. Once decoded, it reveals itself to be .NET.
+This .NET code is responsible for performing some checks and downloading another
+executable file. The obfuscation scheme used in this code is the same as the one used
+in the previously described PowerShell. The downloaded file is then saved and
+executed.
+Call graph after WMI execution.
+The downloaded binary is an AutoIT-compiled script. The script has a lot of junk code
+designed to make the analysis more difficult and time-consuming.
+https://blog.talosintelligence.com/2019/07/sweed-agent-tesla.html 6/22
+7/19/2019 Talos Blog || Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: SWEED: Exposing years of Agent Tesla campaigns
+Extracted AutoIT script .
+The strings and some of the commands contained in the AutoIT script have been
+obfuscated using XOR operations, as described below.
+The decoder receives two hex strings: The first is the string to deobfuscate, while the
+second determines the number of rounds of the XOR operation. The XOR operation is
+performed on each character against the length of the second parameter. This operation
+is then repeated for as many times as the length with the length and the position. If the
+length value is one, then the operation is repeated twice using the same key, which
+leads to a plaintext hex string.
+After performing environment checks, the malware will reconstruct the assembly code
+which is obfuscated in a hex string. Using the AutoIT scripting language Dll* family
+functions the code is loaded into the current process address space.
+https://blog.talosintelligence.com/2019/07/sweed-agent-tesla.html 7/22
+7/19/2019 Talos Blog || Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: SWEED: Exposing years of Agent Tesla campaigns
+Memory allocation
+Finally, the malware executes the assembly code with two arguments. The first argument
+is the path for an executable. This assembly will create a process with the executable
+and will inject the payload into this process.
+As expected, the final payload in this campaign is another packed version of Agent
+Tesla.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SWEED", "type" : "ACTO"},
+        {"id": 2, "description": "spear-phishing emails", "type" : "MAIL"},
+        {"id": 3, "description": "XLS file with obfuscated VBA macro", "type" : "DOCF"},
+        {"id": 4, "description": "PowerShell script using WMI call", "type" : "EXEF"},
+        {"id": 5, "description": ".NET code", "type" : "APPS"},
+        {"id": 6, "description": "another executable file", "type" : "DOCF"},
+        {"id": 7, "description": "AutoIT-compiled script", "type" : "EXEF"},
+        {"id": 8, "description": "Agent Tesla", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "attaches"},
+        {"source": 3, "target": 4, "rel_name" : "executes"},
+        {"source": 4, "target": 5, "rel_name" : "downloads"},
+        {"source": 5, "target": 6, "rel_name" : "downloads and executes"},
+        {"source": 6, "target": 7, "rel_name" : "is compiled from"},
+        {"source": 7, "target": 8, "rel_name" : "executes"}
+    ]
+}

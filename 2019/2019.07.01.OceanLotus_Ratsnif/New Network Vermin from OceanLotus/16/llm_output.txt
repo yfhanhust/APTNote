@@ -1,0 +1,149 @@
+
+
+
+Sentence : Analysis
+For this particular sample, the actual sniffer executable is Base64 encoded within a
+loader DLL and wrapped in two layers of shellcode. The loader DLL decodes the
+payload, copies it to memory and executes the 1 stage shellcode, which will st
+decompress the binary and execute the 2 nd stage shellcode in a separate thread. The
+2 nd stage shellcode will inject the sniffer executable into memory and hook several API
+functions responsible for returning the process command line (GetCommandLineA,
+st
+nd
+nd
+https://threatvector.cylance.com/en_us/home/threat-spotlight-ratsnif-new-network-vermin-from-oceanlotus.html 8/18
+7/2/2019 Threat Spotlight: Ratsnif - New Network Vermin from OceanLotus
+GetCommandLineW, _acmdln, _wcmdln), so they return a hardcoded string instead. The
+string contains the parameter that specifies a path to the config file, as well as the
+executable’s original path:
+C:\Users\Administrator\Desktop\api\temp\royal\HkYh9CvH7.exe -p
+C:\ProgramData\setting.cfg
+Figure 6. Embedded command-line
+It is not immediately obvious why the attackers used this convoluted method to pass the
+config path to the malware.
+The configuration file is a simple text file, Base64 encoded, where the first line is
+ignored, and each subsequent line specifies a parameter. For example:
+[unused_line]
+-ip [ATTACKER IP ADDRESS]
+-ga [DEFAULT GATEWAY]
+-subnet [SUBNET MASK]
+-sniff -ssl_ip [IP ADDRESS]
+-html_inject [BROWSER PROCESS NAME]
+-dlog_ip [IP ADDRESS]
+-mac [ATTACKER MAC ADDRESS] "true"|"false"
+-name [DOMAIN NAME] [REDIRECTION IP]
+-all
+-dnsttl [INT VALUE]
+-log [LOGFILE PATH]
+-pass [CREDENTIALS DUMP PATH]
+-dwn_ip [IP ADDRESS]
+Figure 7. Configuration file options
+However, there is a bug in parsing the value of the dwn_ip parameter, which will result in
+a memory read violation if the value is present in the configuration:
+Figure 8: Bug in the code: the value of "dwn_ip" is passed as a string, while
+print_debug_msg expects a pointer to a string
+https://threatvector.cylance.com/en_us/home/threat-spotlight-ratsnif-new-network-vermin-from-oceanlotus.html 9/18
+7/2/2019 Threat Spotlight: Ratsnif - New Network Vermin from OceanLotus
+Once executed, the sniffer will read the configuration from the specified file, decode it
+using Base64 and parse it to an in-memory structure. If the "-sniff" parameter is specified
+in the configuration, the malware will add a firewall exception and disable Large Send
+Offload (LSO) for each network adapter in the registry:
+netsh advfirewall firewall add rule name=\"Core Networking - Router Solicitation\" dir=in
+action=allow program={self_path} enable=yes
+Figure 9. Command-line used to add Windows firewall rule
+wmic path win32_networkadapter where index=%d call disable
+Figure 10. Command-line used to disable network adapters prior to disabling LSOs
+After importing the same APIs from wpcap.dll as the 2016 variants (with the addition of
+pcap_geterr), the malware creates threads responsible for ARP poisoning and DNS
+spoofing.
+In order to be able to decrypt the SSL traffic, the malware performs SSL hijacking, using
+an open source library called WolfSSL and separately supplied certificate and private
+key files. For that purpose, it creates an internal WolfSSL server, listening on the first
+available port in the range 65000 – 65535:
+Figure 11: Use of WolfSSL
+Unlike the 2016 variants of Ratsnif that stored all packets to a PCAP file, the 2018
+variant employs multiple sniffer classes for harvesting sensitive information from
+packets. This will minimize the amount of data the attacker has to collect, exfiltrate and
+process, and also reveals what information the attacker is interested in.
+https://threatvector.cylance.com/en_us/home/threat-spotlight-ratsnif-new-network-vermin-from-oceanlotus.html 10/18
+7/2/2019 Threat Spotlight: Ratsnif - New Network Vermin from OceanLotus
+The malware can sniff traffic for the following protocols/ports:
+|Inter‐face|Ports|Headers|
+|---|---|---|
+|CSniffFtp|21,990|ABOR ACCT ADAT ALLO APPE AUTH CCC CDUP CONF CWDDELE ENC EPRT EPSV FEAT HELP HOST LANG LIST LPRT LPSVMDTM MIC MKD MLSD MLST MODE NLST OPTS PASS PASV PBSZPORT PROT PWD QUIT REIN REST RETR RMD RNFR RNTO SITESIZE SMNT STAT STOR STOU STRU SYST TYPE USER XCUPXMKD XPWD XRCP XRMD XRSQ XSEM XSEN 230|
+|CSnif‐fImap|143,993|CAPABILITY LOGOUT STARTTLS AUTHENTICATE LOGIN SELECTEXAMINE CREATE RENAME LSUB STATUS APPEND CHECKCLOSE EXPUNGE FETCH STORE UID|
+|CSnif‐fLdap|389,636,10389,10636|Various|
+|CSniffNntp|119|AUTHINFO USER AUTHINFO PASS ANONYMOUS 281|
+|CSniffPop|110,995|RCEV RCVD RSET +OK USER PASS RETR QUIT|
+|CSniffSmb|445|Various|
+|CSniffSmtp|25,465|HELO MAIL RCPT SEND SOML SAML VRFY EXPN TURN FROM|
+|CSniffTds|1433|SELECT name, password_hash FROM master.sys.sql_logins whereis_disabled = 0; -- priv|
+|CSniffTelnet|23|Login Failed login: password:|
+|Sniff‐Http2|80,443|Various|
+https://threatvector.cylance.com/en_us/home/threat-spotlight-ratsnif-new-network-vermin-from-oceanlotus.html 11/18
+7/2/2019 Threat Spotlight: Ratsnif - New Network Vermin from OceanLotus
+Each sniffer class interface contains two methods for extracting sensitive information
+from the incoming and outgoing packets, respectively. These typically rely on searching
+for cleartext header strings to facilitate credential theft:
+Figure 12. Searching for login and password commands in the Telnet protocol
+In addition, the HTTP sniffer interface is also able to perform injection to insert arbitrary
+attacker supplied content into HTML.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Base64 encoded sniffer executable", "type" : "EXEF"},
+        {"id": 2, "description": "Loader DLL", "type" : "EXEF"},
+        {"id": 3, "description": "1 stage shellcode", "type" : "EXEF"},
+        {"id": 4, "description": "2 nd stage shellcode", "type" : "EXEF"},
+        {"id": 5, "description": "C:\\Users\\Administrator\\Desktop\\api\\temp\\royal\\HkYh9CvH7.exe", "type" : "SYSP"},
+        {"id": 6, "description": "C:\\ProgramData\\setting.cfg", "type" : "DOCF"},
+        {"id": 7, "description": "[ATTACKER IP ADDRESS]", "type" : "CCSH"},
+        {"id": 8, "description": "[DEFAULT GATEWAY]", "type" : "NETP"},
+        {"id": 9, "description": "[SUBNET MASK]", "type" : "NETP"},
+        {"id": 10, "description": "-ssl_ip [IP ADDRESS]", "type" : "CCSH"},
+        {"id": 11, "description": "-html_inject [BROWSER PROCESS NAME]", "type" : "APPS"},
+        {"id": 12, "description": "-dlog_ip [IP ADDRESS]", "type" : "CCSH"},
+        {"id": 13, "description": "[ATTACKER MAC ADDRESS] \"true\"|\"false\"", "type" : "MAC"},
+        {"id": 14, "description": "-name [DOMAIN NAME] [REDIRECTION IP]", "type" : "DNSS"},
+        {"id": 15, "description": "-dnsttl [INT VALUE]", "type" : "NETP"},
+        {"id": 16, "description": "-log [LOGFILE PATH]", "type" : "DOCF"},
+        {"id": 17, "description": "-pass [CREDENTIALS DUMP PATH]", "type" : "DOCF"},
+        {"id": 18, "description": "-dwn_ip [IP ADDRESS]", "type" : "CCSH"},
+        {"id": 19, "description": "netsh advfirewall firewall add rule name=\"Core Networking - Router Solicitation\" dir=in action=allow program={self_path} enable=yes", "type" : "EXEF"},
+        {"id": 20, "description": "wmic path win32_networkadapter where index=%d call disable", "type" : "EXEF"},
+        {"id": 21, "description": "wpcap.dll", "type" : "APPS"},
+        {"id": 22, "description": "WolfSSL", "type" : "APPS"},
+        {"id": 23, "description": "CSniffFtp (Ports: 21,990)", "type" : "NETP"},
+        {"id": 24, "description": "CSniffImap (Ports: 143,993)", "type" : "NETP"},
+        {"id": 25, "description": "CSniffLdap (Ports: 389,636,10389,10636)", "type" : "NETP"},
+        {"id": 26, "description": "CSniffNntp (Port: 119)", "type" : "NETP"},
+        {"id": 27, "description": "CSniffPop (Ports: 110,995)", "type" : "NETP"},
+        {"id": 28, "description": "CSniffSmb (Port: 445)", "type" : "NETP"},
+        {"id": 29, "description": "CSniffSmtp (Ports: 25,465)", "type" : "NETP"},
+        {"id": 30, "description": "CSniffTds (Port: 1433)", "type" : "NETP"},
+        {"id": 31, "description": "CSniffTelnet (Port: 23)", "type" : "NETP"},
+        {"id": 32, "description": "Sniff-Http2 (Ports: 80,443)", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "decodes and executes"},
+        {"source": 3, "target": 4, "rel_name" : "decompresses and executes"},
+        {"source": 4, "target": 1, "rel_name" : "injects into memory"},
+        {"source": 5, "target": 6, "rel_name" : "uses as parameter"},
+        {"source": 7, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 8, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 9, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 10, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 11, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 12, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 13, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 14, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 15, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 16, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 17, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 18, "target": 6, "rel_name" : "specified in config file"},
+        {"source": 5, "target": 19, "rel_name" : "adds firewall rule using"},
+        {"source": 5, "target": 20, "rel_name" : "disables network adapter using"},
+        {"source": 5, "target": 21, "rel_name" : "imports APIs from"},
+        {"source": 5, "target": 22, "rel_name" : "uses for SSL hijacking"}
+    ]
+}

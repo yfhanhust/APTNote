@@ -1,0 +1,136 @@
+RAT capabilities
+The CRAT malware consists of multiple RAT capabilities that allow it to be highly versatile
+and dangerous. CRAT executes these capabilities by receiving command codes and
+corresponding data from the C2 in the form of JSONs communicated over HTTP.
+Apart from the introduction of a wide variety of new RAT capabilities in CRAT version 2 (vs
+CRAT version 1), the biggest update is the spin-off of key RAT capabilities into plugin
+modules. These plugins (DLLs) are downloaded on-the-fly by CRATv2 and injected into
+specific processes running on the infected endpoint.
+The following capabilities have been observed in CRATv2.
+Collect System Information
+Collects the following system information:
+Installed AntiVirus software names
+Installed FirewallProduct names
+Domain Names:
+Netbios domain name
+DNS domain name
+Domain forest name
+File version number from DLLs embedded Version Information
+Path to the system folder
+Flag if the current user has administrative privileges
+Implant checking for ADMIN privileges
+TCP/IP enabled MAC Addresses using WMI query:
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 7/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+wmic PATH Win32_NetworkAdapterConfiguration WHERE IPEnabled=TRUE GET
+MACAddress.
+Implant replacing strings in the output of the WMIC command to obtain only the MAC
+Addresses
+Enumerate drives and gather file size information
+Collects size information about all files and folders on the infected endpoint except:
+Recycle Bin
+%windir%
+The data gathered is arranged into a specific format:
+\t\r\n
+[DIR]\t
+\t bytes
+Where Disk Type =
+Local Disk
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 8/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+CD ROM
+Removable Disk
+Remote Disk
+RAM Disk
+Unknown Disk
+E.g.
+Snippet of drive and file size information
+gathered by the implant.
+Enumerate Drives using dir
+Enumerate drives using the 'dir' command:
+cmd /c "dir  /s >> %temp%\error.log"
+Where custom_prefix = file name prefix specified by the C2
+E.g. cmd /c "dir C:\ /s >> C:\Users\\AppData\Local\Temp\BLAHerror.log"
+Implant constructing the dir cmd to be executed.
+The log file is then rolled up into a ".rar" archive using a pre-existing installation of a RAR
+archiver program using the command:
+ a -k -r -s -ibck -m5  
+The RAR archive is then read to memory and exfiltrated to the C2, followed by deletion of the
+.rar and log files.
+Read and write file
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 9/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+CRAT has the capability to read the contents of the file specified by the C2 and exfiltrate
+these to the C2. The write file capability consists of writing the data received from the C2 to a
+temporary file in the %temp% folder: %temp%\.tmp
+The implant will also timestomp the tmp file to either a hardcoded value or copy the filetimes
+from a system file such as %windir%\system32\user32.dll.
+Execute commands
+Execute commands with two variations of the functionality:
+Simply execute the command on the endpoint.
+Execute a command and send output of command to C2.
+Reverse Shell
+Open up a reverse command shell for arbitrary command execution using Windows pipes.
+Set query times
+This capability allows the C2 to specify delays between consecutive command queries from
+the implant to the C2 for:
+Receiving commands from the C2.
+Receiving arbitrary commands to execute in the reverse shell.
+Steal browser passwords: ChromePass
+Execute chromepass.exe with the /stext switch to obtain the usernames and passwords
+stored in Google Chrome. The credentials are dumped to a text file which is read and
+exfiltrated to the C2.
+Command format: chromepass.exe /stext 
+File explorer
+CRAT contains a RAT functionality that implements a custom-built File Explorer sub
+module.
+The C2 specifies the parent functionality command code and an additional sub-command
+code to specify the sub-capability to be executed in the file explorer. The file explorer submodule contains the following sub-capabilities:
+Gather free and total disk space information for each drive on the system.
+Enumerate file listings (recursively) in a given directory.
+Move files across locations.
+Find and remove files and folders.
+Create RAR archive files from files specified.
+Create RAR archives and exfiltrate file contents to C2.
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 10/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+Execute arbitrary commands specified by C2 on the endpoint.
+Plugin administration
+Downloads and installs a malicious plugin from the C2. The plugin is placed in a standard
+directory specified by the C2, and locations may include:
+%PUBLIC%\Documents
+%USERPROFILE%\Downloads
+%PUBLIC%\Music
+%PUBLIC%\Pictures
+%PUBLIC%\Videos
+%windir%
+%windir%\system32
+%APPDATA% (%USERPROFILE%\AppData\Roaming)
+CRAT can also administer the malicious plugins by performing the following actions:
+For EXE based plugins:
+Execute plugin as an independent process.
+For DLL plugins:
+Activate using regsvr32.exe
+Activate using rundll32.exe
+Reflective load into its own process
+Reflectively load into a target process
+Delete files related to plugins
+Uninstall CRAT
+The RAT comes with an uninstallation routine built into it as well. This routine can be
+triggered in response to a command issued by the C2 or if the endpoint fails its anti-infection
+checks. The uninstallation routine consists of:
+Deleting .exe and .lnk files associated with the RAT.
+Sending the uninstall flag to the communications pipe.
+Delete associated plugin files (EXEs and DLLs) from the endpoint.
+Additional capabilities
+In addition to the RAT capabilities, CRAT also consists of additional functionalities that are
+implemented as part of independent threads in the infected process:
+Send Heartbeat Thread: This will send four bytes of data periodically to a named pipe.
+Upload File Thread: This thread will periodically send the contents of a file to the C2
+server over HTTP. The contents of either the Keylogger or Clipboard monitor files are
+read and sent to the C2.
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 11/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+Upload Screen Thread: This thread reads and sends the contents of another file to the
+C2 server over HTTP. Most likely the content of screenshots taken by the Screen
+Recorder plugin.

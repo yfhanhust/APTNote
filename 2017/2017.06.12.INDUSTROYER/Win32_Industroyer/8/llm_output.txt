@@ -1,0 +1,143 @@
+
+
+
+Sentence : 104 payload component
+This payload DLL has the filename 104.dll and is named after IEC 104 (aka
+IEC 60870-5-104 ), an international standard. The IEC 104 protocol extends
+IEC 101, so the protocol can be transmitted over a TCP/IP network.
+Due to its highly configurable nature, this payload can be customized
+by the attackers for different infrastructures. Figure 8 shows what a
+configuration file may look like.
+Figure 8. An example of 104 payload DLL configuration.
+Once executed, the 104 payload DLL attempts to read its configuration file.
+As described above, the path for the configuration file is supplied by the
+Launcher component.
+The configuration contains a STATION section followed by properties
+that configure how the 104 payload should work. The configuration may
+contain multiple STATION entries.
+Our analysis of this component reveals the following possible
+configuration properties:
+Property Expected value Purpose
+target_ip IP address The IP address that will be used
+for the communication using IEC
+104 protocol standard
+target_port Port number Self-explanatory
+uselog 1 or 0 Enables or disables logging
+to a file
+logfile Filename Specifies the filename for the log,
+if enabled
+stop_comm_ 1 or 0 Enables or disables termination of
+service the process
+stop_comm_ Process name Specifies the process name that
+service_name will be terminated
+timeout Timeout in Specifies timeout between send
+milliseconds and recv calls. Default value:
+15000
+socket_timeout Timeout in Specify the receiving timeout.
+milliseconds Default value: 15000
+silence 1 or 0 Enables or disables console output
+asdu Integer Specifies ASDU (Application
+Service Data Unit) address also
+known as sector
+first_action on or off Specifies the Switch value in ASDU
+packet for first iteration
+change 1 or 0 Specifies that the Switch value in
+ASDU packet should be inverted
+during iterations
+command_type def or short Specifies command pulse duration
+or long or persist for qualifier of command (QOC)
+Win32/Industroyer 8
+Property Expected value Purpose
+operation range or Specifies iteration type for
+sequence or shift Information Object Addresses
+(IOA)
+range Specific format of Specifies range of Information
+IOAs Object Addresses (IOA)
+sequence Specific format of Specifies sequence of Information
+IOAs Object Addresses (IOA)
+shift Specific formatof Specifies shift of Information
+IOAs Object Addresses (IOA)
+Once the configuration file is read, the 104 payload creates a thread for
+each STATION section defined in the configuration file. In each such
+thread, the 104 payload will attempt to communicate with the specified
+IP address using the protocol described in the IEC 104 standard. Before the
+connection is made, the 104 payload attempts to terminate the legitimate
+process that is normally responsible for IEC 104 communication with the
+device. It does so only if the stop_comm_service property is specified
+in its configuration. By default, the 104 payload terminates the process
+named D2MultiCommService.exe, or the process name specified in its
+configuration.
+The main idea behind the 104 payload is relatively simple. It connects to
+the specified IP address and starts to send packets with the ASDU address
+that was defined in its configuration. The goal of this communication is to
+interact with an IOA of a single command type.
+In the configuration file, the attacker can define the operation property to
+specify exactly how single command type IOAs will be iterated.
+The first such operation mode is the range mode. The attackers use
+this mode in order to discover possible IOAs in the targeted device. The
+attackers have to take this approach because the protocol described in
+the IEC 104 standard does not provide a specific method to obtain such
+information.
+The range mode has two stages. During the first stage, once the range of
+IOAs is obtained from the configuration file, the 104 payload connects to
+the target IP address and starts to iterate through the specified IOAs. To
+each such IOA the 104 payload sends “select and execute” packets in order
+to switch the state and to confirm whether the IOA belongs to the single
+command type.
+Figure 9. An example of a 104 payload packet, after being dissected by Wireshark.
+Once all possible IOAs from the specified range are iterated, the 104
+payload switches to the second stage of range mode. If logging is enabled,
+the payload writes Starting only success to the log. The rest of this
+second stage is an infinite loop that uses the previously discovered IOAs of
+single command type. In the loop the payload constantly sends “select and
+execute” packets. In addition, if the option change is defined, the payload
+flips the On/Off state between loop steps.
+Figure 10 demonstrates the log file that was produced by the 104 payload
+during our analysis. It shows the payload iterated IOAs from 10 to 15, and
+once IOAs of the single command type were discovered, the payload
+started to use them in the loop. The configuration had the change option
+Win32/Industroyer 9
+enabled, so between loop iterations the payload flipped the switch value
+from On to Off and wrote it to the log.
+Figure 10. Example log file produced by the 104 payload
+The second operation mode is the shift mode. This is very similar to
+the range mode. The attacker defines, in the configuration file, a range of
+IOAs and shift values. Once the 104 payload is activated it does everything
+the same way as in range mode; however, once all IOAs in the defined
+range are iterated, it starts to iterate over the new range. The new range is
+calculated by adding the shift values to the default range values.
+The third operation mode is the sequence mode. It can be used by
+attackers once they know the values of all IOAs of the single command
+type that are supported by the connected device. This payload immediately
+executes an infinite loop, sending “select and execute” packets to the IOAs
+defined in the configuration file.
+Aside from its logging capability, the 104 payload can output debug
+information to the console, as seen in Figure 11.
+Figure 11. The console output of the 104 payload.
+Win32/Industroyer 10
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "104 payload DLL", "type" : "EXEF"},
+        {"id": 2, "description": "IEC 104 protocol", "type" : "NETP"},
+        {"id": 3, "description": "configuration file", "type" : "DOCF"},
+        {"id": 4, "description": "Launcher component", "type" : "EXEF"},
+        {"id": 5, "description": "target_ip", "type" : "CCSH"},
+        {"id": 6, "description": "target_port", "type" : "NETP"},
+        {"id": 7, "description": "logfile", "type" : "DOCF"},
+        {"id": 8, "description": "D2MultiCommService.exe", "type" : "EXEF"},
+        {"id": 9, "description": "ASDU address", "type" : "TAMP"},
+        {"id": 10, "description": "Information Object Addresses (IOA)", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "reads"},
+        {"source": 3, "target": 4, "rel_name" : "supplied by"},
+        {"source": 3, "target": 5, "rel_name" : "contains target_ip"},
+        {"source": 3, "target": 6, "rel_name" : "contains target_port"},
+        {"source": 3, "target": 7, "rel_name" : "writes to logfile"},
+        {"source": 1, "target": 8, "rel_name" : "terminates"},
+        {"source": 1, "target": 5, "rel_name" : "communicates with using IEC 104 protocol"},
+        {"source": 3, "target": 9, "rel_name" : "specifies ASDU address"},
+        {"source": 3, "target": 10, "rel_name" : "iterates through IOAs"}
+    ]
+}

@@ -1,0 +1,33 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 45
+|OS VERISON|COMMAND LINE|
+|---|---|
+|XP or older|cmd.exe /c netsh frewall add portopening protocol=tcp port={listening port} name=CoreNetworkingHTTPS|
+|Vista or newer|cmd.exe /c netsh advfrewall frewall add rule name=CoreNetworkingHTTPSdir=in action=allow Protocol=TCP localport={listening port}|
+Table 13-3: RomeoWhiskey-Two’s Firewall Modification Command Lines
+RomeoWhiskey-Two’s developer(s) were not intent on modifying only the host-level firewall, as they actively try to
+manipulate the perimeter firewall as well. By using the Simple Service Discovery Protocol (SSDP), RomeoWhiskey-Two
+attempts to determine the next hop between the infected machine and the Internet. If the local router responds with the
+URL for its UPnP interface, RomeoWhiskey-Two issues a series of Universal Plug and Play (UPnP) commands in order
+to map an external port on the firewall to the RomeoWhiskey-Two’s listening port and name the new mapping “ DHCP
+Client ”. The net effect, if successful, allows RomeoWhiskey-Two to tunnel a hole from the exterior of the firewall (the
+Internet-facing interface) through to the RomeoWhiskey-Two instance. SSDP and UPnP configuration of firewalls is not
+common in larger networks, but rather is more likely to be found in a SOHO environment. This would indicate that either
+the developer(s) of RomeoWhiskey-Two were unaware of the limitation of SSDP and UPnP in a corporate environment, or
+that they were targeting smaller infrastructures.
+Whenever a new connection from a client occurs, RomeoWhiskey-Two immediately spawns a new thread to handle
+the incoming requests. The generation of the new thread occurs prior to the authentication handshake, unlike
+RomeoWhiskey-One. The authentication handshake, meanwhile, is more evolved than the previously described function
+seen in Figure 13-1. RomeoWhiskey-Two generates a 16-byte buffer of random bytes before modifying the 3 [rd] byte through
+the 7 [th] byte with the seed value and the 10 [th] through 13 [th] bytes with the challenge value as Figure 13-2 illustrates. The client
+has 10 seconds to respond with another 16-byte buffer of which contains random data, a seed value and a challenge value
+in the same format. While the system, at face value, seems somewhat imposing, in actuality it is worthless for any form
+of cryptographic authentication. Both the request from the RomeoWhiskey-Two instance to the client and the client’s
+response contain all of the components necessary to generate a valid response. The challenge value is derived from the
+seed value by performing several bitwise XORs and shifts, and an addition as Figure 13-3 describes. Therefore, by supplying
+both the seed and the challenge values, there is practically no value to the handshake other than to prove both sides know
+the algorithm. Furthermore, a simple packet replay by the client would satisfy the handshake’s conditions.
+|OFFSET|+0|+1|+2|+3|+4|+5|+6|+7|
+|---|---|---|---|---|---|---|---|---|
+|0|Random|Random|Random|Seed value (DWORD)|Seed value (DWORD)|Seed value (DWORD)|Seed value (DWORD)|Random|
+|8|Random|Challenge value (DWORD)|Challenge value (DWORD)|Challenge value (DWORD)|Challenge value (DWORD)|Random|Random|Random|
+Figure 13-2: RomeoWhiskey-Two’s Authentication Handshake Data Blob’s Format

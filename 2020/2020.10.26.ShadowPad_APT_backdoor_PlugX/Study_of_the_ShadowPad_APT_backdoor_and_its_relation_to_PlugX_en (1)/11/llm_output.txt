@@ -1,0 +1,87 @@
+
+
+
+Sentence : Operating with plug-ins
+Command IDs for the Plugins module can have the following values id — 0x650000,
+0x650001, 0x650002, 0x650003, or 0x650004 . In fact, the Plugins module is a plug-in
+manager, allowing one to register new plug-ins and delete existing ones.
+|Command ID|Description|
+|---|---|
+|0x650003|Deletes the specified plug-in from the storage in the registry.|
+|0x650000|Sends information about available plug-ins.ValueSize, byteplug-in namevariable length null-terminated stringnumber of plug-in calls4|
+|Value|Size, byte|
+|---|---|
+|plug-in name|variable length null-terminated string|
+|number of plug-in calls|4|
+|Command ID|Description|
+|---|---|
+||DateTimeStamp4plug-in code4loaded_module.field_14 (unknown)4status (loaded or not)4initialized4size4base8|
+|0x650001|Body of the command contains a new plug-in. The plug-in format is the sameas the built-in ones. The backdoor compresses it with the QuickLZ algorithm,encrypts it and stores it in the registry storage, then pauses the current threadso the plug-in processing thread loads a new plug-in from the registry storage.|
+|0x650002|The command contains the name of the DLL that the backdoor attempts toload, and then sequentially calls its entry point withdwReason 0x64,0x66, 0x68.|
+|0x650004|The command contains the module code. If a plug-in with the specified code ispresent in the list, the backdoor deinitializes it.|
+Online
+|DateTimeStamp|4|
+|---|---|
+|plug-in code|4|
+|loaded_module.field_14 (unknown)|4|
+|status (loaded or not)|4|
+|initialized|4|
+|size|4|
+|base|8|
+The command IDs for the Online plug-in can have the values 0x680002, 0x680003,
+0x680004, or 0x680005 .
+|Command ID|Description|
+|---|---|
+|0x680002|Starts processing commands for plug-ins in a separate thread and initializes anew connection to the current server.|
+|0x680003|Sends system information. It can be represented as the structure:struct date{BYTE year; //+0x30|
+|Command ID|Description|
+|---|---|
+||BYTE month;BYTE day;BYTE hour;BYTE minute;BYTE second;BYTE space;} struct sysinfo{byte id[8];DWORD datestamp1; //20150810DWORD datestamp2; //20170330BYTE year; //+0x30BYTE month;BYTE day;BYTE hour;BYTE minute;BYTE second;BYTE space;DWORD module_code;WORD module_timestamp; //the lower 2 bytes of theloaded_module.timestamp field of the connection moduleDWORD IP_address;LARGE_INTEGER total_physical_memory;DWORD cpu_0_MHZ;|
+|Command ID|Description|
+|---|---|
+||DWORD number_of_processors;DWORD dwOemID;LARGE_INTEGERtotal_disk_space[number_of_disks]; //iterates all disksstarting from C:DWORD pels_width; //screen width in pixelsDWORD pels_height; //screen height in pixelsDWORD LCID;LARGE_INTEGER perfomance_frequency; //pseudo-randomvalue generated using QueryPerformanceCounter andQueryPerformanceFrequencyDWORD current_PID;DWORD os_version_major;DWORD os_version_minor;DWORD os_version_build_number;DWORD os_version_product_type; DWORD sm_Server_R2_build_number; //GetSystemMetrics(SM_SERVERR2)//the strings below - null-terminatedchar hostname[x];char domain_name[x];char domain__username[x]; //separated "/"char module_file_name[x];char osver_info_szCSDVersion[x];char str_from_config_offset1[x]; //Messenger}Theid value is the unique identifier of the infected computer stored in theregistry.|
+|Command ID|Description|
+|---|---|
+||It is worth noting that the values of thedatestamp1 anddatestamp2 fieldsare set to20150810 and20170330, respectively. Similar constants in the formof dates were also used inPlugX backdoor plug-ins.|
+|0x680004|Sends a packet with a random length body (from0 to0x1F bytes). The packetbody is filled with 0.|
+|0x680005|Sends an empty packet (header only) and then callsSleep(1000) 3 times in arow.|
+Config
+This is a plug-in for working with the configuration.
+|Command ID|Description|
+|---|---|
+|0x660000|Sends the current configuration to the server.|
+|0x660001|Receives and applies the new configuration.|
+|0x660002|Deletes the saved configuration file.|
+Install
+|Command ID|Description|
+|---|---|
+|0x670000|Installs the backdoor as a service or installs it in the registry.|
+|0x670001|CallsSleep(1000) three times in a row, then checks theshellarg.modeparameter: if its value is4, it then terminates the current process.|
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Plugins module", "type" : "APPS"},
+        {"id": 2, "description": "Registry storage", "type" : "REGI"},
+        {"id": 3, "description": "Backdoor", "type" : "ACTO"},
+        {"id": 4, "description": "QuickLZ algorithm", "type" : "APPS"},
+        {"id": 5, "description": "Online plug-in", "type" : "APPS"},
+        {"id": 6, "description": "Current server", "type" : "CCSH"},
+        {"id": 7, "description": "System information structure", "type" : "TAMP"},
+        {"id": 8, "description": "Unique identifier of the infected computer", "type" : "REGI"},
+        {"id": 9, "description": "Config plug-in", "type" : "APPS"},
+        {"id": 10, "description": "Configuration file", "type" : "DOCF"},
+        {"id": 11, "description": "Install plug-in", "type" : "APPS"},
+        {"id": 12, "description": "Service or registry installation", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "manages"},
+        {"source": 3, "target": 1, "rel_name" : "uses"},
+        {"source": 3, "target": 4, "rel_name" : "compresses with"},
+        {"source": 3, "target": 5, "rel_name" : "starts processing commands for"},
+        {"source": 5, "target": 6, "rel_name" : "initializes connection to"},
+        {"source": 7, "target": 8, "rel_name" : "contains unique identifier in"},
+        {"source": 3, "target": 9, "rel_name" : "sends configuration to"},
+        {"source": 3, "target": 10, "rel_name" : "deletes"},
+        {"source": 3, "target": 11, "rel_name" : "installs as"}
+    ]
+}

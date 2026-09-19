@@ -1,0 +1,191 @@
+6. VMPROTECTED PACKER USED IN TARGETED ORGANIZATIONS
+In addition to the Winnti malware, organizations targeted by Winnti were found to be compromised
+with a VMProtected DLL. Kaspersky mentions this VMProtected technique in the detailed article about
+ShadowHammer [5] .
+These VMProtected samples are actually responsible for decrypting a payload that is either embedded
+in its PE file overlay or read from ~~[Drive]:\$Recycle.Bin\COM1:NULL.DAT~~ ~~.~~ This file ~~(~~ ~~NULL.DAT~~ )
+is an NTFS Alternate Data Stream (ADS) on a file named “ ~~COM1~~ ”, which has the special meaning of being
+the first serial port it is a reserved name not to be used as a filename [8] . This makes working with the file
+a bit more difficult than usual.
+16 Connecting the dots Exposing the arsenal and methods of the Winnti Group
+To be able to read COM1 from the command prompt, its path needs to be prefixed with “ ~~\\.\~~ ”.
+Regardless of the location of the payload, the key derivation and decryption algorithms are always the same.
+The payloads are encrypted using RC5 in ECB mode and the decryption key is derived from the volume ID
+of the targeted machine as follows:
+```
+       # Generate RC5 key from volume serial number
+       import os
+   volume_serial_number = os.stat("C:").st_dev
+   secret_string = "f@Ukd!rCto R$."
+   rc5_key = ""
+   pos = 0
+   for char in secret_string:
+       byte_from_serial = (volume_serial_number >> ((pos & 3)*8)) & 0xff
+       xored_value = (ord(char) ^ byte_from_serial)
+       if pos % 4 == 0:
+           rc5_key += "%02X" % xored_value
+       else:
+
+           rc5_key += "%02x" % xored_value
+       pos += 1
+
+   print rc5_key
+
+```
+In most of the VMProtected samples we found, the string used to derive the decryption key from the volume
+ID is the same (“ ~~f@Ukd!rCto R$.~~ ”). In some more recent cases the derivation string was “ ~~d37lo{r~~ ”.
+Once decrypted, the payload is position-independent codes executed in a separate thread.
+The derivation string, key derivation from the volume ID and RC5 implementation are the same as used
+in Win64/Winnti.BN, which is the known second stage of the compromised videogames and gaming
+applications and are used to decrypt the third stage. Unlike the samples we are looking at here, Win64/
+Winnti.BN is not packed with VMProtect, but uses exactly the same key derivation and encryption algorithm.
+ESET researchers were able to decrypt several payloads packed using this custom VMProtected packer.
+We found that the payload was either the PortReuse backdoor or the ShadowPad malware [4] .
+6.1 PortReuse backdoor
+The PortReuse backdoors dropped by the VMProtected samples were all using the ~~UrlPrefix~~ technique
+on various ports and the ~~Server~~ header of the backdoor response was ~~Microsoft-IIS/ 10.0~~
+~~Microsoft-HTTPAPI/2.0~~ . The backdoor was observed to be in use at least two organizations.
+Considering that the PortReuse backdoor was found in VMProtected droppers similar to what was previously
+described by Kaspersky with Operation ShadowHammer [5], in addition to the fact that the same decryption
+algorithm is used by the 2nd stage from the compromised video-games and also by the gaming application
+uncovered by ESET, strongly suggests that Operation ShadowHammer and these supply-chain attacks
+are connected and that the PortReuse backdoor is part of the Winnti Group arsenal.
+6.2 ShadowPad
+As mentioned previously, some of the payloads dropped by the VMProtected samples were similar
+to the ShadowPad malware, using the same plugin architecture with identical module ID, similar embedded
+configurations and encryption schemes.
+Interestingly, if we look at the modules timestamps, we can see that public webpages to retrieve the C&C
+server instead of DGA (Domain Generation Algorithm) started to be used from at least the 25th August 2017,
+less than two weeks after the publication on the NetSarang compromise by Kaspersy [4] . The Module IDs
+along with their names and timestamps from various samples are shown in Table 8, Table 9 and Table 10.
+17 Connecting the dots Exposing the arsenal and methods of the Winnti Group
+~~Table 8~~ ~~Module ID and their respective names and timestamps~~
+Module ID Module name Module timestamp
+100 Root Fri 25 Aug 2017 04:40:54 AM UTC
+101 Plugins Fri 25 Aug 2017 04:39:02 AM UTC
+102 Config Fri 25 Aug 2017 04:39:10 AM UTC
+103 Install Fri 25 Aug 2017 04:40:15 AM UTC
+104 Online Fri 25 Aug 2017 04:39:27 AM UTC
+200 TCP Fri 25 Aug 2017 04:40:15 AM UTC
+201 HTTP Fri 25 Aug 2017 04:35:45 AM UTC
+202 UDP Fri 25 Aug 2017 04:35:54 AM UTC
+~~Table 9~~ ~~Module ID and their respective names and timestamps~~
+Module ID Module name Module timestamp
+100 Root Wed 21 Mar 2018 11:09:32 AM UTC
+101 Plugins Wed 21 Mar 2018 10:53:13 AM UTC
+102 Config Wed 21 Mar 2018 10:53:17 AM UTC
+103 Install Wed 21 Mar 2018 10:54:07 AM UTC
+104 Online Wed 21 Mar 2018 10:53:30 AM UTC
+200 TCP Wed 21 Mar 2018 10:50:44 AM UTC
+201 HTTP Wed 21 Mar 2018 10:50:52 AM UTC
+202 HTTPS Wed 21 Mar 2018 10:50:58 AM UTC
+In addition to these ShadowPad variants using the same IDs as described in [4], we found an updated version
+with modules that, according to their timestamps, were compiled in 2019 according to their timestamps,
+with additional obfuscations and using random module IDs.
+~~Table 10~~ ~~Updated module ID and their respective names and timestamps~~
+Module ID Module name Module timestamp
+58338 DNS Fri 15 Mar 2019 05:22:19 PM UTC
+3331 TCP Fri 15 Mar 2019 05:21:40 PM UTC
+22707 UDP Fri 15 Mar 2019 05:22:13 PM UTC
+48503 HTTP Fri 15 Mar 2019 05:21:48 PM UTC
+33173 HTTPS Fri 15 Mar 2019 05:21:56 PM UTC
+4626 Root Fri 15 Mar 2019 05:23:15 PM UTC
+12996 Config Fri 15 Mar 2019 05:23:26 PM UTC
+61013 Plugins Fri 15 Mar 2019 05:23:21 PM UTC
+5176 Online Fri 15 Mar 2019 05:23:49 PM UTC
+35573 Install Fri 15 Mar 2019 05:23:43 PM UTC
+The Config module maintains an encrypted string pool that contains two URLs of a public profile or publicly
+posted document on legitimate websites, which are used to retrieve and decrypt the real C&C server URL.
+18 Connecting the dots Exposing the arsenal and methods of the Winnti Group
+In addition to these URL, the string pool contains a string similar to a campaign identifier that was related
+to the targeted victims. In previous versions of the backdoor, the string pool starts at offset 0x56 relative
+to the beginning of the configuration block, while for the updated version, the offset is 0x5c.
+The algorithm to decrypt the C&C address is similar to the one used in older versions of ShadowPad.
+First, the string enclosed between consecutive ‘ ~~$~~ ’ delimiters from the publicly posted document is extracted.
+Then each character is decremented by 0x61 (‘a’) and each resulting pair of four bits is then concatenated
+into a byte and the resulting buffer decrypted using the decryption routine that is also used to decrypt
+the strings from rest of the code.
+The string decryption algorithms used differ between samples, but follows a pattern similar to the following
+Python transcription:
+```
+       decryption_buf = []
+       xor_key = (0xff & cyphertext[0]) | (0xff00 & (cyphertext[1] << 8))
+   for byte in cyphertext[2:]:
+     decryption_buf.append((0xff & xor_key) ^ byte)
+     xor_key = (0xffffffff & (0xffffffff & (0x8CC70000 * xor_key))
+           - (0xffffffff & (0x1B507339 * ((xor_key >> 16))))
+           - 0x70A927AC)
+
+   print "".join(map(chr, decryption_buf))
+
+```
+The pages used to retrieve the C&C from the payloads we decrypted are shown in Table 11.
+~~Table 11~~ ~~URL of pages containing encrypted C&C and their respective decrypted C&C~~
+URL Decrypted C&C
+From document history:
+```
+URL://https://docs.google[.]com/
+document/d/1jcRsFZM59x_4AKJabmz8sPFsKOZArV4bTn3WsYonUns
+```
+```
+HTTPS://154.223.131[.]237:443
+UDP://117.16.142[.]9:443
+UDP://103.19.3.109:443
+```
+URL://https://docs.google[.]com/
+Access denied
+```
+document/d/1KJ_RJRtkKhcuJjXOCKtEOLuwH3sRi72PUhtfukncyRc
+```
+From document history:
+```
+                                   UDP://110.45.146.253:443
+                               UDP://110.45.146.254:443
+
+                               TCP://110.45.146.254:443
+
+                               UDP://117.16.142.69:443
+
+                               UDP://122.10.117.206:443
+
+```
+```
+URL://https://docs.google[.]com/
+document/d/1T5P3SS-QTO1nOS6IlKFA_chimnMPmhon8E_kuRSodWw
+```
+```
+UDP://207.148.125.56:443
+UDP://118.193.236.206:443
+UDP://167.88.176.205:443
+UDP://167.88.176.205:443
+UDP://103.224.83.95:443
+UDP://103.19.3.21:443
+TCP://103.19.3.21:443
+```
+URL://https://steamcommunity[.]com/id/869406565 C&C removed
+URL://https://steamcommunity[.]com/id/61198869528 C&C altered
+URL://https://raw.githubusercontent[.]com/Enterprise
+C&C removed
+```
+Backup/windows/master/Readme.html
+```
+19 Connecting the dots Exposing the arsenal and methods of the Winnti Group
+URL://https://pastebin[.]com/JgduT7NH C&C removed
+URL://https://docs.google[.]com/
+C&C removed
+```
+      document/d/1-vFbL5nw85uJeS-X9sYEJ0CAsUzJE3kidJg6Gg_vZ7s
+```
+URL://https://social.msdn.microsoft[.]com/profile/Pf9Je@ C&C removed
+Unfortunately, the attackers cleaned all the page content before we had access to the malware samples.
+However, two documents hosted on Google Docs contained information in the document history that
+enabled us to list the C&C servers they used for that campaign. The supported protocols to contact
+the C&C server are HTTP, HTTPS, UDP, TCP and DNS.
+Figure 9 // History of a public Google Docs document containing encrypted C&C URL
+Figure 10 // Steam profile controlled by the operators
+20 Connecting the dots Exposing the arsenal and methods of the Winnti Group
+6.3 Persistence
+These VMProtected samples persist on the system by using a DLL hijacking technique [7] similar to what
+was used by the 2nd stage of the CCleaner backdoor as described by CrowdStrike [8] . The DLL has an
+exported function that is used to copy itself to ~~C:\Windows\System32\TSVIPSrv.DLL~~ . It will then be
+loaded when the ~~SessionEnv~~ service which tries to load ~~TSVIPSrv.DLL~~ from the ~~System32~~ directory.

@@ -1,0 +1,252 @@
+
+
+
+Sentence : Behavior of a PLC infected by sequence A/B
+Infection sequences A and B are very similar. Unless otherwise stated, what’s mentioned here applies to both
+sequences.
+   - The infection code for a 315-2 is organized as follows:
+
+    - The replaced DP_RECV block (later on referred to as the “DP_RECV monitor”) is meant to monitor data sent
+
+by the frequency converter drives to the 315-2 CPU via CP 342-5 Profibus communication modules.
+    - Up to 6 CP 342-5 Profibus communication modules are supported. Each is a master on its own Profibus
+
+subnet with 31 frequency converter drives as slaves. The addresses of the CP 342-5 modules are recorded.
+Note the 315-2 CPU documentation recommends no more than 4 CP 324-5 modules, but in theory can
+support more, depending on CPU performance.
+   - Frames sent over Profibus are inspected. They are expected to have a specific format. Each frame should
+
+have 31 records—one for each slave—of either 28 or 32 bytes as the format differs slightly for the two dif­
+ferent frequency converter drives. Some fields are stored.
+   - The other blocks implement a state machine that controls the process. Transitions from state i to state i+1
+
+are based on events, timers or task completions.
+    - In state 1 fields recorded by the DP_RECV monitor are examined to determine if the target system is in a
+
+particular state of operation. When enough fields match simple criteria, a transition to state 2 occurs.
+   - In state 2 a timer is started. Transitioning to state 3 occurs after two hours have elapsed.
+
+   - In states 3 and 4, network frames are generated and sent on the Profibus to DP slaves. The contents of these
+
+frames are semi-fixed, and partially depend on what has been recorded by the DP_RECV monitor.
+   - State 5 initiates a reset of various variables used by the infection sequence (not to be confused with a PLC
+
+reset), before transitioning to state 1. Transitioning to state 0 may also occur in case of errors.
+   - In state 0, a 5-hour timer is started.
+
+Figure 29 represents a simplified view of this state machine.
+The normal path of execution is 1-2-3-4-5-1 – as shown by the solid, blue arrows in the diagram. Let’s detail what
+happens during each state.
+The initial state is 1 (circled in red). Transitioning to state 2 can take a fair amount of time. The code specifically
+monitors for records within the frames sent from the frequency converter drives that contain the current operat­
+ing frequency (speed of the device being controlled). This value is held at offset 0xC in each record in the frame
+and is referred to as PD1 (parameter data 1). The frequency values can be represented in hertz (Hz) or decihertz
+(deciHz). The attackers expect the frequency drives to be running between 807 Hz and 1210 Hz. If PD1 has a
+value greater than 1210, the code assumes the values being sent are represented in deciHertz and adjusts all
+frequency values by a factor of 10. For example 10000 would be considered 10,000 deciHertz (1000.0 Hz) rather
+than 10,000Hz. The routine that counts these records (here after referred to as events) is called once per minute.
+Events are counted with a cap of 60 per minute. It seems that this is the optimal, expected rate of events. The
+global event counter, initially set to 1,187,136, must reach 2,299,104 to initiate a transition to state 2. If we as­
+sume an optimal number of events set to 60 (the max could be 186, but remember the cap), the counting being
+triggered every minute, the transition occurs after (2299104-1187136)/60 minutes, which is 12.8 days.
+Transitioning from state 2 to 3 is a matter of waiting 2 hours.
+Figure 26
+State machine path of execution
+In states 3 and 4 two network send bursts occur. The traffic generated is semi-fixed, and can be one of the two
+sequences. The sequences consist of multiple frames that each contain 31 records. Each frame is sent to each
+CP 342-5 module, which passes on the respective record within the frame to each of the 31 frequency converter
+drive slaves.
+For infection sequence A (for Vacon frequency converters):
+  - Sequence 1 consists of 147 frames:
+
+   - 145 frames for sub-sequence 1a, sent during state 3.
+
+   - 2 frames for sub-sequence 1b, sent during state 4.
+
+  - Sequence 2 consisting of 163 frames:
+
+   - 127 frames for sub-sequence 2a, sent during state 3.
+
+   - 36 frames for sub-sequence 2b, sent during state 4.
+
+For infection sequence B (for Fararo Paya frequency converters):
+  - Sequence 1 consists of 57 frames:
+
+   - 34 frames for sub-sequence 1a, sent during state 3.
+
+   - 23 frames for sub-sequence 1b, sent during state 4.
+
+  - Sequence 2 consists of 59 frames:
+
+
+   - 32 frames for sub-sequence 2a, sent during state 3.
+
+   - 27 frames for sub-sequence 2b, sent during state 4.
+
+Transitioning from state 3 to state 4 takes 15 minutes for sequence 1 and 50 minutes for sequence 2.
+The data in the frames are instructions for the frequency converter drives. For example one of the frames con­
+tains records that change the maximum frequency (the speed at which the motor will operate). The frequency
+converter drives consist of parameters, which can be remotely configured via Profibus. One can write new values
+to these parameters changing the behavior of the device. The values written to the devices can be found in Ap­
+pendix C.
+Of note, for sequence A, the maximum frequency is set to 1410 Hz in sequence 1a, then set to 2 Hz in sequence
+2a, and then set to 1064 Hz in sequence 2b. Thus, the speed of the motor is changed from 1410Hz to 2Hz to
+1064Hz and then over again. Recall the normal operating frequency at this time is supposed to be between 807
+Hz and 1210 Hz.
+Thus, Stuxnet sabotages the system by slowing down or speeding up the motor to different rates at different
+times.
+When a network send (done through the DP_SEND primitive) error occurs, up to two more attempts to resend the
+frame will be made. Cases where a slave coprocessor is not started are also gracefully handled through the use
+of timers.
+During states 3 and 4, the execution of the original code in OB1 and OB35 is temporarily halted by Stuxnet. This
+is likely used to prevent interference from the normal mode of operation while Stuxnet sends its own frames.
+During processing of state 5, various fields are initialized before transitioning to state 1 and starting a new cycle.
+The two major events are:
+  - The global event counter is reset (which was initially 1187136). This means that future transitions from state 1
+
+to state 2 should take about 26.6 days.
+  - The DP_RECV monitor is reset. This means that the slave reconnaissance process is to take place again before
+
+frame snooping occurs. (Incidentally, note that slave reconnaissance is forced every 5.5 hours.)
+Transition to state 0 then occurs if an error was reported. “Error” in this context usually means that OB1 took too
+long to execute (over 13 seconds). Otherwise, a regular transition to state 1 takes place.
+It is worth mentioning that short-circuits, used to transition directly through states 0 and 1 to state 3, are de­
+signed to allow the sabotage routine to begin immediately. This occurs when another S7-315 on the same bus
+has fulfilled the wait period. The Windows monitoring thread will modify DB890, setting a flag, causing the PLC
+code to immediately begin the sabotage routine and to no longer wait the requisite time. This behavior synchro­
+nizes the sabotage routine across all 315s controlled by the same Windows system.
+Let’s detail the purpose of the DP_RECV monitor and the subsequent frames sent during state 3 and 4. The code
+expects a structure of 31 records of either 28 or 32 bytes (depending on which frequency drive is installed).
+Here’s the header of such a record:
+Offset Type Name
+0 word ID
+2 word Index (IND)
+4 dword VALUE
+8 word ControlWord (CW)/StatusWord (SW)
+10 word Reference (REF)/Actual (ACT)
+12 word Process Data 1 (PD1)
+…
+The monitor is especially interested in fields SW, ACT, and PD1. The following pieces of information are recorded:
+  - Is the tenth bit in SW set? This specifies FieldBus Control is on (one can control the devices via Profibus).
+
+  - Is ACT a positive or negative integer? Positive represents a forward direction, while negative reverse direction.
+
+
+  - The value of PD1, which is the output frequency (the current frequency/speed).
+
+The other fields are ignored.
+When reaching states 3 and 4, the original PLC code is halted and the malicious PLC code begins sending frames
+of data based on the recorded values during the DP_RECV monitor phase. The purpose of sending the frames is
+to change the behavior of the frequency converter drives. First of all DP_SEND will send similar types of frames
+as the ones that are expected to be received by DP_RECV (which means each frame will contain 31 records of 28
+or 32 bytes—one record for each slave frequency converter drive). Each record sent changes a configuration,
+such as the maximum frequency on the frequency converter drive. The record fields will be set to zero, except for
+the ID, Value, CW, and REF fields.
+|Table 6|Col2|Col3|Col4|Col5|Col6|Col7|Col8|Col9|Col10|Col11|Col12|Col13|Col14|Col15|Col16|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|ID Field Format|
+|ID Byte 1|ID Byte 1|ID Byte 1|ID Byte 1|ID Byte 1|ID Byte 1|ID Byte 1|ID Byte 1|ID Byte 2|ID Byte 2|ID Byte 2|ID Byte 2|ID Byte 2|ID Byte 2|ID Byte 2|ID Byte 2|
+|15|14|13|12|11|10|9|8|7|6|5|4|3|2|1|0|
+|Request Type|Request Type|Request Type|Request Type|SM|Parameter Number|Parameter Number|Parameter Number|Parameter Number|Parameter Number|Parameter Number|Parameter Number|Parameter Number|Parameter Number|Parameter Number|Parameter Number|
+  - ID specifies the parameter to change. The format of the ID field is detailed in Table 6.
+
+  - VALUE contains the new value for the particular parameter. For frequency values, a factor of ten can be ap­
+
+plied if the system was determined to be using deciHz units.
+  - CW (ControlWord) in sequence A is typically set to 47Fh, which means ‘Run’, but can start by sending 477h
+
+(Stop by Coast) and finishes by using 4FFh (Fault Reset). CW in sequence B is set to 403h.
+  - REF can range from 100% to -100% represented by 10000 or -10000. This specifies the drive should be
+
+operating at the maximum (100%) frequency either in a forward (positive 10000) or reverse (negative 10000)
+direction. The previous direction, before the behavior of the frequency converter drives were hijacked, is main­
+tained, but at 100% potentially with a new maximum frequency.
+The parameters that are
+modified and their values are
+in Appendix C. To more clearly
+illustrate the behavior of the
+injected code, we’ve outlined
+the key events that would
+occur with an infected 315-2
+CPU connected to multiple
+CP 342-5 modules each with
+31 frequency converter drive
+slaves, as shown in the dia­
+gram below.
+
+
+The PLC is infected.
+
+
+Frequency converter slaves
+
+
+Figure 27
+Connections between sequence blocks
+send records to their CP
+342-5 master, building a
+frame of 31 records The
+CPU records the CP-342-5
+addresses.
+
+
+The frames are examined and the fields are recorded.
+
+
+After approximately 13 days, enough events have been recorded, showing the system has been operating
+
+
+between 807 Hz and 1210 Hz.
+
+The infected PLC generates and sends sequence 1 to its frequency converter drives, setting the frequency to
+
+1410Hz.
+
+
+Normal operation resumes.
+
+
+After approximately 27 days, enough events have been recorded.
+
+
+initially to 2Hz and then 1064Hz.
+  - Normal operation resumes.
+
+  - After approximately 27 days, enough events have been recorded.
+
+  - The infected PLC generates and sends sequence 1 to its frequency converter drives, setting the frequency to
+
+1410Hz.
+  - Normal operation resumes.
+
+  - After approximately 27 days, enough events have been recorded.
+
+  - The infected PLC generates and sends sequence 2 to its frequency converter drives, setting the frequency
+
+initially to 2Hz and then 1064Hz.
+  - …
+
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "315-2 CPU", "type" : "APPS"},
+        {"id": 2, "description": "CP 342-5 Profibus communication modules", "type" : "EXEF"},
+        {"id": 3, "description": "Frequency converter drives", "type" : "EXEF"},
+        {"id": 4, "description": "DP_RECV monitor", "type" : "EXEF"},
+        {"id": 5, "description": "DP_SEND primitive", "type" : "EXEF"},
+        {"id": 6, "description": "Stuxnet", "type" : "APPS"},
+        {"id": 7, "description": "OB1 and OB35", "type" : "EXEF"},
+        {"id": 8, "description": "Windows monitoring thread", "type" : "APPS"},
+        {"id": 9, "description": "DB890 flag", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "description": "CP 342-5 modules connected to 315-2 CPU"},
+        {"source": 3, "target": 2, "description": "Frequency converter drives controlled by CP 342-5 modules"},
+        {"source": 4, "target": 1, "description": "DP_RECV monitor runs on 315-2 CPU"},
+        {"source": 6, "target": 1, "description": "Stuxnet infects 315-2 CPU"},
+        {"source": 5, "target": 3, "description": "DP_SEND primitive sends frames to frequency converter drives"},
+        {"source": 6, "target": 7, "description": "Stuxnet halts OB1 and OB35 during states 3 and 4"},
+        {"source": 8, "target": 1, "description": "Windows monitoring thread modifies DB890 flag to trigger sabotage routine"},
+        {"source": 9, "target": 6, "description": "DB890 flag causes Stuxnet to start sabotage routine immediately"}
+    ]
+}

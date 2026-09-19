@@ -1,0 +1,73 @@
+
+
+
+Sentence : DarkMatter — Shifting in the Winds
+Following former DarkMatter researcher Taha Karim’s presentation on a group he named WINDSHIFT
+(Karim, 2018), there was a lot of speculation in the security community about exactly who or what
+the group was. Several write-ups appeared in the following months concerning WINDSHIFT including
+by Palo Alto (McCabe, 2019) and Objective-See (Wardle, 2018). Both of these reports included a
+deeper analysis of the MacOS payloads deployed by the group and provided some additional linked
+domains including “string2me[.]com” and “domforworld[.]com”.
+Karim stated that the group employed “DES with a hardcoded Key and IV [initialization vector]” and
+the common crypto library function CCCrypt in their MacOS samples. This fact directly aligned
+with what Cisco Talos’ findings about the iOS samples from their follow-on MDM write-up. While
+BlackBerry lacked access to the iOS samples Cisco analyzed, they included enough information
+to replicate their work when cross-referenced with the initialization vector that was included in
+Karim’s Objective-C code slide. With a bit of experimentation BlackBerry confirmed that both sets of
+samples used the same initialization vector (IV), “0x0102030405060708”, although they appeared
+to use differing encryption keys. The initialization vector isn’t unique, but it’s more common to see
+and initialization vector with all zeroes, or else completely random values. As such, the choice of
+this particular sequence of numbers in the IV is indicative of style.
+In reading Cisco Talos’ work, BlackBerry found they had built a script for decryption, but didn’t share
+the code for it, as can be seen below:
+Figure 31: Cisco Talos demonstrating a decryption script
+BlackBerry constructed the following Python snippet that fulfilled the same purpose.
+Figure 32: Python snippet to decrypt DES strings from Cisco Talos’ blog
+In his first talk about WINDSHIFT, Karim provided a single C2 domain, “flux2key[.]com”, and stated
+that DarkMatter discovered a Windows sample in May of 2018 that communicated with the same
+domain as the MacOS malware. The hash of this sample was not shared at the time, but BlackBerry
+managed to find the following Windows executable which beaconed to the same domain exactly
+as Karim described:
+65194c18571f36e45349d0b57d5b1714d1b2846da38a6f4ab0585371691f7705
+Based upon what was presented in his slides, Karim instrumented the decoding of the strings using
+the Unicorn emulator. BlackBerry found that the Python functions listed above could be readily used
+to decode the majority of strings in this particular file. This discovery, along with significant, unique
+code similarities, provided a direct, high confidence link back to Kaspersky’s InPage writeup, Cisco’s
+MDM findings, and Trend Micro’s URPAGE discoveries. BlackBerry assesses with high confidence
+that WINDSHIFT and BAHAMUT are the same group. In sum, we are now able to assess with
+confidence that BAHAMUT has successfully developed and deployed malware for Android, iOS,
+MacOS, and Windows.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DarkMatter", "type" : "ACTO"},
+        {"id": 2, "description": "WINDSHIFT", "type" : "ACTO"},
+        {"id": 3, "description": "Taha Karim", "type" : "ACTO"},
+        {"id": 4, "description": "string2me[.]com", "type" : "CCSH"},
+        {"id": 5, "description": "domforworld[.]com", "type" : "CCSH"},
+        {"id": 6, "description": "CCCrypt function", "type" : "APPS"},
+        {"id": 7, "description": "iOS samples", "type" : "DOCF"},
+        {"id": 8, "description": "Objective-C code slide", "type" : "DOCF"},
+        {"id": 9, "description": "0x0102030405060708 (IV)", "type" : "TAMP"},
+        {"id": 10, "description": "flux2key[.]com", "type" : "CCSH"},
+        {"id": 11, "description": "Windows executable", "type" : "EXEF"},
+        {"id": 12, "description": "65194c18571f36e45349d0b57d5b1714d1b2846da38a6f4ab0585371691f7705", "type" : "IOCS"},
+        {"id": 13, "description": "Unicorn emulator", "type" : "APPS"},
+        {"id": 14, "description": "Python functions for decryption", "type" : "EXEF"},
+        {"id": 15, "description": "BAHAMUT", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 3, "target": 2, "rel_name" : "discovered"},
+        {"source": 2, "target": 4, "rel_name" : "used"},
+        {"source": 2, "target": 5, "rel_name" : "used"},
+        {"source": 2, "target": 6, "rel_name" : "used"},
+        {"source": 7, "target": 9, "rel_name" : "uses IV"},
+        {"source": 8, "target": 9, "rel_name" : "contains IV"},
+        {"source": 2, "target": 10, "rel_name" : "used C2 domain"},
+        {"source": 11, "target": 10, "rel_name" : "communicates with"},
+        {"source": 11, "target": 12, "rel_name" : "has hash"},
+        {"source": 13, "target": 9, "rel_name" : "uses IV"},
+        {"source": 14, "target": 7, "rel_name" : "decodes strings in"},
+        {"source": 15, "target": 2, "rel_name" : "same group as"}
+    ]
+}

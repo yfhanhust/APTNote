@@ -1,0 +1,42 @@
+Payload – In Depth Analysis
+To recap, the second stage payload in the attack chain, is an encrypted DLL file named
+minisdllpub.dll . The DLL, downloaded from 95.179.242[.]6, is a downloader for an
+additional payload. In the following section, we go over its implementation and highlight the
+characteristics which are unique to this payload.
+Minisdllpub.dll begins by creating a mutex with the name Afx:DV3ControlHost . This is a
+unique indicator that can later be used to hunt for more samples in the wild. It then defines a
+structure of size 0x5f8 to store system and environment information such as the name of the
+running computer, IP addresses, the username, and OS Version. Next, another structure of size
+0x3FC is created, this time to store pointers to loaded DLLs and API functions, as well as the
+command and control IP address ( 95.179.242[.]27 ) and port ( 443 ).
+After setting up these structures, the flow continues and a new thread is created. First, it fetches
+several lists of API functions, and dynamically loads them. As can be seen in the following image,
+each list is comprised of the name of a library followed by a sequence of API functions to load
+from this library. Pointers to these functions are then added to the previous structure which are
+used to dynamically invoke them when needed.
+Comma-separated lists of API functions, prepended with the library name
+The second stage payload then sets up HTTP or HTTPS communication, depends on several
+checks, and starts communicating with its remote control in new threads. When the server replies,
+it sends XOR encoded DLL to the malware, with the key 0x51 . Minisdllpub.dll then
+decodes the given payload and dynamically loads the new PE to memory.
+When loaded, it searches for an export function with the name e. The malware then keeps
+listening to commands from the server, and when those are received, it passes them to the "e"
+function of the newly loaded payload. By doing so, the second-stage is operating as a middleman between the C&C and the final payload – a remote access tool.
+https://research.checkpoint.com/2020/vicious-panda-the-covid-campaign/ 10/15
+3/16/2020 Vicious Panda: The COVID Campaign - Check Point Research
+The malware is searching for the export function “e”, in order to invoke it
+At this point, we have a unique layout of modules loaded on the victim’s computer. First, is the
+Minisdllpub.dll that was initially loaded using Rundll32 by http_dll.dll
+( intel.wll ) when a Microsoft Office application was executed. Next, we have the RAT payload
+itself which receives its control commands not directly from the C&C, but through
+Minisdllpub.dll that acts as a mediator.
+Loader execution flow
+Interestingly, in addition to the commands to execute, Minisdllpub.dll also passes several
+structures to the final payload. The structures which were previously built and filled, are now used
+by the RAT to dynamically invoke API functions and deliver data to the C&C server. This unique
+approach of re-using function pointers that were loaded in the previous module makes the
+analyzing the RAT hardly possible without having the previous stage as well.
+https://research.checkpoint.com/2020/vicious-panda-the-covid-campaign/ 11/15
+3/16/2020 Vicious Panda: The COVID Campaign - Check Point Research
+The supported functionalities of the final payload, as well as the respective commands it receives
+and sends, are described in the table in Appendix A.

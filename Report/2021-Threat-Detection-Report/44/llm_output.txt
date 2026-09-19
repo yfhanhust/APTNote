@@ -1,0 +1,130 @@
+
+
+
+Sentence : Detection
+```
+Collection requirements
+Command-line monitoring
+The use of ~~sc.exe~~ to manually create, register, or modify a service is a good
+indication of malicious use of Windows services. While there are many methods
+of creating and modifying services, adversaries still regularly leverage ~~sc.exe~~ to
+perform service operations.
+Adversaries also make use of ~~reg.exe~~ to modify service parameters—for
+example, to point an existing service to an adversary-controlled executable.
+Process monitoring
+Much like process command-line parameters, process monitoring is a reliable
+method for detecting malicious activity when the services in the environment
+are well known and well documented. Processes with randomly generated
+names (especially names consisting exclusively of numbers) may indicate
+malicious services running on the system. For example, Cobalt
+Strike, our second most prevalent threat, uses seven alphanumeric characters
+in its service name by default, appearing in telemetry in a manner similar
+to ~~:~~ ~~\172.0.0.1\ADMIN$\1a2b3c4.exe~~
+Windows Event Logs
+While certain event logs will produce a large number of events and hence a large
+number of false positives, others would be more reliable in detecting malicious
+use of Windows services. Windows Event Logs such as 4697, 7045 and/or 4688
+l [T1543.003: Windows Service]
+37
+2021 Threat Detection Report
+will respectively alert on new services and processes being created. In a perfect
+world, this should be fairly quiet, but depending on the environment, what
+systems are being monitored, and how often this type of activity occurs, these
+logs may generate a lot of noise depending on how often software is installed on
+monitored systems.
+Windows Registry
+In general, anomalous modifications to the registry are a good indication of
+malware or, at the very least, suspicious activity. More specifically, modifications
+to ~~HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services~~ may be
+a good indication of an untrusted or malicious service. As this registry tree
+updates frequently as an artifact of legitimate user-mode service and driver
+installations, registry monitoring has the potential to generate a large number of
+false positives without additional context and baselining.
+File monitoring
+File monitoring can be a useful data source for observing malicious creation
+of Windows services, but only if you use it in context with other behavioral
+identifiers or other specific indicators of malware.
+File monitoring
+While many Windows Service techniques incorporate similar naming
+conventions or binaries across multiple environments, over time these
+attributes may and do change. While conventions may help to locate malicious
+behaviors for a short period of time, it is more important to focus on behavioral
+patterns than specific commands or names.
+You may be able to detect malicious use of Windows services by monitoring for
+and alerting on the following:
+      - changes within the Service Control Manager registry key: ~~**HKEY_LOCAL_**~~
+
+~~MACHINE\SYSTEM\CurrentControlSet\Services~~
+      - service binaries loaded from unusual directory paths (e.g., via the ~~**PUBLIC**~~
+
+or ~~APPDATA~~ )
+      - anomalous and unique services being created on a single device or across
+
+the environment
+      - suspect creation of a service by the Windows Service Control Manager (e.g.,
+
+service executables with a low reputation, like those that deviate from an
+established organizational baseline)
+l [T1543.003: Windows Service]
+Chapman
+S E N I O R I N C I D E N T
+H A N D L E R
+Taylor Chapman has an extensive
+industry background: before landing at
+Red Canary, he started his journey with
+Mandiant and made a few stops along
+the way to work for industry titans like
+Sony in Tokyo, Japan and Carbon Black.
+Ricky
+Espinoza
+D E T EC T I O N
+E N G I N E E R
+Ricky has more than a decade of
+experience in infosec, with specialities
+in incident response, network security,
+and vulnerability management. As a
+detection engineer on the Red Canary
+CIRT, he tunes detection analytics
+and investigates confirmed threats on
+customers’ environments.
+38
+2021 Threat Detection Report
+To expand on that last bullet just a bit, one method of assessing executable
+reputation is to enable the following Microsoft Defender Attack Surface
+Reduction rule in audit mode: “ Block executable files from running unless
+they meet a prevalence, age, or trusted list criterion ”. Executables that fail to
+meet an established reputation will be logged accordingly.
+Weeding out false positives
+The installation of benign software may generate a large number of false
+positives for analysts monitoring Windows Event Logs. Similarly, randomly
+generated benign files or files created in uncommon directories can make a lot
+of noise if you’re leveraging a file-monitoring solution. Baselining and enforcing
+application-control solutions can help reduce false positives associated with
+both these data sources.
+l [T1543.003: Windows Service]
+2021 Threat Detection Report
+T E C H N I Q U E T 1 0 5 3
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "sc.exe", "type" : "EXEF"},
+        {"id": 2, "description": "reg.exe", "type" : "EXEF"},
+        {"id": 3, "description": "Cobalt Strike", "type" : "APPS"},
+        {"id": 4, "description": "\\172.0.0.1\\ADMIN$\\1a2b3c4.exe", "type" : "EXEF"},
+        {"id": 5, "description": "Windows Event Logs (4697)", "type" : "REGI"},
+        {"id": 6, "description": "Windows Event Logs (7045)", "type" : "REGI"},
+        {"id": 7, "description": "Windows Event Logs (4688)", "type" : "REGI"},
+        {"id": 8, "description": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services", "type" : "REGI"},
+        {"id": 9, "description": "PUBLIC directory", "type" : "SYSP"},
+        {"id": 10, "description": "APPDATA directory", "type" : "SYSP"},
+        {"id": 11, "description": "Service Control Manager registry key (HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services)", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "used by"},
+        {"source": 2, "target": 8, "rel_name" : "modifies"},
+        {"source": 3, "target": 4, "rel_name" : "creates executable with"},
+        {"source": 5, "target": 11, "rel_name" : "alerts on changes to"},
+        {"source": 6, "target": 11, "rel_name" : "alerts on creation of services in"},
+        {"source": 7, "target": 11, "rel_name" : "alerts on processes created by"}
+    ]
+}

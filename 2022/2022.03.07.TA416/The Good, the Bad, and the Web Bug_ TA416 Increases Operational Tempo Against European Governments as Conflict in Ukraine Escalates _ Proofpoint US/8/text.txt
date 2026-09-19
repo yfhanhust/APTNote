@@ -1,0 +1,66 @@
+A More Discerning Breed of TA416 PlugX Malware
+Close analysis of the delivered payloads and legitimate resources retrieved from URLs by
+the first stage malware dropper reveals that TA416 is once again using an updated version
+of PlugX malware to target their victims. Historically, the group has relied on a variety of
+legitimate antivirus files, including the Avast file resource wsc_proxy.exe, to begin the
+process of DLL search order hijacking that results in PlugX malware installation. In the
+January 2022 campaigns, TA416 used the PE file potplayermini.exe to initiate DLL search
+order hijacking. This is a legitimate executable file that is part of the publicly available
+media player Daum PotPlayer 1.5.29825, which Mandiant has previously documented as
+being susceptible to search order hijacking since at least 2016. Numerous Chinese APT
+groups, which are not directly correlated to TA416, have utilized it since that time. This
+campaign leveraged the vulnerability of potplayermini.exe to load the file PotPlayer.dll
+which contains an obfuscated launcher that in turn executes the file PotPlayerDB.dat. The
+file DocConvDll.dll has also intermittently been used as a loader of the PlugX DAT
+configuration files. For those that are familiar with TA416’s historic tactics, techniques,
+and procedures (TTPs), this is highly similar to the Trident Loader method which the
+group used to install PlugX in previous campaigns.
+While PotPlayerDB.dat is a variant of PlugX malware, TA416 has updated the payload by
+changing both its encoding method and expanding the payload’s configuration
+capabilities. Historically, TA416 relied on the DLL launcher to decode the PlugX payload
+utilizing an XOR key included at the offset 0 within the PlugX DAT configuration file. In
+this case, TA416 has abandoned that approach in favor of something with less
+dependencies that is more convoluted. The latest version contains obfuscation to thwart
+https://www.proofpoint.com/us/blog/threat-insight/good-bad-and-web-bug-ta416-increases-operational-tempo-against-european 7/19
+4/27/22, 4:13 PM The Good, the Bad, and the Web Bug: TA416 Increases Operational Tempo Against European Governments as Conflict in Ukraine Escalate…
+analysis. One of the main ways it does this is by resolving API functions during runtime.
+Generally, malware loads a DLL, iterates over the set of exports of the DLL and hashes the
+string, looking for a matching hash. This iteration of PlugX does standard API hashing,
+but only to resolve the address of the functions GetProcAddress as well as LoadLibrary.
+Once those functions are resolved properly, it loads the rest of the functions via their text
+name.
+Figure 4. PlugX malware API hashing method.
+https://www.proofpoint.com/us/blog/threat-insight/good-bad-and-web-bug-ta416-increases-operational-tempo-against-european 8/19
+4/27/22, 4:13 PM The Good, the Bad, and the Web Bug: TA416 Increases Operational Tempo Against European Governments as Conflict in Ukraine Escalate…
+In addition to this obfuscation attempt, most of the functions that contain the "business
+logic" of the malware are obfuscated with a state machine. At a high level this obscures
+the order of which blocks are executed within a function. It does this by maintaining a
+state variable with many comparisons in the function. After each block, the state variable
+is modified to whatever the subsequent block should be, making analysis more difficult.
+This sample further implements anti-analysis techniques via the malware’s design. After
+every iteration of the state machine, the malware sample will modify the state with a XOR
+operation. This makes it difficult to analyze as the states are not hardcoded as the result
+of a function. This control obfuscation is apparent below with the highly cyclical nature of
+the control flow graph.
+Figure 5. PlugX malware control flow graph.
+Once researchers defeated the PlugX anti-analysis techniques, they were able to examine
+the malware’s configuration. Notably the configuration contained three additional fields
+that were not present in the previous versions nor in standard PlugX malware. The new
+version included:
+Two hardcoded dates for latest write time used to filter over files within a specified
+directory.
+A minimum and maximum file size to filter over files within a specified directory.
+A format string that defaults to “public/Publics” that modifies characteristics of the
+folder and hide it from the infected user.
+In the past, when fields have been added to PlugX malware configurations they have
+persisted in future samples identified in subsequent campaigns. Recently, this has not
+always proven to be true. In recent campaigns, a consistent and clear configuration that is
+repeated has not been present. The expansion of the malware’s configuration fields
+demonstrates that this tool is undergoing additional development by TA416. Further, the
+type of added features that enable better filtering of victim files for exfiltration and better
+concealment from the infected user demonstrates that the actor is going beyond anti
+https://www.proofpoint.com/us/blog/threat-insight/good-bad-and-web-bug-ta416-increases-operational-tempo-against-european 9/19
+4/27/22, 4:13 PM The Good, the Bad, and the Web Bug: TA416 Increases Operational Tempo Against European Governments as Conflict in Ukraine Escalate…
+analysis to create a more functional and precise tool to use during intrusions. It also
+indicates the varying versions of the PlugX payload that are being used in a short period
+of time.

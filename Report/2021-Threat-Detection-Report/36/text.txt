@@ -1,0 +1,178 @@
+Detection
+Collection requirements
+Process and command-line monitoring
+Monitoring process execution and command-line parameters will offer
+defenders visibility into many behaviors associated with malicious abuse of
+Mshta. Similarly, process lineage is also helpful for detecting adversary use of
+Mshta. At a minimum, collect parent-child process relationships, and, if possible,
+consider collecting information about “grandparent” relationships too.
+Process metadata
+We observed multiple adversaries this year renaming the Mshta binary to
+evade brittle detection logic. While we cover this extensively in our analysis
+of T1036.003: Rename System Utilities, binary metadata like internal process
+names are an effective data source to determine the true identity of a
+given process.
+File monitoring and
+network connections
+File monitoring and network connections—sometimes used in conjunction with
+one another—are also useful data sources for defenders seeking to observe
+potentially malicious Mshta abuse.
+l [T1218.005: Mshta]
+t
+29
+t
+2021 Threat Detection Report
+Detection suggestions
+Two fundamental and complementary ways that you can think about detection
+for a given technique are to:
+
+Build analytics around the ways you’ve observed or otherwise know that
+
+adversaries have leveraged a technique in the past
+
+Identify all of the possible variations in the way a technique can be
+
+leveraged, a process discussed in detail in this blog post, and develop
+methods for detecting variations that deviate from what you expect
+In our experience, it’s best to combine these two strategies while setting
+priorities that ensure that you have sufficient coverage against actualized threats
+in the wild.
+Inline script execution and
+protocol handlers
+Mshta permits a user to execute inline Windows Script Host (WSH) script code
+(i.e., VBScript and JScript). The way that Mshta then interprets that code is
+dependent on the specified protocol handle, which is a component of Windows
+that tells the operating system how to parse and interpret protocol paths (e.g.,
+~~http:~~ ~~,~~ ~~f~~ t ~~p:~~ ~~,~~ ~~javascript:~~ ~~,~~ ~~vbscript:~~ ~~,~~ ~~about:~~, etc.).
+Defenders can build detection analytics for inline Mshta script execution around
+these protocol handlers appearing in the command line. A specific detection
+example for this would be to look for the execution of ~~mshta.exe~~ in conjunction
+with a command line containing any of the protocol handlers that are relevant to
+Mshta: ~~javascript~~ ~~,~~ ~~vbscript~~, or ~~about~~, to name a few options. The following offers
+an example of what that might look like in the wild:
+```
+       vbscript:
+   CreateObject(“WScript.Shell”).Run(“notepad.exe”)(window.close)
+
+   javascript:
+
+   dxdkDS=”kd54s”;djd3=newActiveXObject(“WScript.Shell”);vs3skdk=”dK3”;
+
+   sdfkl3=djd3. RegRead(“HKCU\\software\\
+
+   klkndk32lk”);esllnb3=”3m3d”;eval(asdfkl2);dkn3=”dks”;
+
+   about:
+
+   about:<script>asdfs31=”sdf2”;ssdf2=new ActiveXObject(“WScript.
+
+   Shell”);df2verew=”sdfSDF”;ddlk3nj=ssdf2.RegRead(“HKCU\\software\\asdf\\
+
+   asdfs”);asdfs=”asdfasd”;eval(ddlk3nj);asdfsd=”Tslkjs”;</script>
+
+```
+l [T1218.005: Mshta]
+t
+30
+2021 Threat Detection Report
+Suspicious process ancestry
+While Mshta execution can be pretty common across an environment, there
+are a handful of process lineage patterns that warrant alerting. For example,
+an adversary conducting a phishing attack might embed a macro in a Microsoft
+Word document that executes a malicious HTA file. Given that there are very
+few cases in which Word should be spawning Mshta, it makes sense to alert
+when ~~winword.exe~~ spawns ~~mshta.exe~~ ~~.~~ In 2020, we observed TA551 delivering
+weaponized Word documents that executed Mshta as a child process (note that
+in this case Mshta was renamed to ~~calc[.]com~~ —more on that below):
+Another example of suspicious process ancestry would be Mshta spawning
+other scripting engines, like PowerShell, as child processes. As such, looking for
+~~mshta.exe~~ launching ~~powershell.exe~~ could serve as a high-fidelity detection
+analytic for a specific behavior. The following Kovter persistence example does
+just this, with the HTA code pulled from the registry subsequently spawning an
+instance of PowerShell:
+Mshta masquerading
+As is illustrated in the image above (where ~~mshta~~ is masquerading as ~~calc[.]~~
+~~com~~ ), adversaries will occasionally rename Mshta to evade short-sighted
+detection logic. In these cases, defenders can bolster their detection of Mshta
+abuse by alerting on activity where the internal binary name is consistent with
+~~mshta.exe~~ but the apparent filename is not. A renamed instance of Mshta
+should be highly suspicious and provide a high signal-to-noise analytic.
+In 2020, we observed adversaries not only renaming Mshta but also moving
+it out of its normal location in the ~~System32~~ or ~~SysWOW64~~ directories. In
+l [T1218.005: Mshta]
+31
+2021 Threat Detection Report
+addition to building analytics that look for inconsistencies between internal
+and apparent names, defenders should develop analytics looking for Mshta
+executing from locations other than ~~*C:\Windows\System32*~~ ~~.~~ In this example
+from testing, ~~mshta.exe~~ is renamed ~~notepad.exe~~, which could fool detection
+analytics that don’t account for the possibility of masquerading:
+```
+       C:\Test\notepad.exe “javascript:a=new
+   ActiveXObject(“WScript.Shell”);a.Run(“powershell.
+
+   exe%20-nop%20-Command%20Write-Host%20f83a289e
+   8218-459c-9ddb-ccd3b72c732a;%20Start-Sleep%20
+
+   -Seconds%202;%20exit”,0,true);close();”
+
+```
+Also note that the above example includes the ~~javascript~~ protocol handler,
+meaning that this style of detection will complement and provide added context
+to the protocol handler detection ideas listed above.
+Network connections and HTA content
+Normal file-based execution of Mshta content is typically observed on disk
+and executes HTA content in files ending with the ~~.hta~~ file extension. Detection
+analytics targeting the execution of remotely hosted HTA content—either via
+URI or UNC path, from an alternate data stream, or from files without the ~~.hta~~
+extension—can provide defenders with high-signal analytics.
+A behavioral analytic that might be helpful in certain environments is to simply
+look for ~~mshta.exe~~ executing and making an external network connection.
+Of course, you’ll need to baseline against normal behaviors and tune out
+alerting that comes from legitimate software. Another detection opportunity
+relates instances of Mshta downloading and executing HTA content from a URI.
+When looking for this technique variation, make sure to look for HTA content
+regardless of whether it has the expected ~~.hta~~ file extension.
+Additionally, file monitoring data sources that provide a file’s MIME type is
+particularly useful for identifying HTA files masquerading as other file types. HTA
+files normally have a MIME type of ~~application/hta~~ . Detection analytics built
+around identifying HTA content in files without the typical ~~.hta~~ extension can
+provide high-fidelity detections.
+l [T1218.005: Mshta]
+D E T EC T I O N
+E N G I N E E R
+As a detection engineer for Red
+Canary’s Cyber Incident Response
+Team, Jesse works alongside a talented
+team dedicated to quickly identifying
+and remediating threats in customer
+environments. He enjoys dissecting
+malware and adversary techniques to
+help improve the Red Canary detection
+engine. Jesse holds a Master’s of
+Professional Studies in Cybersecurity
+and Information Assurance from The
+Pennsylvania State University. In his
+spare time, he enjoys restoring old cars
+and spending time with his family.
+Corbin Roof
+D E T EC T I O N
+E N G I N E E R
+Corbin helps to provide 24x7 coverage
+for Red Canary customers. His
+background includes malware analysis,
+computer programming, and network
+administration. Corbin is also a
+musician and burgeoning blogger who
+enjoys sharing a unique perspective on
+cybersecurity and music.
+32
+2021 Threat Detection Report
+Weeding out false positives
+Detection analytics that are based on ~~mshta.exe~~ spawning untrusted or
+unsigned binaries can be especially prone to high numbers of false positives.
+This can be alleviated in parts by effectively tuning detection logic to account for
+related activity that is benign in your environment.
+l [T1218.005: Mshta]
+2021 Threat Detection Report
+T E C H N I Q U E T 1 5 4 3

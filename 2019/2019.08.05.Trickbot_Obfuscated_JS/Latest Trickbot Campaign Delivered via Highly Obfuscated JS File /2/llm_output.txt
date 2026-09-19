@@ -1,0 +1,205 @@
+
+
+
+Sentence : Latest Trickbot Campaign Delivered via Highly Obfuscated JS File
+Posted on:August 5, 2019 at 5:03 am
+Posted in:Malware, Spam
+Author:
+Trend Micro
+0
+by Noel Anthony Llimos and Michael Jhon Ofiaza (Threats Analysts)
+We have been tracking Trickbot banking trojan activity and recently discovered a variant of the malware
+(detected by Trend Micro as TrojanSpy.Win32.TRICKBOT.TIGOCDC) from distributed spam emails that
+contain a Microsoft Word document with enabled macro. Once the document is clicked, it drops a heavily
+obfuscated JS file (JavaScript) that downloads Trickbot as its payload. This malware also checks for the
+number of running processes in the affected machine; if it detects that it’s in an environment with limited
+https://blog.trendmicro.com/trendlabs-security-intelligence/latest-trickbot-campaign-delivered-via-highly-obfuscated-js-file/ 1/10
+12/4/2019 Latest Trickbot Campaign Delivered via Highly Obfuscated JS File - TrendLabs Security Intelligence Blog
+processes, the malware will not proceed with its routine as it assumes that it is running in a virtual
+environment.
+Aside from its information theft capabilities, it also deletes files located in removable and network drives that
+have particular extensions, after which the files are replaced with a copy of the malware. Based on our
+telemetry, this Trickbot campaign has affected the United States the most. It has also distributed spam to
+China, Canada, and India.
+Figure 1. Infection chain
+In a sample email, the spam purports to be a subscription notification involving advertising providers, even
+telling the user that it submitted an application for a three-year subscription and settled a sum of money with
+the sender. The mail then explains that several more fees will be charged to the user’s card in the coming
+transactions. It ends by prompting the user to see the attached document for all the settlement and
+subscription information. The document in question contains the malicious script.
+The distributed Word document presents the user with the following notification (see Figure 2) that states the
+content can be viewed by enabling macro content. It’s worth noting that the document hides the JS script in
+the document itself and not in the macro. It does this by disguising the script through the same font color as
+the document background.
+https://blog.trendmicro.com/trendlabs-security-intelligence/latest-trickbot-campaign-delivered-via-highly-obfuscated-js-file/ 2/10
+12/4/2019 Latest Trickbot Campaign Delivered via Highly Obfuscated JS File - TrendLabs Security Intelligence Blog
+Figure 2. Document asking users to enable macro
+The script is obfuscated and contains different functions. In order to decrypt a function, it will use another
+function that will convert it to a single character.
+Figure 3. Function for decryption
+Upon successfully deobfuscating the file, we were able to analyze it and observed some interesting behaviors.
+Upon execution, it will display a fake Microsoft error to trick the user with an error message that pops up
+after enabling the macro. But actually, the JS file is already running in the background.
+https://blog.trendmicro.com/trendlabs-security-intelligence/latest-trickbot-campaign-delivered-via-highly-obfuscated-js-file/ 3/10
+12/4/2019 Latest Trickbot Campaign Delivered via Highly Obfuscated JS File - TrendLabs Security Intelligence Blog
+Figure 4. Fake Microsoft error
+For persistence, the malware creates a copy of itself into the Startup folder as Shell.jse . The JS file also
+checks for running processes — what’s particularly notable is the malware’s anti-analysis or evasion
+characteristic, which checks for the total number of all the running processes in the victim’s machine, which
+means it will not proceed with its execution if there are not enough processes running.
+If the running processes are under 1,400 characters (length of the string), the malware assumes it to be an
+indicator that it is running in a virtual or sandbox environment. It will also check for the existence of
+processes usually used for analysis. Aside from these, the malware inspects if the environment it runs in
+relates to specific usernames.
+Figure 5. A snippet of checked processes and usernames
+Figure 6. Code error shown if anything matches the check
+https://blog.trendmicro.com/trendlabs-security-intelligence/latest-trickbot-campaign-delivered-via-highly-obfuscated-js-file/ 4/10
+12/4/2019 Latest Trickbot Campaign Delivered via Highly Obfuscated JS File - TrendLabs Security Intelligence Blog
+Here’s a list of processes and debugging tools the malware checks for in the affected system:
+AgentSimulator.exe
+B.exe
+BehaviorDumper
+BennyDB.exe
+ctfmon.exe
+DFLocker64
+FrzState2k
+gemu – ga.exe
+iexplore.exe
+ImmunityDebugger
+LOGSystem.Agent.Service.exe
+lordPE.exe
+ProcessHacker
+procexp
+Procmon
+PROCMON
+Proxifier.exe
+tcpdump
+VBoxService
+VBoxTray.exe
+vmtoolsd
+vmware
+VzService.exe
+windanr.exe
+Wireshark
+Upon further analysis, we’ve also compiled the usernames the malware checks for based on the following
+strings:
+Emily
+HAPUBWS
+Hong Lee
+Johnson
+milozs
+Peter Wilson
+SystemIT | admin
+VmRemoteGuest
+WIN7 – TRAPS
+For the malware’s payload, it will connect to the URL hxxps://185[.]159[.]82[.]15/hollyhole/c644[.]php then
+checks for the file to be downloaded. If it is an executable file, it will save the file to %Temp% as
+{random}.exe and execute it afterwards. If the file is not an executable, it will then save it as {random}.cro in
+the same folder. The .cro file will then be decoded using certutil.exe, saved as {random}.exe in the same
+directory, and executed. Upon further research, we discovered that the downloaded .exe file is a variant of the
+Trickbot malware.
+https://blog.trendmicro.com/trendlabs-security-intelligence/latest-trickbot-campaign-delivered-via-highly-obfuscated-js-file/ 5/10
+12/4/2019 Latest Trickbot Campaign Delivered via Highly Obfuscated JS File - TrendLabs Security Intelligence Blog
+Figure 7. The file is saved, random names get generated, and .cro is decoded using certutil.exe
+Aside from stealing system information such as OS, CPU, and memory information; user accounts; installed
+programs and services; IP configuration; and network information (configuration, users, and domain settings),
+this Trickbot variant also gathers the following credentials and information from applications and internet
+browsers.
+Application credentials
+Filezilla
+Microsoft Outlook
+PuTTy
+Remote Desktop (RDP)
+VNC
+WinSCP
+Browser credentials and information (Google Chrome,
+Internet Explorer, Microsoft Edge, and Mozilla
+Firefox)
+Autofills
+Billing info data
+Browsing history
+Credit card data
+HTTP POST responses
+Internet cookies
+Usernames and passwords
+This malware also uses a point-of-sale (PoS) extraction module called psfin32, which identifies PoS-related
+terms located in the domain of interest. The module uses LDAP queries to search for PoS information on
+machines with the following substrings:
+ALOHA
+BOH
+CASH
+LANE
+MICROS
+POS
+REG
+RETAIL
+STORE
+TERM
+The variant also appears to drop shadnewdll, a proxy module that intercepts and modifies web traffic on an
+affected device to create fraudulent bank transactions over the network. Additionally, according to security
+researcher Brad Duncan, the module shares similarities with the banking trojan IcedID, which redirects
+victims to fake online banking sites or attaches to a browser process to inject fake content in phishing
+schemes.
+In such cases where the malware fails to connect, it will search for files with the following extensions in the
+removable and network drives. These extensions are file types used by Microsoft Office and OpenDocument:
+https://blog.trendmicro.com/trendlabs-security-intelligence/latest-trickbot-campaign-delivered-via-highly-obfuscated-js-file/ 6/10
+12/4/2019 Latest Trickbot Campaign Delivered via Highly Obfuscated JS File - TrendLabs Security Intelligence Blog
+.doc
+.xls
+.pdf
+.rtf
+.txt
+.pub
+.odt
+.ods
+.odp
+.odm
+.odc
+.odb
+Files with the aforementioned extensions will be saved in the %Temp% folder as ascii.txt . The said files will
+all then be deleted and replaced with a copy of the malware and the extension .jse (but is actually a JS file).
+Figure 8. Scanning for files and replacing it with a copy of itself
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Trickbot banking trojan", "type" : "APPS"},
+        {"id": 2, "description": "TrojanSpy.Win32.TRICKBOT.TIGOCDC", "type" : "APPS"},
+        {"id": 3, "description": "Distributed spam emails", "type" : "MAIL"},
+        {"id": 4, "description": "Microsoft Word document with enabled macro", "type" : "DOCF"},
+        {"id": 5, "description": "Heavily obfuscated JS file (JavaScript)", "type" : "EXEF"},
+        {"id": 6, "description": "Trickbot payload", "type" : "APPS"},
+        {"id": 7, "description": "United States", "type" : "COUN"},
+        {"id": 8, "description": "China", "type" : "COUN"},
+        {"id": 9, "description": "Canada", "type" : "COUN"},
+        {"id": 10, "description": "India", "type" : "COUN"},
+        {"id": 11, "description": "Subscription notification email", "type" : "MAIL"},
+        {"id": 12, "description": "Shell.jse (malware copy in Startup folder)", "type" : "EXEF"},
+        {"id": 13, "description": "%Temp% directory", "type" : "SYSP"},
+        {"id": 14, "description": "{random}.exe (downloaded executable file)", "type" : "EXEF"},
+        {"id": 15, "description": "{random}.cro (downloaded non-executable file)", "type" : "DOCF"},
+        {"id": 16, "description": "hxxps://185[.]159[.]82[.]15/hollyhole/c644[.]php", "type" : "URLS"},
+        {"id": 17, "description": "certutil.exe (used to decode .cro file)", "type" : "APPS"},
+        {"id": 18, "description": "psfin32 (PoS extraction module)", "type" : "EXEF"},
+        {"id": 19, "description": "shadnewdll (proxy module)", "type" : "EXEF"},
+        {"id": 20, "description": "ascii.txt (file saved in %Temp% folder)", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "contains"},
+        {"source": 4, "target": 5, "rel_name" : "drops"},
+        {"source": 5, "target": 6, "rel_name" : "downloads and executes"},
+        {"source": 1, "target": 2, "rel_name" : "detected as"},
+        {"source": 1, "target": 7, "rel_name" : "affects most"},
+        {"source": 1, "target": 8, "rel_name" : "distributes spam to"},
+        {"source": 1, "target": 9, "rel_name" : "distributes spam to"},
+        {"source": 1, "target": 10, "rel_name" : "distributes spam to"},
+        {"source": 11, "target": 4, "rel_name" : "contains"},
+        {"source": 5, "target": 12, "rel_name" : "creates copy in Startup folder"},
+        {"source": 5, "target": 13, "rel_name" : "saves files to"},
+        {"source": 6, "target": 14, "rel_name" : "saved as and executes"},
+        {"source": 6, "target": 15, "rel_name" : "saved as and decoded using certutil.exe"},
+        {"source": 6, "target": 17, "rel_name" : "uses to decode .cro file"},
+        {"source": 6, "target": 18, "rel_name" : "uses PoS extraction module"},
+        {"source": 6, "target": 19, "rel_name" : "drops proxy module"},
+        {"source": 5, "target": 20, "rel_name" : "saves files as in %Temp% folder"}
+    ]
+}

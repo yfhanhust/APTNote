@@ -1,0 +1,56 @@
+Elevation of privilege exploit
+The discovered exploit is written to support the following Windows products:
+https://securelist.com/mysterysnail-attacks-with-windows-zero-day/104509/ 1/7
+10/13/21, 10:04 AM MysterySnail attacks with Windows zero-day | Securelist
+Microsoft Windows Vista
+Microsoft Windows 7
+Microsoft Windows 8
+Microsoft Windows 8.1
+Microsoft Windows Server 2008
+Microsoft Windows Server 2008 R2
+Microsoft Windows Server 2012
+Microsoft Windows Server 2012 R2
+Microsoft Windows 10 (build 14393)
+Microsoft Windows Server 2016 (build 14393)
+Microsoft Windows 10 (build 17763)
+Microsoft Windows Server 2019 (build 17763)
+The list of supported products and supported Windows 10 build numbers, explicit
+declaration of server OSs and the fact that exploits were only discovered in attacks on
+servers, all lead us to believe the exploit was developed and advertised as a solution to
+elevate privileges on servers.
+CVE-2021-40449 is a use-after-free vulnerability in Win32k’s NtGdiResetDC function. As
+with many other Win32k vulnerabilities, the root cause of this vulnerability lies in the
+ability to set user-mode callbacks and execute unexpected API functions during execution
+of those callbacks. The CVE-2021-40449 is triggered when the function ResetDC is
+executed a second time for the same handle during execution of its own callback. The
+exploitation process for this vulnerability is as follows:
+
+A user-mode call to ResetDC executes syscall NtGdiResetDC and its inner function
+
+GreResetDCInternal. This function gets a pointer to a PDC object, and then
+performs a call to function hdcOpenDCW.
+2. Function hdcOpenDCW performs a user-mode callback and it can be used to
+execute ResetDC for the same handle a second time.
+
+If an exploit executes ResetDC during a callback, NtGdiResetDC and
+
+GreResetDCInternal are executed again for the same DC.
+4. If an exploit ignores all the callbacks during the second call to GreResetDCInternal,
+this function will be executed as intended. It will create a new DC and get rid of the
+old one (the PDC object is destroyed).
+5. In the callback, after the second ResetDC call has completed, the exploit can reclaim
+the freed memory of the PDC object and finish the execution of the callback.
+6. After execution of the callback, function hdcOpenDCW returns to
+GreResetDCInternal, but the pointer retrieved in step (1) is now a dangling pointer
+– it points to the memory of the previously destroyed PDC object.
+7. In the late stage of GreResetDCInternal execution, a malformed PDC object can be
+used to perform a call to an arbitrary kernel function with controlled parameters.
+In the discovered exploit attackers are able to achieve the desired state of memory with
+the use of GDI palette objects and use a single call to a kernel function to build a primitive
+for reading and writing kernel memory. This step is easily accomplished, because the
+https://securelist.com/mysterysnail-attacks-with-windows-zero-day/104509/ 2/7
+10/13/21, 10:04 AM MysterySnail attacks with Windows zero-day | Securelist
+exploit process is running with Medium IL and therefore it’s possible to use publicly
+known techniques to leak kernel addresses of currently loaded drivers/kernel modules. In
+our opinion, it would be preferable if the Medium IL processes had limited access to such
+functions as NtQuerySystemInformation or EnumDeviceDrivers.

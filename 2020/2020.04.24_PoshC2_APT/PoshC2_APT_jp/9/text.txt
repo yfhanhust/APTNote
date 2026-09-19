@@ -1,0 +1,35 @@
+攻撃⼿⼝ 3 （ MSBuild の悪⽤）
+https://www.lac.co.jp/lacwatch/people/20200424_002177.html 8/15
+5/7/2020 標的型攻撃の新たな⼿⼜判明。診断ツール「PoshC2」を悪⽤する攻撃の流れを解説 | セキュリティ対策のラック
+※10
+これは Microsoft Build Engine （ MSBuild ） ※10 を悪⽤した攻撃⼿⼝です。 .NET Framework ライン
+タイムに標準で含まれる MSBuild は、 Visual Studio や .NET Framework のビルドエンジンであり、
+独⾃の XML フォーマットファイル（プロジェクトファイル）を利⽤して .NET アプリケーション
+を作成できます。 PoshC2 は、 EXE 、 DLL 、 BAT 、 JS など様々なフォーマット ※11 でペイロードを
+作成でき、そのうちの 1 つにこの MSBuild で利⽤可能な XML ファイルがあります。
+※11
+※10 MSBuild - Visual Studio | Microsoft Docs
+※11 PoshC2/resources/payload-templates at master · nettitude/PoshC2 · GitHub
+図 12 は、 PoshC2 によって作成された XML ファイルの⼀部コードです。⾚枠で囲んだ部分が攻撃
+コードであり、 sc32 が 32bit 環境⽤で、 sc64 が 64bit 環境⽤です。この攻撃コードには、シェルコ
+ード、 PoshC2 スクリプトを含む DLL ファイル（ PowershellDLL.dll ）と .NET アプリケーション
+（ Microsoft.dll ）の 3 つが含まれています。図 13 は、攻撃コードを Base64 デコードしたものであ
+り、先頭から 0x364 バイトまでがシェルコード（⻘枠）に該当し、その後に「 MZ 」ヘッダが消さ
+れた DLL ファイルが含まれていることが確認できます。
+図 12 PoshC2 で作成した攻撃コードを含む MSBuild ⽤のプロジェクトファイル（⼀部抜粋）
+https://www.lac.co.jp/lacwatch/people/20200424_002177.html 9/15
+5/7/2020 標的型攻撃の新たな⼿⼜判明。診断ツール「PoshC2」を悪⽤する攻撃の流れを解説 | セキュリティ対策のラック
+図 13 Base64 デコード後の 32 ビット⽤の攻撃コード（⼀部抜粋）
+「 MZ 」ヘッダが消された DLL ファイルには、 Base64 と gzip でエンコードおよび圧縮された
+PoshC2 スクリプトが含まれています（図 14 ）。この PoshC2 スクリプトは、攻撃コードの 3 つ⽬
+に含まれる .NET アプリケーションによってメモリ上で実⾏され、「 MSBuild.exe 」プロセスにイ
+ンジェクションして動作します。 .NET アプリケーションは「 PowerShellRunner 」 ※12 をカスタマ
+イズしたものであり、 PowerShell の機能を提供する「 System.Management.Automation.dll 」を利
+⽤することで、「 powershell.exe 」を呼び出さず、 PowerShell スクリプトを実⾏します（図
+15 ）。
+※12 UnmanagedPowerShell/PowerShellRunner at master ·
+leechristensen/UnmanagedPowerShell · GitHub
+図 14 DLL ファイルに含まれた Base64 でエンコードされた PoshC2 コード（⼀部抜粋）
+https://www.lac.co.jp/lacwatch/people/20200424_002177.html 10/15
+5/7/2020 標的型攻撃の新たな⼿⼜判明。診断ツール「PoshC2」を悪⽤する攻撃の流れを解説 | セキュリティ対策のラック
+図 15 PowerShellRunner の PowerShell スクリプト実⾏コード（⼀部抜粋）

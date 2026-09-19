@@ -1,0 +1,86 @@
+
+
+
+Sentence : Next stages
+To make things more complicated, Scarred Manticore wraps the final payload in nested
+shellcodes. For example, one of the shellcodes received from the attackers runs another
+almost identical shellcode, which in turn runs a final shellcode responsible for machine
+fingerprinting.
+The data gathered by this payload is collected by running specific Windows APIs or
+enumerating the registry keys, and includes these components:
+Computer Name (using GetComputerNameW API) and Domain Name
+(using GetEnvironmentVariableA API)
+Flag if the system is 64-bit (using GetNativeSystemInfo API, the check is done with
+wProcessorArchitecture == 9 )
+Number of processors (dwNumberOfProcessors using GetNativeSystemInfo API)
+Physical RAM ( GetPhysicallyInstalledSystemMemory )
+Data from CurrentVersion registry key (Type, Name length, Name, Data length,
+Data)
+Data from SecureBoot\State registry key (the same data)
+Data from System\Bios registry key (the same data)
+The final structure, which contains all the gathered information, also has a place for error
+codes for the threat actor to use to figure out why some of the APIs they use don’t work
+as expected:
+DWORD last_error (GetComputerNameW)
+DWORD last_error (GetPhysicallyInstalledSystemMemory)
+DWORD last_error (GetEnvironmentVariableA)
+DWORD last_error (NtOpenKey CurrentVersion)
+DWORD last_error (NtQueryKey CurrentVersion)
+DWORD num_of_values (CurrentVersion)
+DWORD last_error (NtOpenKey SecureBoot\State)
+DWORD last_error (NtQueryKey SecureBoot\State)
+DWORD num_of_values (SecureBoot\State)
+DWORD last_error (NtOpenKey System\Bios)
+DWORD last_error (NtQueryKey System\Bios)
+DWORD num_of_values (System\Bios)
+https://research.checkpoint.com/2023/from-albania-to-the-middle-east-the-scarred-manticore-is-listening/ 10/21
+1/16/24, 1:06 PM From Albania to the Middle East: The Scarred Manticore is Listening - Check Point Research
+QWORD num_of_proccesors
+QWORD total_RAM
+QWORD tick_count
+QWORD is_64_bit
+_CHAR[0X10] computer_name
+_CHAR[0X10] domain_name
+_BYTE[] CurrentVersion_data
+_BYTE[] SecureBootState_data
+_BYTE[] SystemBios_data
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Scarred Manticore", "type" : "ACTO"},
+        {"id": 2, "description": "final payload", "type" : "EXEF"},
+        {"id": 3, "description": "nested shellcodes", "type" : "EXEF"},
+        {"id": 4, "description": "Windows APIs", "type" : "APPS"},
+        {"id": 5, "description": "GetComputerNameW API", "type" : "APPS"},
+        {"id": 6, "description": "GetEnvironmentVariableA API", "type" : "APPS"},
+        {"id": 7, "description": "GetNativeSystemInfo API", "type" : "APPS"},
+        {"id": 8, "description": "GetPhysicallyInstalledSystemMemory API", "type" : "APPS"},
+        {"id": 9, "description": "NtOpenKey API", "type" : "APPS"},
+        {"id": 10, "description": "NtQueryKey API", "type" : "APPS"},
+        {"id": 11, "description": "CurrentVersion registry key", "type" : "REGI"},
+        {"id": 12, "description": "SecureBoot\\State registry key", "type" : "REGI"},
+        {"id": 13, "description": "System\\Bios registry key", "type" : "REGI"},
+        {"id": 14, "description": "https://research.checkpoint.com/2023/from-albania-to-the-middle-east-the-scarred-manticore-is-listening/", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "contains"},
+        {"source": 2, "target": 4, "rel_name" : "interacts with"},
+        {"source": 4, "target": 5, "rel_name" : "includes"},
+        {"source": 4, "target": 6, "rel_name" : "includes"},
+        {"source": 4, "target": 7, "rel_name" : "includes"},
+        {"source": 4, "target": 8, "rel_name" : "includes"},
+        {"source": 4, "target": 9, "rel_name" : "uses"},
+        {"source": 4, "target": 10, "rel_name" : "uses"},
+        {"source": 5, "target": 11, "rel_name" : "queries"},
+        {"source": 6, "target": 11, "rel_name" : "queries"},
+        {"source": 7, "target": 13, "rel_name" : "queries"},
+        {"source": 8, "target": 12, "rel_name" : "queries"},
+        {"source": 9, "target": 11, "rel_name" : "opens"},
+        {"source": 10, "target": 11, "rel_name" : "queries"},
+        {"source": 9, "target": 12, "rel_name" : "opens"},
+        {"source": 10, "target": 12, "rel_name" : "queries"},
+        {"source": 9, "target": 13, "rel_name" : "opens"},
+        {"source": 10, "target": 13, "rel_name" : "queries"}
+    ]
+}

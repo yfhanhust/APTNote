@@ -1,0 +1,154 @@
+4.2. Initial C&C communication
+Initial communications with the stage 2/3 delivery C&C servers (such as arabooks.ch) can be
+used to develop detection signatures as follows:
+The malware retrieves the URL using a Twitter query as described earlier. Then, we can
+observe the first query from the victim towards the stage 2/3 delivery C&C server. This query
+contains pure HTTP traffic on port 80 to the server following the template below.
+GET /original/path/shortname/index.php?e=aaaaaaaaa
+where:
+
+shortname can be a number of strings, generally human readable (e.g. lib, engine,
+
+forum, forumengine etc.)
+
+
+"e=" is not constant, can be anything, but generally 1-2 letters long
+
+
+aaaaaaaaa stands for some Base64-like text (see details below)
+
+
+the servers used are assumed to be legitimate sites, just hacked by the attackers.
+
+
+Based on this format, we can detect a valid query as follows:
+
+
+The name of the 1st GET parameter should be discarded
+
+
+this means "e=" is not important
+
+
+we saw only one GET parameter, queries with multiple parameters are likely not
+
+
+used
+For detection, the Base64-like string "aaa…" should be first modified as follows:
+
+
+"-" should be replaced by "+"
+
+
+"_" should be replaced by "/"
+
+
+This results in correct Base64 encoding, which can be decoded with library functions such as
+base64_decode. After decoding, a string of data, partially binary will be available. Parts are
+separated by the delimiter character "|". The format and a numerical example are below:
+||
+e.g.,
+|5551115551|1.13
+As the binary data itself may contain the ”|” character, parsing should start from the end
+(i.e., the numerical ID starts from the second “|” character from the end). In additional, the
+ID length may vary (not fully confirmed), but it seems to be around 10 digits. Finally, the
+version number always follows the pattern <1digit>, e.g., 1.1X 3.1X.
+The correct decoding of the HTTP query information should be enough to quickly develop
+possible IDS-based detections. As we have seen, detection is complicated, but not
+impossible. The following is the summary of potential detection steps:
+
+
+Check if there is only one GET parameter
+
+
+(check if path is not empty and contains index.php)(possible, but not confirmed)
+
+
+convert the Base64-like GET parameter string into real Base64 encoding, and check if
+
+
+it decodes correctly
+
+
+check if the decoded string has at least two delimieter character "|" in it
+
+
+check if after the last but first “|” character, there are digits only
+
+
+check if the version part of the string follows the format “1.11” or similar
+
+
+The header sent is fairly standard, but we include one example nonetheless:
+```
+0x00d0: 2e31 0d0a 4163 6365 7074 3a20 2a2f 2a0d .1..Accept:./.
+0x00e0: 0a41 6363 6570 742d 456e 636f 6469 6e67 .Accept-Encoding
+0x00f0: 3a20 677a 6970 2c20 6465 666c 6174 650d :.gzip,.deflate.
+0x0100: 0a55 7365 722d 4167 656e 743a 204d 6f7a .User-Agent:.Moz
+0x0110: 696c 6c61 2f34 2e30 2028 636f 6d70 6174 illa/4.0.(compat
+0x0120: 6962 6c65 3b20 4d53 4945 2037 2e30 3b20 ible;.MSIE.7.0;.
+0x0130: 5769 6e64 6f77 7320 4e54 2035 2e31 3b20 Windows.NT.5.1;.
+0x0140: 5472 6964 656e 742f 342e 303b 2049 6e66 Trident/4.0;.Inf
+0x0150: 6f50 6174 682e 3129 0d0a 486f 7374 3a20 oPath.1)..Host:.
+0x0160: XXXX XXXX XXXX XXXX XXXX XX0d 0a43 6f6e XXXXXXXXXXX..Con
+0x0170: 6e65 6374 696f 6e3a 204b 6565 702d 416c nection:.Keep-Al
+0x0180: 6976 650d 0a0d 0a            ive....
+```
+Figure 10 – Other HTTP header values in a C&C query
+The used Agent strings vary significantly across queries, therefore they cannot be really used
+for detection:
+```
+Mozilla/4.0+(compatible;+MSIE+6.0;+Windows+NT+5.1)
+Mozilla/4.0+(compatible;+MSIE+6.0;+Windows+NT+5.1;+SV1)
+Mozilla/4.0+(compatible;+MSIE+6.0;+Windows+NT+5.1;+SV1;+InfoPath.2)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+5.1;+Trident/4.0;+.NET+CLR+1.1.4322;+
+.NET+CLR+2.0.50727;+.NET+CLR+3.0.4506.2152;+.NET+CLR+3.5.30729;+InfoPath.2)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+5.1;+Trident/4.0;+.NET+CLR+2.0.50727;
++.NET+CLR+3.0.4506.2152;+.NET+CLR+3.5.30729;+InfoPath.2)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+5.1;+Trident/4.0;+.NET4.0C;+.NET+CLR+
+1.1.4322;+.NET+CLR+2.0.50727;+.NET+CLR+3.0.4506.2152;+.NET+CLR+3.5.30729;+.NET4.0E;
++InfoPath.3)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+5.1;+Trident/4.0;+GTB7.4;+InfoPath.1;
++.NET+CLR+3.0.4506.2152;+.NET+CLR+3.5.30729;+.NET+CLR+1.0.3705;+.NET+CLR+1.1.4322;+
+.NET4.0E;+.NET4.0C;+.NET+CLR+2.0.50727)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+5.1;+Trident/4.0;+InfoPath.2)
+```
+```
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+Trident/4.0;+GTB7.4;+SLCC2;+.NET
++CLR+2.0.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+Media+Center+PC+6.0;+InfoPa
+th.3;+.NET4.0C;+.NET4.0E)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+Trident/5.0;+SLCC2;+.NET+CLR+2.0
+.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+Trident/5.0;+SLCC2;+.NET+CLR+2.0
+.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+InfoPath.3;+Media+Center+PC+6.0;+.N
+ET4.0C;+.NET4.0E)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+Trident/5.0;+SLCC2;+.NET+CLR+2.0
+.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+Media+Center+PC+6.0;+.NET4.0C;+.NET
+4.0E)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+Trident/5.0;+SLCC2;+.NET+CLR+2.0
+.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+Media+Center+PC+6.0;+.NET4.0C;+Info
+Path.2;+.NET4.0E)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+Trident/5.0;+SLCC2;+.NET+CLR+2.0
+.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+Media+Center+PC+6.0;+CMDTDF;+.NET4.
+0C;+InfoPath.3)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+Trident/5.0;+SLCC2;+.NET+CLR+2.0
+.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+Media+Center+PC+6.0;+InfoPath.2)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+WOW64;+Trident/5.0;+SLCC2;+.NET+
+CLR+2.0.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+Media+Center+PC+6.0;+.NET4.0
+C;+.NET4.0E)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+WOW64;+Trident/5.0;+SLCC2;+.NET+
+CLR+2.0.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+Media+Center+PC+6.0;+.NET4.0
+C;+.NET4.0E;+BRI/2;+InfoPath.3)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+WOW64;+Trident/5.0;+SLCC2;+.NET+
+CLR+2.0.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+Media+Center+PC+6.0;+.NET4.0
+C;+.NET4.0E;+InfoPath.2)
+Mozilla/4.0+(compatible;+MSIE+7.0;+Windows+NT+6.1;+WOW64;+Trident/5.0;+SLCC2;+.NET+
+CLR+2.0.50727;+.NET+CLR+3.5.30729;+.NET+CLR+3.0.30729;+Media+Center+PC+6.0;+.NET4.0
+C;+.NET4.0E;+InfoPath.3)
+Mozilla/4.0+(compatible;+MSIE+8.0;+Windows+NT+5.1;+Trident/4.0;+.NET+CLR+2.0.50727;
++.NET+CLR+3.0.04506.648;+.NET+CLR+3.5.21022;+.NET+CLR+3.0.4506.2152;+.NET+CLR+3.5.3
+0729;+InfoPath.2)
+Mozilla/5.0+(Windows+NT+5.1;+rv:19.0)+Gecko/20100101+Firefox/19.0
+Mozilla/5.0+(Windows+NT+6.1;+rv:10.0)+Gecko/20100101+Firefox/10.
+```
+Figure 11 – Agent strings used in C&C comms – might be partial or wrong – not useful for detection

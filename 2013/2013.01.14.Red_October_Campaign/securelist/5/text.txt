@@ -1,0 +1,131 @@
+iPhone module
+Known file location: %PROGRAMFILES%Windows NTiTunesNotifSrv.exe
+Known variants:
+Compilation date
+MD5
+(encrypted) Compilation date (payload)
+ee2e21a45a018c6faa68332a32c65ddd 2011.11.04 12:30:41 (GMT) 2011.11.04 10:19:11 (GMT)
+339b8bc0f6e5ee4ca2bc2109f5de0b38 2011.11.21 12:07:46 (GMT) 2011.11.21 08:20:01 (GMT)
+76e1d54a890befed31a369ce40b44ee6 2011.11.21 12:06:49 (GMT) 2011.11.21 08:20:01 (GMT)
+The file is a PE EXE file, compiled with Microsoft Visual Studio 2010.
+Creates event named “sdjvkbasyfvbalvjklas”.
+Summary
+Writes encrypted log files:
+%TMP%iTunes_notification_%p.dat
+1/22
+%TMP%iTunes_ddsa_%p.tmp
+where %p is derives from the result of GetTickCount() API function.
+Log files are encrypted with a custom encryption algorithm based on AMPRNG.
+When started, the module writes the following registry value to be executed each time Windows
+starts:
+HKCUSOFTWAREMicrosoftWindowsCurrentVersionRuniTunes Notification Service=%path to
+self%
+Then, it locates the ITunes mobile device DLL and “CoreFoundation.dll” and resolves the
+following API functions:
+AMDeviceNotificationSubscribe
+AMRestoreRegisterForDeviceNotifications
+AMDeviceConnect
+AMDeviceIsPaired
+AMDeviceValidatePairing
+AMDeviceStartSession
+AMDeviceStartService
+AFCConnectionOpen
+AFCConnectionClose
+AMDeviceCopyValue
+AFCDirectoryOpen
+AFCDirectoryRead
+AFCDirectoryClose
+AFCFileInfoOpen
+AFCKeyValueRead
+AFCKeyValueClose
+AFCFileRefOpen
+AFCFileRefRead
+AFCFileRefWrite
+AFCFileRefClose
+AMDeviceDisconnect
+__CFStringMakeConstantString
+If succeeded, the module calls AMDeviceNotificationSubscribe to set up own callback for the
+iOS device connection/disconnection events.
+In the Device notification callback function, the module logs each connection and disconnection
+event. When a device is connected, it starts a new thread that manipulates this device.
+Device connection thread
+The module establishes a connection to the device using AMDeviceConnect, AMDeviceIsPaired,
+AMDeviceValidatePairing and finally, AMDeviceStartSession.
+Then, it starts the following services on the device: “com.apple.afc2”, “com.apple.afc”.
+The service “com.apple.afc2” is usually created when the device was jailbroken, so the module
+sets up a special flag if the service was started successfully.
+2/22
+Then, it opens an Apple File Connection via the started service using AFCConnectionOpen.
+The module reads device settings using AMDeviceCopyValue. The following settings are
+referenced by name:
+UniqueDeviceID
+DeviceClass
+DeviceName
+ModelNumber
+ProductType
+ProductVersion
+BuildVersion
+SerialNumber
+ActivationState
+SIMStatus
+InternationalMobileEquipmentIdentity
+InternationalMobileSubscriberIdentity
+IntegratedCircuitCardIdentity
+PhoneNumber
+WiFiAddress
+BluetoothAddress
+TimeZone
+FirmwareVersion
+BasebandVersion
+BasebandBootloaderVersion
+Also, it traverses the whole directory tree and stores the complete file listing in the log.
+Then, it checks if device is jailbroken by
+accessing the directory “/Applications” using AFCFileInfoOpen
+checking if the service “com.apple.afc2” was started
+The results are written in the log file.
+Then, it builds a complete directory listing, starting from the root directory or “/private/var”
+(sample ee2e21a45a018c6faa68332a32c65ddd only). It also searches and retrieves all files
+with following extensions:
+.jpg .jpeg.txt .doc .docx .xls .xlsx .ppt .pptx .dot .dotx .odt .djvu .odts .reg .rtf .zip .rar .pdf .7z
+.wab .pab .vcf .ost .wav .mp4 .m4a .amr .log .cer .em .msg .arc .key .pgp .gpg
+Also, it tries to retrieve the contents of the following files:
+/private/var/mobile/Library/AddressBook/AddressBook.sqlitedb
+/private/var/mobile/Library/SMS/sms.db
+/private/var/mobile/Library/CallHistory/call_history.db
+/private/var/mobile/Library/Notes/notes.db
+/private/var/mobile/Library/Caches/locationd/consolidated.db
+/private/var/mobile/Library/Calendar/Calendar.sqlitedb
+/private/var/mobile/Library/Voicemail/voicemail.db
+/private/var/mobile/Library/Safari/History.plist
+3/22
+/private/var/mobile/Library/WebKit/Databases/https_m.mg.mail.yahoo.com_0/0000000000000001.db
+/private/var/mobile/Library/WebKit/Databases/https_m.mg.mail.yahoo.com_0/0000000000000002.db
+/private/var/mobile/Library/WebKit/Databases/https_m.mg.mail.yahoo.com_0/0000000000000003.db
+/private/var/mobile/Library/WebKit/Databases/https_m.mg.mail.yahoo.com_0/0000000000000004.db
+/private/var/mobile/Library/WebKit/Databases/https_m.mg.mail.yahoo.com_0/0000000000000005.db
+/private/var/mobile/Library/WebKit/Databases/https_m.mg.mail.yahoo.com_0/0000000000000006.db
+/private/var/mobile/Library/WebKit/Databases/https_m.mg.mail.yahoo.com_0/0000000000000007.db
+/private/var/mobile/Library/WebKit/Databases/https_m.mg.mail.yahoo.com_0/0000000000000008.db
+/private/var/mobile/Library/WebKit/Databases/https_m.mg.mail.yahoo.com_0/0000000000000009.db
+/private/var/mobile/Library/WebKit/Databases/https_mail.google.com_0/0000000000000001.db
+/private/var/mobile/Library/WebKit/Databases/https_mail.google.com_0/0000000000000002.db
+/private/var/mobile/Library/WebKit/Databases/https_mail.google.com_0/0000000000000003.db
+/private/var/mobile/Library/WebKit/Databases/https_mail.google.com_0/0000000000000004.db
+/private/var/mobile/Library/WebKit/Databases/https_mail.google.com_0/0000000000000005.db
+/private/var/mobile/Library/WebKit/Databases/https_mail.google.com_0/0000000000000006.db
+/private/var/mobile/Library/WebKit/Databases/https_mail.google.com_0/0000000000000007.db
+/private/var/mobile/Library/WebKit/Databases/https_mail.google.com_0/0000000000000008.db
+/private/var/mobile/Library/WebKit/Databases/https_mail.google.com_0/0000000000000009.db
+Collected information including iOS device configuration variables, file listings and file contents
+is written to the file “%TMP%iTunes_ddsa_%p.tmp”. This file is encrypted and compressed with
+Zlib.
+Log file format
+The log starts with a MAGIC number 0x5C63F935, then 0x14 bytes of 0xFF, DWORD length of
+header, header data, then log data.
+The data consists of tagged records. The following tag values are known to us:
+0x8002 Time/date
+0x8004 SHA1 of MAC address, System Volume Serial Number, IE Product ID, the same is written
+in HKCU,HKLMSOFTWAREMicrosoftADOSoftware32, “ProductID”
+0x8005 Log ID / header
+0x8006 Log data
+Compressed directory log starts with magic 0x5C63F934.

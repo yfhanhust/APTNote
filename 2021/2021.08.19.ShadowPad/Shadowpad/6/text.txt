@@ -1,0 +1,157 @@
+TECHNICAL ANALYSIS
+ShadowPad is a modular backdoor - each plugin contains specific functionality that can be ‘plugged’
+or ‘unplugged’ during runtime - in shellcode format. It also allows dynamic loading of additional
+plugins which are not initially embedded in the sample from the C&C server.
+In this section, we discuss the emergence of ShadowPad, describe some technical details of the
+backdoor, and give our assessment on how it is sold.
+3 https://cybersecurity.att.com/blogs/labs-research/tracking-down-the-author-of-the-plugx-rat
+4 https://securelist.com/winnti-more-than-just-a-game/37029/
+5 https://securelist.com/winnti-returns-with-plugx/66960/
+SHADOWPAD: A MASTERPIECE OF PRIVATELY SOLD MALWARE IN CHINESE ESPIONAGE 5
+M o d u l a r D e s i g n
+ShadowPad is a modular backdoor in shellcode format. On execution, a layer of an obfuscated shellcode
+loader is responsible for decrypting and loading a Root plugin. While the sequence of operation in the
+Root plugin decrypts, it loads other plugins embedded in the shellcode into memory. The plugins are
+kept and referenced through a linked list:
+struct plugin_node {
+plugin_node* previous_node;
+plugin_node* next_node;
+DWORD referenced_count;
+DWORD plugin_timestamp;
+DWORD plugin_id;
+DWORD field_0;
+DWORD field_1;
+DWORD field_2;
+DWORD field_3;
+DWORD plugin_size;
+LPVOID plugin_base_addr;
+LPVOID plugin_export_function_table_addr;
+}
+Along with the plugins embedded in the sample, additional plugins are allowed to be remotely
+uploaded from the C&C server, which allows users to dynamically add functionalities not included
+by default. The uploaded plugins will be kept in memory and added to the linked list of the plugin
+nodes, as shown in Fig 2.
+Fig 2: The architecture of ShadowPad backdoor
+SHADOWPAD: A MASTERPIECE OF PRIVATELY SOLD MALWARE IN CHINESE ESPIONAGE 6
+SentinelOne has collected 22 unique plugins from SentinelOne’s internal sample set. These are
+listed fully in Appendix A.
+C o n t r o l l e r
+As luck would have it, the ShadowPad controller (version 1.0, 2015) was accidentally discovered
+during private research. All of the stakeholders involved agreed to our releasing screenshots
+but not the details of the actual file, so we are unable to provide hashes for this component
+at present. Analysis of the controller allowed us to obtain a clear picture of how the builder
+generates the shellcodes, how the users manage the infected hosts, and the kinds of functions
+available on the controller.
+Written in Delphi, it has the capability to both generate malware and control backdoor
+communications. The controller provides an interface to manage infected hosts, manage C&C
+server listeners and build new ShadowPad shellcode pieces (as shown in Fig 3). This is a relatively
+unique characteristic of malware used by Chinese espionage threat actors.
+Fig 3: The main page of the controller
+
+
+Users: The list of infected hosts.
+
+
+Transfer: The transferring progress of files which are currently being transferred from and
+
+
+to the infected hosts.
+
+
+Listen: To control the C&C listeners and the protocols in use.
+
+
+Setting: Intended to be a setting panel, but there is no option on the list in this version.
+
+
+Builder: The ShadowPad shellcode builder.
+
+
+SHADOWPAD: A MASTERPIECE OF PRIVATELY SOLD MALWARE IN CHINESE ESPIONAGE 7
+The user can choose to enter the management console of a single infected computer (shown in
+Fig 4). The console allows the user to manage the plugin list and use the functions of each plugin.
+The plugins “Root” to “Http” are embedded in the samples by default. If the user wants to use the
+functions of other plugins, those plugins need to be uploaded to the infected computer (in Fig 5).
+Fig 4: The plugin management page. The user can add or remove a plugin.
+Fig 5: The popup message of asking the user to upload a plugin
+SHADOWPAD: A MASTERPIECE OF PRIVATELY SOLD MALWARE IN CHINESE ESPIONAGE 8
+The builder (in Fig 6) allows the user to modify the campaign code and notes, anti-debugger
+settings, installation settings (service and register), process injection settings, C&C servers and
+connection modes. It also contains configuration import and export functionalities.
+Fig 6: The builder in ShadowPad controller
+SHADOWPAD: A MASTERPIECE OF PRIVATELY SOLD MALWARE IN CHINESE ESPIONAGE 9
+or a privately developed modular malware platform for sale to specific groups. Its design allows
+the users to remotely deploy new plugins to a backdoor. In theory, anyone capable of producing a
+plugin that is encrypted and compressed in the correct format can add new functionalities to the
+backdoor freely. However, the control interfaces of the plugins are hardcoded in the “Manager”
+page of the ShadowPad controller (in Fig 7), and the controller itself does not include a feature
+to add a new control interface. In other words, it is unlikely that ShadowPad was created as a
+collaborative attacking framework. Only the plugins produced by the original developer could be
+included and used through the ShadowPad controller.
+Fig 7: The interfaces to control the plugins are hardcoded and listed in the “Manager” page.
+The users can interact with the plugins only through the listed interface
+SHADOWPAD: A MASTERPIECE OF PRIVATELY SOLD MALWARE IN CHINESE ESPIONAGE 1 0
+On the other hand, even if the control interface of a plugin is listed in
+the menu, not every available plugin is embedded in the ShadowPad
+samples built by the controller by default. Once a plugin is not included
+in the compiled sample, the user needs to upload the corresponding
+plugin (encrypted and compressed in the correct format) and place
+it in the “Plugins” directory in the package during runtime on the
+client side. There is no configuration in the builder to allow the user
+to choose which plugins are compiled into the generated sample, so
+this setting can only be managed by the developer of the controller.
+Any functionality can be easily removed from the bundle by removing
+the corresponding plugin from the directory.
+If ShadowPad was not originally designed as an open framework,
+the following question is whether it is freely shared with or sold to
+its users. The possible author ‘whg’ – and one of his close affiliates,
+Rose, who will be introduced in the following section – have been
+monetizing their malware development and hacking skills since the
+early 2000s. Both individuals sold self-developed malware, and Rose
+offered services such as software cracking, penetration testing and
+DDoS attacks
+6 . If ShadowPad was developed by them or their close
+affiliates, it is more likely to be sold to – rather than freely shared
+with – other users under this context.
+S e l l i n g t h e P l u g i n s S e p a r a t e l y R a t h e r
+t h a n G i v i n g a F u l l B u n d l e b y D e f a u l t
+As discussed, the available functionalities to ShadowPad users
+are highly controlled by the seller of ShadowPad. Looking deeply
+into the plugin numbers and the distribution of different plugins
+embedded in around a hundred samples, we assessed that the
+seller is likely selling each plugin separately instead of offering
+a full bundle with all of the currently available plugins. In other
+words, a buyer needs to pick how many plugins they need and
+acquire them from the seller. The seller does not provide all the
+functionality or capabilities by default.
+6 https://web.archive.org/web/20090925075518/http:/www.hackbase.com:80/
+news/2009-04-09/24948.html
+SHADOWPAD: A MASTERPIECE OF PRIVATELY SOLD MALWARE IN CHINESE ESPIONAGE 1 1
+60
+50
+40
+30
+20
+10
+0
+|Col1|Col2|Col3|Col4|Col5|Col6|Col7|Col8|Col9|Col10|Col11|Col12|Col13|Col14|Col15|Col16|Col17|Col18|Col19|Col20|Col21|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19||
+The number of plugins embedded in the samples
+Fig 8: The number of samples grouped by the number of plugins in each sample
+Fig 8 groups the samples by the number of the plugins embedded in them. As the figure shows,
+most of the samples contain less than nine plugins with the following plugins embedded: Root,
+Plugins, Config, Install, Online, TCP, HTTP, UDP and DNS. This set of plugins can only support
+the installation of backdoors and communications with C&C servers, without providing further
+functionality. Actors owning samples with more than 16 plugins, which are all packed by the same
+loader and are likely to be used by a single closed group, are likely to be offered as ‘fully packaged’
+versions of ShadowPad with the specially configured builders that can build samples with a full set
+of plugins. In other cases, the actors can only compile ShadowPad backdoors with the basic set
+of plugins. They need to manually upload other plugins if they want to use other functionalities.
+During our research, we found Tick - one of the threat groups with access to ShadowPad - developed
+a tool to extract the list of installed software information on an infected host while a plugin of
+ShadowPad with the same functionality – the plugin “Software” – was discovered in a sample used
+by another threat group in a similar time frame. This shows that not every customer of ShadowPad
+decides to (or is able to) obtain all of the available plugins. We assess that the plugins are likely
+to be provided separately.
+SHADOWPAD: A MASTERPIECE OF PRIVATELY SOLD MALWARE IN CHINESE ESPIONAGE 1 2

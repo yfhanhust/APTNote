@@ -1,0 +1,117 @@
+
+
+
+Sentence : C&C Communication
+After extracting the configuration, the malware uses the same one-byte XOR to decrypt a
+shellcode responsible for establishing the C&C communication channel by listening to the
+provided URL prefixes list. While the concept of passive backdoors on web-facing
+Windows servers is not new and was observed in the wild hijacking the same Windows
+DLL wblsctrl.dll as early as 2019 (by Chinese-linked Operation ShadowHammer), the
+LIONTAIL developers elevated their approach. Instead of using the HTTP API, the
+malware uses IOCTLs to interact directly with the underlying HTTP.sys driver. This
+approach is stealthier as it doesn’t involve IIS or HTTP API, which are usually closely
+monitored by security solutions, but is not a straightforward task given that the IOCTLs for
+HTTP.sys are undocumented and require additional research efforts by the threat actors.
+First, the shellcode registers the URL prefixes with HTTP.sys using the following IOCTLs:
+0x128000 – UlCreateServerSessionIoctl – Creates an HTTP/2.0 session.
+0x128010 – UlCreateUrlGroupIoctl – Creates a new UrlGroup. UrlGroups are
+configuration containers for a set of URLs created under the server session and
+inherit its configuration settings.
+0x12801d – UlSetUrlGroupIoctl – Associates the UrlGroup with the request
+queue by setting HttpServerBindingProperty .
+0x128020 – UlAddUrlToUrlGroupIoctl – Adds the array of listen_urls to the
+newly created UrlGroup.
+https://research.checkpoint.com/2023/from-albania-to-the-middle-east-the-scarred-manticore-is-listening/ 5/21
+1/16/24, 1:06 PM From Albania to the Middle East: The Scarred Manticore is Listening - Check Point Research
+Figure 3 – HTTP.sys IOCTL table.
+After registering the URL prefixes, the backdoor initiates a loop responsible for handling
+the incoming requests. The loop continues until it gets the request from a URL equal to
+the end_string provided in the backdoor’s configuration.
+The backdoor receives requests from HTTP.sys using 0x124036 –
+UlReceiveHttpRequestIoctl IOCTL.
+Depending on the version of the compromised server, the body of the request is received
+using 0x12403B – UlReceiveEntityBodyIoctl or (if higher than 20348) 0x12403A –
+UlReceiveEntityBodyFastIo . It is then base64-decoded and decrypted by XORing the
+whole data with the first byte of the data. This is a common method of encryption
+observed in multiple malware families, including but not limited to DEV-0861’s web
+deployed Reverse proxy.
+https://research.checkpoint.com/2023/from-albania-to-the-middle-east-the-scarred-manticore-is-listening/ 6/21
+1/16/24, 1:06 PM From Albania to the Middle East: The Scarred Manticore is Listening - Check Point Research
+Figure 4 – C&C decryption scheme from the LIONTAIL payload.
+The decrypted payload has the following structure:
+QWORD shellcode_size
+_BYTE[] shellcode
+QWORD shellcode_output (should be 0 in the incoming msg)
+QWORD shellcode_output_size (should be 0 in the incoming msg)
+QWORD MAGIC_NUM (has to be 0x18)
+_BYTE[] argument
+The malware creates a new thread and runs the shellcode in memory. For some reason,
+it uses shellcode_output and shellcode_output_size in the request message as
+pointers to the respective data in memory.
+To encrypt the response, the malware chooses a random byte, XOR-encodes the data
+using it as a key, prepends the key to the result, and then base64-encodes the entire
+result before sending it back to the C&C server using the IOCTL 0x12403F –
+UlSendHttpResponseIoctl .
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "C&C Communication", "type": "TTPS"},
+        {"id": 2, "description": "Malware", "type": "EXEF"},
+        {"id": 3, "description": "Shellcode", "type": "EXEF"},
+        {"id": 4, "description": "C&C communication channel", "type": "TTPS"},
+        {"id": 5, "description": "URL prefixes list", "type": "URLS"},
+        {"id": 6, "description": "wblsctrl.dll", "type": "DOCF"},
+        {"id": 7, "description": "HTTP.sys driver", "type": "OPPS"},
+        {"id": 8, "description": "IOCTLs for HTTP.sys", "type": "TTPS"},
+        {"id": 9, "description": "UlCreateServerSessionIoctl (0x128000)", "type": "TTPS"},
+        {"id": 10, "description": "UlCreateUrlGroupIoctl (0x128010)", "type": "TTPS"},
+        {"id": 11, "description": "UlSetUrlGroupIoctl (0x12801d)", "type": "TTPS"},
+        {"id": 12, "description": "UlAddUrlToUrlGroupIoctl (0x128020)", "type": "TTPS"},
+        {"id": 13, "description": "end_string", "type": "REGI"},
+        {"id": 14, "description": "UlReceiveHttpRequestIoctl (0x124036)", "type": "TTPS"},
+        {"id": 15, "description": "UlReceiveEntityBodyIoctl (0x12403B)", "type": "TTPS"},
+        {"id": 16, "description": "UlReceiveEntityBodyFastIo (0x12403A)", "type": "TTPS"},
+        {"id": 17, "description": "Base64-decoded and decrypted data", "type": "DOCF"},
+        {"id": 18, "description": "DEV-0861’s web deployed Reverse proxy", "type": "EXEF"},
+        {"id": 19, "description": "Decrypted payload structure", "type": "DOCF"},
+        {"id": 20, "description": "shellcode_size (QWORD)", "type": "REGI"},
+        {"id": 21, "description": "shellcode (BYTE[])", "type": "EXEF"},
+        {"id": 22, "description": "shellcode_output (QWORD)", "type": "REGI"},
+        {"id": 23, "description": "shellcode_output_size (QWORD)", "type": "REGI"},
+        {"id": 24, "description": "MAGIC_NUM (0x18)", "type": "REGI"},
+        {"id": 25, "description": "argument (BYTE[])", "type": "DOCF"},
+        {"id": 26, "description": "New thread", "type": "TTPS"},
+        {"id": 27, "description": "XOR-encoding key", "type": "REGI"},
+        {"id": 28, "description": "Base64-encoded and XOR-encrypted response", "type": "DOCF"},
+        {"id": 29, "description": "UlSendHttpResponseIoctl (0x12403F)", "type": "TTPS"},
+        {"id": 30, "description": "Chinese-linked Operation ShadowHammer", "type": "ACTO"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name": "contains"},
+        {"source": 3, "target": 4, "rel_name": "establishes"},
+        {"source": 4, "target": 5, "rel_name": "uses"},
+        {"source": 6, "target": 7, "rel_name": "interacts with"},
+        {"source": 2, "target": 8, "rel_name": "uses"},
+        {"source": 3, "target": 9, "rel_name": "registers URL prefixes using"},
+        {"source": 3, "target": 10, "rel_name": "creates UrlGroup using"},
+        {"source": 3, "target": 11, "rel_name": "associates UrlGroup with request queue using"},
+        {"source": 3, "target": 12, "rel_name": "adds URL to UrlGroup using"},
+        {"source": 3, "target": 14, "rel_name": "receives requests from HTTP.sys using"},
+        {"source": 3, "target": 15, "rel_name": "receives entity body using"},
+        {"source": 3, "target": 16, "rel_name": "receives entity body using (if version higher)"},
+        {"source": 3, "target": 17, "rel_name": "base64-decodes and decrypts request data to get"},
+        {"source": 18, "rel_name": "observed in", "target": 2},
+        {"source": 3, "target": 19, "rel_name": "creates payload structure with"},
+        {"source": 3, "target": 20, "rel_name": "includes shellcode size as"},
+        {"source": 3, "target": 21, "rel_name": "includes shellcode as"},
+        {"source": 3, "target": 22, "rel_name": "sets shellcode output as"},
+        {"source": 3, "target": 23, "rel_name": "sets shellcode output size as"},
+        {"source": 3, "target": 24, "rel_name": "includes MAGIC_NUM as"},
+        {"source": 3, "target": 25, "rel_name": "includes argument as"},
+        {"source": 3, "target": 26, "rel_name": "creates and runs in new thread"},
+        {"source": 3, "target": 27, "rel_name": "chooses random byte as XOR-encoding key"},
+        {"source": 3, "target": 28, "rel_name": "prepares response by base64-encoding and XOR-encrypting data to get"},
+        {"source": 3, "target": 29, "rel_name": "sends response back to C&C server using"},
+        {"source": 30, "target": 6, "rel_name": "used in"}
+    ]
+}

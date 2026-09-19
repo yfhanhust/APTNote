@@ -1,0 +1,97 @@
+3.5 0-day in Win32k.sys (MS10-073)
+When the Win32/Stuxnet worm didn’t have enough privileges to install itself in the system it exploited a
+recently patched (MS10-73) 0-day vulnerability in the win32k.sys system module to escalate privilege
+level up to SYSTEM, which enabled it to perform any tasks it likes on the local machine. The vulnerable
+systems are: 
+Microsoft Windows 2000; 
+Unpatched Windows XP (all service packs).
+Actually, in theory, it is possible to exploit this vulnerability on the other systems as the code pertaining
+to the vulnerability exists (see figure 3.17), but there are no known ways to reach it (i. e. the code that
+transfers control to the shell code) and as a result the shell code won't be executed.
+To perform this trick, Stuxnet loads a specially crafted keyboard layout file, making it possible to execute
+arbitrary code with SYSTEM privileges. The escalation of privileges occurs while dispatching input from
+the keyboard in Win32k.sys module. While processing input from the keyboard using the
+NtUserSendInput system service, the following code is executed:
+Figure 3.18 – A fragment of the executed code during processing keyboard input
+The purpose of this code is to determine how to dispatch virtual key code of the pressed button.
+Register ecx specifies the type of the handler according to the current keyboard layout to be called in
+__aNLSVKProc_ procedure table. This table consists of three handlers:
+Figure 3.19 – _aNLSVKProc procedure table
+As we can see from the figure above (3.18), the __aNLSVKProc_ is followed by 3 DWORDs, the last of
+which (highlighted in red) can be interpreted as a pointer pointing to 0x60636261 in the user-mode
+address space. Thus, if we set the ecx register in the code in figure 1 with the proper value, namely 5,
+then we can execute code at 0x6036261 with SYSTEM privileges.
+We can manipulate the ecx register in this code by loading a specially crafted keyboard layout file
+specifying that certain virtual key codes should call the procedure indexed as 5. The keyboard layout file
+is a dynamic link library of which the .data section is specially structured. Below we present a structure
+that maps virtual keys to corresponding procedures in the table.
+www.eset.com
+36
+```
+typedef struct _VK_TO_FUNCTION_TABLE {
+BYTE Vk; // Virtual-key code
+
+BYTE NLSFEProcType;  // Index of the procedure in _aNLSVKProc table
+                  // corresponding to the virtual key
+
+BYTE NLSFEProcCurrent;
+
+BYTE NLSFEProcSwitch;
+
+VK_FPARAM NLSFEProc[8];
+
+VK_FPARAM NLSFEProcAlt[8];
+
+} VK_F, *KBD_LONG_POINTER PVK_F;
+```
+The worm loads a special keyboard layout file by calling NtUserLoadKeyboardLayoutEx and passing it the
+following hexadecimal constant 0x01AE0160 as an offTable parameter. The low word of this parameter
+specifies the RVA (Relative Virtual Address) of the KBDTABLES structure from the beginning of the file,
+while the high word specifies the RVA of KBDNLSTABLES, which is of particular interest. The latter
+structure determines the address and size of the array of VK_F structures contained in the file.
+```
+typedef struct tagKbdNlsLayer {
+USHORT OEMIdentifier;
+
+USHORT LayoutInformation;
+
+UINT NumOfVkToF; // Size of array of VK_F structures
+
+PVK_F pVkToF; // RVA of array of VK_F structures in the
+                  // keyboard layout file
+
+INT NumOfMouseVKey;
+
+USHORT *KBD_LONG_POINTER pusMouseVKey;
+
+} KBDNLSTABLES, *KBD_LONG_POINTER PKBDNLSTABLES;
+```
+In figure 3.19 below we present the contents of the .data section where we can see that the structure
+KBDNLSTABLES located at RVA 0x1AE specifies one structure VK_F located at RVA 0x01C2.
+Figure 3.20 – .data section of the crafted keyboard layout file
+As we can see, the keyboard layout file contains exactly one VK_F structure that maps a virtual-key with
+code equal to procedure 0 in __aNLSVKProc_ with indexed as 5.
+www.eset.com
+37
+One thing we need to do in order to exploit this vulnerability is to allocate a buffer for the code to be
+executed at address 0x60636261 as in the case with Stuxnet, which allocates 32KB of memory at
+0x60630000 (figure 3.20) and writes shell code at 0x60636261 (figure 3.21):
+Figure 3.21 – Stuxnet allocates 32KB of memory at 0x 60630000 for shell code
+Figure 3.22 – The beginning of the shell code at 0x60636261
+Microsoft's patch
+On the 13th of October 2010 Microsoft released a security patch that fixes this vulnerability. We've
+compared unpatched and patched Win32k.sys modules to understand the way the vulnerability was
+fixed. As we expected MS added an additional check in the code handling keyboard input (namely in the
+function xxxEKNLSProcs ) to prevent NLSFEProcType field of the VK_F structure of being out of the
+boundaries __aNLSVKProc_ table. In the figures below we can see unpatched (figure 3.22) and patched
+code (figure 3.23) respectively where the additional check is highlighted with the red border.
+As we can see, before calling a procedure from __aNLSVKProc_ table the check is performed to ensure
+that the index of the procedure doesn't exceed the value of 2 (correct values are 0,1,2).
+www.eset.com
+38
+Figure 3.23 – A part of the xxxEKNLSProcs procedure before patching
+www.eset.com
+39
+Figure 3.24 – A part of the xxxEKNLSProcs procedure after patching
+www.eset.com
+40

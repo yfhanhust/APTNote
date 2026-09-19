@@ -1,0 +1,218 @@
+
+
+
+Sentence : Sample D - cryptoapi.dll (Resource: 105)
+Original filename: carbon_system.dll
+Internal name: Carbon v3.61
+This component first initializes the winsock subsystem by calling WSAStartup. Right after it creates directories on
+the VFS:
+CreateDirectoryA("\\.\IdeDrive1\\Tasks\", (LPSECURITY_ATTRIBUTES)&Dst);
+CreateDirectoryA("\\.\IdeDrive1\\Results\", (LPSECURITY_ATTRIBUTES)&Dst);
+Sample D is the next file in the logical execution order, as it creates the following mutexes, which are also accessed
+by Sample E. Sample D can be considered the main userland module, a control unit that sets up the communication
+with the kernel module and has the ability to load plugins dynamically during runtime. The internal name of this
+module, carbon_system.dll, supports this observation.
+Mutexes from cryptoapi.dll
+Global\MSMMC.StartupEnvironment.PPT
+Global\411A5195CD73A8a710E4BB16842FA42C
+Global\881F0621AC59C4c035A5DC92158AB85E
+Global\MSCTF.Shared.MUTEX.RPM
+Global\WindowsShellHWDetection
+Global\MSDBG.Global.MUTEX.ATF
+For reading or writing operations on files, exclusive access is ensured by locking them with mutexes:
+Global\MSMMC.StartupEnvironment.PPT is used for operations on the configuration file.
+Global\411A5195CD73A8a710E4BB16842FA42C is used to exclusively access temporary files
+Global\MSDBG.Global.MUTEX.ATF is used to exclusively access .\IdeDrive1\log.txt
+26 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+Global\WindowsShellHWDetection is used to exclusively access .\IdeDrive1\Results\result.txt
+Global\MSCTF.Shared.MUTEX.RPM is used to exclusively access .\IdeDrive1\Tasks\task.txt
+Global\881F0621AC59C4c035A5DC92158AB85E is used to exclusively access .\IdeDrive1\Tasks
+\task_system.txt
+During the startup of the ModuleStart() function, 6 threads are being started. The first two are:
+get_initialization_parameters_create_GUID_and_check_Packet_Capturing()
+periodic_free_space_check_and_write_log()
+These serve the purpose of initializing the environment for the malware and running maintenance and log tasks.
+Then a function load_transports() is called (more later), and then four more threads are started:
+read_config_start_thread_start()
+thread 5 - handles frag.np / frag.tcp requests
+thread 6 - handles frag.np / frag.tcp requests
+execute_plugin() - starts a new thread, calling a DLLs export ModuleStart from the .\IdeDrive1\Plugins\
+directory
+load_transports()
+In this module, the following transport or communication modules are present:
+Type 1: tcp, b2m
+Type 2: np, frag, m2b
+each associated with a bunch of functions:
+np_functions  func_obj_3 <44h, offset sub_2000FAF9, offset sub_2000FB13, \
+.data:2001EE30          offset sub_2000FB2B, offset sub_2000FC37, \
+.data:2001EE30          offset sub_2000FC91, offset sub_2000FD8E, \
+.data:2001EE30          offset sub_2000FECC, offset sub_20010798, \
+.data:2001EE30          offset sub_20010046, offset sub_2001030F, \
+.data:2001EE30          offset sub_200103BA, offset sub_200103DB, \
+.data:2001EE30          offset sub_2000EB1A, offset sub_2001077D, \
+.data:2001EE30          offset sub_20010798, offset sub_2001079E>
+frag_functions func_obj <4Ch, offset sub_2000DA6E, offset return, \
+.data:2001EE78         offset sub_2000EC14, offset sub_2000EC9E, \
+.data:2001EE78         offset sub_2000ECB2, offset sub_2000ECF3, \
+.data:2001EE78         offset sub_2000ED69, offset sub_2000F5D4, \
+.data:2001EE78         offset sub_2000F4F9, offset sub_2000EDF5, \
+.data:2001EE78         offset sub_2000F185, offset sub_2000F5EB, \
+.data:2001EE78         offset sub_2000EB1A, offset sub_2001077D, \
+.data:2001EE78         offset sub_2000F48B, offset sub_2000F4DA, 0, 0, 0>
+m2b_functions  func_obj <4Ch, offset sub_2000DA6E, offset return, \
+.data:2001EEC8         offset sub_2000E8C8, offset sub_2000E93B, \
+.data:2001EEC8         offset sub_2000DB2B, offset sub_2000E94A, \
+.data:2001EEC8         offset sub_2000E956, offset sub_2000E9B5, \
+.data:2001EEC8         offset sub_2000E9C7, offset sub_2000E9D9, \
+.data:2001EEC8         offset sub_2000EA0C, offset sub_2000EADE, \
+.data:2001EEC8         offset sub_2000EB1A, offset sub_2000EB26, \
+.data:2001EEC8         offset sub_2000EB47, offset sub_2000EB66, \
+.data:2001EEC8         offset sub_2000EB85, offset sub_2000EBE5, 0>
+tcp_functions  func_obj_2 <40h, offset sub_2000DDD6, offset WSACleanup, \
+.data:2001EF18          offset sub_2000DE03, offset sub_2000E0FE, \
+.data:2001EF18          offset sub_2000E14A, offset sub_2000E156, \
+.data:2001EF18          offset sub_2000E1D3, offset sub_20010798, \
+.data:2001EF18          offset sub_2000E288, offset sub_2000E31F, \
+.data:2001EF18          offset sub_2000E499, offset sub_2001077D, \
+.data:2001EF18          offset sub_2000E634, offset sub_2000E661, \
+.data:2001EF18          offset sub_2000E715>
+b2m_functions  func_obj_2 <40h, offset sub_2000DA6E, offset return, \
+.data:2001EF58          offset sub_2000DA71, offset sub_2000DAF9, \
+.data:2001EF58          offset sub_2000DB2B, offset sub_2000DB44, \
+.data:2001EF58          offset sub_2000DB54, offset sub_2000DBB2, \
+.data:2001EF58          offset sub_2000DBC7, offset sub_2000DBDC, \
+.data:2001EF58          offset sub_2000DBF6, offset sub_2000DD63, \
+.data:2001EF58          offset sub_2000DD84, offset sub_2000DDA2, \
+27 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+.data:2001EF58          offset sub_2000DDC0>
+TODO: these functions need to be analyzed and described
+Other reports mention different other transports that are not present in this collection.
+Transport (Type) CIRCL BAE deresz/tecamac
+tcp (1) x x
+b2m (1) x
+np (2) x x
+enc (2) x
+reliable (2) x
+frag x x x
+m2b (2) x x
+m2d (2) x
+t2m (3) x
+udp (4) x
+doms (4) x
+domc (4) x
+frag.np and frag.tcp replies:
+SEND AUTH
+RECV AUTH
+AUTH FAILED
+SEND WHO
+SEND OBJECT_ID
+frag.np/frag.tcp options:
+frag_size=32768
+frag_no_scrambling=1
+allow=*everyone
+active_con
+net_user=
+net_password=
+write_peer_nfo=%c%s%c
+nodelay=N
+Files from cryptoapi.dll
+\.\IdeDrive1\
+\.\IdeDrive1\log.txt
+\.\IdeDrive1*.bak
+\.\IdeDrive1\Tasks\task.txt
+\.\IdeDrive1\Tasks\task_system.txt
+\.\IdeDrive1\Tasks\*.tmp
+\.\IdeDrive1\config.txt
+\.\IdeDrive1\restrans.txt
+\.\IdeDrive1\Tasks\
+\.\IdeDrive1\Results\
+\.\IdeDrive1\logtrans.txt
+\.\IdeDrive1\usbdev.bak
+\.\IdeDrive1\inetpub.bak
+\.\IdeDrive1\inetpub.dll
+\.\IdeDrive1\cryptoapi.bak
+\.\IdeDrive1\cryptoapi.dll
+\.\IdeDrive1\Plugins\
+Pipes from cryptoapi.dll
+\\.\Global\PIPE\comnode
+\\%s\pipe\comnode
+\\%s\pipe\%s
+Custom error codes, shared in sample B, C and D (E and F to be check)
+CUSTOM_ERROR_01 = 21590001h
+28 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+CUSTOM_ERROR_02 = 21590002h      ; WAIT_TIMEOUT?
+CUSTOM_ERROR_03 = 21590003h      ; BROKEN_PIPE?
+CUSTOM_ERROR_04 = 21590004h
+CUSTOM_ERROR_05 = 21590005h
+CUSTOM_ERROR_06 = 21590006h
+CUSTOM_ERROR_07 = 21590007h
+CUSTOM_ERROR_08 = 21590008h
+CUSTOM_ERROR_09 = 21590009h
+CUSTOM_ERROR_0A = 2159000Ah
+CUSTOM_ERROR_0B = 2159000Bh      ; INVALID_USER_BUFFER?
+CUSTOM_ERROR_0D = 2159000Dh
+CUSTOM_ERROR_64 = 21590064h
+CUSTOM_ERROR_65 = 21590065h
+CUSTOM_ERROR_66 = 21590066h
+CUSTOM_ERROR_67 = 21590067h
+CUSTOM_ERROR_68 = 21590068h
+CUSTOM_ERROR_69 = 21590069h
+CUSTOM_ERROR_C9 = 215900C9h      ; NO_VALID_ADDR?
+CUSTOM_ERROR_CA = 215900CAh      ; NO_VALID_PORT?
+CUSTOM_ERROR_CB = 215900CBh
+CUSTOM_ERROR_CC = 215900CCh
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "cryptoapi.dll", "type" : "EXEF"},
+        {"id": 2, "description": "carbon_system.dll", "type" : "EXEF"},
+        {"id": 3, "description": "\\.\IdeDrive1\\Tasks\", (LPSECURITY_ATTRIBUTES)&Dst", "type" : "SYSP"},
+        {"id": 4, "description": "\\.\IdeDrive1\\Results\", (LPSECURITY_ATTRIBUTES)&Dst", "type" : "SYSP"},
+        {"id": 5, "description": "Global\MSMMC.StartupEnvironment.PPT", "type" : "REGI"},
+        {"id": 6, "description": "Global\411A5195CD73A8a710E4BB16842FA42C", "type" : "REGI"},
+        {"id": 7, "description": "Global\881F0621AC59C4c035A5DC92158AB85E", "type" : "REGI"},
+        {"id": 8, "description": "Global\MSFT_SMBShare_Internal_383930322D3031", "type" : "REGI"},
+        {"id": 9, "description": "\\.\IdeDrive1\\log.txt", "type" : "SYSP"},
+        {"id": 10, "description": "\\.\IdeDrive1*.bak", "type" : "SYSP"},
+        {"id": 11, "description": "\\.\IdeDrive1\Tasks\task.txt", "type" : "SYSP"},
+        {"id": 12, "description": "\\.\IdeDrive1\Tasks\task_system.txt", "type" : "SYSP"},
+        {"id": 13, "description": "\\.\IdeDrive1\Tasks\*.tmp", "type" : "SYSP"},
+        {"id": 14, "description": "\\.\IdeDrive1\config.txt", "type" : "SYSP"},
+        {"id": 15, "description": "\\.\IdeDrive1\restrans.txt", "type" : "SYSP"},
+        {"id": 16, "description": "\\.\IdeDrive1\logtrans.txt", "type" : "SYSP"},
+        {"id": 17, "description": "\\.\IdeDrive1\usbdev.bak", "type" : "SYSP"},
+        {"id": 18, "description": "\\.\IdeDrive1\inetpub.bak", "type" : "SYSP"},
+        {"id": 19, "description": "\\.\IdeDrive1\inetpub.dll", "type" : "EXEF"},
+        {"id": 20, "description": "\\.\IdeDrive1\cryptoapi.bak", "type" : "SYSP"},
+        {"id": 21, "description": "\\.\IdeDrive1\Plugins\", "type" : "SYSP"},
+        {"id": 22, "description": "\\.\Global\PIPE\comnode", "type" : "REGI"},
+        {"id": 23, "description": "\\%s\pipe\comnode", "type" : "REGI"},
+        {"id": 24, "description": "\\%s\pipe\%s", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "description": "creates directory for tasks"},
+        {"source": 1, "target": 4, "description": "creates directory for results"},
+        {"source": 1, "target": 5, "description": "uses mutex for synchronization"},
+        {"source": 1, "target": 6, "description": "uses mutex for synchronization"},
+        {"source": 1, "target": 7, "description": "uses mutex for synchronization"},
+        {"source": 1, "target": 9, "description": "writes log file"},
+        {"source": 1, "target": 10, "description": "creates backup files"},
+        {"source": 1, "target": 11, "description": "writes task file"},
+        {"source": 1, "target": 12, "description": "writes task system file"},
+        {"source": 1, "target": 13, "description": "creates temporary files in tasks directory"},
+        {"source": 1, "target": 14, "description": "reads configuration file"},
+        {"source": 1, "target": 15, "description": "writes retransmission log"},
+        {"source": 1, "target": 16, "description": "writes log transmission file"},
+        {"source": 1, "target": 17, "description": "creates USB device backup"},
+        {"source": 1, "target": 18, "description": "creates internet publication backup"},
+        {"source": 1, "target": 19, "description": "loads inetpub.dll"},
+        {"source": 1, "target": 20, "description": "creates cryptoapi backup file"},
+        {"source": 1, "target": 21, "description": "loads plugins from directory"},
+        {"source": 1, "target": 22, "description": "uses named pipe for communication"},
+        {"source": 1, "target": 23, "description": "uses named pipe for communication"},
+        {"source": 1, "target": 24, "description": "uses named pipe for communication"}
+    ]
+}

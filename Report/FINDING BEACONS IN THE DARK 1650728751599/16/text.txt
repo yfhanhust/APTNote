@@ -1,0 +1,621 @@
+WE CAN’T STOP HERE, THIS IS BEACON COUNTRY
+Armed with a dataset comprising information from over 6,000 Team Servers, as well as the configuration and
+PE stager data from nearly 48,000 Beacons, we can begin to perform the analysis phase of the CTI lifecycle.
+The initial analysis we performed on the dataset focused on clustering information based on several unique
+indicators. This clustering can help us spot patterns regarding a variety of different features such as:
+  - Common configuration settings
+
+  - Compilation timestamps
+
+  - Popular Team Server IP addresses
+
+  - ASNs used for hosting
+
+  - Ports used for serving Beacons
+
+  - Domains used for fronting
+
+  - Watermark values
+
+  - Process injection and memory allocation techniques
+
+These insights can prove invaluable for fine-tuning the alerting capabilities of XDR products and services.
+They can also help you to build profiles on new threat actors and correlate intelligence about known groups
+and campaigns.
+During the manual analysis phase, we also made several previously undocumented discoveries concerning
+Beacon configuration settings that can be particularly useful for tracking and monitoring threat groups.
+Let’s delve more closely into the Malleable C2, post exploitation, and stager settings to see what insights
+we can glean from such a comprehensive dataset of Beacons.
+constellating
+Analyzing Beacon configuration data can give great insight into the various Cobalt Strike configuration
+possibilities and the frequency with which each configuration value occurs. As mentioned, this data is
+excellent for the tuning of security products. It can also be hugely beneficial in a SOC environment to
+augment and improve upon existing incident alerting and detection mechanisms.
+To further enhance our clustering capabilities, we can perform some deep visual analysis of the configuration data. This can help us see patterns that are only visible when we have access to a lot of data. For
+example, simply by extracting and correlating the C2SERVER setting, we can see clusters of Cobalt Strike
+networks emerge that would not ordinarily be apparent. We colloquially refer to these as “constellations”
+due to their resemblance to stars in the night sky.
+54
+Figure 33 – Clustering Infrastructure based on the extracted C2SERVER setting
+In the visualization above, each luminous speck (or star in a constellation!) is an IP or domain that has
+either served a Beacon or is acting as a C2 server for a Beacon. To create the connections between
+nodes, we track the IP or domain that has served a particular Beacon and then link it to the infrastructure dictated by the C2SERVER setting.
+When we create connections within a larger dataset, we can start to see clear patterns emerge. Infrastructure that seemed disparate begins to form relationships, or it will overlap with known infrastructure
+from threat groups and active campaigns. This also aids attribution, as we only need to identify “a single
+star in the night sky” (via an IP address or confi guration setting) to map the entire constellation (that is
+to say, a threat group).
+Finally, it is worth noting that some of the largest clusters are likely due to custom Network Address
+Translation (NAT) or routing confi gurations, rather than being a cluster of individual Cobalt Strike Team
+Servers, making some of the constellations appear larger than they might be in reality.
+networking
+The information gained through scraping the Internet for Beacons helps to paint a clearer picture of the
+Cobalt Strike topography. This includes a variety of features, from popular hosting netblocks and Autonomous System Numbers (ASNs), to common ports, domain fronting and default certifi cates.
+Let’s dive in and take a look at some of the most common networking trends.
+55
+netblocks
+Looking at the ASNs for the 6,000+ Team Server IP addresses in our dataset, we can easily determine
+which netblocks are primarily responsible for Team Server deployments:
+Figure 34 – Top 10 Team Server ASNs since March 2021
+This reveals an interesting trend: Threat actors are increasingly likely to use legitimate cloud providers
+for hosting. This allows the malware operators to conceal their traffi c from monitoring systems, which
+makes the task of automated blocking trickier. This is especially problematic because several large and
+reputable companies are fi rmly in the top 20 list of providers:
+|ASN|Country|
+|---|---|
+|CNNIC-ALIBABA-CN-NET-AP Hangzhou Alibaba Advertising Co., Ltd.|CN|
+|CNNIC-TENCENT-NET-AP Shenzhen Tencent Computer Systems CompanyLimited|CN|
+|AS-CHOOPA|US|
+|CLAYERLIMITED-AS-AP Clayer Limited|HK|
+|POWERLINE-AS-AP POWER LINE DATACENTER|HK|
+|AMAZON-02|US|
+|DIGITALOCEAN-ASN|US|
+|CNNIC-ALIBABA-US-NET-AP Alibaba US Technology Co., Ltd.|CN|
+|IT7NET|CA|
+|HOSTKEY-AS|NL|
+|ASSEFLOW Amsterdam Internet Exchange AMS-IX|IT|
+56
+|BCPL-SG BGPNET Global ASN|SG|
+|---|---|
+|GOOGLE|US|
+|PINDC-AS|RU|
+|ASN-QUADRANET-GLOBAL|US|
+|ITLDC-NL|UA|
+|AS-COLOCROSSING|US|
+|SELECTEL-MSK|RU|
+|XIAOZHIYUN1-AS-AP ICIDC NETWORK|US|
+|UCLOUD-HK-AS-AP UCLOUD INFORMATION TECHNOLOGY HK LIMITED|HK|
+Table 3 – Popular ASNs
+The popularity of individual netblocks hosting Cobalt Strike Team Server is perhaps most helpful for
+alerting and monitoring purposes. Often, Team Server is hosted on an IP range used solely for nefarious
+purposes, and these ranges can be blocked directly by security software and appliances, as well as used
+to conduct further hunting, monitoring and alert correlation:
+Figure 35 – Top 10 netblocks hosting Team Sever since January 2021
+57
+We can see which countries have been responsible for hosting most of the Cobalt Strike servers over
+the past eight months by performing an IP geolocation lookup for each of the Team Server IP addresses
+in our dataset and correlating them with last seen date:
+Figure 36 – Top 10 countries hosting Team Severs since January 2021
+ports:
+Cobalt Strike Beacons are typically served on standard HTTP/S ports. Over two-thirds of Team Servers
+are confi gured to serve Beacons using ports 80, 443, and 8080:
+Figure 37 – Top 25 Team Server ports serving Beacon payloads
+58
+This information can prove useful in the automation phase, especially when presented with a suspected
+Team Server IP address with no port information (this is a fairly common occurrence when scraping
+blogs and OSINT sources). In this instance, it is at least possible to try knocking on the top 25 common
+ports to see if the Team Server can be pillaged for Beacons. Nearly 90% of the time this results in suc
+cess.
+certificates
+As mentioned, for Beacons served over HTTPS, the attackers will confi gure an SSL certifi cate that the
+Team Server uses to perform encryption. SSL certifi cates are often reused across network infrastructure, and this can provide a reliable means of grouping Beacons for hunting, alerting, and investigative
+purposes.
+Although not frequently supplied, common certifi cate names from across our dataset include:
+Figure 38 – Top 10 SSL certifi cate names
+59
+Delving deeper, one particular SSL certifi cate, with a serial number of 146473198, is especially widespread and used to serve 11% of all Beacons in our dataset. Searching for the certifi cate serial number
+on Shodan uncovers a further 677 IP addresses (not all active) using this “default”, Cobalt Strike-affi liated HTTPS certifi cate:
+Figure 39 – Default Cobalt Strike SSL certifi cate
+Based on historical IP analysis, this SSL certifi cate has been associated with at least 9,000 Cobalt Strike
+Team Server deployments over time. Why anyone deploying Team Server – whether they’re a red-teamer or threat actor – would use the default certifi cate is somewhat of a mystery. It is easy to detect and,
+as we’ve already demonstrated, this can be a very powerful mechanism for discovering active Team
+Servers on the Internet.
+Finally, the top 10 certifi cates from our dataset were used to serve over 12% of all Beacons, but the
+default is by far the most widespread:
+60
+Figure 40 - Top 10 certifi cate serials
+configuration
+The following sections will focus on the confi guration data contained within Beacon payloads. We will
+be honing in on many of the options that are specifi ed by the attackers via Malleable C2 profi les, as
+well as some of the lesser-known options (such as SSL public keys and stager options) that have been
+recovered from Beacon PE fi les.
+By performing further analysis of our Beacon dataset, it was possible to fi nd the various profi les used
+to confi gure Beacons. To do this, we fi rst obtained as many Malleable C2 profi les as we could get our
+hands on. Then we built an add-on for our automation system that checks for similarities with various
+confi guration values within Beacon payloads.
+By using an algorithm called “hamming distance,” it is possible to compare two strings and determine
+how many times someone would need to edit them (or make substitutions) to make the strings identical. The resulting number of edits or substitutions is called the “edit distance.”
+Based on that computed edit distance, we can then decide how similar to known profi les the HTTP and
+GET request metadata is, and whether the metadata has been modifi ed from the base profi le. This can
+be yet another helpful approach for tracking threat actors.
+In addition, values from the “ stage ” section of the Malleable C2 profi le (such as the compile time and rich
+header) are compared to those in the Beacon PE fi les we’ve obtained, to determine if a known stager
+profi le was used. This is worth checking closely, as it is entirely possible for threat actors to mix and
+match confi g blocks. And again, this can be a useful indicator for campaign tracking purposes.
+Across our dataset, we’ve observed the following profi les, based on HTTP GET/POST metadata and
+stager compile times and rich headers:
+61
+Common Malleable Profi le Confi guration Values
+Figure 41 - Profi les by HTTP GET request metadata:
+Figure 42 - Profi les by stager compile time:
+62
+Figure 43 - Profi les by HTTP POST request meta:
+Figure 44 - Profi les by stager rich header:
+63
+watermark
+Each Cobalt Strike build is shipped with a watermark value that is unique per customer/license. In theory, this should offer the perfect mechanism for tracking threat actors who deploy Cobalt Strike Team
+Servers in the wild.
+Unfortunately, the watermark value is easily spoofed, and there are many trial, cracked, and leaked copies of Cobalt Strike that are easy to acquire. This means that the watermark value can often be a poor
+choice for performing attribution or classification of major threat groups.
+On the other hand, this watermark can be useful for tracking red teams. Legitimate penetration testers
+have less incentive to go to extra lengths to obfuscate their Beacon payloads or to perform advanced
+network operational security (OPSEC) for their Team Server deployments. Therefore, watermark values
+with a lower frequency tend to be more indicative of red team activity.
+Below is the breakdown of the most common watermark values observed in our dataset:
+Figure 45 – Common watermarks
+We have tried our best, given the opportunities for spoofing and reuse, to map watermark values to
+known threat actor groups. However, because so many of these groups use the same build (either
+accidentally or on purpose), it highlights how ineffective it can be to cluster around watermarks alone:
+|Decimal|Hex|Status|Threat Actor|
+|---|---|---|---|
+|0|0|Trial/Leaked/Spoofed|Many|
+|305419896|12345678|Leaked|RyukTrickBotMazeEvilCorpPyxieAPT41|
+|452436291|1AF7A143|Custom|REvil/Sodin/Sodinokibi|
+64
+|3|3|Spoofed|Cobalt Group|
+|---|---|---|---|
+|1580103814|5E2E7886|Leaked|APT27QbotIcedIDDarkSideContiHancitorWizardSpider|
+|1359593325|5109BF6D|Leaked|TrickBot/SmokeLoaderNobelium/APT29|
+|1873433027|6FAA51C3|Leaked|TA511/Hancitor|
+|849087011|329C0A23|Custom|SolarStorm|
+|1|1|Spoofed|Finspy|
+|892810033|35373331|Custom|Teardrop/SolarStorm|
+|16777216|1000000|Spoofed|Ryuk|
+Table 4 – Known Cobalt Strike watermarks
+ssl public keys
+Aside from SSL certificates deployed on the Team Server itself, Beacons are also bundled with an additional SSL public key. This is part of a public/private key pair that is generated on the server whenever
+someone installs Cobalt Strike. The public key is subsequently embedded in all Beacons generated on
+the same server and used for C2 check-ins. It is important to note that this key pair is entirely different
+from the SSL key pair used for the HTTPS certificate on the Team Sever.
+Unlike watermarks, the SSL public key stored within a Beacon’s configuration offers a fantastic means
+of clustering Beacons. We can virtually guarantee that the key is unique per Team Server installation,
+but they often do get reused, for example via virtual machine redeployments. In other instances, threat
+actors will use a single Team Server to configure payloads for deployment from other servers within
+their control. This allows us to easily spot, then subsequently track and monitor their infrastructure.
+Overall, 37% of Beacons are supplied with the top five SSL public keys. Several of the most popular keys
+belong to notorious threat groups.
+65
+Figure 46 –Top 10 SSL public key MD5s since January 2021
+When you’re presented with a Beacon IP that is gathered from an IR engagement, or harvested from
+OSINT feeds, it is usually possible to locate several more Beacons sharing the same SSL public key. This
+can yield further IP addresses and intelligence pertaining to infrastructure that might otherwise seem
+to be unrelated.
+We have found that leveraging this clustering technique has been very helpful for us in expanding our
+intelligence of C2 infrastructure. It helped us fi nd the connections between a wide range of actors and
+campaigns, both active and historical. It can also help you to build a high level of confi dence in your own
+intelligence assessments.
+Several popular SSL public keys used by known threat groups include:
+|MD5|Count ofBeacons|Group|
+|---|---|---|
+|1186914578623be126e5f3e8c058d719|1412|MAN1|
+|8ac540617dddcdf575f6dc207abb7344|1318|DoppelPaymer|
+|f61884abc8f4ba7a0caa288b326a70ee|621|Kegtap|
+|0ce7b6482c1f24e42f2935f5026d338d|257|TA575/Dridex|
+|b3e6b9dd84dae6be68cb40cda4366b77|23|APT41|
+Table 5 – Popular SSL public keys from Beacon confi gs
+66
+Figure 47 –Top 10 SSL public key MD5s
+The vast majority of SSL public keys extracted from confi gurations cluster with one or more Beacons
+from our dataset. Again, this further highlights the great potential for clustering and tracking.
+beacon type
+If you look at the most common communications protocols employed by the Beacons we’ve seen hosted on the Internet – plus some others we’ve obtained through other channels such as IRs and hunting
+– you’ll see no huge surprises:
+Figure 48 – Common Beacon types
+67
+As expected, HTTP is by far the most common protocol (93%). The next most common are HTTPS
+(3.9%), and a hybrid mixture of HTTP and DNS (2.2%). This leaves SMB, TCP, and Bind TCP Beacons,
+which combined account for less than 0.1% of all payloads.
+SMB Beacons are almost certainly underrepresented in our dataset, as they tend to be more commonly
+staged within local networks for further lateral movement, and not publicly hosted on the Internet.
+As a result, the bulk of the SMB stagers in our dataset came from incident response investigations and
+online malware repositories.
+The full list of beacon types supported by Team Server is as follows:
+|Type|Description|
+|---|---|
+|windows/beacon_http/reverse_http|HTTP|
+|windows/beacon_https/reverse_https|HTTPS|
+|windows/beacon_dns/reverse_dns_txt|DNS|
+|windows/beacon_bind_pipe|SMB|
+|windows/beacon_bind_tcp|TCP|
+|windows/beacon_reverse_tcp|Winsock 2 Pivot|
+|windows/beacon_extc2|External C2|
+|windows/foreign/reverse_http|Foreign HTTP|
+|windows/foreign/reverse_https|Foreign HTTPS|
+Table 6 - Types of Cobalt Strike Beacon
+C2SERVER
+A closer inspection of the C2SERVER configuration values is quite revealing. It shows us that attackers
+increasingly prefer to use domain fronting. This is a technique that allows an attacker to route Beacon
+C2 traffic via reputable third-party redirectors, in a way that typically makes use of highly trusted Content Delivery Networks (CDNs). The traffic is encrypted over HTTPS, and it is often indiscernible from
+legitimate communications.
+68
+Figure 49 – Popular fronting domains since January 2021
+Approximately 3.5% of all Beacons in our dataset were confi gured to use domain fronting. The bulk of
+Beacons are confi gured to use either Softline or Tencent. AWS, CloudFront® and Microsoft® Azure®
+are also popular reputable redirectors favored by threat actors, with Google services previously being
+targeted, as reported by Domain Tools.
+DomainTools
+COVID-19 Phishing With a Side of Cobalt Strike
+https://www.domaintools.com/resources/blog/covid-19-phishing-with-a-side-of-cobalt-strike
+Beacons confi gured to operate using domain fronting may be considerably harder for SOC analysts and
+incident responders to identify. Because the network traffi c appears to be legitimate, these Beacons
+tend to lack obvious network-based IOCs, making detection of Beacon traffi c at the network perimeter
+more challenging for defenders.
+Cobalt Strike
+High-reputation Redirectors and Domain Fronting
+https://blog.cobaltstrike.com/2017/02/06/high-reputation-redirectors-and-domain-fronting/
+69
+http
+For HTTP-based communications, each Beacon is confi gured with a user-agent string that is used to
+form part of the HTTP request headers sent to the Team Server. The user-agent strings are nearly
+always “spoofed,” with the default option used to specify a randomly selected Internet Explorer 11 user-agent. It is important to note that it’s possible to specify alternatives via Malleable C2 profi les.
+In many cases, the user-agent strings are not especially common. When combined with other indicators,
+they can occasionally be useful in spotting suspicious activity via network monitoring tools. For example, a macOS® X user-agent string originating from a Windows-based host, or Firefox® in a Chrome™
+environment.
+Looking at our dataset, we observed slightly more than 300 unique user-agent strings, with just over half
+of them being used 10 or more times:
+Figure 50 – Frequency of the top 10 user-agent strings
+The SUBMITURI confi guration option specifi es the URI path to use when sending HTTP requests. Despite over 300 URIs being specifi ed across our Beacon confi g dataset, the default path (/submit.php)
+was by far the most popular.
+Figure 51 – Most common submit URIs
+70
+GET and POST request metadata can also be specifi ed. This is where attackers can really get creative in
+supplying additional HTTP headers as part of Cobalt Strike’s Malleable C2 confi guration. The vast majority of the headers are taken from public profi le repositories. However, there are several bespoke profi les
+in use as well. These can often be used to attribute Beacons to particular threat actors or campaigns
+with a high degree of confi dence.
+GitHub
+rsmudge - Malleable C2 Profi les
+https://github.com/rsmudge/Malleable-C2-Profi les
+Unsurprisingly, the default profi le is the most prominent, with just shy of 80% of Beacons specifying
+nothing more than “Cookie” in the HTTP GET request metadata. A further 3.2% of Beacons use an
+unmodifi ed amazon.profi le. The remaining profi les each account for less than 1% of the total set of
+Beacons.
+Figure 52 – Prevalence of open-source Malleable C2 profi les
+The host header used in HTTP GET and POST requests is also confi gurable as part of the Malleable C2
+profi le. As with many settings, the values are often spoofed, and they differ from the actual hostname
+that the Team Server IP will resolve to. This can be a semi-reliable method for detecting Beacon network traffi c, as well as for detecting domain fronting, where the host header is different from that of the
+C2SERVER setting.
+71
+Figure 53 – “Common” HTTP hostnames
+proxy
+Cobalt Strike Beacon can be manually confi gured to operate via a proxy server, although it doesn’t seem
+to be a particularly popular option. Less than 0.05% of the samples from our dataset were confi gured
+to do so using a username/password. A further 0.3% of samples were confi gured to use a direct connection to the Internet (without a proxy), while the remainder of the samples will use the default IE proxy
+settings.
+The following proxy URIs were uncovered from our dataset:
+Figure 54 – Common proxy IP addresses
+72
+Figure 55 – Proxy behavior
+It seems likely that most Beacons confi gured to use a proxy server are deployed by red teams. Threat
+groups tend to use other proxying and tunnelling mechanisms for routing their C2 traffi c, such as
+SOCKS5 proxies and SSL port forwarding.
+smb
+SMB Beacons (windows/beacon_smb) use an SMB pipe name embedded within the Beacon confi guration in order to enable C2 communication with a named pipe server using the Windows SMB protocol.
+Cobalt Strike
+SMB Beacon
+https://www.cobaltstrike.com/help-smb-beacon
+73
+The following list of SMB pipe names should be viewed with a soupçon of distrust, as most of them
+have been harvested from Beacons that were served by Team Servers that were hosted on the Internet.
+This is not typically how SMB Beacons are deployed. They are typically distributed via shellcode stagers
+instead and are used to perform further lateral movement within a compromised network. Therefore,
+the results from our dataset certainly do not convey the full picture, with only 2.7% of Beacons containing pipe names:
+Figure 56 – Common SMB pipe names
+Other common pipe names frequently employed by Beacons that we’ve encountered elsewhere include
+(where # represents a random base 10 digit):
+|Pipe name|Prof ile|
+|---|---|
+|\.\pipe\MSSE-###-server|Default|
+|\.\pipe\msagent_##|Default (SMB)|
+|\.\pipe\status_##|Default|
+|\.\pipe\postex_####|Default|
+|\.\pipe\mypipe-h##|havex.prof le|
+|\.\pipe\mypipe-f##|havex.prof le|
+|\.\pipe\interprocess_##|gmail.prof le|
+|\.\pipe\ntsvcs|Many|
+|\.\pipe\scerpc|Many|
+|\.\pipe\DserNamePipe##|Many|
+|\.\pipe\PGMessagePipe##|Many|
+|\.\pipe\MsFteWds##|Many|
+74
+|\.\pipe\f4c3##|zillow.profile|
+|---|---|
+|\.\pipe\f53f##|zillow.profle|
+|\.\pipe\mojo.5688.8052.183894939787088877##|jQuery profles|
+|\.\pipe\Common|jQuery profles|
+|\.\pipe\named|jQuery profles|
+|\.\pipe\pipe|jQuery profles|
+|\.\pipe\windows.update.manager##|windows-updates.profle|
+|\.\pipe\windows.update.manager###|windows-updates.profle|
+|\.\pipe\Winsock2\CatalogChangeListener-###-0,|jquery-c2.4.2.profle|
+|\.\pipe\browser_##|malleable-c2-randomizer.py|
+|\.\pipe\comnode_##|malleable-c2-randomizer.py|
+|\.\pipe\spoolss_##|malleable-c2-randomizer.py|
+|\.\pipe\llsrpc_##|malleable-c2-randomizer.py|
+|\.\pipe\comnap_##|malleable-c2-randomizer.py|
+Table 7 – SMB pipe names from profiles
+These pipe names can be useful for alerting and blocking in EDR solutions. They can also be helpful in
+digital forensic investigations involving in-memory Cobalt Strike payloads.
+dns
+In April 2021, F-Secure published research into Cobalt Strike DNS redirectors, where they presented
+methods for fingerprinting Team Servers based on DNS responses.
+F-Secure
+Detecting Exposed Cobalt Strike DNS Redirectors
+https://labs.f-secure.com/blog/detecting-exposed-cobalt-strike-dns-redirectors/
+We can see from the configuration dataset that 68% of Beacons are configured to use 0.0.0.0 as the
+DNS idle IP. As mentioned by F-Secure’s researchers, the 0.0.0.0 DNS idle value is the default, and should
+not be used in production environments. As a result, we can probe DNS servers for 0.0.0.0 responses
+in A records, which can be used as another reliable mechanism for identifying Team Severs in the wild.
+With approximately 25% of Beacons specifying no DNS idle value at all, the remaining 7% of Beacons
+are often configured to use DNS from major providers, including:
+- 8.8.4.4 (Google)
+
+- 8.8.8.8 (Google)
+
+- 114.114.114.114 (China Telecom)
+
+- 1.1.1.1 (CloudFlare)
+
+75
+Figure 57 – DNS idle IP addresses
+This information can be helpful for monitoring DNS requests at network egress points for signs of
+Beacon DNS activity, as well as during forensic investigations involving DNS C2 traffi c from in-memory
+payloads.
+injection
+The SPAWNTO option is used to confi gure the target process that Cobalt Strike will spawn and inject
+post-exploitation DLL payloads into (in response to certain commands, such as screenshot, keylogger
+and hashdump). Different target processes are specifi ed depending on processor architecture (x86/
+x64), although the default process, rundll32.exe, is by far the most popular:
+Figure 58 – Popular x86 SPAWNTO processes
+76
+The list of target injection processes for x64 is largely identical to x86, apart from the differences in the
+fully qualifi ed fi le paths:
+Figure 59 – Popular x64 SPAWNTO processes
+Combining the fi le names used for both the x86 and x64 SPAWNTO values provides a full overview of the
+processes most frequently targeted for injection. This helps us to narrow the focus for tuning security
+software and forensic analysis:
+|Process Name|Percentage|
+|---|---|
+|rundll32.exe|94.53%|
+|gpupdate.exe|2.11%|
+|dllhost.exe|0.80%|
+|svchost.exe -k netsvcs|0.36%|
+|wusa.exe|0.32%|
+|mstsc.exe|0.28%|
+|WerFault.exe|0.25%|
+|mavinject.exe|0.13%|
+|openf les.exe|0.11%|
+|explorer.exe|0.09%|
+|iexplore.exe|0.09%|
+Table 8– Combined x86/x64 injection target processes
+77
+As explored earlier, Cobalt Strike’s method of process injection is highly confi gurable via the Malleable
+post exploitation settings, with the most popular methods/APIs used to execute shellcode being:
+Figure 60 – Injection execution techniques
+When allocating memory for the shellcode payload, the Windows API VirtualAllocEx is most commonly
+used, although around 3% of Beacons will use NtMapViewOfSection with a fi le mapping instead.
+Figure 61 – Frequency of allocation techniques
+However, roughly 5% of Beacons are confi gured to use transformations. These will append/prepend
+additional code (typically a simple NOP sled, although sometimes it will be something more
+78
+adventurous) to the injection shellcode stub to prevent detection. It is also possible to remove the write
+fl ag from the page protections, so it is important to note that in the end not all Beacon payloads will
+necessarily reside in RWX memory (4%).
+Figure 62 – Common process injection transformations (x86)
+Figure 63 – Frequency of memory protection fl ags
+compilation timestamps
+There is some advantage in knowing the compilation date/timestamps of Cobalt Strike Beacons, even
+though they are often spoofed via the stager confi guration, or simply zeroed out (which accounts for
+nearly 3.5% of Beacons). When the value is left unmodifi ed, it can provide a quick and simple way for
+researchers to determine the version of Beacon/Team Server in operation:
+79
+|Release Date|Version|Timestamps|
+|---|---|---|
+|8 December 2016|3.6|2016-12-07T21:14:472016-12-07T21:25:22|
+|23 May 2017|3.8|2017-05-22T21:21:182017-05-22T21:21:47|
+|26 September 2017|3.9|2017-10-26T04:32:19|
+|9 April 2018|3.11|2018-03-22T20:35:002018-03-22T20:35:112018-03-22T20:35:14|
+|6 September 2018|3.12|2018-09-05T21:53:172018-09-05T21:54:00|
+|4 May 2019|3.14|2019-04-18T23:51:292019-04-18T23:53:25|
+|5 December 2019|4.0|2019-12-05T12:00:492019-12-05T12:01:49|
+|22 February 2020|4.0|2020-02-21T04:55:08|
+|25 June 2020|4.1|2020-06-23T19:17:482020-06-23T19:18:442020-06-23T19:21:26|
+|6 November 2020|4.2|2020-11-03T01:27:302020-11-03T01:31:35|
+|3 March 2021|4.3|2021-03-02T08:03:152021-03-09T16:42:17|
+|17 March 2021|4.3|2021-03-16T17:37:352021-03-16T06:10:34|
+Table 9 – Cobalt Strike Beacon compilation timestamps
+As we can see from our dataset, of the beacons that have their timestamps unmodified, over 40% of
+Beacons are version 4.0. Version 4.2 is gaining in popularity at 14%, which is just slightly above version
+4.1 at 13%. Version 4.3 is slowly gaining traction at around 6% usage. The use of version 3.x Beacons
+has tailed off quite dramatically in recent months.
+80
+Figure 64 – Top 10 compilation timestamps
+When specifi ed via the stager confi guration, the compilation timestamp can be most revealing due to a
+time zone conversion bug in Team Server.
+The server appears to interpret the compile_time confi guration value as a local time before converting
+it to UTC for storing in the Beacon PE header. The result is that any Beacon built using a compile_time
+value specifi ed in the stager confi guration will leak the time zone offset of the server. This gives us yet
+more forensically sound evidence that we can use to correlate with incident events and IP geolocations
+to try and pinpoint the location of attackers.
+81
+Figure 65 –Stager time zone offsets and their respective frequencies
+rich headers
+The rich header, or signature, is embedded within the DOS stub of a PE fi le. It contains information
+pertaining to the executable linker, including the count of various sources and the version of the tools
+used to compile them. For example, here is a typical rich header from a Beacon DLL viewed in PE Tree.
+The header indicates that Visual Studio® 2012 was used to compile and link 53 object fi les and a single
+exported function:
+Figure 66 – DOS stub and rich header from a Beacon PE fi le
+82
+The top 12 rich headers observed in our set of Beacon PE files account for nearly 90% of all payloads:
+Figure 67 – Top 12 rich header MD5s
+The rich headers can be specified via the stager profile settings, or simply left unaltered in the original
+Beacon PE files. For this reason, they can provide malware researchers with a semi-reliable mechanism
+for hunting, clustering and classifying Beacon payloads within malware datasets. They can also provide
+forensic investigators with helpful signatures for finding in-memory payloads.
+GitHub
+PE Tree
+https://github.com/blackberry/pe_tree
+import hashes
+An import hash, commonly known as an “imphash,” is a checksum that is calculated from the DLL
+and function names that are present in a PE file’s import descriptor. Often unique per malware family/
+variant, imphashing can be an excellent technique for clustering malicious PE files based on similarity.
+83
+Figure 68 – Import descriptor showing wininet.dll imports from a Beacon PE file
+From our Beacon dataset, we can see that the top 12 import hashes calculated from Beacon DLL files
+belong to just over 90% of all payloads:
+Figure 69 – Top 12 import hashes
+Again, much like the rich header, knowing Cobalt Strike’s associated imphashes can be a useful tool for
+malware analysts and researchers with respect to hunting, clustering and classifying Beacons.
+84
+export names
+The exported module and function name within a Beacon PE file are referenced by the export descriptor.
+This contains either the default Beacon DLL name (beacon.dll or beacon_x64.dll) and exported function
+name (ReflectiveLoader@1), or values specified by the attacker via a transform block in the “ stage ”
+section of the Malleable profile.
+Containing just a solitary exported function, the export descriptor for an x86 Beacon DLL typically looks
+like this:
+Figure 70 – Export descriptor from a Beacon PE file
+Note time TimeDateStamp in the IMAGE_EXPORT_DESCRIPTOR. This is often overlooked when adversaries perform time-stomping of the TimeDateStamp in the PE file header, especially in Beacon DLLs.
+The net result is that the original compilation time is often still in the export descriptor, even if it has
+been overwritten in the PE headers. In this instance the TimeDateStamp is known to belong to Cobalt
+Strike version 4.0
+In total, the top 13 exported module names from across our dataset account for nearly 97% of all Beacon PE files we’ve obtained:
+85
+Figure 71 – Top 10 exported module names
+Further default module names observed in the wild include:
+- pivot.dll
+
+- pivot.x64.dll
+
+- dnsb.dll
+
+- dnsb.x64.dll
+
+This knowledge can aid in the tuning of security solutions as well as assisting forensic investigators
+when inspecting in-memory Beacon payloads.
+procinj_stub
+Surprisingly, it just so happens that the configuration setting PROCINJ_STUB is somewhat of a misnomer. This setting has absolutely nothing to do with process injection or shellcode stubs. In fact, this
+unintuitively named configuration value actually contains an MD5 hash of the Cobalt Strike Java archive
+(cobaltstrike.jar). This archive contains the server-side component that provides the Team Server operators with a GUI to generate, operate, deploy, and control Beacon payloads.
+When correlated with its corresponding Java archive commonly found in online malware repositories,
+such as VirusTotal, the MD5 hash of the cobaltstrike.jar package allows us to determine not only the
+exact version of the Team Server in use, but also whether the Team Server in operation is a leaked,
+cracked, trial or even a private version. Even if the Java archive is unavailable to assist with version
+identification, it is still an extremely valuable clustering mechanism, especially in the case of private and
+customized builds.
+As a comparison, the SSL public key allows us to cluster Beacons generated by a single Team Server
+installation, while conversely, the “process injection stub” hash allows us to cluster Beacons generated
+on any server running the same cobaltstrike.jar Java application. Even if the threat actor is aware of this
+hash, they are extremely unlikely to modify the cobaltstrike.jar Team Server archive between generating
+Beacons. This means that the hash is highly likely to remain constant.
+Given that each cobaltstrike.jar is theoretically unique per version, per “customer” (accepting leaked
+versions), this gives us the confidence to cluster Beacons not only from seemingly unrelated attacks
+but also from seemingly disparate Team Servers. That is assuming that the operators reuse the same
+cobaltstrike.jar application, which is a strong possibility within threat groups.
+86
+A point to note is that if a threat actor is aware of this secret hashing mechanism, then the value can be
+spoofed without impairing the functionality of the Beacon. This is unlike SSL public keys, where it would
+break C2 functionality if someone were to tamper with them.
+In theory, these MD5s are not an entirely infallible pivot for performing clustering and attribution. However, in practice they are rarely tampered with, and they routinely yield invaluable information and intelligence.
+Eight out of the top 10 most popular Cobalt Strike hashes belong to leaked builds and can be found on
+VirusTotal. The remaining two hash values are nulled out, with one known to convey a 0-byte string/file,
+which suggests that there is either a bug in Team Server, or perhaps certain operators might have some
+awareness of this secret hashing mechanism.
+Currently, threat actors running leaked copies of Cobalt Strike appear to be favoring versions 4.0 to 4.3,
+although a recent build of 4.4 from August 2021 seems to be gaining popularity among several distinct
+groups.
+Figure 72 - Top 10 PROCINJ_STUB hashes of cobaltstrike.jar
+The clandestine nature of this feature raises several questions:
+
+Why add the hash of the Cobalt Strike Java package archive to the config of a Beacon at all?
+Was this a purposeful choice by the developers?
+What other Easter eggs, either accidental or deliberate, have the developers left lurking in
+Team Server?
+
+87
+If this was done on purpose, then it might have been to track or differentiate between licensed customers and those using unlicensed or cracked copies of Cobalt Strike. But this is pure speculation. We’ll
+leave you, dear reader, to draw your own conclusions.
+The top PROCINJ_STUB hashes reveal just how prevalent leaked, cracked, and trial builds of Cobalt
+Strike have become:
+|PROCINJ_STUB|SHA256|Version|
+|---|---|---|
+|a56c813864af878a4c10083ca-1578e0a|8ba9ba1ca1ad484ea3dd9bdc-d419515006149e41f0b1edd12698ac1ecd5351b9|4.0|
+|187ab8f-98098de95714613f8544c9613|d8a8ec922dd8863da80be182faa97b901cd75fc-9d600e94a291d14384597571b|4.1|
+|0ce2f55444e4793516b5afe-967be9255|9b49f169aa607e70562a15f161c-d00a4a173e598d3faa1cd7bf4bfe3027c5078|4.2|
+|0ce2f55444e4793516b5afe-967be9255|9b49f169aa607e70562a15f161c-d00a4a173e598d3faa1cd7bf4bfe3027c5078|4.2|
+|b54afe01ec6a75ed-f35e1a44f8bd3929|56a53682084c46813a5157d73d7917100c-9979b67e94b05c1b3244469e7ee07a|4.2(20201106)|
+|303ae5ba3c016e-498624505880fad314|558f61bfab60ef5e6bec15c8a6434e94249621f-53e7838868cdb3206168a0937|4.0|
+|32cd41edf0810c5b5f498edf-4731cc6d|02fa5afe9e58cb633328314b279762a03894df6b-54c0129e8a979afcfca83d51|4.3|
+|da7489d9f303b6a5db-c484fdf78721d1|ef4c688e6c499332d63dd1fccf1f7c-388502c6836014f24ef52b4c01ab6b8c86|3.14|
+|d41d8cd98f-00b204e9800998ecf8427e|e3b0c44298fc1c149afbf4c8996fb92427ae41e-4649b934ca495991b7852b855|Empty fle|
+|a49f5445f01a9f3240ee-a9e46ee66c81|1f472f1ad1d5aea0cb51200f07f2fcdb24c-8b0646ef1ebe2d72e3cf7b2c54662|4.3|
+|b2736f1cbba90d42286fc42b-fba74f4d|c3c243e6218f7fbaaefb916943f500722644ec-396cf91f31a30c777c2d559465|4.3|
+|367635691cdd-70722ef5706a8f0ca7e6|1f2c29099ba7de0f7f05e0ca0efb58b56ec422b-65d1c64e66633fa9d8f469d4f|4.1|
+|60e790d9492bbbc2da-556be9edd5ceee|fb27c7c014c4df8f0820d940b01b8a1f5d27c-c7c018ab4f489df1b950992cb83|4.1|
+|d10ba2f46586cefb-16817150c6c1168e|981c124ac263a6e0bdd68ec8faa22a44c80536b-382203f3a2f79f45c37e1d5cc|4.0|
+|cd89fa488ffa5c795876d04f-95b3733c|eef76cda6ea8c0b46613cf2f20f48d2c-2fa067b9f2291599fb4ad0cf96961f46|4.0|
+|67bfc989d7549f873ae09c4fd-48f2a66|272eeaaefd6d2489e434c7c73e7de7a3941c-c77865697c3955df518e62e4e641|4.1|
+88
+|30aa21b939d29f3a2cf6a5c-3038c328b|17a2ccec7b41b-585d5a1239b12818d74d454b577db10b-2607d482311944e10e9|3.14(20190504)Licensed|
+|---|---|---|
+|46a0fae303e4d26d61ff-c6a347adef56|86991bed942cc39c0796091243ea58844b-ce577f7cb8172b3f737fa0ecad0e38|4.1|
+|446714587d79d27df098dd-3e82f27ff3|7de98cb0bd3e8f3804ea7eaca400a955aee-59a23684428bd17b2c7c89c5f1efa|4.1(20200625)|
+|4300e055262500719f12645a0bc536b8|810095d5fc630f6de2d24f34e94b8a5652d7269c-31c78668b4078a63d16712fe|4.0(20191205)|
+|95de7e032f607fb7b32b7d-387ca18645|41976f79674855bb092598257c896b2de5e-ce3e3d5509d57c37d7c161850caf6|4.4(20210801)|
+|45606e73f3a76c2834a3ca-e67306a611|b6cd3b4ea7d1d4dd00afe7e894b7c-7ca0f82f8b809494d92ba48ed35a6531bf6|3.14(20190502)|
+|799b1726911eb1fc6073f-5c96821f299|1cdfa75b103f4b3218a9f6ddec137a5438c5e-6571151d0979c60d96dfbbf9231|4.3|
+Table 10 – PROCINJ_STUB hashes by popularity
+deprecated_spawnto
+Much like the PROCINJ_STUB setting, one could be forgiven for thinking that this setting contains the
+target process name to inject to, and that it is now deprecated. After even a cursory glance at our dataset, it appears as if this value contained a hex encoded executable name for the SPAWNTO setting at
+some point in time. This is indicated by the value 72756e646c6c33322e657865, which is present in 76
+of our Beacons:
+Figure 73 – CyberChef decoded DEPRECATED _SPAWNTO value for rundll32.exe
+89
+In reality, this setting presents another mystery. Most of the values appear to be MD5s hashes, and not
+the expected hex-encoded process names:
+Figure 74 – Top DEPRECATED _SPAWNTO values
+The plot thickens further, as two of the hashes appear on VirusTotal. They belong to a pair of text files
+containing release notes for Cobalt Strike 3.12 and 3.13:
+Figure 75 – DEPRECATED _SPAWNTO release notes
+90
+The DEPRECATED_SPAWNTO configuration value seems to have been misappropriated at some point
+in time, much like the PROCINJ_STUB setting that we mentioned before, which was used to covertly
+embed the hash of the Team Server Java archive into all Beacon configurations.
+The DEPRECATED_SPAWNTO setting instead seems to surreptitiously embed the hash value of a file
+located on the Team Server into the Beacon payload configuration. And like PROCINJ_STUB, the developers may well have intended it to be a crude tracking mechanism for monitoring Beacons deployed in
+the wild. But, again, this is speculation.
+miscellaneous
+Finally, there are several Boolean options that can be specified to control the behavior of Cobalt Strike
+Beacons. Although none of them are frequently set, it seems worth mentioning them for the sake of
+completeness:
+|Option|Percentage|Description|
+|---|---|---|
+|CRYPTO_SCHEME|5%|Enable data encryption|
+|C2_CHUNK_POST|4%|Chunk HTTP post requests|
+|USE_COOKIES|4%|Enable the use of cookies|
+|CLEANUP|5%|Free memory associated withthe Beacon stager|
+Table 11 – Miscellaneous Boolean configuration options
+Now that we’ve looked at the various configuration values, cluster points and statistics, let’s take a look
+at the data in practice.
+Time to get hunting!
+91

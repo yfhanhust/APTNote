@@ -1,0 +1,48 @@
+Introducing the QuasarRAT Loader
+Overview
+The QuasarRAT loader typically arrives as a 64-bit service DLL. Its primary purpose is to decrypt, load
+and invoke an embedded .NET assembly in-memory using the CppHostCLR technique. This technique
+is based on code snippets from Microsoft DevCentre examples. The assembly, obfuscated with
+ConfuserEx, is subsequently responsible for finding, decrypting, and executing a separate malicious
+.NET module. The encrypted module is stored in the %WINDOWS%\Microsoft.NET directory.
+https://blogs.blackberry.com/en/2019/06/threat-spotlight-menupass-quasarrat-backdoor 1/18
+11/19/2020 Threat Spotlight: MenuPass/QuasarRAT Backdoor
+During our investigation we encountered several variants of the loader which indicated a development
+path lasting over a year; we were also able to locate some (but not all) of the encrypted payload files
+belonging to these loader variants. After decryption, we discovered that the payloads are backdoors
+based on the open-source code of QuasarRAT [1], version 2.0.0.0 and 1.3.0.0.
+Features
+Several layers of obfuscation
+Payload and its immediate loader are .NET assemblies
+Initial loader uses the CppHostCLR [2] technique to inject and execute the .NET loader assembly
+Payload encrypted and stored under Microsoft.NET directory
+Known to load QuasarRAT, but may work with any other .NET payload
+Initial Loader and AntiLib
+The initial loader binary is a 64-bit PE DLL, intended to run as a service. The DllMain function is
+empty, while the malicious code is contained in the ServiceMain export. Some variants include an
+additional randomly named export that creates the malicious service. In newer versions this
+functionality was shifted to a standalone module.
+The malware starts by deobfuscating an embedded next-stage executable. In the earliest variant, this is
+performed using simple XOR with a hardcoded 8-byte key composed of random letters. Later variants
+use a slightly more advanced XOR based algorithm that requires two single-byte keys. It’s possible that
+this approach was implemented to thwart XOR bruteforcing attempts:
+Figure 1: Second stage decryption loop
+Starting with variant 3, the .NET injection mechanism is implemented inside a second stage DLL,
+which according to debugging strings seems to be part of a project called “AntiLib”:
+https://blogs.blackberry.com/en/2019/06/threat-spotlight-menupass-quasarrat-backdoor 2/18
+11/19/2020 Threat Spotlight: MenuPass/QuasarRAT Backdoor
+Figure 2: Debugging strings from variant 3
+This DLL is reflectively loaded into memory by an obfuscated shellcode-like routine and invoked by
+executing an export bearing the unambiguous name: “FuckYouAnti”. Older samples do not contain this
+second stage library, and the .NET loading functionality is implemented directly in the initial loader:
+Figure 3: FuckYouAnti string in the code and in 2 nd stage DLL export table
+Once executed, the "FuckYouAnti" function will decrypt the .NET loader binary using the same XOR
+based algorithm with a different pair of hardcoded keys.
+To load the assembly directly into memory, the malware makes use of a technique called
+"CppHostCLR" which is described in detail in Microsoft DevCentre. The code looks like the example
+code provided by Microsoft. It invokes the loader entry point using hardcoded class and method
+names, that are random and differ for each sample:
+https://blogs.blackberry.com/en/2019/06/threat-spotlight-menupass-quasarrat-backdoor 3/18
+11/19/2020 Threat Spotlight: MenuPass/QuasarRAT Backdoor
+Figure 4: Use of CppHostCLR technique
+Figure 5: Invoking .NET assembly loader

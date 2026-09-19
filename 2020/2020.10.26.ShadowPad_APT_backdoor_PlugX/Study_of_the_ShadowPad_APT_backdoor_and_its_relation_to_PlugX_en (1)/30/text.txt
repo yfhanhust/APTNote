@@ -1,0 +1,39 @@
+The secondary commands
+BackDoor.Farfli.125 sends the sysinfo structure to the C&C server with the 0x1F42 ID after it
+receives one of the following commands: 0x1F42, 0x1F43, 0x1F44, 0x1F4E, or 0x1F54 . In
+response, the server sends a compressed block with the additional command’s ID and other
+data.
+The result of the command execution is written into the %TEMP%\<threadid>.tmp
+temporary file first, where threadid is the ID of the current thread in the %08x
+format. Next, the file is read and its contents are packed and sent to the C&C server.
+|CommandID|Performed actions|
+|---|---|
+|0x1771|To collect the information about the disk the path to which is specified in thecommand. The data is sent to the C&C server in the form of the structure shownbelow:struct disk_info{DWORD type;DWORD dword_0;LARGE_INTEGER free_bytes_available_to_caller;LARGE_INTEGER total_number_of_bytes;LARGE_INTEGER total_number_of_free_bytes;BYTE volume_name[128];DWORD gap_0[32];BYTE file_system_name[128];DWORD gap_1[32];BYTE path[64];s};|
+|0x1772|To receive the information about properties of the file specified in the command.The result of the command’s execution is saved as the following structure:struct file_info{WIN32_FILE_ATTRIBUTE_DATA attrs; //WINAPI structchar filename[512];};|
+|0x1773|To receive the following information about a specified directory: the properties of the directory the number of files and subdirectories in it|
+|Col1|the total amount of the data stored in it·The command is executed recursively. The received information is saved as thefollowing structure:struct dir_info{WIN32_FILE_ATTRIBUTE_DATA attrs;DWORD number_of_files;DWORD number_of_subdirs;DWORD dword_0;LARGE_INTEGER total_dir_size;BYTE path[512];};|
+|---|---|
+|0x1774|To write a list of the files and subdirectories in the specified directory to thetemporary file. The list represents a sequence of thefile_info structures for eachelement.|
+|0x1775|To delete files listed in the command.|
+|0x1776|To create a directory.|
+|0x1777|To move a file. The current and new file name are set as two consequent buffers ofthe size of0x200 bytes.|
+|0x1778|To list all available disks, forming adisk_info structure with the correspondinginformation for each of them. The collected data is sent to the C&C server in aresponse message.|
+|0x1779|To open a specified file, calling theShellExecuteA function with thenCmdShowparameter, which equalsSW_SHOW.|
+|0x177A|To obtain aSE_DEBUG_PRIVILEGE privilege and terminate a process. Thecommand contains the PID of the targeted process in a text format.|
+|0x177B|To list the contents of the registry key. For each element of the key the followingstructure is formed:struct reg_key_item{DWORD ValueName_len;DWORD type;DWORD data_size;DWORD is_subkey;BYTE element_name[512];BYTE data[512];};|
+|---|---|
+|0x177C|To delete a specified registry key.|
+|0x177E|To delete a parameter in the registry key.|
+|0x177F|To set a parameter value in the registry key.|
+|0x1781|This command contains the list of paths to files and folders (one or more paths). Ifthe path received in the command leads to the file, the trojan writes its name andsize into the temporary file. If the path leads to the directory, the trojan recursivelygoes through it and for each file found in it, it writes its name and size into thetemporary file.|
+|0x1782|To create the list of active processes. For each process the following structure isformed:struct proc_info{DWORD pid;DWORD threads_base_priority;DWORD number_of_threads;BYTE exe_file[512];};|
+|Col1|The collected information is sent to the C&C server.|
+|---|---|
+|0x1783|To create a list of running services of theSERVICE_WIN32 type. For each servicethe following structure is formed:struct service_info{DWORD service_type;DWORD start_type;DWORD error_control;DWORD tagID;BYTE service_name[520];BYTE display_name[520];DWORD current_state;DWORD gap_0[9];BYTE binary_path_name[512];BYTE load_order_group[512];BYTE dependencies[512];BYTE service_start_name[1024];BYTE description[1024];};|
+|0x1784|To stop or launch a service. The command contains the buffer with the size of0x200 with the service name, followed by a code.If the code is1, the trojan needs to stop the service; if the code is0, it needs tolaunch it.|
+|0x1785|The command is responsible for the service configuration control. The trojan canchange the type of the launch, the name, and the displayed name of the service.|
+|0x1787|To delete a service.|
+|0x1788|To search files, using the mask. The trojan saves the list of files with their propertiesin the temporary file.|
+|0x1789|To list opened windows. For each window the trojan forms the following structure:struct window_info{BYTE text[512];BYTE owner_process_name[512];HWND hWnd;DWORD dword;}|
+|---|---|
+|0x178A|To close or show a window. The command contains a handle of the window, thecode of the message, and thenCmdShow parameter.|

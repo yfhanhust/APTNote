@@ -1,0 +1,135 @@
+
+
+
+Sentence : Detection
+Collection requirements
+Process and command-line monitoring
+Command-line parameters are by far the most efficacious for detecting
+potentially malicious PowerShell behavior, at least as far as standard process
+telemetry is concerned. Logs such as Anti-Malware Scan Interface (AMSI), script
+block, or Sysmon can be particularly helpful for detecting PowerShell.
+Detection opportunities
+Encoding command switch
+Encoding and obfuscation tend to go together. Watch for the execution
+of ~~powershell.exe~~ with command lines that include variations of the
+~~-encodecommand~~ argument; PowerShell will recognize and accept anything
+from ~~-e~~ onward, and it will show up outside of the encoded bits. The following
+are example variations on the shortened, encoded command switch:
+• ~~-e~~
+• ~~-ec~~
+• ~~-encodecommand~~
+• ~~-encoded~~
+• ~~-enc~~
+• ~~-en~~
+• ~~-encod~~
+• ~~-enco~~
+This is a starting point, so be prepared for some initial noise as you implement
+and tune this detection logic.
+Base64 encoding
+Base64 encoding isn’t inherently suspicious, but it’s worth looking out for in a
+lot of environments. As such, looking for the execution of a process that seems
+to be ~~powershell.exe~~ along with a corresponding command line containing the
+term ~~base64~~ is a good way to detect a wide variety of malicious activity. Beyond
+alerting on PowerShell that leverages Base64 encoding, consider leveraging
+a tool—like CyberChef, for example—that is capable of decoding encoded
+commands.
+l [T1059.001: PowerShell]
+Frank McClain
+C I R T
+T R A I N I N G L E A D
+Frank is responsible for building and
+maintaining the Red Canary CIRT
+training program. He leads all aspects
+including onboarding new employees
+and fostering the development of
+new or expanding skillsets. Frank
+is an accomplished cyber security
+investigator and information assurance
+practitioner with deep experience in
+digital forensics and incident response
+(DFIR). He paid his dues in DFIR
+consulting before going on to manage
+security operations for a national
+financial services firm, where he built
+and led the team responsible for
+continuous monitoring, threat analysis,
+and incident response.
+15
+2021 Threat Detection Report
+Obfuscation
+Once decoded (from Base64), you may encounter compressed code, more
+Base64 blobs, and decimal, ordinal, and obfuscated commands. Obfuscation
+(whether inside or outside the encoding) breaks up detection methodologies by
+splitting commands or parameters, inserting extra characters (that are ignored
+by PowerShell), and other janky behavior. You can use regular expressions (such
+as ~~regex~~ ) to increase fidelity and help flag more interesting activity from within
+the decoded sections. Monitoring for the execution of PowerShell with unusually
+high counts of characters like ~~^~~, ~~+~~, ~~$~~, and ~~%~~ may help you detect suspicious and
+malicious behavior.
+Suspicious cmdlets
+Once the command line is decoded to human-readable text, you can also watch
+for various cmdlets, methods, and switches that may indicate malicious activity.
+These may include strings such as ~~Invoke-Expression~~ (or variants like ~~iex~~ and
+~~.invoke~~ ~~)~~, the DownloadString or DownloadFile methods, or unusual switches like
+~~-nop~~ or ~~-noni~~ .
+Weeding out false positives
+Monitoring for encoded commands may seem like an easy win, and it is certainly
+a place to start. However, you will quickly find that many platforms and
+administrators leverage PowerShell and use encoded commands as a part of
+normal workflows. As such, flagging activity simply based on variations of the
+~~-encodedcommand~~ switch may generate a significant amount of noise. Start
+with queries against offline or static data to get a feel for volume.
+Once you have a better understanding of your overall volume, identify patterns
+within the decoded data. Leverage your knowledge of what is normal for your
+environment in order to identify what is potentially malicious. Automation is
+critical to not just detecting encoded commands, but the contents of those
+commands once decoded. Prior to applying detection logic, feed encoded
+command lines into a workflow that decodes them; that way, you are increasing
+fidelity from the start.
+l [T1059.001: PowerShell]
+PARENT TECHNIQUE RANK
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "powershell.exe", "type" : "EXEF"},
+        {"id": 2, "description": "-encodecommand", "type" : "TTPS"},
+        {"id": 3, "description": "-e", "type" : "TTPS"},
+        {"id": 4, "description": "-ec", "type" : "TTPS"},
+        {"id": 5, "description": "-encoded", "type" : "TTPS"},
+        {"id": 6, "description": "-enc", "type" : "TTPS"},
+        {"id": 7, "description": "-en", "type" : "TTPS"},
+        {"id": 8, "description": "-encod", "type" : "TTPS"},
+        {"id": 9, "description": "-enco", "type" : "TTPS"},
+        {"id": 10, "description": "Base64 encoding", "type" : "TTPS"},
+        {"id": 11, "description": "CyberChef", "type" : "APPS"},
+        {"id": 12, "description": "T1059.001: PowerShell", "type" : "TTPS"},
+        {"id": 13, "description": "regex", "type" : "TTPS"},
+        {"id": 14, "description": "Invoke-Expression", "type" : "EXEF"},
+        {"id": 15, "description": "iex", "type" : "EXEF"},
+        {"id": 16, "description": ".invoke", "type" : "EXEF"},
+        {"id": 17, "description": "DownloadString method", "type" : "TTPS"},
+        {"id": 18, "description": "DownloadFile method", "type" : "TTPS"},
+        {"id": 19, "description": "-nop", "type" : "TTPS"},
+        {"id": 20, "description": "-noni", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "uses"},
+        {"source": 1, "target": 4, "rel_name" : "uses"},
+        {"source": 1, "target": 5, "rel_name" : "uses"},
+        {"source": 1, "target": 6, "rel_name" : "uses"},
+        {"source": 1, "target": 7, "rel_name" : "uses"},
+        {"source": 1, "target": 8, "rel_name" : "uses"},
+        {"source": 1, "target": 9, "rel_name" : "uses"},
+        {"source": 1, "target": 10, "rel_name" : "uses"},
+        {"source": 1, "target": 13, "rel_name" : "monitors_with"},
+        {"source": 1, "target": 14, "rel_name" : "may_use"},
+        {"source": 1, "target": 15, "rel_name" : "may_use"},
+        {"source": 1, "target": 16, "rel_name" : "may_use"},
+        {"source": 1, "target": 17, "rel_name" : "may_use"},
+        {"source": 1, "target": 18, "rel_name" : "may_use"},
+        {"source": 1, "target": 19, "rel_name" : "may_use"},
+        {"source": 1, "target": 20, "rel_name" : "may_use"},
+        {"source": 1, "target": 11, "rel_name" : "decoded_with"}
+    ]
+}

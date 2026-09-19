@@ -1,0 +1,79 @@
+
+
+
+Sentence : Cmstar Behavior
+After manually creating the IAT, Cmstar decrypts its configuration, several encrypted strings, and a piece
+of shellcode. The embedded configuration contains nothing more than a URL that Cmstar uses as its
+command and control (C2) location. The encrypted strings within the Trojan include fields used within the
+HTTP requests that Cmstar will create to communicate with its C2 server, as well as additional strings
+used to interact with the registry. The Cmstar sample associated with the MNKIT delivery document
+creates the following registry key to automatically execute at system startup:
+HKCU\Software\Microsoft\Windows\CurrentVersion\Run\xpsfiltsvcs: “rundll32.exe
+C:\DOCUME~1\ADMINI~1\LOCALS~1\Temp\xpsfiltsvcs.dll,XpsRegisterServer”
+Unit 42 found an additional encrypted registry key that would allow Cmstar to automatically start up after
+reboots. However, the code does not decrypt, reference, or use the following registry key in any way, which
+suggests that the malware author left this artifact in the code after swapping to the run key listed above:
+HKCU\Software\Microsoft\CTF\LangBarAddIn
+Cmstar also decrypts a 752-byte piece of shellcode that carries out communications with the C2 server,
+specifically by sending HTTP POST requests to the following URL:
+http://happy.launchtrue[.]com:8080/cgl-bin/update.cgi
+It should be noted that the C2 URL contains the string ‘cgl-bin’, which visually resembles the common cgi
+bin folder used by many webservers to run server-side scripts. Unit 42 used the Palo Alto Networks
+AutoFocus threat intelligence service to locate additional samples using the ‘cgl-bin’ string within URLs of
+HTTP requests and found several samples of the Cmwhite tool associated with the LURID/Enfal
+downloader [1], as seen in Figure 2.
+Figure 2 . Cmwhite Tools Using “cgl-bin” within HTTP Requests
+Cmstar’s HTTP POST requests sent to ‘happy.launchtrue[.]com’ contain data that the Trojan gathers from
+the infected machine that has the following structure:
+@@??<boolean for elevated
+privileges>]]**!!==
+In one example, Unit 42 observed the following data within an analysis environment, which was then
+encrypted using a single-byte XOR algorithm and a key of 0x45 before being sent to the C2 server:
+510@@1??1]]**0!!150316o==
+Helpfully, the malware author writes log messages to the ‘DF64159.TMP’ file, used for debugging purposes
+throughout the execution of the Cmstar downloader. The log messages are abbreviated strings that
+describe specific activities during the execution of the code. For instance, the downloader uses the
+CreateMutex to create a mutex named ‘{53A4988C-F91F-4054-9076-220AC5EC03F3}’ to determine if
+another instance of the code is running. If the downloader determines another instance of itself is
+running, the code writes the string ‘CM**’ – which happens to be the basis for the name of the Trojan – to
+the log file. Unit 42 created a Yara signature to detect Cmstar samples based on these debugging strings,
+which is available in the appendix.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cmstar", "type": "EXEF"},
+        {"id": 2, "description": "IAT (Import Address Table)", "type": "TAMP"},
+        {"id": 3, "description": "Configuration file", "type": "DOCF"},
+        {"id": 4, "description": "Encrypted strings", "type": "TAMP"},
+        {"id": 5, "description": "Shellcode", "type": "EXEF"},
+        {"id": 6, "description": "C2 URL", "type": "URLS"},
+        {"id": 7, "description": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\xpsfiltsvcs", "type": "REGI"},
+        {"id": 8, "description": "rundll32.exe", "type": "EXEF"},
+        {"id": 9, "description": "C:\\DOCUME~1\\ADMINI~1\\LOCALS~1\\Temp\\xpsfiltsvcs.dll", "type": "SYSP"},
+        {"id": 10, "description": "XpsRegisterServer", "type": "EXEF"},
+        {"id": 11, "description": "HKCU\\Software\\Microsoft\\CTF\\LangBarAddIn", "type": "REGI"},
+        {"id": 12, "description": "http://happy.launchtrue[.]com:8080/cgl-bin/update.cgi", "type": "URLS"},
+        {"id": 13, "description": "DF64159.TMP", "type": "DOCF"},
+        {"id": 14, "description": "Mutex {53A4988C-F91F-4054-9076-220AC5EC03F3}", "type": "TAMP"},
+        {"id": 15, "description": "MNKIT delivery document", "type": "DOCF"},
+        {"id": 16, "description": "LURID/Enfal downloader", "type": "EXEF"},
+        {"id": 17, "description": "Cmwhite tool", "type": "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "decrypts"},
+        {"source": 1, "target": 3, "rel_name": "decrypts"},
+        {"source": 1, "target": 4, "rel_name": "decrypts"},
+        {"source": 1, "target": 5, "rel_name": "decrypts"},
+        {"source": 1, "target": 6, "rel_name": "uses as C2"},
+        {"source": 1, "target": 7, "rel_name": "creates"},
+        {"source": 7, "target": 8, "rel_name": "calls"},
+        {"source": 7, "target": 9, "rel_name": "calls"},
+        {"source": 7, "target": 10, "rel_name": "calls"},
+        {"source": 1, "target": 11, "rel_name": "decrypts but does not use"},
+        {"source": 1, "target": 12, "rel_name": "sends HTTP POST requests to"},
+        {"source": 1, "target": 13, "rel_name": "writes log messages to"},
+        {"source": 1, "target": 14, "rel_name": "creates"},
+        {"source": 1, "target": 15, "rel_name": "associated with"},
+        {"source": 16, "rel_name": "related to", "target": 17}
+    ]
+}

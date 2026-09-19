@@ -1,0 +1,138 @@
+Explaining the attack: Wolves in sheep's clothing
+In the illustration above, our castle represents the targeted server infrastructure; In the case of the incident
+we investigated, the server was hosted by Amazon Web Services (AWS). At its perimeter, the AWS
+Security Groups - a set of firewall rules that provide security at the protocol and port access level – limit
+the inbound network traffic.
+For example, you might typically set up an AWS Security Group that only allows web traffic – that is,
+TCP packets that arrive at ports 80 or 443 – to reach your server. Network traffic with any other
+destination port never makes it past the SGs.
+The infection involves a rootkit that inspects network traffic, and a backdoor that the attackers leverage
+the rootkit to send commands to, and receive data from, the backdoor.
+Cloud Snooper - SophosLabs Page 9 of 29
+Cloud Snooper - SophosLabs
+In order to bypass the AWS Security Groups, depicted here as guards, the attackers communicate with the
+rootkit by sending innocent-looking requests (depicted in the illustration as a wolf in sheep's clothing) to
+the web server on the normal web server ports. A listener that inspects inbound traffic before it reaches
+the web server intercepts the specially-crafted requests, and sends instructions to the malware based on
+characteristics of those requests.
+Cloud Snooper - SophosLabs Page 10 of 29
+Cloud Snooper - SophosLabs
+The listener sends a "reconstructed" C2 command to the backdoor Trojan installed by the rootkit.
+Depending on the commands included into C2 traffic, the attacker may use the backdoor to steal sensitive
+data from the target.
+The collected data is then delivered back with the C2 traffic. Only this time, the rootkit has to masquerade
+it again in order to bypass the guards: the wolf dresses itself in sheep's clothing once again. Once outside,
+the C2 traffic delivers the collected data back to the attackers.
+During an entire operation, the normal web traffic, depicted as sheep, keeps flowing to and from the web
+server through the allowed gate. Visually, the C2 traffic stays largely indistinguishable from the
+legitimate web traffic.
+Technical analysis of Cloud Snooper network operations
+To trigger the payload ( snoopy ) activation, an attacker would send the following packet:
+Cloud Snooper - SophosLabs Page 11 of 29
+Cloud Snooper - SophosLabs
+Next, the snoopy module would be accessed by the C2, using source port 7070 for TCP-based or 8080
+for UDP-based control:
+On the way back, the NF_INET_LOCAL_OUT hook handler rebuilds the packet again to make sure its
+source port is restored back to the original port the incoming packet was destined for. This way, the C2
+traffic transparently flows through the port(s) allowed by the firewall:
+No other Netfilter hooks within the chain, such as iptables INPUT/OUTPUT rules, will process the packet
+if the hook returns NF_STOP . This appears to be the purpose of the TCP command 2020: to bypass other
+Netfilter hooks.
+In instances where the Netfilter receives inbound traffic with a source port of 1010/TCP, it directs the
+contents to the Secure Shell (SSH) port, 22/TCP. For outbound traffic, we have seen two variants using
+either port 80 or port 443. This will allow for an SSH connection to step around a firewall with IP
+restrictions on traffic to port 22.
+Cloud Snooper - SophosLabs Page 12 of 29
+Cloud Snooper - SophosLabs
+Hence, the ultimate purpose of the snd_floppy rootkit is to provide a covert control channel for the
+snoopy usermode process, running on a compromised host.
+Such covert control channels can be established via any port allowed by firewalls or AWS Security
+Groups, be it 80, 443, 22, or any other port.
+From the outside, the compromised system will show an unusually large volume of traffic that comes
+from the remote ports 6060, 7070, 8080, and 9999.
+But what is the snoopy module? What does it do?
+|Sample #3|Col2|
+|---|---|
+|MD5|c7a3fefb3c231ad3b683f00edd0e26e4|
+|SHA1|8ba26a4082c80cc216cee89b2033678256f226ef|
+|SHA-256|ec22c6e3537fcc0003bb73dd42f41ae077b2cb3ad9cdab295bca46dc91eac1e1|
+|File size|305,309 bytes|
+|Internalname|snoopy, rrtserver|
+snoopy is a backdoor trojan that can be executed both as a command line tool and as a daemon (though
+it needs to be launched with the -d flag for that). The backdoor's internal version is 3.0.1-2.20170303.
+It opens HTTP and/or DNS services on a compromised system, and allows tunneling of the traffic,
+operating both as a reverse SOCKS5 proxy server, and client.
+For example, the incoming control traffic can also be relayed to a different server.
+When run with -h option, the tool prints the following syntax:
+Where:
+-h option will print out the usage above
+-d will run the tool as daemon
+Cloud Snooper - SophosLabs Page 13 of 29
+Cloud Snooper - SophosLabs
+-s allows to specify a server address to bind the listening socket to, its port number, and what
+protocol is used for the traffic: either UDP-based DNS or TCP-based HTTP
+The binary requires root privilege; when run, it calls geteuid() to get the user ID. If it fails, it prints the
+line below and quits:
+"Administrator privileges are required."
+It sets the working directory to /tmp and obtains a lock for the file /tmp/rrtserver-lock . The lock file
+is used to make sure there is only one version of the tool running.
+The incoming HTTP traffic is accepted on port 2080, and DNS traffic on port 2053.
+NOTE : the port numbers 2080 and 2053 are default ones; the tool can be executed with different port
+numbers specified as parameters.
+The rootkit parses the received DNS/HTTP traffic to extract hidden commands within it - such
+commands are called "rrootkit messages" and are distinguished by the presence of a magic header or
+marker.
+For example, to find "rrootkit messages" in HTTP traffic, Snoopy parses the HTTP request to see if it
+starts with " GET /* HTTP/1.1\r\ndata: " or " HTTP/1.1 200 OK\r\ndata: ".
+Next, the "rrootkit messages" would start from a magic header 0xE381B7F5 . If this header is found, such
+data is called msg-data .
+The received msg-data is then decrypted with RC4, using the quite specific key ' A YARN-based system
+for parallel processing of large data sets '.
+The tool then initiates several additional components. These components will process the received msg-
+data .
+Depending on a separate magic header within each msg-data, the data will be processed by a different
+component.
+The initiated components are:
+
+view-shell (magic header 0xFC72E392 ): pty (pseudo terminal) that allows remote shell
+
+o the HISTFILE variable is cleared, to make sure /bin/sh execution leaves no history
+o the received commands are then executed with /bin/sh
+
+view-file (magic header 0xFC72E393 ): file manager that accepts three commands:
+
+o 'get'     - read files
+o 'put'     - save file
+o any other command - execute file with popen() syscall
+
+view-proxy (magic header 0xFC72E394 ): proxy server that accepts the following commands:
+
+o 'exit' or 'quit'     - quit proxy server
+o 'socks5'     - starts SOCKS5 proxy server, authentication is provided with user/password passed with
+the ' -u ' and ' -p ' parameters
+o 'rcsocks-cmd: socks is closed.'     - closes SOCKS proxy
+The SOCKS5 server is based on the open-source sSocks proxy implementation:
+Cloud Snooper - SophosLabs Page 14 of 29
+Cloud Snooper - SophosLabs
+
+view-pipe (magic header 0xFC72E398 ): p2p communicator, that receives commands 'pwd', 'exit', 'quit',
+
+'connect'
+On receiving the 'connect' command, it accepts the same parameters as the command-line tool
+(server IP, port, protocol) and starts tunneling commands to another peer.
+The pipe appears to be used to establish connections to other peers.
+The negotiation protocol to other peers includes a message 'rrootkit-negotiation: hello'.
+Once the connection is established, the logged message displays what peers have been
+connected, and that a new network node is now open:
+"view-pipe: left[address, port]->right[address, port]."
+"view-pipe: the network node is opened."
+
+view-myproto (magic header 0xFC72E397 ): a 'ping'/'pong'; depending on a flag it receives, it either:
+
+o receives a message "rrootkit-negotiation: hello", then responds back "rrootkit-negotiation: ok, go
+on"
+o checks if the received message was "rrootkit-negotiation: ok, go on"
+
+loop-notifier – creates a pipe, a data channel for inter-process communication (IPC)
+
+The backdoor allows control via IPC pipe as a backup control channel.

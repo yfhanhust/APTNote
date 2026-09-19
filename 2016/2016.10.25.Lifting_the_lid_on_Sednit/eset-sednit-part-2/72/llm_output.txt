@@ -1,0 +1,51 @@
+
+
+
+Sentence : En Route with Sednit
+To do so, the C&C server sends messages to Xtunnel beginning (once decrypted) with a two-byte
+tunnel identifier — denoted Tunnel ID hereafter — and followed by data of arbitrary length. When
+a particular Tunnel ID value is sent for the first time, it means the C&C server wants to open a new
+tunnel. The information in this first packet contains data about the target machine: either an IP address
+or a domain name, plus a port number. Two examples of such tunnel-opening messages are given
+in Figures 26.1 and 26.2.
+01 00 01 C0 A8 7C 01 11 C1
+Tunnel ID Command IP address Port
+“open tunnel by IP” (192.168.124.1) (4545)
+Figure 26.1 Message to open tunnel 0x100 on IP address 192.168.124.1 and port 4545
+02 00 03 08 74 65 73 74 2E 63 6F 6D 12 26
+Domain name
+length
+Figure 26.2 Message to open tunnel 0x200 on domain name test.com and port 4646
+Commands ~~1~~ and ~~3~~ pictured in these messages are the only ones implemented, and Xtunnel searches for such a command byte only when it is the first
+time it received a particular Tunnel ID value.
+Xtunnel then makes a TCP connection on the designated target and if successful, the tunnel is considered
+fully opened. At this point, each message from the C&C server beginning with the corresponding Tunnel ID
+will be forwarded to the target machine by Xtunnel — after having removed Tunnel ID from the message.
+In other words, any kind of TCP data can be sent through the tunnel .
+On the other side of the tunnel the target machine can also send data, and Xtunnel will prefix
+it with the associated Tunnel ID before forwarding it to the C&C server.
+Since in general the size of the data to be transferred is unknown, each
+communication between C&C server and Xtunnel starts with a 4-byte value
+containing the number of bytes to be sent.
+81
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sednit", "type" : "ACTO"},
+        {"id": 2, "description": "C&C server", "type" : "CCSH"},
+        {"id": 3, "description": "Xtunnel", "type" : "APPS"},
+        {"id": 4, "description": "Tunnel ID", "type" : "REGI"},
+        {"id": 5, "description": "192.168.124.1:4545", "type" : "CCSH"},
+        {"id": 6, "description": "test.com:4646", "type" : "CCSH"},
+        {"id": 7, "description": "TCP connection", "type" : "NETP"},
+        {"id": 8, "description": "target machine", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "sends command to"},
+        {"source": 4, "target": 5, "rel_name" : "identifies tunnel for"},
+        {"source": 4, "target": 6, "rel_name" : "identifies tunnel for"},
+        {"source": 3, "target": 7, "rel_name" : "makes connection using"},
+        {"source": 3, "target": 8, "rel_name" : "forwards data to"},
+        {"source": 8, "target": 2, "rel_name" : "sends data back to"}
+    ]
+}

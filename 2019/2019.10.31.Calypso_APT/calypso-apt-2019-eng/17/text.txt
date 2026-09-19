@@ -1,0 +1,34 @@
+Modules
+Each module is a valid MZPE file mapped in the address space of the same process as the shell
+code. Also the module can export the GetClassObject symbol, which receives control when run
+(if required).
+Each module has its own descriptor created by a command from C2. The C2 server sends a byte
+array (0x15) describing the module. The array contains information on the module: whether the
+module needs to be launched via export, module type (in other words, whether it needs pipes
+for communicating with C2), module size, entry point RVA (used if there is no flag for launching
+via export), and module data decryption key. The key is, by and large, the data used to format
+the actual key.
+Figure 21. Module decryption
+We should also point out that decryption takes place only if modKey is not equal to the 7AC9h
+constant hard-coded in the shellcode. This check affects only the decryption process. If modKey
+does equal the constant, the malware will immediately start loading the module. This means the
+module is not encrypted.
+14
+Each module is launched in a separate thread created specially for that purpose. Launching with
+pipes looks as follows:
+�  The malware creates a thread for the module, starts mapping the module, and gives it control inside the newly created thread.
+�  The malware creates a new connection to the current working C2.
+�  The malware creates a pipe with the name derived from the following format string: \\.\
+pipe\windows@#%02XMon (%02X is replaced by a value that is received from С2 at the same
+time as the command for launching the module).
+�  The malware launches two threads passing data from the pipe to C2 and vice versa,
+
+using the connection created during the previous step. Two more pipes, \.\pipe\win
+dows@#%02Xfir and \.\pipe\windows@#%02Xsec, are created inside the threads. The pipe
+ending in "fir" is used to pass data from the module to C2. The pipe ending in "sec" is used
+to pass data and commands from C2 to the modules.
+The second thread processing the commands from C2 to the modules has its own handler. This
+is described in more details in the Commands section. For now we can only say that one of the
+commands can start a local asynchronous TCP server. That server will accept data from whoever
+connects to it, send it to C2, and forward it back from C2. It binds to 127.0.0.1 at whichever port it
+finds available, starting from 5000 and trying possible ports one by one.

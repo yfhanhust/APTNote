@@ -1,0 +1,136 @@
+
+
+
+Sentence : Payload Workflow
+In this section we will describe the internal working of the Sedreco payload: first, its configuration
+file format; second, the commands it can execute; then, how it communicates with its C&C server;
+and finally, how its functionality can be extended with plugins.
+Configuration
+The first action of Sedreco’s payload is to retrieve the configuration file previously installed
+by the dropper. This configuration file consists of a series of variably-sized data fields, preceded
+by a header, as described in Figure 13.
+C&C1
+size
+13
+14
+7
+9
+Computer
+name size
+0
+6
+12
+15
+16
+8
+10
+11
+Timer2
+size
+Keylogger
+MaxBuffer
+Keylogger
+MaxTimeout
+C&C3
+size
+Keylogger
+flag
+C&C2
+size
+Operation
+name size
+Key
+Timer1
+size
+|size size6 17 18 28 29 35 41|Col2|Col3|Col4|Col5|Col6|
+|---|---|---|---|---|---|
+|||||||
+Plugin1
+path size
+Plugin2
+path size
+Plugin10
+path size
+Timer1 Timer2
+Figure 13. Extract of Sedreco configuration. The names of the fields are those created
+by ESET’s analysts. Field sizes are in bytes.
+The configuration is encrypted with a custom algorithm using a 6-byte key stored at its beginning.
+An implementation of this algorithm in Python can be found in ESET’s GitHub repository [10] .
+Following the key come 10 1-byte fields, each of them containing the size of a corresponding
+data field. Those data fields contain the following values (ESET’s names):
+
+
+Timer1: Time to wait between two attempts to ask the C&C server for a command
+to execute (usually set to 10 minutes)
+
+
+Timer2: Time to wait between two attempts to exfiltrate data to the C&C server (usually
+set to 10 minutes)
+
+
+Computer Name: Computer name to which a pseudo-randomly generated 6-byte value
+is appended, plus a two-byte value hardcoded in the dropper
+
+
+C&C1: Domain name of the first C&C server
+
+
+C&C2: Domain name of the second C&C server
+
+
+Operation Name: 4-character string initially hardcoded in the dropper, which likely
+
+
+identifies the operation or the target. So far, we have observed the following values: ~~rhze~~ ~~,~~
+~~rhdn~~ ~~,~~ ~~rhst~~ ~~,~~ ~~rhbp~~ ~~,~~ ~~mtfs~~ ~~,~~ ~~mctf~~ ~~,~~ ~~mtqs~~ ~~.~~ We do not know the exact meaning of these values.
+
+
+Keylogger MaxBuffer: Maximum size of the memory buffer where keystrokes are logged,
+before they are dumped to the outbound file (described below)
+
+
+Keylogger MaxTimeout: Maximum time to wait before the logged keystrokes are dumped
+
+
+to the outbound file (described below)
+
+
+Keylogger Flag: Specify whether to enable the keylogger or not
+
+
+C&C3: Domain name of the third C&C server
+
+
+70
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sedreco payload", "type" : "EXEF"},
+        {"id": 2, "description": "Configuration file", "type" : "DOCF"},
+        {"id": 3, "description": "6-byte key", "type" : "IOCS"},
+        {"id": 4, "description": "C&C1 domain name", "type" : "CCSH"},
+        {"id": 5, "description": "C&C2 domain name", "type" : "CCSH"},
+        {"id": 6, "description": "Operation Name", "type" : "REGI"},
+        {"id": 7, "description": "Keylogger MaxBuffer", "type" : "REGI"},
+        {"id": 8, "description": "Keylogger MaxTimeout", "type" : "REGI"},
+        {"id": 9, "description": "Keylogger Flag", "type" : "REGI"},
+        {"id": 10, "description": "C&C3 domain name", "type" : "CCSH"},
+        {"id": 11, "description": "Timer1 (10 minutes)", "type" : "REGI"},
+        {"id": 12, "description": "Timer2 (10 minutes)", "type" : "REGI"},
+        {"id": 13, "description": "Computer Name", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "retrieves"},
+        {"source": 2, "target": 3, "rel_name" : "contains"},
+        {"source": 2, "target": 4, "rel_name" : "contains"},
+        {"source": 2, "target": 5, "rel_name" : "contains"},
+        {"source": 2, "target": 6, "rel_name" : "contains"},
+        {"source": 2, "target": 7, "rel_name" : "contains"},
+        {"source": 2, "target": 8, "rel_name" : "contains"},
+        {"source": 2, "target": 9, "rel_name" : "contains"},
+        {"source": 2, "target": 10, "rel_name" : "contains"},
+        {"source": 2, "target": 11, "rel_name" : "contains"},
+        {"source": 2, "target": 12, "rel_name" : "contains"},
+        {"source": 2, "target": 13, "rel_name" : "contains"}
+    ]
+}

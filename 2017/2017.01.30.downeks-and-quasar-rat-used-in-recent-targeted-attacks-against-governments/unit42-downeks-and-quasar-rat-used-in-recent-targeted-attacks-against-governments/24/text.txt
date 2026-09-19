@@ -1,0 +1,37 @@
+A Double-Edged Sword…
+With further analysis of the Quasar RAT C2 Server, we uncovered vulnerabilities in the server
+code, which would allow remote code execution. This might allow a second attacker to install
+code of their choice – for example, their own Quasar RAT – on the original attacker’s server.
+We refer to this (somewhat ironic) technique as a “Double Edged Sword Attack”. We did not
+apply this to any live C2 servers – we only tested this with our own servers in our lab.
+In the lab, we changed our Quasar RAT source code to use the known encryption key, and to
+send fake victim IP address, City, Country code, Flag, and Username. The Quasar server
+does not verify the RAT data, and displays this data in the RAT Server GUI when the RAT is
+executed and connects to the server. We found this could be used to supply compelling
+“victim data” to convince the attacker to connect to this “victim” via the GUI.
+Quasar server includes a File Manager window, allowing the attacker to select victim files, and�
+trigger file operations – for example, uploading a file from victim machine to server. Uploaded�
+files are written to the server sub directory “clients\user_name@machine_name_ipaddress”.�
+Quasar server does not verify that the size, filename, extension, or header of the uploaded file�
+is the same as requested. Therefore, if we convince the attacker to request the file�
+“secret_info.doc (20KB)”, we can instead return to the server any file of our choice, of any size�
+or type.
+When the Quasar server retrieves the name of the uploaded file from the victim, it does not�
+verify that it is a valid file path. Therefore sending the file path “....\ secret_info.doc ” will�
+result in writing our file instead to the same directory as the Quasar server code.�
+Quasar server does not even verify that a file was requested from the victim. Immediately�
+when the File Manager window is opened by the attacker, the Quasar server sends two
+commands to the RAT: GetDrives and listDirectory (to populate the list of the victim’s files in�
+the RAT Server GUI). We can respond to those commands by instead sending two files of our�
+choice to the Quasar server. Again, we control the content of the file, the size and the path�
+and filename.�
+Quasar is a .NET Framework assembly, loading multiple DLLs upon launch, for example
+“dnsapi.dll”. Quasar server is vulnerable to a simple DLL hijacking attack, by using this
+technique to replace server DLLs.
+When the attacker restarts the Quasar application, our uploaded “dnsapi.dll” will instead be
+loaded. Through this vector, we could drop our own Quasar client on the attacker’s server
+and execute it. Our Quasar RAT will connect to our own (secured, of course) Quasar server,
+allowing us to control that attacker’s server with his own RAT. We can also replace
+“shfolder.dll” (and add a DLL export proxy to avoid a crash), which is loaded whenever the
+attacker clicks the builder tab – allowing us to infect the server while it runs, without the need
+to wait for application restart.

@@ -1,0 +1,101 @@
+
+
+
+Sentence : How WastedLocker attacks unfold
+The initial compromise of an organization involves the SocGholish framework, which is
+delivered to the victim in a zipped file via compromised legitimate websites. Symantec has
+discovered at least 150 different legitimate websites that refer traffic to websites hosting
+the SocGholish zip file. It is possible that these websites lead to different malware, as such
+redirection services can be utilized by multiple actors at the same time.
+The zipped file contains malicious JavaScript, masquerading as a browser update. A
+second JavaScript file is then executed by wscript.exe. This JavaScript first profiles the
+computer using commands such as whoami, net user, and net group, then uses
+PowerShell to download additional discovery related PowerShell scripts.
+The next stage of the attack is to deploy Cobalt Strike. PowerShell is used to download
+and execute a loader from a domain publicly reported as being used to deliver Cobalt
+Strike as part of WastedLocker attacks. The loader also shared a command and control
+(C&C) domain with this reported Cobalt Strike infrastructure. The loader contained a
+.NET injector, also reportedly seen in WastedLocker attacks. The injector, along with the
+loader for Cobalt Strike Beacon, is reportedly taken from an open-source project called
+Donut, which is designed to help inject and execute in-memory payloads.
+https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/wastedlocker-ransomware-us 3/24
+6/30/2020 WastedLocker: Symantec Identifies Wave of Attacks Against U.S. Organizations | Symantec Blogs
+The injected payload is known as Cobalt Strike Beacon and can be used to execute
+commands, inject other processes, elevate current processes or impersonate other
+processes, and upload and download files. The Get-NetComputer command
+from PowerView is renamed by the attackers to a random name. This command was then
+seen searching for all the computer objects in the Active Directory database with filter
+condition like server or 2003 or 7 (returning all Windows Server, Windows Server
+2003, or Windows 7 instances). The attackers then logged this information in a .tmp file.
+Privilege escalation was performed using a publicly documented technique involving the
+Software Licensing User Interface tool (slui.exe), a Windows command line utility that is
+responsible for activating and updating the Windows operating system.
+The attackers used the Windows Management Instrumentation Command Line Utility
+(wmic.exe) to execute commands on remote computers, such as adding a new user or
+executing additional downloaded PowerShell scripts. Cobalt Strike was also used to carry
+out credential dumping using ProcDump and to empty log files.
+In order to deploy the ransomware, the attackers use the Windows Sysinternals tool
+PsExec to launch a legitimate command line tool for managing Windows Defender
+(mpcmdrun.exe) to disable scanning of all downloaded files and attachments, remove all
+installed definitions, and, in some cases, disable real-time monitoring.
+It is possible that the attackers use more than one technique to perform this task, since
+NCC reported suspected use of a tool called SecTool checker for this purpose.
+PsExec is then used to launch PowerShell which uses the win32_service WMI class to
+retrieve services and the net stop command to stop these services. After Windows
+Defender is disabled and services have been stopped across the organization, PsExec is
+used to launch the WastedLocker ransomware itself, which then begins encrypting data
+and deleting shadow volumes.
+https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/wastedlocker-ransomware-us 4/24
+6/30/2020 WastedLocker: Symantec Identifies Wave of Attacks Against U.S. Organizations | Symantec Blogs
+Figure 3. WastedLocker attack chain
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SocGholish framework", "type" : "APPS"},
+        {"id": 2, "description": "zipped file", "type" : "DOCF"},
+        {"id": 3, "description": "malicious JavaScript", "type" : "EXEF"},
+        {"id": 4, "description": "wscript.exe", "type" : "EXEF"},
+        {"id": 5, "description": "PowerShell commands (whoami, net user, net group)", "type" : "EXEF"},
+        {"id": 6, "description": "discovery related PowerShell scripts", "type" : "DOCF"},
+        {"id": 7, "description": "Cobalt Strike", "type" : "APPS"},
+        {"id": 8, "description": "loader from a domain used to deliver Cobalt Strike", "type" : "EXEF"},
+        {"id": 9, "description": "C&C domain", "type" : "CCSH"},
+        {"id": 10, "description": ".NET injector", "type" : "EXEF"},
+        {"id": 11, "description": "Donut (open-source project)", "type" : "APPS"},
+        {"id": 12, "description": "Cobalt Strike Beacon", "type" : "APPS"},
+        {"id": 13, "description": "Get-NetComputer command from PowerView", "type" : "EXEF"},
+        {"id": 14, "description": ".tmp file", "type" : "DOCF"},
+        {"id": 15, "description": "slui.exe (Software Licensing User Interface tool)", "type" : "EXEF"},
+        {"id": 16, "description": "wmic.exe (Windows Management Instrumentation Command Line Utility)", "type" : "EXEF"},
+        {"id": 17, "description": "ProcDump", "type" : "EXEF"},
+        {"id": 18, "description": "PsExec", "type" : "APPS"},
+        {"id": 19, "description": "mpcmdrun.exe (Windows Defender management tool)", "type" : "EXEF"},
+        {"id": 20, "description": "SecTool checker", "type" : "APPS"},
+        {"id": 21, "description": "WastedLocker ransomware", "type" : "APPS"},
+        {"id": 22, "description": "Windows Defender", "type" : "OPPS"},
+        {"id": 23, "description": "win32_service WMI class", "type" : "EXEF"},
+        {"id": 24, "description": "net stop command", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "delivered via"},
+        {"source": 2, "target": 3, "rel_name" : "contains"},
+        {"source": 4, "target": 3, "rel_name" : "executes"},
+        {"source": 5, "target": 3, "rel_name" : "used by"},
+        {"source": 6, "target": 5, "rel_name" : "downloaded using"},
+        {"source": 7, "target": 8, "rel_name" : "deployed via"},
+        {"source": 9, "target": 7, "rel_name" : "C&C for"},
+        {"source": 10, "target": 8, "rel_name" : "contains"},
+        {"source": 11, "target": 10, "rel_name" : "taken from"},
+        {"source": 12, "target": 7, "rel_name" : "part of"},
+        {"source": 13, "target": 12, "rel_name" : "renamed and used by"},
+        {"source": 14, "target": 13, "rel_name" : "logs to"},
+        {"source": 15, "target": 16, "rel_name" : "used with"},
+        {"source": 16, "target": 17, "rel_name" : "executes"},
+        {"source": 18, "target": 19, "rel_name" : "launches to manage"},
+        {"source": 20, "target": 18, "rel_name" : "suspected use of for managing"},
+        {"source": 18, "target": 23, "rel_name" : "uses WMI class to retrieve services"},
+        {"source": 18, "target": 24, "rel_name" : "uses command to stop services"},
+        {"source": 18, "target": 21, "rel_name" : "launches ransomware via"},
+        {"source": 21, "target": 22, "rel_name" : "disables and stops"}
+    ]
+}

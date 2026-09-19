@@ -1,0 +1,100 @@
+
+
+
+Sentence : Anatomy of the attack
+Figure 1: Original image Figure 2: Lure document image
+To initiate their advanced persistent threat (APT) campaign, the group likely delivered a
+Microsoft Word document as a phishing lure attachment. The image used in the lure
+(Figure 2) appears to be crafted from a broadcast announcement shared by a Malaysian
+blogger (Figure 1). The lure image includes the same broadcast time, but the date and
+speech topic are removed. Once this attachment is opened, a decoy document is
+presented while behind the scenes, taking the following actions:
+The lure document downloads the remote template RemoteLoad.dotm
+https://www.elastic.co/blog/advanced-techniques-used-in-malaysian-focused-apt-campaign 1/13
+6/29/2020 Leviathan APT campaign in 2020 Malaysian political crisis | Elastic Blog
+The remote template executes VBA macro code
+The VBA macro code unpacks and executes two embedded base64-encoded DLLs
+(sl1.tmp and sl2.tmp) to c:\users\public\
+This technique is known as template injection, which you may recall from our Playing
+defense against Gamaredon Group blog post. This an effective approach used by
+adversaries to bypass perimeter controls such as email gateways.
+Figure 3: Remote template injection – RemoteLoad.dotm
+Figure 4: Obfuscation of MZ/PE header base64
+Both embedded DLLs ( sl1.tmp and sl2.tmp ) are similar and export the same
+function names: RCT and RCP . The first DLL ( sl1.tmp ) is used to download a benign
+executable called LogiMailApp.exe and an associated library LogiMail.dll, and the
+second DLL ( sl2.tmp ) is used to execute LogiMailApp.exe, which automatically
+attempts to execute LogiMail.dll due to an inherent DLL search order vulnerability
+we’ll cover shortly.
+File name File
+type
+Size
+(bytes)
+MD5 Compile time
+2012-09-26
+22:13:13+00:00
+2020-06-03
+04:08:29+00:00
+LogiMailApp.exe
+LogiMail.dll
+Win32
+EXE
+Win32
+DLL
+311656 850a163ce1f9cff0367854038d8cfa7e
+105984 b5a5dc78fb392fae927e9461888f354d
+https://www.elastic.co/blog/advanced-techniques-used-in-malaysian-focused-apt-campaign 2/13
+6/29/2020 Leviathan APT campaign in 2020 Malaysian political crisis | Elastic Blog
+sl1.tmp Win32
+DLL
+sl2.tmp Win32
+DLL
+3072 ccbdda7217ba439dfb6bbc6c3bd594f8
+3072 dbfa006d64f39cde78b0efda1373309c
+2019-11-29
+17:15:29+00:00
+2019-11-29
+21:23:44+00:00
+Table 1: Dropped files metadata
+Figure 5: Download and execution of LogiMailApp.exe and LogiMail.dll
+This implementation stood out to our researchers due to a behavioral idiosyncrasy:
+The Microsoft Office application winword.exe loads sl1.tmp and sl2.tmp DLLs uses
+the LoadLibraryA method, which is moderately rare
+These DLLs run explicit commands or install a payload from a URL using the
+CallWindowProcA method, which appears to be exceptionally rare
+Both DLLs are deleted after execution
+Figure 6: Download and execution module deletion
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Microsoft Word document", "type" : "DOCF"},
+        {"id": 2, "description": "RemoteLoad.dotm", "type" : "DOCF"},
+        {"id": 3, "description": "VBA macro code", "type" : "EXEF"},
+        {"id": 4, "description": "sl1.tmp (DLL)", "type" : "EXEF"},
+        {"id": 5, "description": "sl2.tmp (DLL)", "type" : "EXEF"},
+        {"id": 6, "description": "c:\\users\\public", "type" : "SYSP"},
+        {"id": 7, "description": "LogiMailApp.exe", "type" : "EXEF"},
+        {"id": 8, "description": "LogiMail.dll", "type" : "EXEF"},
+        {"id": 9, "description": "DLL search order vulnerability", "type" : "TTPS"},
+        {"id": 10, "description": "winword.exe", "type" : "APPS"},
+        {"id": 11, "description": "LoadLibraryA method", "type" : "EXEF"},
+        {"id": 12, "description": "CallWindowProcA method", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "downloads"},
+        {"source": 2, "target": 3, "rel_name" : "executes"},
+        {"source": 3, "target": 4, "rel_name" : "unpacks and executes"},
+        {"source": 3, "target": 5, "rel_name" : "unpacks and executes"},
+        {"source": 4, "target": 6, "rel_name" : "writes to"},
+        {"source": 5, "target": 6, "rel_name" : "writes to"},
+        {"source": 4, "target": 7, "rel_name" : "downloads and executes"},
+        {"source": 4, "target": 8, "rel_name" : "downloads"},
+        {"source": 5, "target": 7, "rel_name" : "executes"},
+        {"source": 7, "target": 8, "rel_name" : "executes due to"},
+        {"source": 10, "target": 4, "rel_name" : "loads"},
+        {"source": 10, "target": 5, "rel_name" : "loads"},
+        {"source": 10, "target": 11, "rel_name" : "uses"},
+        {"source": 4, "target": 12, "rel_name" : "runs using"},
+        {"source": 5, "target": 12, "rel_name" : "runs using"}
+    ]
+}

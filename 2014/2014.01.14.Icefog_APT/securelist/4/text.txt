@@ -1,0 +1,52 @@
+The Javafog
+The “jar” applet caught our attention so we analysed to determine how it works.
+The JAR format uses ZIP compression to store the data in compact form. The ZIP header
+uses timestamps to track when files were added to the archive. This helps understanding
+when the JAR file could have been created. Here is ZIP directory information from the
+applet:
+1
+2
+3
+4
+5
+6
+Date Time Attr Size Compressed Name
+
+2012-10-30 16:47:50 ..... 129 115 META-INF/MANIFEST.MF
+2012-10-30 16:47:50 ..... 259 206 META-INF/B8228E45.SF
+2012-10-30 16:47:50 ..... 5365 3610 META-INF/B8228E45.RSA
+2010-10-29 22:44:06 ..... 7726 4226 JavaTool.class
+This means that the JAR file was most likely created on 30th November 2012, while the
+main class JavaTool.class was compiled two years before that, on 29th November 2010.
+Upon startup, it tries to register itself as a startup entry to achieve persistence. The
+module writes a registry value to ensure it is automatically started by Windows:
+1
+2
+[HKEY_CURRENT_USERsoftwaremicrosoftwindowscurrentversionrun]
+JavaUpdate=%TEMP%update.jar
+It is worth noting that the module does not copy itself to that location. It is possible that
+the missing file “policyapplet.jar” contains the parts of the installation routine.
+4/7
+Next, it enters a loop where it keeps calling its main C&C function, with a delay of
+1000ms. The main loop contacts the well known Icefog C&C server –
+“www.lingdona[dot]com/news” and interacts with it.
+First of all, it sends the full system information profile, which the attackers can use to
+determine if the victim is “interesting” or has any real value. Here’s a PCAP of the
+conversation:
+5/7
+In the screenshot above, “title=2.0_1651809722” indicates a unique victim ID that is
+computed by hashing the hostname. This can be used by the operators to uniquely
+identify the victim and send commands to it.
+As a reply to the uploaded system information, the backdoor expects an “order”, which
+can have different values:
+Command Description:
+upload_ – Upload a local file specified after the command to the C&C server by
+URL “%C&C server URL%/uploads/%file name%”. Uploaded data is encrypted with
+a simple XOR operation with key 0x99.
+cmd_UpdateDomain – Migrate to a new C&C server URL specified after the
+command. The new URL is also written to the file “%TEMP%update.dat”
+cmd_** – Execute the string specified after the command using “cmd.exe /c”. The
+results are uploaded to the C&C server by URL “%C&C server
+URL%/newsdetail.aspx?title=2.0_%host name%”.
+Besides the above, the backdoor doesn’t do much else. It allows the attackers to
+control the infected system and download files from it. Simple, yet very effective.

@@ -1,0 +1,64 @@
+Operation Blockbuster: Tools Report 13
+TangoBravo is a simple piece of malware, consisting of only a handful of non-library functions. Using a technique
+commonly found in commodity malware versus APT-style malware, TangoBravo’s sole purpose is to prevent a victim’s
+machine from accessing specific domains by modifying the victim’s %SYSDIR%\drivers\etc\hosts file. To that end,
+the first task that TangoBravo performs is to scan the hosts file line by line and determine if one of the following domains
+is present; if so, the line is modified to replace the existing IP address with the loopback address 127.0.0.1 :
+
+
+www.alyac.co.kr
+
+
+www.boho.or.kr
+
+
+download.boho.or.kr
+
+
+www.ahnlab.com
+
+
+explicitupdate.alyac.co.kr
+
+
+gms.ahnlab.com
+
+
+ko-kr.albn.altools.com
+
+
+ko-kr.alupdatealyac.altools.com
+
+
+su.ahnlab.com
+
+
+su3.ahnlab.com
+
+
+update.ahnlab.com
+
+
+ahnlab.nefficient.co.kr
+
+
+To further ensure that the above domains are inaccessible to the victim, any of the domains that were not explicitly
+modified are appended to the end of the hosts file with the 127.0.0.1 loopback address. Note that not all variants of
+TangoBravo overwrite all of the domains; specifically, alyac.co.kr, boho.or.kr, download.boho.or.kr, and ahnlab.com are
+not found in all samples.
+Upon completion of the hosts file modification, some variants of TangoBravo generate and execute a suicide script. It is
+this suicide script generation and execution that ties TangoBravo into the larger Lazarus Group’s malware collection, as
+the suicide script generator and suicide script content is also found in IndiaCharlie. The difference, as seen below, is that
+TangoBravo uses CreateProcess instead of WinExec to activate the script.
+fp = fopen("d.bat", "w+");
+if ( fp )
+  {
+  fprintf(fp, ":R\nIF NOT EXIST %s GOTO E\ndel /a %s\nGOTO R\n:E\ndel /a d.bat", "%1",
+"%1");
+fclose(fp);
+sprintf(szCommandLine, "d.bat \"%s\"", szTangoBravoFilename);
+CreateProcessA(0, &szCommandLine, 0, 0, 0, 0x8000000u, 0, 0, &StartupInfo,
+&ProcessInformation);
+}
+Additionally, the core component of TangoBravo has been found integrated in another malware family within the Lazarus
+Group’s collection: IndiaGolf.

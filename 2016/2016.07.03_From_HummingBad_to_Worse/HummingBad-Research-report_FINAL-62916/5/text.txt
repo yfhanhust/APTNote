@@ -1,0 +1,202 @@
+Detailed Analysis: How HummingBad Works
+The first infection method the Check Point research team saw was a drive-by download attack, and the
+Check Point ThreatCloud indicates some adult content sites served malicious payloads too. HummingBad
+uses a sophisticated, multi-stage attack chain with two main components. The first component attempts
+to gain root access on a device with a rootkit that exploits multiple vulnerabilities. If successful, attackers
+gain full access to a device. If rooting fails, a second component uses a fake system update notification,
+tricking users into granting HummingBad system-level permissions.
+Irrespective of whether rooting is successful, HummingBad downloads as many fraudulent apps to the
+device as possible. The malicious apps in the HummingBad campaign are made of a mix of several
+malicious components, many of which have variations with the same functionality. In some cases, the
+malicious components are dynamically downloaded onto a device after the infected app is installed.
+SSP Simulate click:
+The first malicious component,
+known as SSP, displays illegitimate
+ads and installs fraudulent apps.
+It is triggered by four events: device
+boot, screen turning on or off,
+detection that a user is present, and
+any change in connectivity.
+When triggered, SSP starts a service
+named Se, which initiates the
+malicious logic and starts the
+advertisement networks used by the
+app. Different variations of
+HummingBad use different ad
+networks such as Mobvista, Cheetah,
+Apsee, or Startapp.
+SSP starts a timer that schedules a
+LockTask execution every 10 seconds. If all conditions (such as time delay, internet connection, and
+settings received from the server) are met, LockTask restarts the Se server and launches the MainActivity
+process, activating the malicious payload.
+Once the MainActivity process starts, the malware begins to display ad banners with a “close” button. The
+malware blocks any attempt to return to the home screen or go back, forcing the user to click on the
+banner. If the user clicks the “close” button, the malware imitates a click on the banner itself. Once the
+banner is clicked, SSP sends a request to a server that returns a link to an Android application kit (APK).
+SSP then downloads this APK from the server.
+©2016 Check Point Software Technologies Ltd. All rights reserved   |   P.  7
+Show close button:
+Once the APK is downloaded, the app
+checks if the device is rooted by any
+of the other components.
+If the device is rooted, it installs the
+APK silently; if not, SSP attempts
+installation with a user dialog.
+Once installed, SSP launches the APK
+and broadcasts
+INSTALL_REFERRER, using
+information received from the server
+to imitate an installation from GP and
+acquire revenue from the ad
+networks.
+To receive updates and send reports,
+SSP retrieves the command and
+control (C&C) domain from
+a JavaScript Object Notation (JSON) file downloaded from
+d1qxrv0ap6yf2e.cloudfront[.]net/domain/xxx.json.
+Possible values are:
+
+
+{"id":3,"name":"CAP","master":"032o[.]com","slave":"032n[.]com"}
+
+
+{"id":4,"name":"SSP&CCSDK","master":"guangbom[.]com","slave":"ssppsspp[.]com"}
+
+
+{"id":5,"name":"asdf","master":"asdf","slave":"asdf"} //I think
+
+
+{"id":6,"name":"efwe","master":"gwsgs","slave":"dgss"}//it's unused
+
+
+{"id":7,"name":"1","master":"1","slave":"1"} //and this
+
+
+{"id":8,"name":"CAP-DW","master":"ccaa100[.]com","slave":"ccaa200[.]com"}
+
+
+{"id":9,"name":"SSP-DW","master":"cscs100[.]com","slave":"cscs200[.]com"}
+
+
+{"id":11,"name":"HM-JK","master":"hmapi[.]com","slave":"eoapi[.]com"}
+
+
+{"id":12,"name":" 易盟   - 易窗 ","master":"ma2.heshan88[.]com","slave":"sl2.heshan88[.]com"}
+
+
+{"id":13,"name":" 易盟   - 易推 ","master":"ma2.heshan88[.]com","slave":"sl2.heshan88[.]com"}
+
+
+{"id":14,"name":" 易盟   - 启 弹","master":"ma2.heshan88[.]com","slave":"sl2.heshan88[.]com"}
+
+
+{"id":15,"name":"iadpush","master":"ma2.lb0408[.]com","slave":"sl2.lb0408[.]com"}
+
+
+{"id":16,"name":"1mob-fudian","master":"ma2.heshan88[.]com","slave":"sl2.heshan88[.]com"}
+
+
+{"id":17,"name":"QS","master":"aa0ad[.]com","slave":"aa0ab[.]com"}
+
+
+{"id":18,"name":"1mob-xin （点滴 /BDSDK ","master":"ma2.heshan88[.]com","slave":"sl2.heshan88[.]com"}
+
+
+©2016 Check Point Software Technologies Ltd. All rights reserved   |   P.  8
+Google Play Process Injection
+SSP injects a library into the process
+of Google Play. By doing this, the
+malware can then imitate clicks on
+install/buy/accept button inside
+Google Play. This injection
+determines if the required button is
+active and understands which window
+of Google Play is displayed in the
+foreground.
+The malware injects the native library
+into the Google Play process using
+the well-known ptrace approach. SSP
+uses the ptrace system call to control
+other apps, reading and writing
+memory and registers. By combining
+calls of ptrace, it loads its library into
+the memory of other processes and
+calls. The injected library dynamically
+loads dex-code (compiled Java code
+for Android) into the process.
+©2016 Check Point Software Technologies Ltd. All rights reserved   |   P.  9
+Loaded dex code starts the service in the context of the Google Play app. Periodically scanning views
+inside Google Play, it imitates clicks on install/buy/accept buttons when they appear.
+RightCore
+Present in the first sample of HummingBad found in February 2016, the RightCore component contains
+the malware’s rooting functionality. Some samples include this payload in their assets, while others
+download it from the server.
+The infected app checks whether the device is rooted. If the device is not rooted, the parent malware
+decrypts RightCore (every character is XOR encrypted against 85). Depending on the version, RightCore
+either downloads a pack of exploits from the server or decrypts them from its own assets. Then, it
+analyzes the device’s configurations to choose best how to run the exploits.
+If the exploit is successful, the app decodes a payload from its assets and attempts a quiet installation.
+Then, it downloads additional fraudulent apps, installing them silently. Though copied from other
+developers, these exploits remain effective nonetheless. The root binaries are named ipm and ppm
+instead of the normal su, possibly to avoid detection. According to the Umeng interface, the HummingBad
+campaign tries to root thousands of devices every day, with hundreds of these attempts successful.
+CAP
+The CAP component installs fraudulent apps using elaborate techniques. When CAP launches on a device
+it decrypts module_encrypt.jar from its assets and dynamically loads code containing the main malware
+functionality. From its assets, it decrypts and runs a native daemon binary. This binary then periodically
+executes a command to wake up the app.
+On every broadcast, CAP checks for changes in data. If it detects a change, the app clears all pending
+downloads, notifications, and events, and checks several parameters about its own activity (time from
+start, number of requests sent before). If the parameters meet the preset conditions, CAP sends a
+request to the server to receive the fraudulent app.
+©2016 Check Point Software Technologies Ltd. All rights reserved   |   P.  10
+Once CAP receives the payload, it
+attempts installation – silently if the
+device is rooted, or by initiating user
+interaction if it is not. This
+mechanism allows hackers to control
+the quantity of apps installed each
+day, maintaining a low profile and
+avoiding suspicion.
+Periodically, the app sends statistics
+about the plugin’s activities to the
+server and checks for updates. These
+statistics include the identifications of
+actions, such as whether a device is
+rooted, and if so, when it occurred.
+Fake IMEI injection
+CAP creates a fake ”unique” 15
+digit International Mobile Station
+Equipment Identity (IMEI) number,
+imitating the activity of additional
+devices and conducting further
+fraud. In doing so, CAP installs the
+same app twice on the same
+device, but receives payment for
+installing it on two different
+devices. CAP injects a library into
+the com.android.phone or
+android.internal.telephony
+process and calls internal classes
+of this process to set fake IMEI
+numbers.
+Clicking Simulation in
+Google Play
+CAP conducts an "external” clicking
+simulation for Google Play by opening
+an app in Google Play that was
+proposed by an advertisement.
+©2016 Check Point Software Technologies Ltd. All rights reserved   |   P.  11
+Once Google Play is open, the
+malware simulates the sequence of
+screen clicks that tap the "Install" and
+"Accept" buttons to claim the reward
+for a successful referral. To obtain
+the coordinates of the Google Play
+button, the malware dumps its layout
+using a user interface (UI) automation
+application program interface (API).
+The click imitation is performed by
+then executing the "input tap X Y"
+utility with the coordinates of the
+button.

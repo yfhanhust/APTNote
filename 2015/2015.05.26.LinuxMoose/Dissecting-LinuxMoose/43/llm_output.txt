@@ -1,0 +1,62 @@
+
+
+
+Sentence : Dissecting Linux/Moose
+Name Size Description
+Victim details Bit field (4 bytes) Details about the victim. See ~~infect_state~~
+enumeration to see what information it holds.
+Unused 20 bytes Unused
+CPU Model size Integer (4 bytes) Size of the CPU Model string
+CPU Model CPU Model size bytes The obfuscated "cpu model:" line out
+of ~~/proc/cpuinfo~~
+Processor size Integer (4 bytes) Size of the Processor string
+Processor Processor size bytes The obfuscated "processor:" line out
+of ~~/proc/cpuinfo~~
+Bit field about the infection state
+```
+   enum infect_state {
+     NO_CHMOD = (1 << 0), // set if chmod command is not present
+     NO_ECHO = (1 << 1), // set if echo command is not present
+     FOUND_NEAR_SCAN = (1 << 2), // set if victim was found during a near /15 scan
+     PS_BLKLST_HIT = (1 << 7), // set if a process-to-kill is found in the list
+                     // of running processes
+   };
+```
+The report C&C server responds with obfuscated commands to execute on the victim:
+~~Table 4.~~ ~~Report shell access response~~
+Name Size Description
+Command size Integer (4 bytes) Size of the command string
+Command command size bytes The obfuscated command to be sent to the victim
+… repeat … Integer (4 bytes) +
+command size bytes
+Zero or more commands until the terminator below
+Terminator Integer (4 bytes) Always 0. Ends the sequence of commands
+Second stage
+We now enter the second stage of infection. Each command is decrypted and executed on the victim
+via Telnet. Typically, this consists of a download and execute but the architecture is flexible and would
+allow any arbitrary commands to be executed.
+27
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Linux/Moose", "type" : "EXEF"},
+        {"id": 2, "description": "Victim details bit field (4 bytes)", "type" : "REGI"},
+        {"id": 3, "description": "CPU Model string", "type" : "TAMP"},
+        {"id": 4, "description": "Processor string", "type" : "TAMP"},
+        {"id": 5, "description": "infect_state enumeration", "type" : "REGI"},
+        {"id": 6, "description": "C&C server", "type" : "CCSH"},
+        {"id": 7, "description": "Obfuscated command string", "type" : "EXEF"},
+        {"id": 8, "description": "Terminator (Integer 4 bytes)", "type" : "TAMP"},
+        {"id": 9, "description": "/proc/cpuinfo", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 1, "target": 4, "rel_name" : "contains"},
+        {"source": 1, "target": 5, "rel_name" : "uses"},
+        {"source": 6, "target": 7, "rel_name" : "sends"},
+        {"source": 7, "target": 8, "rel_name" : "ends with"},
+        {"source": 3, "target": 9, "rel_name" : "extracted from"},
+        {"source": 4, "target": 9, "rel_name" : "extracted from"}
+    ]
+}

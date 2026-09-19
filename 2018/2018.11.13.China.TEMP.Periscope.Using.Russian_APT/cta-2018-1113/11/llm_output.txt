@@ -1,0 +1,77 @@
+
+
+
+Sentence : Appendix B — Network Monitoring
+```
+     Snort Rules to Detect SMB Credential Snarf (via US-CERT)
+ alert tcp any any -> any 445 (msg:"SMB Client Request contains 'AME_ICON.
+
+```
+PNG' (SMB credential harvesting)"; sid:42000003; rev:1; flow:established,to_
+server; content:"|FF|SMB|75 00 00 00 00|"; offset:4; depth:9; content:"|08
+00 01 00|"; distance:3; content:"|00 5c 5c|"; distance:2; within:3; con ­
+tent:"|5c|AME_ICON.PNG"; distance:7; fast_pattern; classtype:bad-unknown;
+metadata:service netbios-ssn;)
+```
+     __________
+ alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"HTTP URI OPTIONS
+ contains '/ame_icon.png' (SMB credential harvesting)"; sid:42000004; rev:1;
+
+                                           ­
+
+```
+flow:established,to_server; content:"/ame_icon.png"; http_uri; fast_pat
+tern:only; content:"OPTIONS"; nocase; http_method; classtype:bad-unknown;
+```
+     metadata:service http;)
+ __________________________________________
+
+```
+alert tcp $EXTERNAL_NET [139,445] -> $HOME_NET any (msg:"SMB Server Traffic
+­
+contains NTLM-Authenticated SMBv1 Session"; sid:42000006; rev:1; flow:estab
+lished,to_client; content:"|ff 53 4d 42 72 00 00 00 00 80|"; fast_pat ­
+tern:only; content:"|05 00|"; distance:23; classtype:bad-unknown; meta ­
+data:service netbios-ssn;)
+Recorded Future | www.recordedfuture.com | CTA-2018-1113 | 18
+CYBER THREAT ANALYSIS
+Recorded Future customers and community members familiar with
+Bro IDS can utilize its features to threat hunt for TEMP.Periscope
+activity pertaining to the intrusion documented in this research:
+|Example Bro Command|Pertinent Indicator(s)|Description|
+|---|---|---|
+|cat dns.log | bro-cut query | grep -iE“thyssenkrupp-marinesystems.org”|thyssenkrupp-marinesystems[.]orgscsnewstoday[.]com|Search DNS queries for callsmade from hosts on yournetwork to TEMP.Periscopemalicious C2s|
+|cat dns.log | bro-cut -d answers | grep-E “82.118.242.243”|82.118.242[.]243193.180.255[.]2185.106.120[.]20668.65.123[.]230|Search DNS responses forcalls made from hosts on yournetwork to TEMP.Periscopemalicious infrastructure|
+|cat conn.log |grep -E“82.118.242.243”|82.118.242[.]243193.180.255[.]2185.106.120[.]20668.65.123[.]230|Search Bro connections logfor evidence of connectionsto TEMP.Periscope maliciousinfrastructure|
+|cat dce_rpc.log |grep “WIN-PRH492RQAFV“cat ntlm.log |grep “WIN-PRH492RQAFV“cat smb_cmd.log |grep “WIN-PRH492RQAFV“cat smb_files |grep “WIN-PRH492RQAFV“cat smb_mapping.log |grep “WIN-PRH492RQAFV“|WIN-PRH492RQAFV|Search Bro SMB logs forevidence of use of specificmodified version of Responderused in this campaign|
+Recorded Future | www.recordedfuture.com | CTA-2018-1113 | 19
+CYBER THREAT ANALYSIS
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SMB Client Request", "type" : "NETP"},
+        {"id": 2, "description": "'AME_ICON.PNG'", "type" : "DOCF"},
+        {"id": 3, "description": "US-CERT", "type" : "COUN"},
+        {"id": 4, "description": "HTTP URI OPTIONS '/ame_icon.png'", "type" : "NETP"},
+        {"id": 5, "description": "SMB Server Traffic with NTLM-Authenticated SMBv1 Session", "type" : "NETP"},
+        {"id": 6, "description": "Bro IDS", "type" : "APPS"},
+        {"id": 7, "description": "TEMP.Periscope", "type" : "ACTO"},
+        {"id": 8, "description": "thyssenkrupp-marinesystems.org", "type" : "CCSH"},
+        {"id": 9, "description": "scsnewstoday.com", "type" : "CCSH"},
+        {"id": 10, "description": "82.118.242.243", "type" : "CCSH"},
+        {"id": 11, "description": "193.180.255.218", "type" : "CCSH"},
+        {"id": 12, "description": "5.106.120.206", "type" : "CCSH"},
+        {"id": 13, "description": "68.65.123.230", "type" : "CCSH"},
+        {"id": 14, "description": "WIN-PRH492RQAFV", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 7, "target": 8, "rel_name" : "uses"},
+        {"source": 7, "target": 9, "rel_name" : "uses"},
+        {"source": 7, "target": 10, "rel_name" : "uses"},
+        {"source": 7, "target": 11, "rel_name" : "uses"},
+        {"source": 7, "target": 12, "rel_name" : "uses"},
+        {"source": 7, "target": 13, "rel_name" : "uses"},
+        {"source": 6, "target": 7, "rel_name" : "detects"}
+    ]
+}

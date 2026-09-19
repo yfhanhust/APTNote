@@ -1,0 +1,49 @@
+COMPONENT: PSEXECUTOR
+A binary designed to detonate a command, judging by the name and
+some of the recovered examples, this is predominantly designed to
+detonate PowerShell commands.
+Figure 14 : PsExecutor cmd.exe overview
+Figure 15: PsExecutor powershell command
+This is an executable that would allow the actor to execute any
+PowerShell command you would want on the system. PowerShell is
+something these actors tend to favor as well, using all sorts of custom
+loaders and available frameworks for further profiling systems including
+Meterpreter, CobaltStrike and PowerShell Empire.
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 1 3
+The payloads pushed down to the bots are frequently Meterpreter, PowerShell Empire and
+CobaltStrike. These payloads are delivered using a mix of custom utilities like loaders with existing
+tools and scripts, which appears to be an effective strategy for these actors.
+Meterpreter Loader:
+The crypter layer on this loader had a notable string calling itself “RuntimeCrypter”.
+Figure 16: RuntimeCrypter string
+The main block of code inside also utilized some function calls not normally seen.
+Figure 17: Start of main code block
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 1 4
+Ultimately, this crypter layer is designed to XOR-decode the next layer, load it into memory and
+then detonate it.
+Figure 18: XOR-decoding shellcode
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 1 5
+The next layer turns out to be 64-bit Metasploit code for downloading Meterpreter.
+Figure 19: Receiving payload in Metasploit shellcode
+Figure 20: Metasploit loader shellcode RC4 decrypting payload
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 1 6
+The Terraloader component has the normal string encoding you would see where it bruteforces
+the key out using known data. It is also a newer version that uses RC4 versus AES to decode the
+file to be delivered.
+Figure 21: Loader string decryption
+After decrypting the file we are left with an ApacheBench executable that’s been hollowed out with
+Metasploit loader shellcode, which in turn performs the same flow as the previously discussed one
+of TCP connection -> XOR-encoded length and RC4 encrypted payload to be detonated.
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 1 7
+The script turns out to be a simple download and execute PowerShell script:
+The executed DLL allocates a chunk of memory and copies over some
+Figure 22: Allocate and load data
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 1 8
+That data is then passed to a function along with some hardcoded strings:
+Figure 23: Call to function to decrypt data
+This function turns out to be AES, and the previously mentioned strings are the AES key and
+initialization vector.
+Figure 24: AES snippet
+After being decoded, the chunk of data is once again a Metasploit shellcode loader chain with RC4
+decryption of the download from the C2.
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 1 9

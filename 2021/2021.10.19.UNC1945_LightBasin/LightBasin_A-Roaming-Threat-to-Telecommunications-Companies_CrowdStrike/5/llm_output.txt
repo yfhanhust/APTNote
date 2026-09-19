@@ -1,0 +1,91 @@
+
+
+
+Sentence : Serving GPRS Support Node (SGSN) Emulation
+LightBasin uses a novel technique involving the use of SGSN emulation software to
+support C2 activities in concert with TinyShell. SGSNs are essentially GPRS network
+access points, and the emulation software allows the adversary to tunnel traffic via
+this telecommunications network.
+https://www.crowdstrike.com/blog/an-analysis-of-lightbasin-telecommunications-attacks/ 3/13
+10/21/2021 A Roaming Threat to Telecommunications Companies | CrowdStrike
+TinyShell is an open-source Unix backdoor used by multiple adversaries; however,
+LightBasin uniquely combined this implant with the publicly available SGSN
+emulator sgsnemu through a bash script. This script constantly ran on the system, 2
+but only executed certain steps between 2:15 and 2:45 UTC each day. This window
+was specified via command-line arguments. During this window, the script
+performed the following steps in a loop:
+
+Execute TinyShell to communicate with an actor-controlled C2 IP
+
+address hosted by the virtual private server (VPS) provider Vultr.
+
+
+Add a route to the TinyShell C2 on the interface tun0 .
+
+
+Check for connectivity to the TinyShell C2 via ping .
+
+
+If connectivity to the IP address fails, the script executes the SGSN
+
+
+emulator in a loop, attempting to connect to a set of nine pairs of
+International Mobile Subscriber Identity (IMSI) and Mobile Subscriber
+Integrated Services Digital Network (MSISDN) numbers that are used
+as arguments to the SGSN emulator. These numbers are required to
+generate Packet Data Protocol (PDP) context requests for connection
+to a Gateway GPRS Support Node (GGSN), which will then forward
+traffic to the C2 IP address. Once a connection is established, the
+SGSN emulator creates a connection to the GGSN via the GPRS
+Tunnelling Protocol (GTP), and utilizes the interface tun0 for the
+connection. The TinyShell implant then uses tun0, as mentioned
+above.
+3
+
+If a successful connection has not been made by the end of the 30
+
+minute window, the script kills both the SGSN emulator and the
+TinyShell implant.
+In short, the SGSN emulator is used to tunnel TinyShell C2 traffic between the C2
+server and the infected host via GTP through a GGSN. The script is used as a 4
+persistence mechanism; it runs continually, but attempts to establish a tunnel to
+each of the specified mobile stations, which, in turn, act as tunnels to the TinyShell
+C2 server. The script runs for only 30 minutes each day, culminating in a similar
+effect to a scheduled job.
+CrowdStrike Intelligence assesses that this sophisticated form of C2 is likely an
+OPSEC measure. This assessment carries moderate confidence, as GTP-encapsulated
+TinyShell C2 traffic is less anomalous within the environment of a global mobile
+communications network due to its use of a protocol native to the
+telecommunications infrastructure that is compromised. Additionally, GTPencapsulated traffic is potentially subject to less inspection and restrictions by
+network security solutions.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "LightBasin", "type" : "ACTO"},
+        {"id": 2, "description": "SGSN emulation software", "type" : "APPS"},
+        {"id": 3, "description": "TinyShell", "type" : "EXEF"},
+        {"id": 4, "description": "GPRS network", "type" : "NETP"},
+        {"id": 5, "description": "Unix backdoor", "type" : "TTPS"},
+        {"id": 6, "description": "sgsnemu", "type" : "APPS"},
+        {"id": 7, "description": "Bash script", "type" : "EXEF"},
+        {"id": 8, "description": "Vultr VPS provider", "type" : "CCSH"},
+        {"id": 9, "description": "tun0 interface", "type" : "NETP"},
+        {"id": 10, "description": "C2 IP address", "type" : "CCSH"},
+        {"id": 11, "description": "IMSI numbers", "type" : "TAMP"},
+        {"id": 12, "description": "MSISDN numbers", "type" : "TAMP"},
+        {"id": 13, "description": "GGSN (Gateway GPRS Support Node)", "type" : "NETP"},
+        {"id": 14, "description": "GTP (GPRS Tunnelling Protocol)", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 4, "rel_name" : "tunnel traffic via"},
+        {"source": 3, "target": 10, "rel_name" : "communicate with"},
+        {"source": 7, "target": 9, "rel_name" : "add route to"},
+        {"source": 7, "target": 10, "rel_name" : "check connectivity via"},
+        {"source": 2, "target": 6, "rel_name" : "use"},
+        {"source": 6, "target": 13, "rel_name" : "create connection to"},
+        {"source": 13, "target": 10, "rel_name" : "forward traffic to"},
+        {"source": 6, "target": 9, "rel_name" : "utilize interface for connection"},
+        {"source": 7, "target": 2, "rel_name" : "run as persistence mechanism"},
+        {"source": 7, "target": 3, "rel_name" : "kill if not successful"}
+    ]
+}

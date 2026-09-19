@@ -1,0 +1,49 @@
+The art and science of detecting Cobalt Strike
+An adversary could exploit this vulnerability by calling
+Class.forName() as the target method of the Expression. In
+reality, forName() is not called. Instead, Expression uses
+custom logic to load classes without verifying permissions.
+Without Expression, this would not be possible.
+After returning to SetField() with our privileged class
+access, the second issue is exploited to gain access to
+a private field. An adversary could go on to disable the
+security manager and execute arbitrary shellcode.
+CVE-2013-2460 - Oracle Java ProviderSkeleton invoke()
+remote code execution
+Figure 38
+Java Version <= 1.7.0_21
+This exploit involves gaining access to a restricted package
+through a public interface.
+This exploit can be found in:
+• Bean
+• BeanHelper
+• BeanProvider
+The com.sun.tracing.Provider and java.lang.reflect.
+InvocationHandler are the main culprits here. This gives
+access to a Provider interface, or ProviderSkeleton, and
+provides the base for the target invoke() function.
+This starts obtaining a lookup method by creating an
+Invocationhandler via java.lang.reflect.Proxy. From there,
+the exploit can obtain a reference to MethodHandles.
+lookup and call it via the InvocationHanlder defined earlier.
+This is most of the work needed to begin exploitation, access
+to the invoke() method is already provided. But how does
+that give an attacker an opportunity to elevate privileges? The
+invoke method, in Java 7u21, does not perform any checks on
+whether or not a public method should be accessible by the
+calling class. See the openjdk commit in Figure 38.
+Figure 40
+Figure 39
+The second issue is that in this case, invoke() does not
+return the calling blass but instead returns sun.tracing.
+ProviderSkeleton. This all comes together because
+ProviderSkeleton is a privileged class. Eventually, Cobalt Strike
+loads several classes and, once again, disables the manager.
+Cobalt Strike now uses the displayAd() (Figure 39) to make
+calls to invoke() and return privileged classes that they
+would otherwise not have access to.
+You can see another call to getMethod() prior to invoking
+the argument, this function is used to obtain access to the
+familiar forName() method. Then once again like earlier, that
+can be called to gain access to restricted classes (Figure 40).
+© 2020 Cisco. All rights reserved. talos-external@cisco.com | talosintelligence.com page 23 of 29

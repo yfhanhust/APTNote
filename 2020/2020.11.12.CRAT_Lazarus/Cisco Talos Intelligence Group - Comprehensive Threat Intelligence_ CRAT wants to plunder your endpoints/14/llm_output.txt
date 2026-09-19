@@ -1,0 +1,114 @@
+
+
+
+Sentence : Loaders
+In addition to the CRATv2 DLLs, Cisco Talos discovered multiple loaders related to the RAT
+family. This section provides an overview of these components.
+EXE Loaders
+The EXE based loader serves two primary purposes:
+
+Establish persistence for itself using a scheduled task on the infected endpoint. Usually
+
+scheduled to run once every few minutes. The loader may also obtain persistence using
+a registry RUN key.
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 18/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+
+
+Perform anti-infection checks and inject the CRAT DLL into a target process.
+
+
+The CRAT DLL isn't dropped or downloaded by the .exe based loader to the
+
+
+endpoint.
+2. It simply reads the DLL from a hardcoded filepath, un-XORs it using a 4-byte key
+and the resulting DLL is reflectively injected into a specified target process.
+Variant #2
+The latest variant of the EXE loader contains the following capabilities/upgrades:
+
+
+Establish persistence for itself using two mechanisms:
+
+
+Create and run a malicious service on the endpoint to run itself.
+
+Create a malicious LNK for itself which is persisted via a malicious RUN registry
+
+key value.
+2. Read an implant (most likely CRATv2) into memory and reflectively load it into the
+loader's process space.
+DLL Loaders
+Apart from EXE based loaders, this CRAT also uses DLL based loaders. The DLL loaders
+carry out the same function of decoding the CRAT DLL and reflectively injecting it into a
+specified process.
+The differences are in the persistence techniques used:
+The DLL loader copies itself to a specified directory and creates a LNK that activates
+the loader via rundll32.exe
+The LNK file is then persisted across reboots via the registry RUN key:
+HKCU\Software\Microsoft\windows\CurrentVersion\Run |  =
+
+Variant #2
+Cisco Talos discovered another variant of the DLL-based loader that acts as a packager as
+well. Depending on the option specified, the loader will either:
+Activate CRAT:
+Activate unpacked CRAT DLL:
+Reflectively inject an existing CRAT DLL into a hardcoded process.
+Unpack and activate:
+Extract components of the attack from a RAR archive and execute an
+accompanying EXE file (Most likely used to load the CRAT DLL).
+The extraction isn't carried out directly. This variant will create a VBS file to
+run rar.exe to extract CRAT components. Syntax used:
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 19/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+Set s = Wscript.CreateObject("Wscript.Shell"): s.Run """%s"" x -y -p%s ""%s""
+""%s""", 0, TRUE: s.Run """%s\%s""", 0: Set s = Nothing
+E.g.
+Set s = Wscript.CreateObject("Wscript.Shell"): s.Run """C:\Users\
+\AppData\Roaming\WinRar\Rar.exe"" x -y -p[password] ""
+\.rar"" """"", 0, TRUE: s.Run """
+\.exe""", 0: Set s = Nothing
+Just like the previous DLL loader, this variant will create an LNK file to run
+the VBS script upon reboot by setting up registry key:
+HKCU\Software\Microsoft\windows\CurrentVersion\Run |
+ = 
+Package CRAT: This variant of the loader also has the capability to create an archive
+from a specified file on disk. This functionality may be used to create deployment
+packages for another part of the infection chain. Syntax used:
+"\Rar.exe" a -k -r -s -ibck -m5 -df -ep -hp[password] "
+.rar" ""
+Infection chain of CRATv2
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "CRATv2 DLLs", "type": "EXEF"},
+        {"id": 2, "description": "EXE Loaders", "type": "EXEF"},
+        {"id": 3, "description": "Scheduled task on the infected endpoint", "type": "TPTH"},
+        {"id": 4, "description": "Registry RUN key", "type": "REGI"},
+        {"id": 5, "description": "CRAT DLL", "type": "EXEF"},
+        {"id": 6, "description": "Target process for CRAT DLL injection", "type": "APPS"},
+        {"id": 7, "description": "Malicious service on the endpoint", "type": "TPTH"},
+        {"id": 8, "description": "Malicious LNK file", "type": "DOCF"},
+        {"id": 9, "description": "Rundll32.exe", "type": "EXEF"},
+        {"id": 10, "description": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "type": "REGI"},
+        {"id": 11, "description": "RAR archive", "type": "DOCF"},
+        {"id": 12, "description": "VBS file to run rar.exe", "type": "EXEF"},
+        {"id": 13, "description": "WinRar\\Rar.exe", "type": "EXEF"},
+        {"id": 14, "description": "CRAT components extracted from RAR archive", "type": "DOCF"},
+        {"id": 15, "description": "Accompanying EXE file to load CRAT DLL", "type": "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name": "creates"},
+        {"source": 2, "target": 4, "rel_name": "uses"},
+        {"source": 2, "target": 5, "rel_name": "injects into"},
+        {"source": 2, "target": 6, "rel_name": "targets process for injection"},
+        {"source": 7, "target": 2, "rel_name": "runs"},
+        {"source": 8, "target": 4, "rel_name": "persists via"},
+        {"source": 9, "target": 8, "rel_name": "activates loader via"},
+        {"source": 10, "target": 8, "rel_name": "persists LNK file in"},
+        {"source": 12, "target": 13, "rel_name": "runs"},
+        {"source": 12, "target": 11, "rel_name": "extracts from"},
+        {"source": 12, "target": 14, "rel_name": "creates extracted components"},
+        {"source": 15, "target": 5, "rel_name": "loads CRAT DLL"}
+    ]
+}

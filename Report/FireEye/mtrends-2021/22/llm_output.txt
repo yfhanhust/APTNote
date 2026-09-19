@@ -1,0 +1,394 @@
+
+
+
+Sentence : Mapping UNC2452 Activities to the Targeted Attack Lifecycle Framework
+On December 13, 2020, FireEye published a report which
+detailed a supply chain attack called SUNBURST—an implant in
+the SolarWinds Orion platform being used to compromise target
+environments. Mandiant tracks this activity as UNC2452 and suspects the
+group is state-sponsored. While supply chain attacks are not unheard of in the
+information security space, this attack used significantly complex, methodical and
+deliberate tradecraft.
+UNC2452 has demonstrated a facility with network intrusions which stand well
+outside the standard set of activities attackers commonly employ during a breach.
+Mandiant has observed UNC2452 take advantage of areas in an environment that
+may be monitored less intensely than others, and remain within those areas as
+long as possible to reduce opportunities for detection.
+Figure 7.
+Targeted attack
+lifecycle framework.
+SPECIAL REPORT M-TRENDS 2021 64
+Mandiant analysts use the Targeted Attack Lifecycle framework to model attacker
+behaviors. Over thousands of engagements, the framework has provided a
+common nomenclature to describe both individual incidents and attacker
+methodologies. During an investigation, Mandiant consultants will often collect
+forensic artifacts associated with specific stages of the Targeted Attack Lifecycle.
+Mandiant consultants also use the framework to develop a structured narrative for
+reporting investigative findings.
+In 2020, Mandiant consultants were tasked with scoping the initial stages of
+SUNBURST activity across many complex and disparate environments. The ability
+UNC2452 managed to subvert the build process for SolarWinds Orion from March
+2020 through June 2020; the trojanized binary maintained the normal trappings
+of a legitimate software package. SolarWinds reported that 18,000 of their
+approximately 33,000 Orion customers downloaded the trojanized dynamically
+loaded library (DLL) which constitutes SUNBURST. UNC2452 appeared to target
+environments selectively based on the profiling data submitted to the Command
+and Control (CnC) nodes. [7] It is unclear whether UNC2452 would target victims
+based on industry vertical or had specific organizations in mind, but the ability to
+scope this phase of the lifecycle accurately is a critical step for security teams.
+
+FireEye (January 19, 2021). Remediation and Hardening Strategies for Microsoft 365 to Defend
+
+Against UNC2452.
+
+SolarWinds (January 29, 2021). SolarWinds Security Advisory.
+
+SPECIAL REPORT M-TRENDS 2021 65
+After initial installation, SUNBURST potentially sleeps for up to 14 days, attempts
+to interrupt security instrumentation prior to launch and then starts beaconing via
+DNS requests for avsvmcloud.com. These requests include encoded information
+about the environment from which SUNBURST is beaconing. Any organization
+that used SolarWinds Orion and updated to the trojanized version was practically
+guaranteed to have at least attempted DNS requests (Stage 1).
+Scoping the Initial Compromise phase from the perspective of the endpoint
+focuses heavily on the SolarWinds Orion endpoints themselves. Security
+teams should work to identify evidence that the malicious hotfix served by the
+SolarWinds update process was downloaded and activated on their SolarWinds
+Orion endpoints. Ideally, security teams would have imaged their SolarWinds Orion
+systems and analyzed the image or investigated the endpoint using forensically
+sound endpoint detection and response (EDR) capabilities. Fortunately, host
+based indicators (HBIs) of SUNBURST are fairly straightforward.
+During the update process the hotfix package is downloaded to the
+%PROGRAMDATA%\SolarWinds\Installers\ directory along with a corresponding
+SolarWinds-Core-v2019.4.5220-Hotfix5.msp.log file in the %PROGRAMDATA%\
+SolarWinds\Logs\Installer\ directory. After
+installation, the trojanized DLL associated with SUNBURST is written to the
+%PROGRAMFILES(x86)%\Solarwinds\Orion\ directory.
+The identification of the SUNBURST installer provides two valuable data points
+for a follow-on investigation. First, confirming the existence of SUNBURST is
+critical, but defining the earliest evidence of compromise can help drive the pace
+of the investigation. While it was reported SUNBURST may sleep for 14 days
+after installation, the check is performed against the NTFS Standard Information
+Modified timestamp of the BusinessLayer DLL. In some cases, this timestamp
+can persist from the time the archive was created, making this date less reliable.
+Therefore, the NTFS Create timestamp for the BusinessLayer DLL is used as the
+start of the timeline for a compromise in which UNC2452 used SUNBURST as the
+initial vector.
+Passive DNS logging makes Scoping Stage 1 SUNBURST requests a trivial exercise.
+While it is possible to log requests on a local DNS server within the organization,
+a more stable solution includes passive network collection of DNS requests. These
+requests usually include the source and destination of the request, the time of
+the request and relevant DNS-specific details such as the query, the answer and
+various status indicators of both. In this configuration the sensor’s placement and
+its effect on the quality of the data being captured are critical.
+Depending on the placement of a passive sensor, the data captured may lack
+visibility, reducing the accuracy of its logs. If a sensor is placed north of a local
+server that provides DNS and recursive lookups, DNS requests emanating from
+the server may not indicate the true source of the domain lookup. This limitation
+may be overcome in relatively small or localized SolarWinds deployments, but can
+generate more questions in a large-scale deployment. It is more desirable if the
+sensor sits between the individual endpoint and any DNS resolution service.
+SPECIAL REPORT M-TRENDS 2021 66
+administrative access to the endpoint and runs as SYSTEM on the SolarWinds Orion
+endpoint. Consequently, UNC2452 can maintain access to an environment as long
+as the SolarWinds Orion systems remain active.
+During startup SUNBURST checks the ReportWatcherRetry value in the
+SolarWinds.Orion.Core.BusinessLayer.dll.config file. If it is set to any value other
+than 3, SUNBURST will launch; a value of 3 in ReportWatcherRetry acts as a
+SUNBURST kill switch, which may be automated or manual. Mandiant experts
+analyzed SUNBURST and identified a hardcoded list of IP address blocks that
+control the malware’s behavior. DNS records returning values within these blocks
+would terminate the malware and subsequently update the ReportWatcherRetry
+value to prevent further execution. However, Mandiant Consulting engagements
+have identified instances during which UNC2452 set the ReportWatcherRetry
+value to 3 after successful acquisition of a secondary means of access to the
+environment. When security teams identify an inactive ReportWatcherRetry value
+they may need to determine why and how it was set.
+
+To further interact with the environment, UNC2452 can switch the DNS resolution
+requests for avsvmcloud.com to a CNAME record response containing a domain
+to which SUNBURST will subsequently communicate (Stage 2). While the full
+breadth of the UNC2452 campaign remains opaque, it is safe to assume that even
+an organization with state sponsorship would not be able to manage the workload
+of 18,000 compromised networks. As of March 2021, the number of environments
+that entered Stage 2 is suspected to be in the hundreds instead of the thousands.
+Security teams can focus on the search for CNAME record responses. Depending
+on how DNS traffic is monitored, available data may differ, but the best monitoring
+provides the query, response and response type. If security teams identify CNAME
+responses associated with SUNBURST Stage 2, their investigation is likely to
+advance dramatically.
+Ideally, Stage 2 CNAME DNS requests would be captured by passive DNS
+logging within the environment. Secondary sources such as firewall logs can
+identify potential Stage 2 activity in the environment but they rely on publicly
+available threat intelligence. While searching firewall logs for the IP addresses of
+known Stage 2 domains may help identify Stage 2 activity in an environment, it
+is unlikely that every Stage 2 domain will be publicly disclosed. In fact, Mandiant
+has identified the use of multiple domains during Stage 2 SUNBURST activity
+in individual environments. Therefore, security teams should hunt for other
+indications of attacker activity in their environment consistent with UNC2452
+across the Targeted Attack Lifecycle.
+In a few engagements, Mandiant has observed UNC2452 use the memory-only
+dropper TEARDROP, which launches Cobalt Strike BEACON. If Cobalt Strike
+BEACON was used by UNC2452, the CnC infrastructure was separate from the
+infrastructure used by SUNBURST. UNC2452 has demonstrated significant caution
+Figure 8.
+Sample setting for
+ReportWatcherRetry.
+SPECIAL REPORT M-TRENDS 2021 67
+regarding actions which would have exposed SUNBURST; this pattern persisted
+in the instances where TEARDROP was deployed. While Cobalt Strike has a
+reputation for stealth, UNC2452 appeared to take pains to ensure that
+if Cobalt Strike was detected, the SUNBURST backdoor would not be burned in
+the process.
+UNC2452 clearly understands both security operations and incident response.
+An incident’s initial attack vector often remains a mystery. UNC2452 was likely
+counting on this knowledge gap to protect SUNBURST as long as possible. If the
+Cobalt Strike implant were detected and an incident response process initiated
+around the event, UNC2452 may have hoped that by avoiding a direct line
+between SUNBURST and BEACON they could protect the former, a more costly
+Figure 9.
+Control access
+rights associated
+with DCSync.
+In the Escalate Privileges phase, the attacker seeks to obtain further access to
+systems and data in the target environment. This can include credential harvesting,
+keystroke logging or the compromise of authentication systems. Success with
+credential harvesting depends on the attacker’s skillset. UNC2452 is quite able
+to surmount obstacles, research vulnerabilities and move towards their objective.
+UNC2452 tries to progress to lateral movement from the SYSTEM privileges
+provided by a SolarWinds Orion endpoint. In some cases, Mandiant has observed
+a modified version of Mimikatz used to harvest password hashes from memory.
+In other cases, Mandiant has observed UNC2452 use DCSync, a technique
+that simulates the Windows domain controller (DC) replication process to an
+unauthorized endpoint.
+As an investigation moves through the cyclical portion of the Targeted Attack
+Lifecycle, tracking malware-adverse adversaries relies on an in-depth and well
+maintained monitoring strategy. Groups such as UNC2452, which understand both
+security operation center and incident response procedures, are likely to plan
+their actions around activities which leave behind the least forensic evidence. For
+example, the actions performed during a DCSync attack are legitimate actions
+within an Active Directory (AD) environment. The ability to replicate AD objects
+is a convenience that can add efficiency to an AD environment. When attempting
+to identify a DCSync attack, security teams will often, by necessity, focus on
+events that fall outside of common communications and actions between a DC
+and another endpoint. Where enabled, the Windows Event ID 4662, which details
+operations performed on directory service objects, can be used to identify DCSync
+activity. It can be overwhelming to track all Event ID 4662 events. To better
+manage the task, security teams should only enumerate those Event ID 4662
+events that include values in their Operation > Properties field, such as Replicating
+Directory Changes All or a combination of the globally unique identifiers (GUIDs)
+listed in Figure 9.
+SPECIAL REPORT M-TRENDS 2021 68
+Unfortunately, Event ID 4662 does not provide the source of any operation
+request. Security teams will need to carefully scrutinize suspicious events identified
+through Event ID 4662 analysis and identify any correlated events that point to the
+source of the DCSync. Searching for instances of access from SolarWinds systems
+to domain controllers may help reduce the dataset of potential connections.
+However, UNC2452 has been observed to run DCSync from systems affected by
+SUNBURST as well as other endpoints.
+On the network, DCSync is accomplished through DCE/RPC sessions between
+the unauthorized system and the DRSUAPI RPC interface on a domain controller.
+DCE/RPC calls such as DSBind, which creates the context necessary to call other
+functions, and DSGetNCChanges, which requests AD object updates from the
+domain controller, are both key indicators for identifying DCSync. Unfortunately,
+not all customer environments conduct the degree of internal monitoring
+necessary to map RDP/DCE to actions taken across the network. While egress
+monitoring has become more common in the last decade, monitoring internal
+traffic exacerbates issues that have slowed the adoption of comprehensive
+network monitoring solutions. The UNC2452 attack highlights network monitoring
+gaps which have historically been acceptable risk areas in an organization’s
+monitoring stance.
+Internal Reconnaissance
+In the internal reconnaissance phase, the attacker explores the organization’s
+environment to better understand its infrastructure, how and where it stores
+information of interest, and the roles of critical users. In engagements where
+attackers are less worried about stealth, Mandiant has often observed threat
+actors use reconnaissance utilities that generate large volumes of data and create
+detection opportunities. For UNC2452, the converse has been observed across
+multiple organizations. UNC2452 was often found to use common Microsoft
+Windows-related tools. For example, one of the few “noisy” actions conducted by
+UNC2452 was the enumeration of file system shares. UNC2452 would regularly
+peruse filesystem contents on remote systems, an activity that generates a
+considerable amount of noise because of how verbose the SMB protocol can be. In
+fact, SMB monitoring is rarely implemented for the same reason.
+In organizations which did have SMB monitoring, reconnaissance performed by
+UNC2452 would stand out because regular and in-depth enumeration of network
+shares sourced from a SolarWinds system are atypical events. While this allowed
+Mandiant consultants to identify the types of files UNC2452 would target, it also
+provided insight into the data sources the attacker would avoid on the way to their
+objective. As of March 2021, Mandiant has not observed UNC2452 target access to
+customer data, personally identifiable information or financial data.
+UNC2452 targeted data stores that acted as central stores of knowledge. Mandiant
+has observed UNC2452 targeting access to online documentation stores, code
+repositories, and IT and Infosec file shares. Logging resources associated with such
+data stores are valuable hunting grounds for identifying reconnaissance activities.
+Searching for access from uncommon sources or sources known to have been
+affected by SUNBURST can provide substantial indicators to advance hunting
+efforts. For example, SMB sessions between SolarWinds endpoints affected by
+SUNBURST and a file server or administrative share may highlight times when the
+attacker was particularly active on an endpoint, allowing security teams to identify
+user accounts accessing data during those times. Similarly, quantifying serial
+access to documentation stores by individual IP addresses within a set period may
+lead back to a system compromised by UNC2452.
+Move Laterally
+SPECIAL REPORT M-TRENDS 2021 69
+Lateral Movement
+In the Lateral Movement phase, the attacker uses the accounts and knowledge
+of the network gathered in previous phases to move to additional systems in the
+environment. Tracking UNC2452’s lateral movement is quite challenging, given the
+large amount of network traffic originating from the SolarWinds Orion platform.
+Once again, the quantity and quality of logging performed in the environment will
+determine the likelihood of accurately identifying attacker activity in this phase.
+Creating timelines by identifying windows of attacker activity in the environment
+can help reduce the amount of data to be analyzed. Reviewing common Windows
+logon event types in aggregated windows event logs for the identified timelines
+can help pinpoint instances of lateral movement. Every time UNC2452 progresses
+further into an environment, the process of generating timelines, identifying
+suspicious activities and hunting must be repeated. Every indicator the security
+team can identify, no matter how small requires the re-examination of existing
+datasets through a constantly changing lens of attacker motivations. However,
+teams can quickly identify patterns undertaken by UNC2452. Every identification
+of lateral movement becomes an opportunity to further quantify UNC2452
+behavior and build a comprehensive understanding of their operations and
+During the Maintain Presence phase, the attacker ensures continued access to
+the environment. Mandiant observed UNC2452 move away from SUNBURST as a
+persistence mechanism when possible. UNC2452 commonly maintained access to
+an environment through legitimate VPN sessions. After VPN access was stabilized,
+UNC2452 sometimes activated the kill switch on SUNBURST and relied solely on
+In some investigations where Mandiant observed UNC2452 shift to VPN, a distinct
+pattern emerged. UNC2452 applied the same level of tradecraft to source VPN
+sessions as they did to other phases of the attack lifecycle. The threat actor
+not only maintained an individual IP address from which an account would
+authenticate over the lifetime of the account’s use, it also ensured the GeoIP
+location of the IP address showed an address local to the target environment. In
+some cases, Mandiant observed the threat actor changing the hostname of the
+Windows-based virtual machines they were using to that of a legitimate hostname
+in the target environment. While the actions taken to mask the true origin of the
+VPN sessions were not costly or difficult, the effect on investigations could be
+dramatic. Traditionally, incident response engagements use Windows Event Logs
+as a trusted primary source and efforts to subvert those logs often rely on bulk
+deletion. While this common tactic limits the ability of security professionals to
+quantify attacker activity during a specific timespan, it still allows the qualification
+of attacker activity. Windows endpoints log the action of Event Log deletion to the
+event log which can become an actionable indicator of compromise. In fact, most
+incident response firms look for quick wins by enumerating these events early in
+the investigation. UNC2452 attacked this limitation from the other direction.
+Instead of deleting logs, UNC2452 activities reduced the confidence security
+professionals could maintain in a critical incident response dataset. Instead of
+a one-to-one mapping of hostname to system, analysts would instead have
+to consider a one-to-many mapping of hostname to systems—with at least
+one being the legitimate host. These actions did not alter the intrinsic value or
+SPECIAL REPORT M-TRENDS 2021 70
+accuracy of the logs themselves; instead, they made it dramatically more difficult
+to compensate for the different mappings as the number of scenarios producing
+this effect increased. A counterfeit hostname for an attacker-controlled system
+is quite rare. As investigations progress, new findings spawn follow-on actions to
+pursue deeper analyses. When analysts are not aware that a hostname might be
+falsified, they may initiate follow-on workstreams which assume the legitimate
+host is compromised. As analysts review endpoints which have been erroneously
+identified as compromised, more time is required to disambiguate attacker activity
+and legitimate activity when in truth attacker activity never originated from
+the legitimate system. These unnecessary workflows draw valuable resources
+away from the investigation—a worthwhile effect in the eyes of an attacker.
+While UNC2452 was able to place roadblocks in the path of investigations, the
+roadblocks sometimes provided opportunities for detection.
+UNC2452 relied on virtual private server (VPS) infrastructure to limit ingress IP
+addresses to geolocations which matched the target organizations geographical
+spread, which meant VPN logs could be used for broad scale analysis. The source
+IP address from which a VPN connection is established can be cross-referenced
+with public data, including the autonomous system number (ASN) to which the IP
+address belongs. Mandiant analyzed correlations between IP addresses extracted
+from VPN logs and corresponding ASNs. From this dramatically reduced dataset,
+analysts could begin to rule out VPN sessions based on an ASN’s owner and
+quickly target ASNs associated with VPS providers. While some advanced users
+may connect to a corporate VPN through a VPS, it should be a relatively rare
+practice. Security teams should ensure they review each VPN session sourced
+from a VPS provider because Mandiant has observed UNC2452 use multiple VPS
+providers in individual environments.
+By using legitimate VPN credentials, UNC2452 allowed Mandiant to successfully
+perform “Impossible Travel” analysis, which correlates each VPN logon session’s
+originating IP Address to the geolocation of the IP. Individual accounts with
+successive logons from locations which are too geographically disparate for a
+person to travel through using conventional means dramatically reduces the
+dataset of potentially suspicious VPN sessions. The UNC2452 campaign was
+conducted during the global lockdown resulting from COVID-19 policies, which
+meant organizations were likely heavily invested in remote work. This enabled
+the curation of a more accurate baseline of normal user activity. While UNC2452
+used legitimate credentials and logged on from localities which broadly matched
+the organization’s, this technique was not infallible. Mandiant observed instances
+where accounts for users who were on leave were used by UNC2452 as well as
+cases where international users would log on from US-based locales.
+While the impact of using hostnames taken from targeted environments as
+VPS hostnames had an appreciable effect on the pace of investigations, the
+identification of this technique led to novel analysis methodologies. Mandiant
+analysts were able to use services that perform data collection and historical
+analysis of changes across the Internet to identify potential systems of interest.
+One field commonly captured by these services is the RDP SSL certificate which
+can leak the configured hostname of an endpoint. By querying for endpoints which
+presented leaked hostnames matching those of legitimate hosts within customer
+environments, Mandiant consultants were able to identify suspicious VPN sessions
+and then review VPN log data to generate timelines of attacker activity.
+SPECIAL REPORT M-TRENDS 2021 71
+Complete Mission
+In the Complete Mission phase, the attacker accomplishes the objectives of the
+intrusion. In some intrusions this can be intellectual property theft or disruption
+of business operations. Investigation during this phase of the Targeted Attack
+Lifecycle depends entirely on the accuracy and consistency of the timelines the
+analysts previously built based on available data. In environments where UNC2452
+was able to acquire VPN access, they could freely access data through common
+protocols such as HTTP(S), SMB and SSH. The cross-referencing of timeline data
+such as the VPN IP address with access logs for data stores can help security
+teams identify individual accesses which result in data loss.
+Conclusion
+The UNC2452 campaign was extremely challenging to uncover and address. The
+attacker was sophisticated enough to implant SUNBURST in the widespread and
+broadly respected SolarWinds Orion platform. While UNC2452’s knowledge of
+operational security was higher than most incident responders are likely to witness
+first-hand, it doesn’t change the mission: security professionals must work to guard
+against similar attacks from copycat threat actors. Well-designed environment
+monitoring practices and procedures, along with rigorous investigation
+methodologies serve as consistent ways to shine a bright light on the actions of
+advanced attackers.
+SPECIAL REPORT M-TRENDS 2021 72
+Output : 
+### Overview of the UNC2452 Campaign
+
+The UNC2452 campaign, conducted by a sophisticated threat actor, involved the compromise of the SolarWinds Orion platform through the implantation of the SUNBURST malware. This attack was particularly challenging due to the widespread use and trust in the SolarWinds software, which allowed the attacker to gain deep access to numerous organizations' networks. The following sections detail the various phases of the attack lifecycle, from initial compromise to mission completion, and provide insights into the methods used by UNC2452.
+
+### Initial Compromise: SUNBURST Malware
+
+- **SUNBURST Implantation**: The attacker embedded the SUNBURST malware within legitimate SolarWinds software updates. This allowed for stealthy and widespread distribution of the malware.
+- **Kill Switch Mechanism**: Once the attacker had established alternative access methods, they often activated a kill switch in SUNBURST to prevent further use of the malware.
+
+### Scanning and Reconnaissance
+
+- **Network Traffic Analysis**: The large volume of network traffic generated by the SolarWinds Orion platform made it challenging to detect malicious activities. However, detailed logging and analysis were crucial for identifying suspicious patterns.
+- **File Access Monitoring**: UNC2452 targeted central knowledge stores such as online documentation, code repositories, and IT/Infosec file shares. Logging access to these resources helped identify reconnaissance activities.
+
+### Lateral Movement
+
+- **Challenges in Detection**: The extensive network traffic from SolarWinds Orion made it difficult to pinpoint lateral movement. Creating timelines of attacker activity was essential for narrowing down the data to be analyzed.
+- **Windows Logon Events**: Reviewing common Windows logon event types during identified time windows helped pinpoint instances of lateral movement.
+
+### Maintaining Presence
+
+- **Legitimate Access Methods**: UNC2452 often maintained access through legitimate VPN sessions, which were carefully managed to appear normal. This included using consistent IP addresses and ensuring the GeoIP location matched the target environment.
+- **Hostnames and VPS Infrastructure**: The attacker used hostnames from the targeted environment for their virtual private server (VPS) infrastructure. This made it difficult to distinguish between legitimate and compromised systems.
+
+### Completing the Mission
+
+- **Data Access and Exfiltration**: Once UNC2452 had established a presence, they could freely access data through common protocols like HTTP(S), SMB, and SSH. Cross-referencing timeline data with access logs for data stores helped identify instances of data exfiltration.
+- **Mission Objectives**: The primary objectives included intellectual property theft and disruption of business operations.
+
+### Conclusion
+
+The UNC2452 campaign was a sophisticated and well-executed attack that leveraged the trust in SolarWinds software to gain deep network access. Despite the attacker's advanced operational security, effective environment monitoring, rigorous investigation methodologies, and innovative analysis techniques were crucial for uncovering and mitigating the impact of the attack. Security professionals must remain vigilant and continue to enhance their practices to guard against similar threats.
+
+### Key Takeaways
+
+1. **Advanced Monitoring**: Implement robust logging and monitoring practices to detect unusual patterns in network traffic and file access.
+2. **Timeline Analysis**: Create detailed timelines of attacker activity to focus analysis efforts and identify lateral movement.
+3. **Legitimate Access Control**: Monitor and control legitimate access methods, such as VPN sessions, to prevent misuse by attackers.
+4. **Innovative Techniques**: Use novel analysis methodologies, such as cross-referencing IP addresses with ASN data and leveraging historical internet data, to identify suspicious activities.
+
+By staying proactive and continuously improving security practices, organizations can better defend against sophisticated threats like UNC2452.

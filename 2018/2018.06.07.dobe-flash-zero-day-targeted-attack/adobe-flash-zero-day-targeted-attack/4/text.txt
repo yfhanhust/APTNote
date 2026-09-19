@@ -1,0 +1,35 @@
+CRYPTOGRAPHIC ROUTINES
+Data transmission from the attacker’s server to the client is protected by a custom
+cryptosystem (Figure 3) leveraging a symmetric cipher (AES), that protects the data
+payload and an asymmetric cipher (RSA) to protect the symmetric key. The custom
+cryptosystem leverages a public Action Script library for low level operations.
+Figure 3: Generic network retrieval and decrypt routine
+Data transmission is initiated by the client, whereby the client HTTP POSTs a randomly
+generated RSA modulus n and the exponent 0x10001, and the server responds with the
+following structure:
+0x0: Encrypted AES key length (L)
+0x4: Encrypted AES key
+0x4+L: AES IV
+0x14+L: AES encrypted data payload
+Figure 4: Structure of encrypted data
+To decrypt the data payload, the client decrypts the encrypted AES key using its randomly
+generated private key, then decrypts the data payload with the decrypted AES key.
+The extra layer of public key cryptography, with a randomly generated key, is crucial here.
+By using it, one must either recover the randomly generated key or crack the RSA
+encryption to analyze subsequent layers of the attack. If implemented correctly, this
+renders packet capture in forensic analysis and automated security products ineffective.
+Furthermore, the decrypted data payloads will only reside in memory, challenging
+traditional disk forensics and non-volatile artifact analysis.
+In this scenario, the attacker chose an RSA modulus length of 512 bits, which is considered
+insecure by today’s standards and may be cracked with notable effort. Consequently,
+offline analysis is possible, although more laborious than online analysis, whereby the
+analyst may either instrument a mock victim or create a man-in-the-middle service, then
+attempt to be exploited by the attacker.
+The combination of a remotely included Flash exploit and asymmetric cryptography are
+particularly powerful counters against postmortem analysis. Once exploited, the only
+artifact residing on the victim’s system would be the initial lure document that only contains
+a URL. In that scenario, responders may look to network packet captures to recreate the
+attack. However, without the victim’s randomly created private key, it would be impossible
+for responders to decrypt the attacker’s code and recover subsequent protected stages
+like the exploit or payload. In this scenario, responders’ only saving grace would be the use
+of a weak RSA modulus.

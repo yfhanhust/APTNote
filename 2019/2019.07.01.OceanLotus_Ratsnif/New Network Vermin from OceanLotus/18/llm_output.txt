@@ -1,0 +1,82 @@
+
+
+
+Sentence : Example
+To recreate conditions in which the sample would operate, a default gateway was
+configured on 192.168.8.135 and was running iNetSim to act as the DNS and HTTP
+servers. The attacker machine was located at 192.168.8.134 and the victim at
+192.168.8.138. Ratsnif was configured to operate as follows:
+TEST CONFIG
+-ip " 192.168.8.134 "
+-ga " 192.168.8.135 "
+-subnet "255.255.255.0"
+-sniff
+-ssl_ip "192.168.8.254"
+-html_inject "iexplore.exe"
+-dlog_ip "192.168.8.254"
+-mac " 00:0C:29:59:62:46 " "true"
+-name "www.google.com" " 192.168.8.135 "
+-dnsttl "100"
+-log "C:\ratsnif.log"
+-pass "C:\ratsnif.pcap"
+-dwn_ip
+Figure 13. Configuration used for testing
+Figure 14 shows the malware sending ARP packets asking for the MAC addresses of all
+the machines on the subnet specified in the config file, whilst ignoring itself
+(192.168.8.134) and the default gateway (192.168.8.135):
+https://threatvector.cylance.com/en_us/home/threat-spotlight-ratsnif-new-network-vermin-from-oceanlotus.html 12/18
+7/2/2019 Threat Spotlight: Ratsnif - New Network Vermin from OceanLotus
+Figure 14. ARP Broadcasts
+Figure 15 shows the malware sending ARP packets asking for the MAC addresses of all
+the machines on the subnet specified in the config file, whilst ignoring itself
+(192.168.8.134) and the default gateway (192.168.8.135): ARP Broadcasts
+Once it has MAC addresses for all machines on the subnet, Ratsnif will then send
+unsolicited ARP packets to those addresses, updating the MAC address of the default
+gateway for each victim:
+Figure 15. ARP Poisoning
+Figure 16 shows the effect on the victim machine, with the attacker IP address and the
+default gateway IP address (192.168.8.135) both now sharing the same physical
+address:
+https://threatvector.cylance.com/en_us/home/threat-spotlight-ratsnif-new-network-vermin-from-oceanlotus.html 13/18
+7/2/2019 Threat Spotlight: Ratsnif - New Network Vermin from OceanLotus
+Figure 16. arp -a results showing poisoned ARP Table on the victim machine
+Once the ARP table is poisoned, all traffic destined for the default gateway will be routed
+through Ratsnif and can be stored and manipulated prior to retransmission.
+Finally, Figure 17 shows a poisoned DNS response for, whereby the DNS query was
+intercepted by Ratsnif, modified to point to an attacker controlled IP address and the
+fake response sent to the original requestor:
+Figure 17. Ratsnif log file output showing ARP poisoning and DNS spoofing in action
+C2
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "iNetSim", "type" : "APPS"},
+        {"id": 2, "description": "DNS server", "type" : "DNSS"},
+        {"id": 3, "description": "HTTP server", "type" : "EXEF"},
+        {"id": 4, "description": "192.168.8.135", "type" : "CCSH"},
+        {"id": 5, "description": "192.168.8.134", "type" : "CCSH"},
+        {"id": 6, "description": "192.168.8.138", "type" : "CCSH"},
+        {"id": 7, "description": "Ratsnif", "type" : "EXEF"},
+        {"id": 8, "description": "255.255.255.0", "type" : "NETP"},
+        {"id": 9, "description": "192.168.8.254", "type" : "CCSH"},
+        {"id": 10, "description": "iexplore.exe", "type" : "EXEF"},
+        {"id": 11, "description": "C:\\ratsnif.log", "type" : "SYSP"},
+        {"id": 12, "description": "C:\\ratsnif.pcap", "type" : "DOCF"},
+        {"id": 13, "description": "00:0C:29:59:62:46", "type" : "MAC"},
+        {"id": 14, "description": "www.google.com", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 4, "target": 3, "rel_name" : "acts as"},
+        {"source": 4, "target": 2, "rel_name" : "hosts"},
+        {"source": 5, "target": 7, "rel_name" : "runs"},
+        {"source": 6, "target": 7, "rel_name" : "target of"},
+        {"source": 7, "target": 4, "rel_name" : "poisons ARP table for"},
+        {"source": 7, "target": 5, "rel_name" : "ignores"},
+        {"source": 7, "target": 6, "rel_name" : "poisons ARP table of"},
+        {"source": 7, "target": 14, "rel_name" : "spoofs DNS for"},
+        {"source": 7, "target": 9, "rel_name" : "redirects traffic to"},
+        {"source": 7, "target": 10, "rel_name" : "injects into"},
+        {"source": 7, "target": 11, "rel_name" : "logs activity in"},
+        {"source": 7, "target": 12, "rel_name" : "captures packets to"}
+    ]
+}

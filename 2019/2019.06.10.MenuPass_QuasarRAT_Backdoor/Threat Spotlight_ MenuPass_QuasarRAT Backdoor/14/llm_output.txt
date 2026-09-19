@@ -1,0 +1,73 @@
+
+
+
+Sentence : YARA
+The following YARA rule can be used to identify QuasarRAT loaders:
+https://blogs.blackberry.com/en/2019/06/threat-spotlight-menupass-quasarrat-backdoor 16/18
+11/19/2020 Threat Spotlight: MenuPass/QuasarRAT Backdoor
+import "pe"
+rule QuasarRAT_Loader
+{
+meta:
+description = "MenuPass/APT10 QuasarRAT Loader"
+strings:
+$rdata1 = " !\"#$%&'()*+,./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`ABCDEFGHIJKLMNOPQRSTUVWXYZ{|}~" ascii
+$rdata2 = "CONOUT$" wide
+condition:
+// Has MZ header?
+uint16(0) == 0x5a4d and
+// File size less than 600KB
+filesize < 600KB and
+// Is a DLL?
+pe.characteristics & pe.DLL and
+// Contains the following sections (in order)
+pe.section_index(".text") == 0 and
+pe.section_index(".rdata") == 1 and
+pe.section_index(".data") == 2 and
+pe.section_index(".pdata") == 3 and
+pe.section_index(".rsrc") == 4 and
+pe.section_index(".reloc") == 5 and
+// Has the following export
+pe.exports("ServiceMain") and
+// Does not have the following export
+not pe.exports("WUServiceMain") and
+// Has the following imports
+pe.imports("advapi32.dll", "RegisterServiceCtrlHandlerW") and
+// Contains the following strings in .rdata
+for all of ($rdata*) : ( $ in
+(pe.sections[pe.section_index(".rdata")].raw_data_offset..pe.sections[pe.section_index
+(".rdata")].raw_data_offset+pe.sections[pe.section_index(".rdata")].raw_data_size) )
+}
+The following YARA rule can be useful for detecting possible high-entropy payloads stored within
+the %WINDOWS%\Microsoft.NET\Framework folder (these files typically have a double file
+extension):
+https://blogs.blackberry.com/en/2019/06/threat-spotlight-menupass-quasarrat-backdoor 17/18
+11/19/2020 Threat Spotlight: MenuPass/QuasarRAT Backdoor
+import "pe"
+import "math"
+rule Possible_QuasarRAT_Payload
+{
+meta:
+description = "Possible encrypted QuasarRAT payload"
+condition:
+uint16(0) != 0x5A4D and
+uint16(0) != 0x5449 and
+uint16(0) != 0x4947 and
+math.entropy(0, filesize) > 7.5
+}
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "QuasarRAT loaders", "type" : "EXEF"},
+        {"id": 2, "description": "%WINDOWS%\\Microsoft.NET\\Framework folder", "type" : "SYSP"},
+        {"id": 3, "description": "MenuPass/APT10", "type" : "ACTO"},
+        {"id": 4, "description": "advapi32.dll", "type" : "APPS"},
+        {"id": 5, "description": "https://blogs.blackberry.com/en/2019/06/threat-spotlight-menupass-quasarrat-backdoor", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "used by"},
+        {"source": 1, "target": 4, "rel_name" : "imports from"},
+        {"source": 2, "target": 1, "rel_name" : "contains"},
+        {"source": 5, "target": 1, "rel_name" : "described in"}
+    ]
+}

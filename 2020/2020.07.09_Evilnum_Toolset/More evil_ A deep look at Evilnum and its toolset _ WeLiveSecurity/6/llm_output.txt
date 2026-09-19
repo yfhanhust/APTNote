@@ -1,0 +1,71 @@
+
+
+
+Sentence : C# Component: Evil, not so evil
+In March 2019, Palo Alto Networks described malware with very similar functionality to
+the JS component, but coded in C#. That version (2.5) obtained the address of its C&C by
+dividing a number by 666, and was therefore named Evilnum by Palo Alto Networks
+researchers. Since then there have been new versions of the C# malware, the latest of
+them being version 4.0, which we first saw in April 2020. The number 666 is not used
+anymore and the PDB paths of the executables show that the developers call their
+malware “Marvel”. However, we will continue to name the malware Evilnum to avoid
+creating confusion.
+The latest version comes bundled in an MSI file (Windows Installer) and runs
+independent of the JS component. Furthermore, it has different C&Cs than the JS
+component. However, in all cases that we have seen, the C# component was downloaded
+and executed after the JavaScript malware gained initial access. The structure of this
+component is shown in Figure 6.
+https://www.welivesecurity.com/2020/07/09/more-evil-deep-look-evilnum-toolset/ 6/21
+7/10/2020 More evil: A deep look at Evilnum and its toolset | WeLiveSecurity
+Figure 6. Parts of the C# component
+When the MSI file is executed, three malicious components, along with some .NET
+Framework library files, are written to disk in %LOCALAPPDATA%\Microsoft\Mediia.
+The file copier is the first to be executed and its only purpose is to move the files to
+another location in %LOCALAPPDATA% (see the Indicators of Compromise section for
+the folder names). The loader is then executed and it loads and decrypts the contents of
+the file System.Memmory.dll, which is the actual malicious payload (DLL Agent) for the
+C# component. AES encryption is used for the DLL and for obfuscation of the strings in
+the payload. The same key and initialization vector are used to encrypt the strings in all of
+the different versions.
+The IP address of the C&C server is hardcoded and in plain text. A GET request is sent for
+/Validate/valsrv and if the response body contains the text youwillnotfindthisanywhare,
+then the server is accepted. Otherwise, a GitLab page is parsed to get the IP address of a
+second server.
+The following capabilities are present in version 4.0:
+Take screenshots if the mouse has been moved in a period of time, and send them to
+the C&C, base64 encoded. The image is stored in a file called SC4.P7D
+Run commands
+Run other binaries via cmd.exe
+Send information such as computer name, username and antivirus installed
+Persist in a compromised system by creating registry keys
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Evilnum", "type" : "APPS"},
+        {"id": 2, "description": "666", "type" : "TAMP"},
+        {"id": 3, "description": "C# malware version 4.0", "type" : "APPS"},
+        {"id": 4, "description": "MSI file (Windows Installer)", "type" : "EXEF"},
+        {"id": 5, "description": "%LOCALAPPDATA%\\Microsoft\\Mediia", "type" : "SYSP"},
+        {"id": 6, "description": "%LOCALAPPDATA%", "type" : "SYSP"},
+        {"id": 7, "description": "System.Memmory.dll (DLL Agent)", "type" : "EXEF"},
+        {"id": 8, "description": "C&C server", "type" : "CCSH"},
+        {"id": 9, "description": "/Validate/valsrv", "type" : "URLS"},
+        {"id": 10, "description": "youwillnotfindthisanywhare", "type" : "TAMP"},
+        {"id": 11, "description": "GitLab page", "type" : "URLS"},
+        {"id": 12, "description": "SC4.P7D", "type" : "DOCF"},
+        {"id": 13, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 14, "description": "Registry keys for persistence", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "bundled in"},
+        {"source": 4, "target": 5, "rel_name" : "writes to disk in"},
+        {"source": 5, "target": 6, "rel_name" : "moves files to"},
+        {"source": 7, "target": 3, "rel_name" : "is the payload of"},
+        {"source": 8, "target": 9, "rel_name" : "sends GET request to"},
+        {"source": 10, "target": 8, "rel_name" : "accepts server if response contains"},
+        {"source": 11, "target": 8, "rel_name" : "parses page to get IP of second server from"},
+        {"source": 3, "target": 12, "rel_name" : "stores screenshots in file"},
+        {"source": 3, "target": 13, "rel_name" : "runs commands via"},
+        {"source": 14, "target": 3, "rel_name" : "creates for persistence"}
+    ]
+}

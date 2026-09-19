@@ -1,0 +1,46 @@
+Attack timeline
+When investigating the Chinese APT group, Bitdefender researchers managed to compile an attack timeline of how the
+tools were used when compromising a machine. After piecing all the forensic evidence together, this attack timeline
+paints a clearer picture of how all the tools found are tied to each other, serving as a detailed case study into dissecting
+an APT-style attack.
+The first suspicious signs our researchers observed were some unusual processes with command lines that contain
+file extensions and timestamps as the one illustrated below:
+```
+“c:\users\public\ccf32.exe -PC all 123456 doc,docx,ppt,pptx,xls,xlsx,pdf 1903220000
+1904221000”
+```
+Further analysis revealed a complex attack, with multiple types of tools combined to monitor and spy on the victims,
+having as a final purpose exfiltration of intelligence and sensitive information.
+Despite our efforts, the infection vector remains unknown, although some clues indicate that, most probably, we are
+dealing with social engineering through a spam email.
+Following the killchain, the first trace we observed was the execution of Chinoxy backdoor, whose role was to gain
+persistence in the victim’s system after initial access. Although Chinoxy acts as the main backdoor, we observed
+another component deployed by Chinoxy – it’s an open source Chinese RAT called PcShare . Both Chinoxy and PcShare
+have a persistence mechanism, first backdoor being copied to startup folder and the second one hijacking a COM
+object ( MruPidlList ). To evade detection, the Chinoxy dropper uses a digitally signed binary ( Logitech Blutooth Wizard
+Host Process ) vulnerable to Side Loading to load the backdoor dll into memory.
+Moving further in the investigation uncovers some evidence of lateral movement. We have seen credentials used to
+execute many batch files with scheduled tasks and WMI on remote machines, but we can only make assumptions
+about their origin, due to the lack of evidence. We also noticed the attackers’ preference for using the wmiexec.vbs
+script to run remote commands.
+For the Discovery step, the attackers used command line tools like tasklist.exe, ipconfig.exe, systeminfo.exe and netstat.
+exe, executed from batch files, mapping the internal network and gaining information about the systems from that
+institution.
+After the discovery process, the attackers use a tool for file collection called ccf32. The tool is copied to C:\Users**
+_Public_ folder and is run with schtasks on a daily basis, the files collected by _ccf32 are copied to a remote machine (the
+machine on which the results are copied is infected with Chinoxy or another backdoor). However, the ccf32**_ isn’t the only
+tool used for collecting files. During the investigation we were able to identify a much more complex toolset, probably
+custom made, whose role was to collect files, monitor the file system for changes, take screenshots, log keystrokes
+and exfiltrate that information to the C&C server. The toolset gathers binaries such as FilePak, FilePakMonitor,
+ScreenCap, Keyrecord but also a third backdoor called FunnyDream.
+4
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+All those tools, and many others used in the attack, will be described in detail in sections below.
+Fig.1 - Tool usage timeline
+As seen in the presented timeline, the first trace of the attack relates to the Chinoxy activity and is dated back to
+November, 2018. Somewhere around that time, PcShare was installed as well. The role of the latter, we believe, is to
+perform more complex espionage actions. Starting with 29.01.2019 the ccf32 is intensively used, first by Chinoxy,
+followed by FunnyDream . After FunnyDream appears on the systems, we observed more tools used and some of those
+indicate more frequent attempts of lateral movementon around 200 machines in five months of activity.
+More technical details about the arsenal of tools is provided in section below.

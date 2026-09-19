@@ -1,0 +1,28 @@
+SlingDll.Dll and Minisling modules
+For some victims we found that attackers did not use Slingshot. Instead, they used two components
+named SlingDll.dll and Minisling.
+SlingDll is typically located in system32 folder as a standalone DLL with a random name and loaded
+by svchost via COM Object hijacking (CLSID =6C19BE35-7500-11D1-AD94-00C04FD8FDFF). It uses
+module_id 0xFF000008 for fixing SlingDll.dll export table in runtime. Then it obtains the path to a
+MZPE sample from module_id 0xFF000008:
+and fills the export table with links to the exported routines of this file (DLL-forwarding). This way,
+when SlingDll.#1 is called, esscli.#1 will be run. The export table in memory looks like this:
+SlingDll.dll also uses a smart trick. Its image in memory looks initially like this:
+Then it copies the whole image to heap and UnmapViewOfFile to unload SlingDll.Dll image. After
+that, it allocates new memory by calling VirtualAlloc with the same start address and size that the
+unloaded image had. Finally, malware copies all data from heap back to the allocated memory,
+resulting in the following:
+At that moment the image is unloaded but keeps working because ImageBase is the same.
+The last thing that SlingDll.dll does is run the Minisling module.
+Minisling uses a global mutex (Global{6D29520B-F138-442e-B29F-A4E7140F33DE}) to ensure it is
+run only once. It checks if one of the following drivers is loaded into memory: DepFrzLo.sys,
+DeepFrz.sys, DfDiskLo.sys; and if none is found it checks how many times the operating system was
+rebooted before correctly shutting down. This is done by comparing EventRecordID from ETW-logs:
+malware gets this value by sending an XML-requests with EventID=12 and Provider.Name =
+Microsoft-Windows-Kernel-General in order to obtain the last reboot time, and with EventID=41 and
+Provider.Name = Microsoft-Windows-Kernel-Power to obtain the last unsuccessful attempt to turn
+the machine off.
+When the limit of reboots is reached, Minisling deletes itself. In cases when the computer was
+successfully rebooted, the counter is set to 0. If one of the drivers listed above is loaded or if the
+counter limit is not reached, Minisling starts finding and executing loaders in the same sequence as
+previously described.

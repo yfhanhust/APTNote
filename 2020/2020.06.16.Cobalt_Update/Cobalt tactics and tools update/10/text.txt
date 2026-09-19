@@ -1,0 +1,28 @@
+4.1. PE file external structure
+All the studied items are PE-DLL files to be registered by regsvr32. In addition to exports called by regsvr32, each sample has different sets of
+exports typical of legitimate DLL files. Cobalt attempted to mask COM-DLL-Dropper by using third-party exports. Figure 32 shows the most
+popular exports used in the malware files (total of 249 unique exports).
+Figure 32. Most popular COM-DLL dropper exports
+These exports contain stubs that generally do not actually do anything. Judging by the names of the exports, the droppers were masked to
+resemble media application libraries. In 2019, the malware was updated with the DllInstall export, which is also called by regsvr32, and the main
+dropper code was moved to the export.
+Before describing the malware code, we should touch on the PureBasic code. The information we provide here is the result of analyzing malware
+samples. We did not study the compiler itself and therefore are forced to make certain assumptions. However, the described entities helped us in
+our analysis, which is why we are sharing them here. All the names in screenshots were made up for the purposes of interpreting the malware code.
+Our analysis requires two entities: strings and object arrays. PureBasic strings are stored in a special buffer. They are allocated and released
+without using a system API. Figure 33 shows the process of string allocation. During program initialization, a separate heap is created for strings
+by calling HeapCreate().
+Figure 33. String workings
+A common pattern for working with this entity is as follows:
+
+Allocate a string to storage from a constant.
+Operate on the string.
+Update the global string which is usually allocated on the heap. After the update is completed, move back the node index. This operation is
+
+somewhat similar to pop().
+The string storage structures do not allow storing the size of the added string. Instead, before starting any operation with the string, the program
+saves the previous index of the node and then passes it to the update operation. The difference between the indices is the string size.
+We will not describe object arrays here in detail; suffice it to say that a special header before each array stores information about the size, type, and
+number of elements. The header occupies 18h bytes. Therefore, the space allocated for the array of objects can be calculated as size of element ×
+number of elements + 18h .
+To get a clearer picture, refer to this description of functions that are presented in the screenshots a bit later.

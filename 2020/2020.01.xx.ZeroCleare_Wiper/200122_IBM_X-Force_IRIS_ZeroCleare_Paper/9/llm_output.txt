@@ -1,0 +1,74 @@
+
+
+
+Sentence : 1.5. File #2: ClientUpdate.exe (x86) – aka ZeroCleare
+```
+|File name|Type|MD5|Compiled|
+|---|---|---|---|
+|~~ClientUpdate.exe~~(x86)|~~32-bit Windows~~binary|~~33f98b613b331b49e272512274669844~~|~~15 Jun 2019,~~11:38:44|
+Same as ClientUpdate.exe (x64), this file was also identified as the ZeroCleare wiper. As it is
+designed for 32-bit Windows systems, Driver Signature Enforcement does not prevent
+unsigned drivers from running. Therefore, this version of ZeroCleare does need to use Soy.exe
+or TDL, the latter being only applicable to 64-bit systems.
+ClientUpdate.exe (x86) first attempts to install itself as a service by running:
+New Destructive Wiper “ZeroCleare” Targets Energy Sector in the Middle East | X-Force IRIS
+Use or disclosure of data contained on this page is subject to the restrictions at the end of this document. 8
+Next, it attempts to activate the disk management device driver by opening a file handle via a
+unique filename using the logical drive (For example, C:). The file name's format requested by
+function CreateFileW must start with # followed by the license key issued to the developer by
+EldoS. This 32-bit ZeroCleare version attempts to open the following filename:
+The malware uses the same EldoS RawDisk driver license key as observed in the 64-bit
+version:
+```
+b4b615c28ccd059cf8ed1abf1c71fe03c0354522990af63adf3c911e2287a4b906d47d
+```
+This version did not work properly. During analysis the sample crashed as the disk
+management driver had not been installed and was therefore not accessible. We can theorize
+that this may be a bug in the code.
+It was later confirmed that the sample required to be named ‘zeroclear.exe’ in order to run
+correctly. However, this was not the name used for the malware during the observed incident
+and therefore the binary would not have run correctly in that instance.
+X-Force IRIS patched the 32-bit ZeroCleare sample in order to continue the analysis provided
+in this paper. Once it worked, we noted that this version’s wiping behavior was similar to that
+of ClientUpdate.exe (x64), which functioned by creating a buffer consisting of ‘0x55’ bytes and
+used the function DeviceIoControl to send the buffer to the RawDisk driver to write data that
+would wipe the victim's hard drive(s). Similar to what the Shamoon malware does, this would
+overwrite the MBR, partitions, and files on the system with junk data.
+This file was saved in the following PDB file path:
+```
+C:\Users\Developer\source\repos\ZeroCleare32\Release\zeroclear.pdb
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "ClientUpdate.exe (x86)", "type" : "EXEF"},
+        {"id": 2, "description": "MD5: 33f98b613b331b49e272512274669844", "type" : "IOCS"},
+        {"id": 3, "description": "ZeroCleare wiper (32-bit)", "type" : "EXEF"},
+        {"id": 4, "description": "Driver Signature Enforcement", "type" : "SYSP"},
+        {"id": 5, "description": "Soy.exe", "type" : "EXEF"},
+        {"id": 6, "description": "TDL (for 64-bit systems)", "type" : "EXEF"},
+        {"id": 7, "description": "Service installation attempt", "type" : "TTPS"},
+        {"id": 8, "description": "Disk management device driver activation", "type" : "TTPS"},
+        {"id": 9, "description": "EldoS RawDisk driver license key: b4b615c28ccd059cf8ed1abf1c71fe03c0354522990af63adf3c911e2287a4b906d47d", "type" : "IOCS"},
+        {"id": 10, "description": "zeroclear.exe (required name for execution)", "type" : "EXEF"},
+        {"id": 11, "description": "DeviceIoControl function", "type" : "TTPS"},
+        {"id": 12, "description": "RawDisk driver", "type" : "FIRW"},
+        {"id": 13, "description": "MBR and partitions wiping behavior", "type" : "TTPS"},
+        {"id": 14, "description": "Shamoon malware", "type" : "EXEF"},
+        {"id": 15, "description": "PDB file path: C:\\Users\\Developer\\source\\repos\\ZeroCleare32\\Release\\zeroclear.pdb", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has MD5 hash"},
+        {"source": 1, "target": 3, "rel_name" : "is identified as"},
+        {"source": 1, "target": 4, "rel_name" : "bypasses"},
+        {"source": 1, "target": 5, "rel_name" : "uses"},
+        {"source": 1, "target": 7, "rel_name" : "attempts to install as"},
+        {"source": 1, "target": 8, "rel_name" : "attempts to activate"},
+        {"source": 8, "rel_name" : "opens file handle via", "target": 9},
+        {"source": 3, "target": 10, "rel_name" : "requires name for execution"},
+        {"source": 3, "target": 11, "rel_name" : "uses function to wipe disk"},
+        {"source": 3, "target": 12, "rel_name" : "sends buffer to driver to write data"},
+        {"source": 3, "target": 13, "rel_name" : "exhibits wiping behavior similar to"},
+        {"source": 14, "target": 13, "rel_name" : "has wiping behavior like"},
+        {"source": 1, "target": 15, "rel_name" : "saved in PDB file path"}
+    ]
+}

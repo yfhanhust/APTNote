@@ -1,0 +1,28 @@
+Operation Blockbuster: Loaders, Installers and Uninstallers Report 8
+locate the opened document. If the window of the document is located, SetForegroundWindow is called to ensure that
+the phishing document is the topmost window on the victim’s display.
+The implementation of Task #5, the suicide script, uses a series of string concatenation operations in order to construct
+the script before writing the script to a batch file, as illustrated below. Many suicide scripts are executed via a call to
+WinExec or CreateProcess API calls, but IndiaAlfa-One uses ShellExecuteA, which is a notable departure from
+the majority of Lazarus Group’s malware families including IndiaAlfa-One’s sibling IndiaAlfa-Two.
+```
+  strcpy(buffer, " @echo off\r\n");
+  strcpy(buffer, ":Loop\r\ndel /a H \"");
+  strcat(buffer, szIndiaAlfaBinaryFilename);
+  strcat(buffer, "\"\r\nif exist \"");
+  strcat(buffer, szIndiaAlfaBinaryFilename);
+  strcat(buffer, "\" goto Loop\r\ndel \"");
+  strcat(buffer, szSuicideScriptFilename);
+  strcat(buffer, "\"");
+  WriteFile(fp, buffer, strlen(buffer), &NumberOfBytesWritten, 0);
+  CloseHandle(fp);
+  ShellExecuteA(0, "open", szSuicideScriptFilename, 0, 0, 0);
+```
+Figure 2-2: Snippet of the IndiaAlfa-One Suicide Script Generation Code
+There is a unique mistake within the suicide script generation code in IndiaAlfa-One. The first instruction to construct the
+content of the suicide script is immediately rendered useless by the second instruction. Specifically, the strcpy(buffer,
+"@echo off\r\n") instruction has no effect since the next instruction, strcpy(buffer, ":Loop\r\ndel /a H
+\""), will overwrite the results of the first instruction. The developer(s) should have used strcat instead of strcpy for the
+second instruction if the @echo off command was desired. Ultimately this has no negative effects on the suicide script,
+but it is an artifact that is also found in other Lazarus Group families using the same code for their suicide script generators,
+notably WhiskeyAlfa-One and TangoDelta.

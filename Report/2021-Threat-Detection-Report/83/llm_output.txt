@@ -1,0 +1,117 @@
+
+
+
+Sentence : Detection
+Collection requirements
+Process and command line monitoring
+Because adversaries often manipulate Windows services via built-in system
+tools, telemetry drawn from process monitoring and command-line parameters
+can be useful for detecting malicious service use. Sources include EDR tools,
+Sysmon, or native command-line logging.
+DLL load monitoring
+It may be helpful to monitor for DLL loads in order to identify when a service DLL
+loads in the context of a shared ~~svchost.exe~~ process. Sysmon Event ID 7 is one
+available data source for gaining visibility into DLL loads.
+Device driver load monitoring
+As we noted above, adept adversaries may choose to execute services in the
+context of a device driver, so it’s important to monitor device driver loads.
+Windows Defender Application Control (WDAC) can be an effective source of
+device driver monitoring.
+l [T1569.002: Service Execution]
+Armstrong
+D E T EC T I O N
+E N G I N E E R
+Del has an extensive history working
+in IT, including 15 years focused on
+computer security. He has a master’s
+in computer science and expertise in
+Linux/Unix, SOC team training, and
+various programming languages.
+Del lives for the technical side of this
+business and loves to explore new
+ways to solve security challenges while
+mentoring others.
+Jim Irwin
+D E T EC T I O N
+E N G I N E E R
+Jim Irwin is a manager on the Detection
+Engineering team. Prior to joining
+Red Canary, he served on active duty
+and still serves in the Reserves as an
+intelligence officer. Jim has worked
+both the offensive and defensive side for
+the U.S. Army, as a Red Team Lead and
+Network Defense Watch Officer.
+72
+2021 Threat Detection Report
+Unix/Linux systems
+In addition to monitoring command-line signals, alerting on changes to the
+configuration files for daemons—and/or their startup scripts—is a powerful tool
+for detecting this tactic. This includes monitoring for the creation of new files in
+the ~~/etc/rc~~ directory trees.
+For macOS, pay special attention to the use of ~~launchctl~~ and manipulation of
+files in the ~~Library/LaunchAgents~~ and ~~Library/LaunchDeamon~~ directories,
+although this leads into a grey area that might fall under the purview of
+T1569.001 System Services: Launchctl .
+Detection opportunities
+Malicious service execution often incorporates normally benign tools, so it
+makes sense to focus detection efforts around the use of legitimate tools under
+unusual circumstances. For example, alert when a normal utility is invoked from
+non-standard or untrusted parent processes, or with unexpected command-line
+arguments. You should also watch for services that spawn interactive shells or
+that run a program from non-system directories.
+One useful analytic that we’ve used to detect service execution involves looking
+for instances of the Windows Command Processor ~~(~~ ~~cmd.exe~~ ) spawning from
+the Service Control Manager ~~(~~ ~~services.exe~~ ~~)~~, which adversaries use to execute
+commands as the local SYSTEM account. Looking for ~~/c~~ in the command line
+may help narrow in on potential interactive sessions. The ~~/c~~ switch carries out
+the command specified by string and then terminates. Building detector logic
+accounting for this switch has the potential to cast a wider net for catching
+interactive commands without regard for the respective filename of ~~cmd.exe~~ ~~.~~
+Weeding out false positives
+False positives most often involve new programs in which the installation
+script takes some liberties with how it installs or upgrades software. Games
+are frequent offenders in this respect. Approaches for filtering on legitimate
+programs could include excluding specific “known good” hashes from detection
+analytics. Depending on the environment, it may make sense to take a broader
+approach of excluding ~~.bat~~ scripts altogether, especially if their inclusion causes
+too much noise.
+l [T1569.002: Service Execution]
+2021 Threat Detection Report
+T E C H N I Q U E T 1 0 3 6
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Windows services", "type" : "APPS"},
+        {"id": 2, "description": "EDR tools", "type" : "APPS"},
+        {"id": 3, "description": "Sysmon", "type" : "APPS"},
+        {"id": 4, "description": "native command-line logging", "type" : "OPPS"},
+        {"id": 5, "description": "DLL loads", "type" : "TTPS"},
+        {"id": 6, "description": "svchost.exe process", "type" : "EXEF"},
+        {"id": 7, "description": "Sysmon Event ID 7", "type" : "DOCF"},
+        {"id": 8, "description": "device driver loads", "type" : "TTPS"},
+        {"id": 9, "description": "Windows Defender Application Control (WDAC)", "type" : "APPS"},
+        {"id": 10, "description": "/etc/rc directory trees", "type" : "SYSP"},
+        {"id": 11, "description": "launchctl", "type" : "EXEF"},
+        {"id": 12, "description": "Library/LaunchAgents directories", "type" : "SYSP"},
+        {"id": 13, "description": "Library/LaunchDaemons directories", "type" : "SYSP"},
+        {"id": 14, "description": "Windows Command Processor (cmd.exe)", "type" : "EXEF"},
+        {"id": 15, "description": "Service Control Manager (services.exe)", "type" : "EXEF"},
+        {"id": 16, "description": "/c command line switch", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "monitors"},
+        {"source": 3, "target": 1, "rel_name" : "monitors"},
+        {"source": 4, "target": 1, "rel_name" : "monitors"},
+        {"source": 5, "target": 6, "rel_name" : "occurs in"},
+        {"source": 7, "target": 5, "rel_name" : "provides data for"},
+        {"source": 8, "target": 1, "rel_name" : "monitors"},
+        {"source": 9, "target": 8, "rel_name" : "provides monitoring for"},
+        {"source": 10, "target": 5, "rel_name" : "related to"},
+        {"source": 11, "target": 5, "rel_name" : "manipulates"},
+        {"source": 12, "target": 11, "rel_name" : "contains files for"},
+        {"source": 13, "target": 11, "rel_name" : "contains files for"},
+        {"source": 14, "target": 15, "rel_name" : "spawns from"},
+        {"source": 16, "target": 14, "rel_name" : "used in"}
+    ]
+}

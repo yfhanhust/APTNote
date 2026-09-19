@@ -1,0 +1,53 @@
+Diamorphine Rootkit
+Another trend we observed in 2020 is the integration of rootkits into Linux-based threats for persistence
+and stealth. [15] Stealth, in particular, is a crucial factor for cryptocurrency mining activities since, without
+any limitations in place, the mining process will quickly raise red flags as the CPU utilization spikes to
+100%. Even if this anomalous behavior is not spotted by an administrator, it will likely trigger warnings in
+the cloud provider’s system, which will then send a notification to the user. To get around this, malware
+authors have introduced new features to hide the process from administrators and system tools.
+TeamTNT is no exception. The group uses a kernel-mode open-source rootkit called Diamorphine, [16] which
+creates function hooks for the following system calls:
+
+getdents/getdents64: This hook allows hiding file system entries from user-mode applications. The
+
+actual process hiding is implemented in this hook as the Unix uses the /proc pseudo-file system as
+an interface to kernel process structures.
+
+kill: This hook implements the main functionality of the rootkit, which is dependent on the signal sent
+
+to the process based on the following:
+º The signal SIGINVIS = 31 flips the process custom PF_INVISIBLE flag to the task associated with
+the specified process ID (pid).
+if ((task = find_task(pid)) == NULL)
+return -ESRCH;
+task->flags ^= PF_INVISIBLE;
+break;
+º The signal SIGSUPER = 64 obtains root privileges by committing new credentials with uids = 0.
+º The signal SIGMODINVIS = 63 hides/reveals the presence of the kernel module.
+17 | Tracking the Activities of TeamTNT: A Closer Look at a Cloud-Focused Malicious Actor Group
+Diamorphine is used for hiding the cryptocurrency mining process in which, in this context, the kernel
+module itself is hidden by default as the hide function is called during the module initialization phase.
+Figure 17. The Diamorphine module initialization phase
+The following discussion demonstrates the described behavior of Diamorphine.
+After the cryptocurrency process using XMRig is started, the signal SIGINVIS is sent to the mining process.
+Figure 18. The XMRig process
+This is done by executing the kill utility with the argument SIGINVIS and the target process ID. The utility
+calls linux syscall, which is then intercepted by Diamorphine, rendering the process invisible to user-mode
+applications.
+Figure 19. Sending a SIGINVIS signal to the Diamorphine rootkit, effectively hiding
+the cryptocurrency mining process
+If we compare the output of the top utility before the hiding signal is sent to the rootkit module and after
+the signal is sent, we can observe that the XMRig process (pid = 12254) is causing the CPU usage to
+spike. [17]
+18 | Tracking the Activities of TeamTNT: A Closer Look at a Cloud-Focused Malicious Actor Group
+Figure 20. The top output before the signal is sent
+However, after the hiding signal is sent, the process is not seen by the utility and remains undetected.
+At this point, we should emphasize that a root user permission with CAP_SYS_ADMIN capability is
+required to install the kernel module. As malware authors target container environments, there is the
+danger of privileged containers that allow users to obtain full host root with all capabilities and thus can
+also be used to install kernel mode rootkits such as Diamorphine.
+Malware authors have also optimized the usability of XMRig for cloud environments by decreasing the
+maximum percentage of CPU usage in order to remain undetected and not trigger necessary alarms. It
+should be noted that running unwanted cryptocurrency miners in public clouds will lead to additional
+costs.
+19 | Tracking the Activities of TeamTNT: A Closer Look at a Cloud-Focused Malicious Actor Group

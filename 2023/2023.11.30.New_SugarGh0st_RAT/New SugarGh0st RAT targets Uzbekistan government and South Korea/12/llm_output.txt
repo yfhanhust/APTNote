@@ -1,0 +1,80 @@
+
+
+
+Sentence : JavaScript leverages DynamicWrapperX to run shellcode that launches SugarGh0st
+The JavaScript used in this infection chain is also heavily obfuscated and is embedded
+with base64-encoded data of other components of the attack, including a shellcode.
+When the JavaScript is executed, it drops an encrypted SugarGh0st, a DLL called
+“libeay32.dll” and the decoy document. The JavaScript opens the decoy document and
+copies Wscript.exe to the %TEMP% folder as dllhost.exe. It runs the dropped JavaScript
+again using the dllhost.exe and creates a registry subkey called “CTFMON.exe” in the
+Run registry key to establish persistence.
+Registry
+Key
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
+Subkey CTFMON.exe
+Value “cmd /c start C:\Users\user\AppData\Local\Temp\dllhost.exe
+C:\Users\user\AppData\Local\Temp\~204158968.js”
+The file “libeay32.dll” is a tool called DynamicWrapperX (originally named
+“dynwrapx.dll”) developed by Yuri Popov. This tool is an ActiveX component that enables
+Windows API function calls in scripts (JScript, VBScript, etc.). The attacker can use this
+to run shellcode via the JavaScript dropper. But, they must first run regsvr.exe to install
+the component.
+C:\Windows\system32\regsvr32 /i /s
+C:\Users\ADMINI~1\AppData\Local\Temp\libeay32.dll
+The DynamicWrapperX DLL registers its member functions in the victim’s machine by
+creating a registry subkey CLSID with the value “89565275-A714-4a43-912E
+978B935EDCCC” in Software\Classes\DynamicWrapperX registry key. The JavaScript
+containing the ActiveX components executes the embedded shellcode using the
+DynamixWrapperX DLL.
+https://blog.talosintelligence.com/new-sugargh0st-rat/ 9/19
+1/16/24, 12:16 PM New SugarGh0st RAT targets Uzbekistan government and South Korea
+The shellcode has the API hashes and instructions to load and map to the functions
+necessary for process injection from Kernel32.dll. It also loads two other DLLs,
+User32.dll and shlwapi.dll. Then, it loads the encrypted SugarGh0st “libeay32.lib” from
+the %TEMP% location, decrypts it, and reflectively loads it into the memory space
+allocated in the dllhost.exe process.
+Shellcode that loads and decrypts the encrypted SugarGh0st.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "JavaScript", "type" : "APPS"},
+        {"id": 2, "description": "DynamicWrapperX (libeay32.dll)", "type" : "EXEF"},
+        {"id": 3, "description": "SugarGh0st", "type" : "EXEF"},
+        {"id": 4, "description": "Decoy document", "type" : "DOCF"},
+        {"id": 5, "description": "Wscript.exe", "type" : "EXEF"},
+        {"id": 6, "description": "%TEMP% folder", "type" : "SYSP"},
+        {"id": 7, "description": "dllhost.exe", "type" : "EXEF"},
+        {"id": 8, "description": "Run registry key (HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run)", "type" : "REGI"},
+        {"id": 9, "description": "CTFMON.exe subkey", "type" : "REGI"},
+        {"id": 10, "description": "C:\\Users\\user\\AppData\\Local\\Temp\\dllhost.exe", "type" : "TPTH"},
+        {"id": 11, "description": "C:\\Users\\user\\AppData\\Local\\Temp\\~204158968.js", "type" : "DOCF"},
+        {"id": 12, "description": "regsvr32.exe", "type" : "EXEF"},
+        {"id": 13, "description": "C:\\Windows\\system32\\regsvr32 /i /s C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\libeay32.dll", "type" : "TPTH"},
+        {"id": 14, "description": "Software\\Classes\\DynamicWrapperX registry key", "type" : "REGI"},
+        {"id": 15, "description": "89565275-A714-4a43-912E-978B935EDCCC", "type" : "REGI"},
+        {"id": 16, "description": "Kernel32.dll", "type" : "EXEF"},
+        {"id": 17, "description": "User32.dll", "type" : "EXEF"},
+        {"id": 18, "description": "shlwapi.dll", "type" : "EXEF"},
+        {"id": 19, "description": "%TEMP%\\libeay32.lib", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "drops"},
+        {"source": 1, "target": 4, "rel_name" : "opens"},
+        {"source": 5, "target": 6, "rel_name" : "copies to"},
+        {"source": 5, "target": 7, "rel_name" : "renames as"},
+        {"source": 1, "target": 7, "rel_name" : "runs using"},
+        {"source": 8, "target": 9, "rel_name" : "creates subkey"},
+        {"source": 9, "target": 10, "rel_name" : "sets value to"},
+        {"source": 9, "target": 11, "rel_name" : "sets value to"},
+        {"source": 12, "target": 13, "rel_name" : "runs command"},
+        {"source": 2, "target": 14, "rel_name" : "registers in"},
+        {"source": 2, "target": 15, "rel_name" : "creates subkey with value"},
+        {"source": 3, "rel_name" : "loads and decrypts from", "target": 19},
+        {"source": 3, "rel_name" : "reflectively loads into memory of", "target": 7},
+        {"source": 3, "rel_name" : "uses functions from", "target": 16},
+        {"source": 3, "rel_name" : "loads and uses", "target": 17},
+        {"source": 3, "rel_name" : "loads and uses", "target": 18}
+    ]
+}

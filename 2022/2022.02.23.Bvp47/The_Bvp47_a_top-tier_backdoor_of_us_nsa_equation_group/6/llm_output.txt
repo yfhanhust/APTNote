@@ -1,0 +1,93 @@
+
+
+
+Sentence : 2. Unseen Backdoor
+In a certain month of 2015, an advanced threat detection system deployed by a customer prompted a spe
+cial network intrusion alarm, and there were suspicious communication activities between important serv
+ers. During the incident response process, packets were captured at several nodes in the network and the
+server’s information was obtained by disk mirroring. After preliminary analysis, at least two servers in the
+system network have been hacked and implanted with backdoors, and there are signs of a relatively large
+amount of data leakage
+The investigation of the incident involved 3 servers, one of which was the source of external attacks, host
+A, and the other two internally affected servers, V1 (mail server) and V2 (a business server). There is
+abnormal communication between external host A and the V1 server. Specifically, A first sends a SYN
+packet with a 264-byte payload to port 80 of the V1 server (normal SYN packets generally do not carry a
+Payload), and then the V1 server immediately initiates an external connection to the high-end port of the
+A machine and maintains a large amount of exchange data. Data communication is encrypted.
+At almost the same time, the V1 server connects to the V2 server's SMB service and performs some sensi
+tive operations, including logging in to the V2 server with an administrator account, trying to open terminal
+services, enumerating directories, and executing Powershell scripts through scheduled tasks.
+At the same time, the V2 server connected to the 8081 port of the V1 server to download suspicious files,
+including the Powershell script and the encrypted data of the second stage.
+A simple HTTP server implemented in Python was started on port 8081 of the V1 server, and the V2 server
+obtained two files from the above: index.html and index.htm. Among them, index.html is a Base64-encod
+ed Powershell script. After this script is executed on the server, it will continue to download a file named
+index.htm from the V1 server. The content is Base64-encoded data, but after decoding it is found to be an
+unreadable string. Analysis of the Powershell script executed to download index.htm proves that this is a
+piece of asymmetrically encrypted data.
+Next, the V2 server connects to the high-end port of the V1 server to communicate with its own protocol,
+and a large amount of interactive transmission data is encrypted.
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 2
+Based on the above observations, it can be inferred from the above analysis that the V1/V2 servers have
+been implanted with backdoors. By integrating the overall interaction of the A machine and the V1/V2
+server, we can restore the communication process between the machines as follows:
+
+Machine A connects to port 80 of the V1 server to send a knock request and start the backdoor program
+
+on the V1 server;
+
+
+The V1 server reversely connects the high-end port of machine A to establish a data pipeline;
+
+
+The V2 server connects to the backdoor web service opened on the V1 server, and obtains PowerShell
+
+
+execution from the V1 server;
+
+
+The V1 server connects to the SMB service port of the V2 server to perform command operations;
+
+
+The V2 server establishes a connection with the V1 server on the high-end port and uses its own encryp
+
+
+tion protocol for data exchange;
+
+The V1 server synchronizes data interaction with the A machine, and the V1 server acts as a data trans
+
+fer between the A machine and the V2 server;
+This is a backdoor communication technology that has never been seen before, implying an organization
+with strong technical capabilities behind it.
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 3
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Host A (external attacker)", "type" : "ACTO"},
+        {"id": 2, "description": "V1 (mail server)", "type" : "MAIL"},
+        {"id": 3, "description": "V2 (business server)", "type" : "APPS"},
+        {"id": 4, "description": "SYN packet with 264-byte payload", "type" : "NETP"},
+        {"id": 5, "description": "Port 80 of V1 server", "type" : "NETP"},
+        {"id": 6, "description": "High-end port of A machine", "type" : "NETP"},
+        {"id": 7, "description": "SMB service on V2 server", "type" : "APPS"},
+        {"id": 8, "description": "Scheduled tasks on V2 server", "type" : "TTPS"},
+        {"id": 9, "description": "Port 8081 of V1 server (HTTP server)", "type" : "NETP"},
+        {"id": 10, "description": "index.html (Base64-encoded Powershell script)", "type" : "DOCF"},
+        {"id": 11, "description": "index.htm (Base64-encoded data)", "type" : "DOCF"},
+        {"id": 12, "description": "Powershell script", "type" : "EXEF"},
+        {"id": 13, "description": "High-end port of V1 server", "type" : "NETP"},
+        {"id": 14, "description": "Encrypted data exchange protocol", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 5, "rel_name" : "sends"},
+        {"source": 2, "target": 6, "rel_name" : "connects to"},
+        {"source": 2, "target": 7, "rel_name" : "interacts with"},
+        {"source": 3, "target": 9, "rel_name" : "downloads from"},
+        {"source": 9, "target": 10, "rel_name" : "hosts"},
+        {"source": 9, "target": 11, "rel_name" : "hosts"},
+        {"source": 3, "target": 12, "rel_name" : "executes"},
+        {"source": 3, "target": 13, "rel_name" : "connects to"},
+        {"source": 1, "target": 6, "rel_name" : "exchanges data with"},
+        {"source": 2, "target": 14, "rel_name" : "uses"}
+    ]
+}

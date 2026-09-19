@@ -1,0 +1,99 @@
+Analysis
+Why do adversaries use
+Obfuscated Files or Information?
+Adversaries employ obfuscation to evade simple, signature-based detections
+and to impede analysis. Since obfuscation can be used by software and IT staff
+in the regular course of business, analysts investigating potentially malicious
+obfuscation are often left to wonder if what they are seeing reflects a legitimate
+business use or something nefarious. However, some obfuscation techniques
+are so focused on fooling machines that they disproportionately draw human
+attention.
+If you consider the conspicuousness of the alternative—performing clearly
+malicious actions in plain sight—it makes complete sense that adversaries
+would take the time and effort to encrypt, encode, or otherwise obfuscate files
+or information that, in plaintext form, would be trivial to detect, block,
+and/or mitigate.
+How do adversaries use
+Obfuscated Files or Information?
+Obfuscation comes in many forms. In this section we will attempt to enumerate
+and briefly describe the obfuscation techniques that we observe most often
+across the environments we monitor.
+l [T1027: Obfuscated Files or Information]
+59
+2021 Threat Detection Report
+Base64 encoding
+Base64 encoding is the variety of obfuscation that we encounter most
+frequently. It enables binary data to transit text-only pathways and eliminates
+issues around string quoting and the need to escape special characters.
+Administrators and developers use Base64 encoding to pass scripts to
+subprocesses or remote systems, as well as to conceal sensitive information.
+These same benefits appeal to adversaries.
+Nearly all of the 1,300 detections involving obfuscation we observed last
+year used Base64 encoding in conjunction with PowerShell. The following is
+an example of PowerShell combined with Base64 encoding from an activity
+cluster we named Yellow Cockatoo . This example combines multiple types of
+obfuscation beyond just Base64, including XOR obfuscation.
+String concatenation
+String concatenation is the second-most-common obfuscation variant Red
+Canary observed in 2020. Adversaries use string concatenation for the same
+reasons they use Base64 encoding: to hide malicious strings from automated
+detections that rely on overly exacting signatures and to confound analysts.
+String concatenation comes in many forms, such as:
+      - The ~~**+**~~ operator can be used to combine string values
+
+
+      - The -join operator combines characters, strings, bytes, and other elements
+
+using a specified delimiter character
+      - Since PowerShell has access to .NET method, it can use the ~~**[System.**~~
+
+~~String]::Join()~~ method, which also combines characters like the ~~-join~~
+operator
+l [T1027: Obfuscated Files or Information]
+60
+2021 Threat Detection Report
+      - String interpolation allows adversaries to set values such that u can equal
+
+~~util.exe~~ and ~~cert%u%~~ then executes as ~~certutil.exe~~ ~~,~~ effectively evading
+certain signature-based controls
+Since interpolation is nuanced, we’ve included the following image of
+commands used by TA551 as an illustrative example of what is described in the
+last bullet above. ~~drop.tmp~~ is the DLL installer for the follow-on IcedID payload.
+Substrings
+Our next most common flavor of obfuscation involves the use of substrings. Take
+the following as an example of how an adversary might leverage a substring:
+~~$ENV:pubLic[13]+$env:PublIc[5]+’x’.~~
+The plus signs here are string concatenation, which we’ve addressed. Looking
+on either side of the plus sign, we see a substring that will cause PowerShell to
+combine the 14th and sixth characters (remember, the first element of an array
+starts at 0) from the ~~Public~~ environment variable. On most systems, the public
+environmental variable will be ~~C:\Users\Public~~ ~~.~~ You can do the counting, but the
+resulting substring is ~~ie~~ ~~.~~ The ~~+~~ operator then adds an ~~x~~ on the end, resulting in an
+Invoke-Expression cmdlet that will execute whatever code is passed to it. If you
+had robust coverage looking for the execution of PowerShell with an Invoke
+Expression in the command line, then you might miss this behavior.
+The following command line used by Cobalt Strike offers a clear example of why
+an adversary might use a substring. Here the adversary is replacing a ~~!~~ ~~,~~ which is
+not a valid member of PowerShell’s Base64 character set, with an empty string.
+The result could help adversaries circumvent detection controls designed to
+alert on Base64 encoding.
+l [T1027: Obfuscated Files or Information]
+61
+2021 Threat Detection Report
+Escape characters
+Some obfuscation techniques are so focused on fooling machines that they
+disproportionately draw attention. PowerShell and the Windows Command
+Shell both have escape characters (i.e., or`, depending on the context,
+and ^, respectively) for situations where users may want to prevent special
+characters from being interpreted by the command shell or PowerShell
+interpreter. Take the following string, which is copied from the string
+concatenation image above:
+~~/u^r^l^c^a^c^h^e^ /f^~~
+Examined in context, you can see that it contains two command-line options for
+~~certutil.exe~~ ~~:~~ ~~/urlcache~~ and ~~/f~~ ~~.~~ The carets here are escape characters that serve
+no purpose except to protect this string against potential signature matches.
+We see the DOS escape character used frequently in attacks in the manner
+above. PowerShell escape characters are also used, but more conservatively.
+For more on this topic, take a look at the work of Daniel Bohannon, who
+has produced tools, whitepapers, and conference talks on the subjects of
+PowerShell and Windows Command Shell obfuscation.

@@ -1,0 +1,89 @@
+
+
+
+Sentence : 3.2 LNK Vulnerability in Stuxnet
+This is the first way in which the rootkit distributes itself. When you inspect a flash USB drive infected
+with the Stuxnet worm you can expect to find 6 files there as on the following screenshot:
+Figure 3.10 – The Worm’s Files on a USB Flash Drive 
+Copy of Shortcut to.lnk; 
+Copy of Copy of Shortcut to.lnk; 
+Copy of Copy of Copy of Shortcut to.lnk; 
+Copy of Copy of Copy of Copy of Shortcut to.lnk; 
+~WTR4141.TMP; 
+~WTR4132.TMP.
+The first four files are LNK files – these are the files that specify how the Icon of other files should be
+displayed. The files with LNK extension are different: here is an example of the contents of one of them:
+Figure 3.11 – Contents of the .LNK Files
+The worm exploits the CVE-2010-2568 vulnerability (see section The LNK exploit for details) to infect the
+system. You can see in the figure above the highlighted name of the module to be loaded during the
+exploitation of the vulnerability. When a user tries to open an infected USB flash drive with an
+application that can display icons for shortcuts, the file with the name ~WTR4141.TMP is loaded and its
+entry point is called. The file is, in fact, a dynamic link library, the main purpose of which is to load
+another file with the name ~WTR4132.TMP from the infected flash drive.
+www.eset.com
+30
+The files with the .LNK filename extension are essentially the same except they specify different paths to
+the single file: 
+\.\STORAGE#Volume#??USBSTOR#Disk&Ven_____USB&Prod_FLASH_DRIVE&Rev#1_
+2345000100000000173&0#{53f56307-b6bf-11d0-94f2-00a0c91efb8b}#{53f5630d-b6bf-11d0-
+94f2-00a0c91efb8b}\~WTR4141.tmp ; 
+\.\STORAGE#Volume#1&19f7e59c&0&??USBSTOR#Disk&Ven_____USB&Prod_FLASH
+__DRIVE&Rev_#12345000100000000173&0#{53f56307-b6bf-11d0-94f2-
+_00a0c91efb8b}#{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}\~WTR4141.tmp ; 
+\.\STORAGE#RemovableMedia#8&1c5235dc&0&RM#{53f5630d-b6bf-11d0-94f2-
+00a0c91efb8b}\~WTR4141.tmp ; 
+\.\STORAGE#RemovableMedia#7&1c5235dc&0&RM#{53f5630d-b6bf-11d0-94f2-
+00a0c91efb8b}\~WTR4141.tmp .
+All these strings specify a path to the file located on the removable drive, and are used instead of a short
+form of the path with a drive letter. The first part of the path to the file (before the backslash "\" that
+precedes the filename) is a symbolic link name referring to the corresponding volume, as we can see on
+the figure below:
+Figure 3.12 – Symbolic Link Names of Volumes
+The first entry in figure 3.12 corresponds to the volume representing a USB flash drive, the name of
+which is \Device\HarddiskVolume5 . Notably, that drive letters are symbolic link names too that refer to
+the same device objects:
+Figure 3.13 – Drive letters
+Stuxnet uses the long versions of pathnames because it is impossible to predict what letter corresponds
+to a removable drive in a remote system, and as a result, the short paths are likely to be incorrect in
+some cases. The longer variant of a path is constructed with respect to certain rules and configuration
+information obtained from the hardware, so that we can predict with considerable accuracy what
+symbolic link name corresponds to a device on a remote machine.
+The rules according to which these symbolic links are constructed vary depending on the operating
+system, which is why Stuxnet uses four distinct .LNK files. For instance, the first entry in the list
+presented above won't work on Windows XP but will work on Windows 7, the second entry works on
+Windows Vista, while the last two entries work on Windows XP, Windows Server 2003 and Windows
+2000.
+www.eset.com
+31
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Stuxnet worm", "type" : "ACTO"},
+        {"id": 2, "description": "USB flash drive", "type" : "USB"},
+        {"id": 3, "description": "Shortcut to.lnk (LNK file)", "type" : "DOCF"},
+        {"id": 4, "description": "~WTR4141.TMP", "type" : "EXEF"},
+        {"id": 5, "description": "~WTR4132.TMP", "type" : "EXEF"},
+        {"id": 6, "description": "CVE-2010-2568 vulnerability", "type" : "CVES"},
+        {"id": 7, "description": "\.\STORAGE#Volume#??USBSTOR#Disk&Ven_____USB&Prod_FLASH_DRIVE&Rev#1_2345000100000000173&0#{53f56307-b6bf-11d0-94f2-00a0c91efb8b}#{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}\~WTR4141.tmp", "type" : "SYSP"},
+        {"id": 8, "description": "\.\STORAGE#Volume#1&19f7e59c&0&??USBSTOR#Disk&Ven_____USB&Prod_FLASH__DRIVE&Rev_#12345000100000000173&0#{53f56307-b6bf-11d0-94f2-_00a0c91efb8b}#{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}\~WTR4141.tmp", "type" : "SYSP"},
+        {"id": 9, "description": "\.\STORAGE#RemovableMedia#8&1c5235dc&0&RM#{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}\~WTR4141.tmp", "type" : "SYSP"},
+        {"id": 10, "description": "\.\STORAGE#RemovableMedia#7&1c5235dc&0&RM#{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}\~WTR4141.tmp", "type" : "SYSP"},
+        {"id": 11, "description": "\Device\HarddiskVolume5", "type" : "TPTH"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "contains"},
+        {"source": 2, "target": 4, "rel_name" : "contains"},
+        {"source": 2, "target": 5, "rel_name" : "contains"},
+        {"source": 1, "target": 6, "rel_name" : "exploits"},
+        {"source": 3, "target": 4, "rel_name" : "loads when opened"},
+        {"source": 4, "target": 5, "rel_name" : "calls entry point of"},
+        {"source": 7, "target": 4, "rel_name" : "points to"},
+        {"source": 8, "target": 4, "rel_name" : "points to"},
+        {"source": 9, "target": 4, "rel_name" : "points to"},
+        {"source": 10, "target": 4, "rel_name" : "points to"},
+        {"source": 7, "target": 11, "rel_name" : "refers to volume"},
+        {"source": 8, "target": 11, "rel_name" : "refers to volume"},
+        {"source": 9, "target": 11, "rel_name" : "refers to volume"},
+        {"source": 10, "target": 11, "rel_name" : "refers to volume"}
+    ]
+}

@@ -1,0 +1,98 @@
+
+
+
+Sentence : 61850 payload component
+Unlike the 101 and 104 payloads, this payload component exists as a
+standalone malicious tool comprising an executable named 61850.exe
+and the DLL 61850.dll. It is named after the IEC 61850 standard. This
+standard describes a protocol used for multivendor communication among
+devices that perform protection, automation, metering, monitoring, and
+control of electrical substation automation systems. The protocol is very
+complex and robust, but the 61850 payload uses only a small subset of the
+protocol to produce its disruptive effect.
+Once executed, the 61850 payload DLL attempts to read the configuration
+file, the path to which is supplied by the Launcher component. The
+standalone version defaults to reading its configuration from i.ini. The
+configuration file is expected to contain a list of IP addresses of devices
+capable of communicating via the protocol described in the IEC 61850
+standard.
+If the configuration file is not present, then this component enumerates all
+connected network adaptors to determine their TCP/IP subnet masks. The
+61850 payload then enumerates all possible IP addresses for each of these
+subnet masks, and tries to connect to port 102 on each of those addresses.
+Therefore, this component has the ability to discover relevant devices in the
+network automatically.
+Otherwise, if a configuration file is present and it contains target IP
+addresses, this component connects to port 102 on those IP addresses and
+on IP addresses that were discovered automatically.
+Once this component connects to a target host, it sends a Connection
+Request packet using the Connection Oriented Transport Protocol, as seen
+in Figure 12.
+Figure 12. A Connection Request packet, after dissection by Wireshark.
+If the target device responds appropriately, the 61850 payload then sends
+an InitiateRequest packet using the Manufacturing Message Specification
+(MMS). If the expected answer is received, it continues, sending an MMS
+getNameList request. Thereby, the component compiles a list of object
+names in a Virtual Manufacturing Device (VMD).
+Next, this component enumerates the objects discovered in the previous
+step and sends the device domain-specific getNameList requests with
+each object name. This enumerates named variables in a specific domain.
+Win32/Industroyer 11
+Figure 13. The dissected MMS getNameList request in Wireshark.
+Afterwards, the 61850 payload parses data received in response to these
+requests, searching for variables that contain following combinations of
+strings:
+
+
+CSW, CF, Pos, and Model
+
+
+CSW, ST, Pos, and stVal
+
+
+CSW, CO, Pos, Oper, but not $T
+
+
+CSW, CO, Pos, SBO, but not $T
+
+
+The string CSW is a name for logical nodes, which are used to control
+circuit breakers and switches.
+For variables that contain the Model or stVal string the 61850 payload sends
+an additional MMS Read request. For some of the variables this component
+may also issue an MMS Write request that will change its state.
+The 61850 payload produces a log file of its operations that contains the IP
+addresses, MMS domains, named variables and the node states (open or
+closed) of its targets.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "61850.exe", "type" : "EXEF"},
+        {"id": 2, "description": "61850.dll", "type" : "EXEF"},
+        {"id": 3, "description": "i.ini (configuration file)", "type" : "DOCF"},
+        {"id": 4, "description": "IEC 61850 standard", "type" : "NETP"},
+        {"id": 5, "description": "TCP/IP subnet masks", "type" : "NETP"},
+        {"id": 6, "description": "Port 102", "type" : "NETP"},
+        {"id": 7, "description": "Connection Request packet", "type" : "TAMP"},
+        {"id": 8, "description": "InitiateRequest packet (MMS)", "type" : "TAMP"},
+        {"id": 9, "description": "MMS getNameList request", "type" : "TAMP"},
+        {"id": 10, "description": "VMD (Virtual Manufacturing Device)", "type" : "TAMP"},
+        {"id": 11, "description": "MMS Read request", "type" : "TAMP"},
+        {"id": 12, "description": "MMS Write request", "type" : "TAMP"},
+        {"id": 13, "description": "Log file of operations", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "reads configuration from"},
+        {"source": 2, "target": 4, "rel_name" : "communicates via"},
+        {"source": 2, "target": 5, "rel_name" : "enumerates"},
+        {"source": 2, "target": 6, "rel_name" : "connects to"},
+        {"source": 2, "target": 7, "rel_name" : "sends"},
+        {"source": 2, "target": 8, "rel_name" : "sends"},
+        {"source": 2, "target": 9, "rel_name" : "sends"},
+        {"source": 2, "target": 10, "rel_name" : "interacts with"},
+        {"source": 2, "target": 11, "rel_name" : "reads from"},
+        {"source": 2, "target": 12, "rel_name" : "writes to"},
+        {"source": 2, "target": 13, "rel_name" : "generates"}
+    ]
+}

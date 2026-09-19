@@ -1,0 +1,29 @@
+Dissecting Linux/Moose
+The IP address is lightly obfuscated by being XORed with a fixed key and can be decrypted using
+the following Python snippet (where ~~p~~ is the ~~p~~ parameter of the ~~GET~~ ):
+```
+   import socket, struct
+p = -1482289528
+   print (socket.inet_ntoa(struct.pack("i", (p ^ 0x7890ABCD))))
+```
+Back to the scanner thread description: if there is no connection possible to TCP port 10073
+(no proper handshake) it tries to connect to the Telnet service of that IP (TCP port 23). It will attempt
+to bruteforce the login prompt (if any) with a username and password combination list it received
+from the configuration C&C server. On a successful guess, it will report the intrusion to the report
+C&C server, then attempt to get a command prompt on the device. Otherwise it will move on
+to the next IP address.
+The Moose is In — Telnet Access
+The packet to report a successful connection has the following format:
+~~Table 1.~~ ~~Report Telnet login protocol~~
+Name Size Description
+Version Integer (4 bytes) Version of the malware
+Message type Integer (4 bytes) Set to 14 meaning report successful Telnet login
+IP address Integer (4 bytes) IP address of the victim
+Unused 28 bytes Unused
+Byte ordering
+Unless otherwise noted, all the network protocol’s Integers are stored
+in little-endian byte ordering, except for IP addresses, which are stored their
+native network order (big-endian).
+Figure 12 Report Telnet login example
+The reply from the server is the same packet with the version field repurposed.
+24

@@ -1,0 +1,106 @@
+Configurable Features
+StealthVector has various configurable features that enable malicious actors to easily modify its behavior.
+We believe this design is meant to keep malware development simple, as the actors will not need to
+change its source code in order to implement these features. We discuss these features in the succeeding
+subsections.
+Disabling Event Tracing for Windows
+StealthVector can disable ETW to cover its tracks, as shown in Figure 26.
+Figure 26. StealthVector configured to disable ETW
+19 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Context Awareness
+A common feature of other malware, such as mutual exclusion object (mutex) checking or username
+checking for context awareness, can also be configured into StealthVector, as shown in Figure 27.
+Figure 27. StealthVector configured for context awareness
+Logic to Determine Payload Location
+StealthVector decrypts and executes its payload in memory, but it can also be configured to load its
+encrypted payload in a specific location. Some variants embed the payload in its binary, while others load
+it to another file in the same directory, whose file name is specified in the malware’s configuration (Figure
+28). The decryption logic is the same for all variants of StealthVector: It reads the specific size of data
+from a specific offset. The values for the offset and the size of the encrypted payload are already defined
+in the malware’s configuration. Afterward, the payload will be decrypted by ChaCha20. This same routine
+is used in decrypting StealthVector’s configuration, but the nonce for its payload is already defined in the
+configuration (Figure 29).
+Figure 28. A StealthVector variant that embeds its encrypted payload into a specific file
+20 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Figure 29. Stealthvector’s decryption logic
+21 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Self-Uninstallation
+StealthVector can also uninstall itself based on its configuration, as shown in Figure 30.
+Figure 30. StealthVector’s uninstall configuration
+Shellcode Execution Techniques
+StealthVector implements various shellcode execution techniques. We discuss these techniques in the
+succeeding subsections.
+Execution Using CreateThread
+The simplest way for StealthVector to execute its shellcode payload is by using the CreateThread function,
+as shown in Figure 31.
+Figure 31. Execution of the shellcode using CreateThread
+Module Stomping in Local Process
+Some variants of StealthVector implement an evasive technique called module stomping, which is
+designed to bypass the detection of reflective loading. Module stomping is well known because Cobalt
+Strike has implemented this feature in its version 3.11. [14] In the case of StealthVector, however, the injected
+payload is a shellcode instead of a dynamic link library (DLL). To perform this technique, StealthVector
+looks for a legitimate DLL that has sufficient space for its payload, “(payload_size + 2048)”, as shown in
+Figure 32.
+22 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Figure 32. StealthVector looking for a DLL with enough space for its payload
+Once it finds one that meets its space requirement, StealthVector loads that DLL using the LoadLibraryExW
+function, with the flag DONT_RESOLVE_DLL_REFERENCES . As shown in Figure 33, when this flag is
+enabled, the system does not call the DllMain of the target DLL upon loading.
+Figure 33. StealthVector enabling DONT_RESOLVE_DLL_REFERENCES after finding its target DLL
+23 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Once it loads the target DLL, StealthVector changes the protection settings of the DLL using read, write,
+and execute (RWX) permissions. It then copies its payload onto the legitimate DLL and executes the
+payload through the CreateThread function, as illustrated in Figure 34.
+StealthVector
+DLL
+Payload
+Overwrite with Legitimate DLL
+shellcode and 3
+execute.
+3
+Find DLL and
+2
+LoadLibraryExW .
+Decrypt. 1
+Encrypted payload
+Code
+Encrypted payload
+Figure 34. StealthVector’s process of overwriting the target DLL with its malicious payload
+Bypassing Control Flow Guard
+As shown in Figure 35, some variants of StealthVector run their shellcode by bypassing Microsoft’s
+Control Flow Guard (CFG), an exploit mitigation technology. CFG makes it difficult for malware to run
+code on Windows operating systems by restricting indirect calls to an unapproved address. In this case,
+StealthVector executes its shellcode using CreateThread, which checks the target address.
+In order to sidestep attempts to verify its indirect call, StealthVector will then patch the
+LdrpHandleInvalidUserCallTarget API in ntdll.dll with “ 48 FF E0 CC 90 (jmp rax; int3; nop)”, as shown in
+Figure 36. LdrpHandleInvalidUserCallTarget is called when CFG, through the LdrpValidateUserCallTarget
+function, determines that the target address is invalid. StealthVector can patch this API without crashing
+the application.
+24 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Figure 35. StealthVector bypassing CFG to execute its shellcode
+Figure 36. StealthVector patching LdrpHandleInvalidUserCallTarget
+Phantom DLL Hollowing in Remote Process
+Some variants of StealthVector can also inject their shellcode payload into a remote process using
+phantom DLL hollowing, a technique that is a combination of process hollowing and module stomping
+(Figure 37). To do this, StealthVector spawns a new process, which is specified in its configuration, in
+suspended mode. StealthVector uses the NtCreateSection and ZwMapViewOfSection APIs to load a
+legitimate DLL into this newly created process. The logic of finding its target DLL is the same as that
+in module stomping: It checks if the code section, or ( .text section size ), is large enough. Afterward, it
+overwrites the code section of the loaded DLL with its own payload and executes it in the DLL’s memory
+space. It then patches the entry point of the legitimate process in order to modify the shellcode’s execution
+flow to this entry point in the DLL. Using this method, malicious actors can hide StealthVector’s payload
+within the memory space of an image, which often goes unnoticed by common memory scan engines,
+and execute it like a normal module.
+25 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+StealthVector
+Legitimate process
+2 Spawn process in
+6
+Patch entry point
+to call payload in
+DLL, and then
+resume thread.
+Decrypt 1
+Encrypted payload
+Figure 37. StealthVector performing phantom DLL hollowing
+26 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor

@@ -1,0 +1,139 @@
+ScrambleCross, or a Refactored Crosswalk
+During our analysis, we found a never-before-seen shellcode as a payload of StealthMutant and
+StealthVector. Upon closer study, we learned that this payload uses similar techniques to those of the
+Crosswalk backdoor. A modularized shellcode-based backdoor that is known to be used by Earth Baku,
+Crosswalk can execute additional shellcodes on memory as a plug-in. According to an indictment by the
+US Department of Justice, [17] Crosswalk was also used by members of Chengdu 404 Network Technology,
+a network security business. The similarities between Crosswalk and ScrambleCross indicate that the
+actual entity behind this campaign could be or is linked to members of Chengdu 404 Network Technology.
+Following our analysis, we have concluded that this unknown payload is a new version, or rather a
+fully refactored version, of Crosswalk. It still has many of the same capabilities as Crosswalk, but these
+are implemented differently. Considering this, we have named this new backdoor ScrambleCross to
+distinguish it from its predecessor.
+ScrambleCross shares the following features with Crosswalk:
+
+
+It is designed as fully position-independent code.
+
+
+It has encrypted code, data, and configuration.
+
+
+It calculates the hash of the code section as an anti-debugging technique.
+
+
+It supports multiple types of network communication protocols.
+
+
+It uses message queues to asynchronously receive commands from worker threads.
+
+
+Crosswalk’s capabilities have been documented at length by the likes of Positive Technologies,
+ZScaler, [18] and VMware Carbon Black. [19] But there are some key differences between this backdoor and
+ScrambleCross. Much like Crosswalk, ScrambleCross also embeds encrypted code in itself, but it uses
+a slightly different encryption algorithm to do so. To decode its functions and global values, including
+imports or strings, ScrambleCross uses a 16-byte XOR, as shown in Figure 41.
+29 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+|XOR key for global values|Col2|
+|---|---|
+|||
+|XOR key for code|Col2|
+|---|---|
+|XOR key for code||
+|Imports|Col2|
+|---|---|
+|Imports||
+|Signature of code|Col2|
+|---|---|
+|||
+|Signature of global values (cleared right after use)|Col2|
+|---|---|
+|||
+Figure 41. ScrambleCross using a 16-byte XOR to decode its functions and global values
+However, for its network configuration, ScrambleCross uses ChaCha20 for decryption instead of XOR
+(Figure 42). The encrypted network configuration is embedded at offset 0x1028 from the top of the
+configuration.
+30 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Figure 42. ScrambleCross using ChaCha20 for decryption in its network configuration
+Like StealthVector, ScrambleCross uses a fixed value of 0xB for its initial counter. The ChaCha20 routine
+shown in Figure 43 is used for encryption and decryption.
+Figure 43. The ChaCha20 routine
+31 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+With regard to its command-and-control (C&C) server communication, Crosswalk supports TCP
+(Transmission Control Protocol) and HTTP for application layer protocols, and uses AES-128 for transport
+layer encryption. ScrambleCross similarly supports TCP, HTTP, and HTTPS for application layer protocols,
+but it instead uses ChaCha20 and a custom message structure for transport layer encryption. Regardless
+of whether TCP or HTTP protocols are used, both the client request and the C&C server response have
+the same message structure.
+The client request data is compiled in the following nine steps, as illustrated in Figure 44. On the other
+hand, after deconstructing the server response data, we found that it is compiled in reverse order.
+
+
+Receive a 16-byte challenge from the server, or generate a 16-byte null key instead.
+
+
+Generate a random 16-byte ChaCha20 nonce.
+
+
+Generate a 32-byte ChaCha20 key.
+
+
+Compress the raw request data using the LZ4 compression algorithm.
+
+
+Encrypt the payload chunk with ChaCha20, using the key generated in Step 3. The nonce is the first
+
+
+12 random bytes generated in Step 2.
+
+Calculate the MD5 hash of the victim information. The victim information consists of the globally
+
+unique identifier (GUID), botID, and computer name of the victim’s device.
+
+Encrypt the header chunk with ChaCha20, using the key embedded in the network configuration. The
+
+nonce is the last 12 random bytes generated in Step 2.
+
+Calculate the total size of the MD5 hash, which is the sum of 13, the nonce, the encrypted header
+
+chunk, and the encrypted payload chunk. Copy the MD5 hash onto the top of the message data.
+
+If the message is sent in TCP, add the size of the message data on top of the message data.
+
+Payload chunk
+Figure 44. ScrambleCross’ compilation of request data
+32 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+ScrambleCross, like Crosswalk, also receives backdoor commands from its C&C server, as shown in
+Figure 45, but these are very different from those for Crosswalk. In the case of ScrambleCross, the purpose
+of its backdoor commands is to receive plug-ins from the C&C server and to manipulate these plug-ins, as
+indicated in Table 1. However, since a backdoor command’s capacity for manipulating plug-ins depends
+on the specific plug-in it receives, and we have been unable to retrieve any plug-ins from the server, we
+have yet to determine the full extent of the commands’ plug-in manipulation functions.
+Figure 45. ScrambleCross receiving backdoor commands from its C&C server
+|Command|Action|
+|---|---|
+|0x00x640x5C0x660x680x700x74|Do nothing.Run all the loaded plug-in’s entry at offset 0x48, which possibly tries toclose sessions in the plug-in and close current sessions.Update the ChaCha20 key for message encryption and decryption on C&Ccommunication.Change the current status based on the Base64-like string in response.Change the unknown DWORD value.Update the maximum interval period.Possibly uninstall all the plug-ins. Enumerate the loaded plug-ins, run theplug-in’s entry at offset 0x38 if it is already initialized, and then unload theplug-in.|
+33 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+|Command|Action|
+|---|---|
+|0x780x7C0x7E0x800x820x840x8C0x8ENone of theabove|Find a plug-in by ID and, if it is already initialized, run the plug-in’s entryoffset at 0x38. If the plug-in’s entry offset at 0x38 returns false, it will beunloaded.Possibly initialize a new plug-in. It receives new plug-in data from the C&Cserver and runs the plug-in’s entry at offset 0x30.Possibly try to remove a specifed server challenge from the serverchallenge list. Find a plug-in by ID (or if 0xFF is specifed, all plug-ins willbe targeted) and, if it is already initialized, run the plug-in’s entry offsetat 0x50. Afterward, look for the given challenge bytes in the registeredchallenge list and remove them from the list.Find a plug-in by ID and, if it is already initialized, run the plug-in’s entryoffset at 0x38. If the plug-in’s entry offset at 0x38 returns false, the plug-inand related registered server challenge will be unloaded.Enumerate the user information and send it back to the C&C server.Change the unknown DWORD value.Send the current confguration values to the C&C server.Load additional confguration from the message and try to save to fle.Enumerate all the loaded plug-ins and run the plug-in’s entry offset at 0x40.|
+Table 1. A list of backdoor commands for ScrambleCross
+Because ScrambleCross supports HTTPS, some variants of this backdoor abuse Cloudflare Workers, a
+computing platform, to obscure their C&C server activity. Cloudflare Workers can prove to be a powerful
+and accessible tool for malicious actors for the following reasons:
+
+Cloudflare Workers provides better scalability, making it useful for malicious actors who want to build
+
+their C&C infrastructure.
+
+The malware will not communicate with the C&C server directly, posing a challenge for security
+
+analysts to find the actual IP address to block. C&C traffic on Cloudflare Workers makes blocking of
+ScrambleCross’ C&C server much more difficult because the observed IP address is a Cloudflare IP
+address rather than that of the actual C&C server.
+
+The Cloudflare Workers platform is allowed by many security products. Connections to Cloudflare
+
+Workers are often considered legitimate and thus will likely be overlooked by network monitoring
+solutions.
+34 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor

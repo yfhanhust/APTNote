@@ -1,0 +1,66 @@
+
+
+
+Sentence : Command 0x80061007: Enumerate Files
+The Enumerate Files command provides a list of files for a given path on the victim’s
+machine along with some limited information concerning each file found. The command handler
+uses the payload section of the data blob (the section following the CommandHeader and
+CommandData structures) as a NULL-terminating string containing the full path to enumerate.
+When activated, the command handler determine the number of files in the given path by using
+the FindFirstFile and FindNextFile functions to count the number of results.
+Using the number of files within the specified directory, the command handler will allocate a
+response buffer large enough to contain a CommandHeader and the necessarily information
+structures to describe each file. The command handler begins filling out a FileInfo data
+structure for each file, placing the structure within the payload of the response buffer. The
+FileInfo structure is defined as:
+```
+struct FileInfo
+{
+DWORD dwFileAttributes;
+FILETIME ftLastWriteTime;
+DWORD nFileSizeLow;
+DWORD nFileSizeHigh;
+char szFilename[260];
+};
+```
+The dwFileAttributes field contains a bitmask of FILE_ATTRIBUTE_* values,
+ftLastWriteTime contains the timestamp of the last time the file was modified,
+nFileSizeLow and nFileSizeHigh collectively define the size of the file and
+szFilename contains a NULL-terminate string with the file’s name.
+After completing the array of FileInfo structures for each found file (via calls to
+FindFirstFile and FindNextFile ), the command handler will set the dwCommandID field
+within the CommandData structure to 0x80061007 and return the response buffer. If, however,
+the command handler is unable to allocate the proper sized response buffer or if the number of
+files for the specified directory is zero, the command handler will return only a CommandHeader
+structure with the dwCommandID field set to 0x80061007 and the dwLastError set to the
+return value from GetLastError .
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Command 0x80061007: Enumerate Files", "type" : "EXEF"},
+        {"id": 2, "description": "FindFirstFile function", "type" : "EXEF"},
+        {"id": 3, "description": "FindNextFile function", "type" : "EXEF"},
+        {"id": 4, "description": "CommandHeader structure", "type" : "EXEF"},
+        {"id": 5, "description": "CommandData structure", "type" : "EXEF"},
+        {"id": 6, "description": "FileInfo data structure", "type" : "EXEF"},
+        {"id": 7, "description": "dwFileAttributes field", "type" : "REGI"},
+        {"id": 8, "description": "ftLastWriteTime field", "type" : "REGI"},
+        {"id": 9, "description": "nFileSizeLow field", "type" : "REGI"},
+        {"id": 10, "description": "nFileSizeHigh field", "type" : "REGI"},
+        {"id": 11, "description": "szFilename field", "type" : "REGI"},
+        {"id": 12, "description": "GetLastError function", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "uses"},
+        {"source": 1, "target": 4, "rel_name" : "creates"},
+        {"source": 1, "target": 5, "rel_name" : "modifies"},
+        {"source": 1, "target": 6, "rel_name" : "fills out"},
+        {"source": 6, "target": 7, "rel_name" : "contains"},
+        {"source": 6, "target": 8, "rel_name" : "contains"},
+        {"source": 6, "target": 9, "rel_name" : "contains"},
+        {"source": 6, "target": 10, "rel_name" : "contains"},
+        {"source": 6, "target": 11, "rel_name" : "contains"},
+        {"source": 1, "target": 12, "rel_name" : "calls"}
+    ]
+}

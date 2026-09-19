@@ -1,0 +1,82 @@
+Samurai backdoor
+https://securelist.com/toddycat/106799/ 7/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+The final stage is a formerly unknown modular backdoor that we dubbed Samurai, due to
+a constant keyword used inside an important dictionary used by the malware to share
+data between its modules.
+The library was developed in C# and uses the .NET HTTPListener class to receive and
+handle HTTP POST requests, looking for specially crafted requests that carry encrypted
+C# source code issued by the attackers. These programs will be in turn compiled and
+executed during runtime.
+The malware is obfuscated with an algorithm developed to increase the difficulty of
+reverse engineering by making the code complicated to read. Multiple functions in the
+code are assigned random names, while some perform very simple actions, like getting a
+property of an object passed as input.
+Moreover, the malware uses multiple while loops and switch cases to jump between
+instructions, thus flattening the control flow and making it hard to track the order of
+actions in the code. The flow is controlled by modifying the switch case expression value
+and using break and goto statements to restart the loop, re-evaluate the switch expression
+and jump to the correct instruction.
+Code snippet with while loop and
+switch case
+The malware’s logic starts by decrypting
+configuration data provided as an input
+argument. Those data are encoded with
+base64 and encrypted with the DES
+algorithm using the hardcoded key 90 EE
+0C E1 6C 0D C9 0C. The resulting payload
+is a configuration file, which is customized
+per victim, containing multiple lines with
+several parameters consumed by the
+backdoor.
+Below is an example of the configuration
+block’s structure:
+1
+2
+3
+4
+keywordxyz
+C:\Windows\Temp\
+http://*:80/owa/auth/sslauth/
+https://*:443/owa/auth/sslauth/
+https://securelist.com/toddycat/106799/ 8/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+The first line contains a keyword that needs to be included as a variable in the received
+POST request, marking it as designated for processing by the backdoor and also used to
+specify important session parameters like the AES session key and the list of variable
+names that contain the data that should be processed.
+In some variants, the second line is used as a directory path, whose value is used to
+override the TEMP environment variable. All the other lines are URI prefixes that are
+used to configure the HTTPListener component, whereby each is a string composed of a
+scheme (HTTP or HTTPS), a host, an optional port, and an optional path defining which
+request will be processed by the HTTPListener object.
+In several cases, the URL prefixes contained in the configuration included the victim’s
+domain, as in the following example:
+https://mail.%redacted%.gov.%redacted%/owa/auth/sslauth.
+Once the configuration is successfully decrypted, the backdoor starts the listeners
+according to the provided configuration and waits for incoming requests. The request
+must to be structured as in the following example:
+1
+2
+3
+4
+5
+6
+7
+POST /owa/auth/sslauth/ HTTP/1.0
+Host: example.xyz
+Headers...
+keywordxyz={session_AES_key,variable2,variable3}&variable2=[C# source
+code]&variable3=
+[argument_for_the_compiled_program\r\nassembly_reference1;assemb
+ly_reference2]
+Where:
+1
+2
+3
+4
+5
+6
+7
+{} = encrypted with default AES key + base64 encoded
+[] = encrypted with session AES key + base64 encoded

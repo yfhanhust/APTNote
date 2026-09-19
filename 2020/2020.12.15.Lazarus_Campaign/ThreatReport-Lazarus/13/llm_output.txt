@@ -1,0 +1,107 @@
+
+
+
+Sentence : 2.2 Persistence
+Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder (T1547.001)
+For persistence two different DLL downloader variants were found:
+Variant a) used DLLs, which were manipulated versions of well-known DLLs like OpenSSL’s libeay32.dll or
+SQLite’s sqlite3.dll. This technique seems to be used more common as other researchers described it also [6] .
+For invocation, an original named PE export together with an encryption-key parameter is called, e.g.:
+```
+c:\windows\system32\rundll32.exe C:\ProgramData\Windows\ntuser.dat,CMS_ContentInfo {216B0291-15BF-D688-17004CFEE40B5330}
+```
+Listing 1: Execution of DLL with encryption-key
+Variant b) corresponds to the iconcache.db DLLs described in US-CERT publication AR20-232A [7] : The
+DLLs have the original filename MFC_DLL.dll and export a SMain function. The invocation is triggered
+with a SID looking number like, i.e.:
+```
+rundll32.exe C:\ProgramData\iconcache.db,SMain S-7-43-8423-97048307-383378-8483
+```
+Listing 2: Call of Smain function in DLL
+The DLLs were stored with obfuscated extensions into a subdirectory of C:\ProgramData. For example:
+File path Execution
+|C:\ProgramData\Windows\ntuser.dat|rundll32.exe C:\ProgramData\Windows\ntuser.dat,CMS_ContentInfo{216B0291-15BF-D688-1700-4CFEE40B5330}|
+|---|---|
+|~~C:\ProgramData\Microsoft\MSSqlite3DB.evt.pol.dat~~|~~rundll32.exe~~C:\ProgramData\Microsoft\MSSqlite3DB.evt.pol.dat,sqlite3_create_functionex NujsFYJNTpws664RGNruaKSu12TdGVYt|
+|~~C:\ProgramData\desktop.ini~~|~~rundll32.exe C:\ProgramData\desktop.ini,Smain S-7-43-8423-~~97048307-383378-8483|
+The threat actors code is persisted via a harmless looking Windows lnk file (e.g. OneNote.lnk) in the Startup
+folder ( %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup ) of the compromised
+user account. This tactic is also described by ClearSky Cyber Security and McAfee in their respective reports.
+It is assumed that all downloaders retrieve an encrypted version of the BLINDINGCAN / DRATzarus RAT.
+On two systems it was identified that the threat actor directly persisted malicious executables, which likely
+are the final stage of the BLINDINGCAN / DRATzarus RAT. The executables were very large (~ 65 MB), in
+both instances invoked with the parameter -p 0x57AC098B and persisted in the compromised user’s runkey:
+```
+reg add “HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run” /v USOShare /t REG_SZ /d
+“C:\ProgramData\USOShared\USO.TMP -p 0x57AC098B”
+```
+Listing 3: Persistence used by the threat actor for the USO.TMP executable
+6 https://github.com/StrangerealIntel/CyberThreatIntel/blob/master/North%20Korea/APT/Lazarus/2020-05-
+05/Analysis.md
+7 https://us-cert.cisa.gov/ncas/analysis-reports/ar20-232a
+© 2020 HvS-Consulting AG TLP-White page 8 of 27
+The parameter -p together with the hex values 0x57AC098B or 0x53A4C60B was frequently observed
+in the threat actor’s process executions (see listing below). However, intact versions of these executables
+have not been obtained.
+```
+cmd.exe /c c:\RECYCLER\~TMP.0312.bin -p 0x57AC098B
+cmd.exe /c c:\ProgramData\~DF877.TMP 17 c:\ProgramData\~DF086.TMP -p 0x57AC098B
+cmd.exe /c c:\ProgramData\ssh\ssh_tmp088.tmp 2 c:\ProgramData\ssh\ssh_tmp087.tmp -p 0x57AC098B
+cmd.exe /c c:\ProgramData\Intel\DAL\~TMP015.DAT -p 0x57AC098B
+cmd.exe /c c:\ProgramData\Intel\DAL\~DF088.TMP 1 c:\ProgramData\Intel\DAL\~DF099.TMP -p 0x57AC098B" >
+C:\Users\\AppData\Local\Temp\~DF8DB5.tmp
+```
+Listing 4: Executions with the parameter “-p 0x57AC098B”
+Create Account: Local Account (T1136.001)
+In one incident the threat actor created local administrative accounts named admin$ to hide them from
+the net user command output. The accounts were created remotely via the Windows sc command. The
+string abcd1234!@#$ was used as password. Such patterns where seen commonly for attacker passwords.
+As described in chapter 1.3, TTPs changed after reinfection, this technique was only observed in the second
+attempts.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DLL downloader variants", "type" : "EXEF"},
+        {"id": 2, "description": "OpenSSL’s libeay32.dll", "type" : "EXEF"},
+        {"id": 3, "description": "SQLite’s sqlite3.dll", "type" : "EXEF"},
+        {"id": 4, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 5, "description": "C:\\ProgramData\\Windows\\ntuser.dat", "type" : "SYSP"},
+        {"id": 6, "description": "CMS_ContentInfo {216B0291-15BF-D688-17004CFEE40B5330}", "type" : "EXEF"},
+        {"id": 7, "description": "MFC_DLL.dll", "type" : "EXEF"},
+        {"id": 8, "description": "SMain function", "type" : "EXEF"},
+        {"id": 9, "description": "C:\\ProgramData\\Microsoft\\MSSqlite3DB.evt.pol.dat", "type" : "SYSP"},
+        {"id": 10, "description": "sqlite3_create_functionex NujsFYJNTpws664RGNruaKSu12TdGVYt", "type" : "EXEF"},
+        {"id": 11, "description": "C:\\ProgramData\\desktop.ini", "type" : "SYSP"},
+        {"id": 12, "description": "S-7-43-8423-97048307-383378-8483", "type" : "EXEF"},
+        {"id": 13, "description": "OneNote.lnk", "type" : "DOCF"},
+        {"id": 14, "description": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", "type" : "SYSP"},
+        {"id": 15, "description": "BLINDINGCAN / DRATzarus RAT", "type" : "EXEF"},
+        {"id": 16, "description": "C:\\ProgramData\\USOShared\\USO.TMP -p 0x57AC098B", "type" : "SYSP"},
+        {"id": 17, "description": "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "type" : "REGI"},
+        {"id": 18, "description": "cmd.exe /c c:\\RECYCLER\\~TMP.0312.bin -p 0x57AC098B", "type" : "EXEF"},
+        {"id": 19, "description": "cmd.exe /c c:\\ProgramData\\~DF877.TMP 17 c:\\ProgramData\\~DF086.TMP -p 0x57AC098B", "type" : "EXEF"},
+        {"id": 20, "description": "cmd.exe /c c:\\ProgramData\\ssh\\ssh_tmp088.tmp 2 c:\\ProgramData\\ssh\\ssh_tmp087.tmp -p 0x57AC098B", "type" : "EXEF"},
+        {"id": 21, "description": "cmd.exe /c c:\\ProgramData\\Intel\\DAL\\~TMP015.DAT -p 0x57AC098B", "type" : "EXEF"},
+        {"id": 22, "description": "cmd.exe /c c:\\ProgramData\\Intel\\DAL\\~DF088.TMP 1 c:\\ProgramData\\Intel\\DAL\\~DF099.TMP -p 0x57AC098B", "type" : "EXEF"},
+        {"id": 23, "description": "admin$", "type" : "ACTO"},
+        {"id": 24, "description": "abcd1234!@#$", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 4, "target": 5, "rel_name" : "executes with"},
+        {"source": 5, "target": 6, "rel_name" : "calls function"},
+        {"source": 4, "target": 7, "rel_name" : "executes with"},
+        {"source": 7, "target": 8, "rel_name" : "calls function"},
+        {"source": 4, "target": 9, "rel_name" : "executes with"},
+        {"source": 9, "target": 10, "rel_name" : "calls function"},
+        {"source": 4, "target": 11, "rel_name" : "executes with"},
+        {"source": 11, "target": 12, "rel_name" : "calls function"},
+        {"source": 13, "target": 14, "rel_name" : "located in"},
+        {"source": 15, "target": 16, "rel_name" : "persisted as"},
+        {"source": 17, "target": 16, "rel_name" : "modified by"},
+        {"source": 18, "target": 24, "rel_name" : "uses parameter"},
+        {"source": 19, "target": 24, "rel_name" : "uses parameter"},
+        {"source": 20, "target": 24, "rel_name" : "uses parameter"},
+        {"source": 21, "target": 24, "rel_name" : "uses parameter"},
+        {"source": 22, "target": 24, "rel_name" : "uses parameter"}
+    ]
+}

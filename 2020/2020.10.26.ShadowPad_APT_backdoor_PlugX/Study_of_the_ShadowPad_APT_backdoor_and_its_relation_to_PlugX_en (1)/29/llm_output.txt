@@ -1,0 +1,74 @@
+
+
+
+Sentence : The operation with the commands
+When responding to each command, the backdoor first verifies the packet with the sysinfo
+data, where the id field holds the ID of the received command, and the cfg_dword field
+represents the second DWORD received with this command.
+There are two groups of commands BackDoor.Farfli.125 works with:
+
+the main commands
+
+the secondary commands; the backdoor starts to work with them upon receiving the
+commands with the 0x1F42, 0x1F43, 0x1F44[/strong], 0x1F4E and 0x1F54 IDs
+The main commands
+|CommandID|Performed actions|
+|---|---|
+|0x7535|To obtain aSeShutdownPrivilege privilege and shut down the system with theSHTDN_REASON_MINOR_RECONFIG code.|
+|0x7534|To obtain aSeShutdownPrivilege privilege and reboot the system with theSHTDN_REASON_MINOR_RECONFIG code.|
+|0x7532|To load a.DLL into the memory, call theServiceMain function from it and deletethe library. Due to possible error in the code, instead of the .DLL file, the trojan triesto load a text file with the keylogger log.If the.DLL was successfully loaded, the backdoor checks the value of theconfig.service parameter. This value can be as follows:1—the trojan deletes theATI value in the[HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run] key2—the trojan forms the file%TEMP%\<config.name>reg.reg and imports itinto the Windows registry other value—the trojan deletes the<config.name> value from the[HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost] keyThereg.reg file formed by the backdoor has the following contents:Windows Registry Editor Version 5.00[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\Messenger]|
+|Col1|"Start"=dword:00000004[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet002\Services\Messenger]"Start"=dword:00000004[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet003\Services\Messenger]"Start"=dword:00000004[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\Messenger\Parameters]"ServiceDll"=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,00,5c,00,53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,6d,00,73,00,67,00,73,00,76,00,63,00,2e,00,64,00,6c,00,6c,00,00,00[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet002\Services\Messenger\Parameters]"ServiceDll"=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,00,5c,00,53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,6d,00,73,00,67,00,73,00,76,00,63,00,2e,00,64,00,6c,00,6c,00,00,00[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet003\Services\Messenger\Parameters]"ServiceDll"=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,00,5c,00,53,00,79,00,7Where the ServiceDll name in it corresponds to the %SystemRoot%\System32\msgsvc.dll\ path.|
+|---|---|
+|0x22B8|To delete the keylogger log file.|
+|0x1F5A|To shut down the SOCKS proxy server and delete the configuration file.|
+|0x1F59|To send the keylogger log file to the C&C server. The contents of the file arepacked with the same algorithm as the data in the last section and sent in 3 stages:1. the size of the packed data is sent2. the second DWORD from the command is sent3. the data itself is sent|
+|0x1F58|To receive a file name from the C&C server and then a buffer with the data. Toopen the specified file and write a received buffer into its end.|
+|0x1F57|To record a sound through the microphone into the WAV file and send it as blocksto the C&C server.|
+|0x1F56|To take a screenshot of the desktop and send it to the C&C server as a jpeg file.|
+|---|---|
+|0x1F52|To run a SOCKS proxy server. First, the trojan receives a configuration file, thenbinds a proxy server to a port specified in the configuration and starts to processthe incoming connections.|
+|0x1F51|To launch Internet Explorer with the command line arguments sent in thecommand.|
+|0x1F50|To demonstrateMessageBox with the specified parameters.|
+|0x1F4B|To receive a file from the C&C server, save it in%TEMP%\<threadid>.<ext> andrun it using theShellExecute function. A file extension andnShowCmd parameterare also sent in the command.|
+|0x1F4A|To receive a URL from the C&C server from which a file will be downloaded. Thetrojan saves the file in%TEMP% and runs it.|
+|0x1F49|To receive an executable module from the C&C server. In this module, the trojansearches for signatures similar to the one located in its last section. After thissignature, it places theconfig.created_GUID value. Next, it saves a file in%TEMP%\<threadid>.exe and creates a process from it.After the process is successfully created, it performs the same actions as uponreceiving the0x7532 command.|
+|0x1F48|To send a specified file to the C&C server.|
+|0x1F47|A remote control usingcmd.exe. The trojan redirects I/O to the pipes, receives thecommands from the C&C server, sends them into the pipe set ashStdInput forcmd.exe, reads the results from the pipe set ashStdOutput. The results arecompressed before being sent and the received commands are also compressed.|
+|0x1F41|An RDP protocol imitation. The trojan takes desktop screenshots, sends them to theC&C server as.jpeg files and receives the input commands in response.|
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BackDoor.Farfli.125", "type" : "EXEF"},
+        {"id": 2, "description": "C&C server", "type" : "CCSH"},
+        {"id": 3, "description": "ATI value in [HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run] key", "type" : "REGI"},
+        {"id": 4, "description": "%TEMP%\\<config.name>reg.reg file", "type" : "DOCF"},
+        {"id": 5, "description": "<config.name> value from [HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SvcHost] key", "type" : "REGI"},
+        {"id": 6, "description": "%SystemRoot%\\System32\\msgsvc.dll path", "type" : "SYSP"},
+        {"id": 7, "description": "keylogger log file", "type" : "DOCF"},
+        {"id": 8, "description": "SOCKS proxy server configuration file", "type" : "DOCF"},
+        {"id": 9, "description": "WAV file (sound recording)", "type" : "DOCF"},
+        {"id": 10, "description": "jpeg file (screenshot or RDP protocol imitation)", "type" : "DOCF"},
+        {"id": 11, "description": "%TEMP%\\<threadid>.<ext> file", "type" : "DOCF"},
+        {"id": 12, "description": "%TEMP%\\<threadid>.exe file", "type" : "EXEF"},
+        {"id": 13, "description": "cmd.exe", "type" : "APPS"},
+        {"id": 14, "description": "Internet Explorer", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "communicates with"},
+        {"source": 1, "target": 3, "rel_name" : "deletes"},
+        {"source": 1, "target": 4, "rel_name" : "creates and imports into registry"},
+        {"source": 1, "target": 5, "rel_name" : "deletes"},
+        {"source": 1, "target": 6, "rel_name" : "loads DLL from path"},
+        {"source": 1, "target": 7, "rel_name" : "deletes"},
+        {"source": 1, "target": 8, "rel_name" : "deletes and shuts down"},
+        {"source": 1, "target": 9, "rel_name" : "records sound to and sends as blocks"},
+        {"source": 1, "target": 10, "rel_name" : "takes screenshot of desktop or RDP protocol imitation and sends as"},
+        {"source": 1, "target": 2, "rel_name" : "sends keylogger log file content to in stages"},
+        {"source": 1, "target": 2, "rel_name" : "receives URL from and downloads a file to %TEMP% then runs it"},
+        {"source": 1, "target": 2, "rel_name" : "receives executable module from and creates process with it in %TEMP%"},
+        {"source": 1, "target": 11, "rel_name" : "saves file to and runs using ShellExecute function"},
+        {"source": 1, "target": 12, "rel_name" : "saves executable module as and creates process from it in %TEMP%"},
+        {"source": 1, "target": 13, "rel_name" : "uses for remote control by redirecting I/O to pipes and sending commands through C&C server"},
+        {"source": 1, "target": 14, "rel_name" : "launches with command line arguments sent in command"}
+    ]
+}

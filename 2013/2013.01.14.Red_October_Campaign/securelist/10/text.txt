@@ -1,0 +1,126 @@
+GetFileReg module
+Known variants (all share the same code section, differ in resources):
+MD5 Compilation date (payload)
+163CEE95FA3EF1469030F0BFEC0EB64C 2011.07.18 07:03:52 (GMT)
+CC0F35631D7F69EB087F31754FA9635A 2011.07.18 07:03:52 (GMT)
+E8711B9DBB3E7A6FBC1DF70F7131520C 2011.07.18 07:03:52 (GMT)
+469F4B81A01B1577531812385CAC827E 2011.07.18 07:03:52 (GMT)
+E8711B9DBB3E7A6FBC1DF70F7131520C 2011.07.18 07:03:52 (GMT)
+A8B8F616FFD94D34E4E188657A5C8BA7 2011.07.18 07:03:52 (GMT)
+E461B07E2A11ED13DDC0F27162545DE1 2011.07.18 07:03:52 (GMT)
+The file is a PE DLL file, 0 exports, compiled with Microsoft Visual Studio 2008. All functionality
+is implemented in the DllMain function.
+DllMain function
+16/22
+When loaded, the module deletes the file named “dump”, then proceeds to its main function.
+After executing the main function, the module tries to delete the same file again.
+Main function
+First, the module initializes its main object and log headers, i.e.
+@fileinforeg_logGETFILEREG_STARTED_V1_%s.txt
+@fileinforeg_logGETFILEREG_V1_%s.txt
+Then, it retrieves its resource of type “AAA” and name “BBB”. The resource is expected to be an
+INI file compressed using Zlib. The module decompresses the data and parses the whole INI
+file. It extracts data from the following INI sections:
+INI section name Description
+i_getfile Directory traversal and file matching rules
+Common On/off switches for features, global
+settings
+conn_a C&C server connection parameters
+keylogger Identified but not used
+Common options
+Option name Description
+i_getfile_all_dbx Extract data from all files with ‘dbx’ extension (Outlook Express mail
+archives)
+i_getfile_all_tbebat Extract data from all files with ‘tbb’ extension (The Bat mail archives)
+i_getfile_all_thunderbird Extract data from all Thunderbird mail archives
+i_getfile_all_disks Traverse all fixed and network disks
+i_getfile_all_netdisks Traverse system network shares
+i_getfile_all_netshared Traverse computer’s network shares
+f_time_min Minimum file creation or modification time to look for
+f_time_max Maximum file creation or modification time to look for
+f_total_send_size_max Global limit on the data to be sent to the C&C server
+f_max_size Maximum file size to look for
+f_min_size Minimum file size to look for
+spec_check_task_existance_a Save last traversal time value and modify minimum file time option
+depending that value
+i_getfile options
+The following options apply only to the “i_getfile” section they are specified in
+Option name Description
+f_max_size Maximum file size to look for
+f_min_size Minimum file size to look for
+17/22
+f_time_min Minimum file creation or modification time to look for
+f_time_max Maximum file creation or modification time to look for
+f_regexp_a Regular expression to match against the filename (must match)
+f_regexp_d Regular expression to match against the filename (must not match, exclusion list)
+f_search_path Directories to traverse
+f_delete_file Delete the file after sending its contents to the C&C server
+Conn_a options
+Option name Description
+D_CONN List of C&C server domain names, separated with
+‘;’
+D_NAME Relative URL
+D_RPRT TCP port of the C&C server
+D_SPRT Not used
+D_USER Unique ID of the victim
+D_MODE Not used
+D_PASS Not used
+J_CONN Not used
+J_NAME Not used
+J_RPRT Not used
+J_SPRT Not used
+J_USER Not used
+J_MODE Not used
+J_PASS Not used
+VERSION_ID Sent to C&C
+VER_SESSION_ID Not used
+SEND_DELAY_TIME Not used
+After parsing the INI file, the module tries to raise its privileges by logging on as a user with
+administrative rights. It looks for suitable credentials in an encrypted file named “adt.dat” in the
+directories with CSIDLs:
+CSIDL_LOCAL_APPDATA (%LOCALAPPDATA%, %USERPROFILE%AppDataLocal)
+CSIDL_COMMON_APPDATA (%ALLUSERSPROFILE%)
+The module sends several types of packets to the C&C server.
+The first packet is sent after the configuration is read, it contains the string “===” and
+starts with a string “Subject: Reflebt”
+Intermediate packets are sent when every traversal operation is finished, it also contains
+the contents of the internal log file and starts with a string “Subject: Refleut”
+Contents of the stolen files are sent in separate packets, they are split in chunks of size
+511950 bytes (regular files) or 512000 (e-mails) bytes, starting with a string “Subject:
+18/22
+Refleut”
+The final packet is sent after all operations are completed, it contains a string “===” and
+starts with a string “Subject: Refleet”.
+The data sent to the C&C server is compressed with Zlib and encrypted with a modified PKZIP
+stream cipher, and then it is Base64-encoded.
+Directory traversal
+Depending on the configuration file, the module may traverse different directories:
+For each “i_get_file” configuration section, the module traverses the directories named in
+“f_search_path” values of the same section.
+If the “i_getfile_all_disks” global option is set, the module traverses all fixed and mounted
+network drives.
+If the “i_getfile_all_netdisks” global option is set, the module searches for available network
+shares and tries to mount “%computer%%drive%$” system shares for drive names from ‘C’ to ‘F’,
+then traverses these shares.
+If the “i_getfile_all_netshared’ global option is set, the module searches for all available network
+shares and traverses them.
+The directories are traversed recursively, with a hardcoded depth limit of 100.
+The global option “spec_check_task_existance_a” modifies the traversal and matching rules for
+local and network disks. If this option is set, the module tracks the time of the last traversal of
+each disk in a file named “%DRIVE%System RestoreSystem Restore Point”. This file is then used
+to correct the minimum file creation/modification rules so that the module skips the files that it
+should have already processed.
+File matching rules
+The module applies the same matching routine to all files found while traversing the disks,
+folders and network shares.
+For each file, the module checks if the file’s creation and modification time satisfy both
+minimum and maximum configuration values, its size is within the allowed range and the
+filename is matched by at least one “f_regexp_a” regular expression and is not matched against
+any “f_regexp_d” regular expression. If the file’s properties satisfy all the requirements, the file is
+sent to the C&C server.
+Special processing is applied for the e-mail databases. The module can parse Outlook Express
+databases (“dbx” files), The Bat databases (“tbb” files) and Thunderbird message storages.
+Depending on the configuration options, these files may be read, processed and then extracted
+e-mail messages are sent to the C&C server.
+After all operations are completed, the module sends the final C&C request with string “Subject:
+Refleet” and returns.

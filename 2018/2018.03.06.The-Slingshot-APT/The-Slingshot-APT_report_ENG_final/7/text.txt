@@ -1,0 +1,195 @@
+User mode payloads
+GollumApp
+This payload (named after the famous character from The Hobbit) is the main user mode payload,
+orchestrating activities of other modules and having a constant interaction with the kernel mode
+Cahnadr orchestrator.
+Initially it is injected into services.exe as a separate user mode thread: first it allocates the memory,
+then writes the module and creates the thread. After that, it calls CsrCreateRemoteThread in the
+context of the csrss.exe for creating the new thread in services.exe, which is typical for creating new
+user mode threads from ring0. This is done in this way because malware works directly with system
+services.
+The following summarizes its functionality:
+
+
+Collects network-related information: routing tables, configuration, information about proxyservers and AutoConfigUrl settings
+
+
+Collect notifications about all changes in the routing table and/or changing interface IP
+address.
+
+
+Handles IO requests for the encrypted file system
+
+
+Contains various command processor for communication with CNC
+
+
+Collects all passwords saved in Mozilla and IE
+
+
+Can work with the clipboard
+
+
+Can log all pressed keys
+
+
+Collects information about hard disk partitions
+
+
+Collects information about USB devices and sends notifications when new device is
+
+
+connected.
+
+
+Can run new process with SYSTEM privileges as a child of smss.exe
+
+
+Injects malicious module SsCb into specified process
+
+
+SsCB
+This module provides the following features:
+
+
+Makes screenshots of a specified window, or the whole desktop
+
+
+Steals data from clipboard
+
+
+Collects information about opened windows: title, size, position
+
+
+Can close any window by sending WM_CLOSE message
+
+
+Shows specified window by calling ShowWindow
+
+
+Collects information about active desktop, active window, name of a process that created this
+window, title of a window, keyboard layout
+
+
+ffproxy
+Collects information related to proxy settings for all Mozilla profiles.
+
+
+From pref.js: Collects HTTP and SSL proxies, autoconfig_url (contains local or remote URL to
+Proxy AutoConfiguration file, for instance, when proxy settings are managed remotely)
+
+
+From signons* files: retrieves domain, port and username with passwords, if available
+
+
+signons.sqlite for 3.5-32.0 versions
+
+
+signons3.txt for 3.0-3.5  versions
+
+
+signons2.txt from 1.5.0.10 and 2.0.0.2 to 3.0 versions
+
+
+signons.txt for lower versions
+
+
+
+
+NeedleWatch
+This component is injected in almost all processes using the couple GollumApp and Cahnadr. It spies
+on the content of the buffers passed to the following functions:
+
+
+Functions that draw text
+
+
+gdi32!ExtTextOutW
+
+
+gdi32!ExtTextOutA
+
+
+gdi32!TextOutA
+
+
+gdi32!TextOutW
+
+
+
+
+Functions that writes to Console
+
+
+kernel32!WriteConsoleA
+
+
+kernel32!WriteConsoleW
+
+
+
+
+Function used for rendering unicode text by Uniscribe library
+
+usp10!ScriptShape
+
+
+
+Function used for rendering text by DirectWrite
+
+dwrite!DWriteFontFace::GetGlyphIndicesW
+
+
+
+Functions used for encryption and decryption by SSP (Security Support Provider)
+
+
+secur32!EncryptMessage
+
+
+secur32!DecryptMessage
+
+
+
+
+Functions from Netscape Portable Runtime
+
+
+nspr4!PR_GetUniqueIdentity
+
+
+nspr4!PR_Read
+
+
+nspr4!PR_Write
+
+
+
+
+The implementation is based on hooks. Each hook is set as one of the privileged instructions placed
+at the beginning of the function. Before placing hooks, NeedleWatch registers an exception handler
+by calling AddVectoredExceptionHandler, so when the hooked function is called, the first instruction
+raises an exception which is handled by NeedleWatch. In the malware exception handler
+NeedleWatch calls the original function and extracts all the sent/received data.
+Functions from the secur32 and nspr4 modules are the most interesting ones.
+EncryptMessage and DecryptMessage are functions of the Security Support Provider Interface, not
+linked to any Security Support Provider in particular, so hooking these functions allows NeedleWatch
+to spy on every provider: Digest, Kerberos, NTLM, Schannel, or any other one.
+NeedleWatch can also read encrypted Mozilla traffic as follows: Netscape Portable Runtime (NSPR)
+provides a platform-neutral API for system level and libc-like functions. The API is used in Mozilla
+clients, many of Red Hat's and Oracle's server applications, and other software. In I/O NSPR operates
+with file descriptors that can be layered. When read/write operations occur, NeedleWatch checks
+the layer of the file descriptor and if it is NSS (Network Security Services), SSL or any other SSL-based
+layer, NeedleWatch stores the data from the buffer sent in the I/O operation.
+Sfc2
+Disables Windows file protection, making sfc.exe utility believe that the patched disk system library
+(scesrv or spoolsv) is not.
+This is possible by patching wcp.dll in the TrustedInstaller.exe process. Based on the exported
+wcp!RtlParseManifestMicrodomIntoCdf function, Sfc2 searches for the address of the non-exported
+wcp!GetRootElement function and calls it in order to retrieve the _XMLWALK_ELEMENT_DECL
+structure. Once returned, this structure will be patched at the 0x34 offset with 0 instead of 0x1E.
+In x64 version it hooks ZwCreateFile and ZwOpenFile in the same way as described in the
+NeedleWatch section. If the hook handler found that the file object name passed to function points
+to scesrv.dll library in system or in winsxs directory, malware changes the object name to scesrv.dll
+located in winsxs\backup directory. So, when the process is trying to check patched scesrv, hooks
+make it so that an unpatched backup file is checked instead.

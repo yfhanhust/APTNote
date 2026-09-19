@@ -1,0 +1,98 @@
+F5 BIG-IP – The Perfect Place to Hide
+F5 BIG-IP appliances occupy a trusted position within the network architecture, often placed at the
+perimeter or between different network segments. By compromising such a device, attackers can exert
+significant control over network traffic without arousing suspicion. Moreover, while organizations
+frequently gather logs from network devices, their attention is predominantly directed towards
+application-level logs such as traffic records and alerts. Unfortunately, operating system logs are often
+overlooked, either due to vendor constraints or a lack of recognition regarding their significance. As a
+result, a backdoor hidden within the F5 appliance can evade detection from traditional log monitoring
+solutions.
+The compromised organization had two F5 BIG-IP appliances which provided services such as firewall,
+WAF, load balancing and local traffic management. These appliances were directly exposed to the
+internet, and both of which were compromised.
+Both F5 appliances were running an outdated, vulnerable, operating system. The threat actor may have
+leveraged one of the vulnerabilities to gain remote access to the appliances. However, visibility
+limitations hinder the ability to identify exactly how the appliances were compromised.​
+Forensic investigation of the appliances revealed a reverse SSH tunnel connection to the same C&C IP
+address that was previously blocked on the corporate firewalls during the eradication efforts. Since the
+appliances were not located behind the main corporate firewall, the traffic was not blocked.
+Figure 9: Snippet showing the output of a ‘ps’ command executed on one of the F5 appliances.
+The threat actor created a reverse SSH tunnel to the C&C with a user named ‘leo’.
+Analyzing the active network connections on the F5, an established connection was observed between
+the appliance and the file server, on the port PlugX was listening on. This complemented the analysis
+made on the file server itself (see figure 8).
+Figure 10: Snippet from an output of ‘netstat’ command executed on the F5 appliance, showing
+the connection to the file server.
+Figure 11: Snippet extracted from Wireshark, showing that the traffic transmitted from the F5
+appliances was sent to port 13742 of the file server. This is the port that PlugX was listening on
+in this server.
+Pivoting From the F5 Appliance
+The figure below depicts the stages of the threat actor’s working flow.
+(1) The malware running on the device polls the C&C server once an hour. After connecting to the C&C
+server (2), the threat actor sends commands to the compromised appliance, including for the creation
+of a reverse SSH tunnel (3). Once the tunnel with the appliance is established, the threat actor
+https://www.sygnia.co/blog/china-nexus-threat-group-velvet-ant/ 7/17
+6/25/24, 3:03 PM In-Depth Analysis: Velvet Ant's Prolonged Cyber Attack on a Large Organization
+connects to the file server that is infected with PlugX (4).
+The PlugX instance on the compromised file server was used by the threat actor as an internal C&C
+server. From this server, the threat actor conducted reconnaissance activities, deployed additional
+instances of the PlugX onto legacy servers by leveraging Impacket’s WmiExec (5).
+Figure 12: Diagram showing how the F5 appliance was leveraged by the threat actor as a
+persistent beachhead, utilized to move laterally and execute remote commands on different
+servers.
+Recording the traffic between the F5 appliance and the file server revealed additional details about the
+threat actor’s TTPs, as the traffic was sent over SMB, and was not encrypted. The following figures
+show the interactive activities conducted by the threat actor prior to deploying additional PlugX
+instances.
+The threat actor’s first step was to enumerate the active network connections on the targeted server:
+Figure 13: Snippet extracted from Wireshark, showing that the threat actor enumerated the
+active network connections before moving laterally to additional servers.
+After selecting a new server for PlugX deployment, the threat actor listed files in different folders,
+presumably in order to choose where to deploy the malware.
+https://www.sygnia.co/blog/china-nexus-threat-group-velvet-ant/ 8/17
+6/25/24, 3:03 PM In-Depth Analysis: Velvet Ant's Prolonged Cyber Attack on a Large Organization
+Figure 14: Snippet from Wireshark showing how the threat actor enumerated additional legacy
+systems within the network by executing commands through WmiExec.
+The threat actor then chose a folder, and leveraged WmiExec to transfer PlugX over SMB from the file
+server to the target server.
+Figure 15: Snippet from Wireshark showing the iviewers PlugX variant being sent over SMB
+and saved into the ‘C:\tools\’ folder.
+Additional Malware on the F5 Appliances
+Forensic analysis of the F5 appliances identified four binaries deployed by the threat actor:
+
+VELVETSTING – a tool that connects to the threat actor’s C&C once an hour, searching
+
+commands to execute. The threat actor used the IP address 202.61.136[.]158:8443 as a C&C
+and the commands were encoded with the passphrase ‘1qaz@WSXedc’. Once the tool received
+a command, it was executed via ‘csh’ (Unix C shell).
+https://www.sygnia.co/blog/china-nexus-threat-group-velvet-ant/ 9/17
+6/25/24, 3:03 PM In-Depth Analysis: Velvet Ant's Prolonged Cyber Attack on a Large Organization
+Figure 16: Snippet showing the output of the ‘strace’ command, which monitored the
+‘VELVETSTING’ process. The malware tried to connect to the C&C server on port 8443 every
+3600 seconds (1 hour). Once the connection was successful, the malware created a child
+process based on the commands it received from the C&C.
+
+VELVETTAP – a tool with the ability to capture network packets. The binary was executed on the
+
+F5 appliance with the argument ‘mgmt’, which is the name of the internal NIC of the F5 device.
+Figure 17: Snippet from an output of ‘ifconfig’ command, showing the ‘mgmt’ network interface
+on the F5 appliance.
+To maintain persistence on the F5 appliance, the threat actor added both VELVETSTING and
+VELVETTAP to the ‘/etc/rc.local’ file. ‘rc.local’ is executed as part of the system’s startup process, which
+means that any commands or scripts listed in it will be executed automatically whenever the system
+boots up.
+Figure 18: Snippet showing that the paths for VELVETSTING and VELVETTAP were added to
+the ‘/etc/rc.local’ file by the threat actor.
+https://www.sygnia.co/blog/china-nexus-threat-group-velvet-ant/ 10/17
+6/25/24, 3:03 PM In-Depth Analysis: Velvet Ant's Prolonged Cyber Attack on a Large Organization
+
+SAMRID – identified as ‘EarthWorm’, an open-source SOCKS proxy tunneller available on
+
+GitHub. The tool was utilized in the past by different Chinese state-sponsored groups, such as
+‘Volt Typhoon’, ‘APT27’ and ‘Gelsemium’. The tool was not running on the device at the time of
+investigation.
+
+ESRDE – a tool with similar capabilities to that of ‘VELVETSTING’, but with minor differences,
+
+such as using bash instead of ‘csh’. The tool was not running on the device at the time of
+investigation.

@@ -1,0 +1,56 @@
+UP007 Malware Family
+The fzyy.exe executable is a dropper responsible for creating multiple files and starting this particular infection chain.
+When the file is run it creates the following files in the directory: %APPDATA%\Microsoft\Internet Explorer\
+|Filename|MD5|Purpose|
+|---|---|---|
+|conhost.exe|f70b295c6a5121b918682310ce0c2165|LoadsSBieDll.dll|
+|SBieDll.dll|f80edbb0fcfe7cec17592f61a06e4df2|Loadsmaindll.dll|
+|maindll.dll|d8ede9e6c3a1a30398b0b98130ee3b38|Loadsdll2.xor|
+|dll2.xor|ce8ec932be16b69ffa06626b3b423395|Payload|
+|runas.exe|6a541de84074a2c4ff99eb43252d9030|Establishes persistence; Not utilized in this loading chain|
+|nvsvc.exe|e0eb981ad6be0bd16246d5d442028687|Unknown – possibly older component|
+Table 2: Executable infection chain for fzyy.exe
+These files are all initially stored as resources within fzyy.exe. Some of the files are stored in encoded form while
+maindll.dll is stored as a packed executable. When writing the files to disk, the dropper will decode and write the files
+stored in encoded form. In addition the infection chain will check multiple registry keys before writing maindll.dll.
+The keys largely seem to check for the presence of popular Chinese antivirus products: 360 Security, Kingsoft Antivirus,
+Rising AV, Jiangmin, and Micropoint as well as a popular free antivirus product Avira. Interestingly, in this instance, even if
+the registry keys are present, maindll.dll will still be written and the infection chain will still continue. The registry keys that
+are checked by the infection chain are summarized in Table 3.
+https://citizenlab.org/2016/04/between-hong-kong-and-burma/ 3/9
+|Key|Subkey|
+|---|---|
+|citizenlab.org/2016/04/between-hong-kong-and-burma/||
+|/20 Between Hong Kong anHKLM\SOFTWARE\360Safe\Liveup|d Burma: Trackingcurl|
+|---|---|
+|HKCU\Software\360safe|DefaultSkin|
+|HKLM\SOFTWARE\kingsoft\Antivirus|WorkPath|
+|HKLM\SOFTWARE\Avira\Avira Destop|Path|
+|HKLM\SOFTWARE\rising\RAV|installpath|
+|HKLM\SOFTWARE\JiangMin|InstallPath|
+|HKLM\SOFTWARE\Micropoint\Anti-Attack|MP100000|
+Table 3: Registry keys that fzyy.exe checks for before writing maindll.dll
+Once all the files are created, conhost.exe starts, loads SBieDll.dll, then ultimately loads maindll.dll and the final
+payload, which we have named UP007 (dll2.xor) due to an identifier in the network traffic. The primary function of
+UP007 appears to be to log keystrokes to the %USERPROFILE%\Local Settings\Temp\keylog\ directory and send
+them to a remote server.
+UP007 uses Windows Sockets to communicate with its command and control server (C2). While doing so, it sends a
+hardcoded HTTP header disguised as Microsoft Update traffic. This is likely an attempt to escape notice by casual
+inspection of network traffic. On connection, UP007 downloads another payload directly from the C2 server. This
+secondary payload we have named “DownLoad” given the way it identifies itself in the traffic with the C2 server. This
+secondary payload is injected into memory. The initial network traffic observed from the UP007 sample is seen in Figure 3.
+Figure 3: Network capture of the initial communication by UP007.
+Once the entire payload is received from the C2 server, UP007 sends basic system information such as operating system
+version, IP address, and username and the C2 responds with a “READY” announcement (see Figure 4).
+Figure 4: Network capture of the infected system sending system information to the C2.
+The secondary payload (DownLoad) initiates its own separate TCP connection with the C2 server. A sample of the
+network traffic of this secondary payload is seen in Figure 5.
+https://citizenlab.org/2016/04/between-hong-kong-and-burma/ 4/9
+2016/4/20 Between Hong Kong and Burma: Tracking UP007 and SLServer Espionage Campaigns - The Citizen Lab
+Figure 5: Network capture of DownLoad connection to the C2.
+Unfortunately, even though the connection with the C2 was established, we did not observe any further activity from this
+payload. However, DownLoad’s strings show references to the following:
+this is cmd
+this is Desktop
+It is possible these are in reference to additional components or capabilities of the malware. Further analysis is required to
+determine the function of these components.

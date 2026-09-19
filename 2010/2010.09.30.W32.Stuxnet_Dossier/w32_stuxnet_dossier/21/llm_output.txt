@@ -1,0 +1,160 @@
+
+
+
+Sentence : Peer-to-peer communication
+The P2P component works by installing an RPC server and client. When the threat infects a computer it starts
+the RPC server and listens for connections. Any other compromised computer on the network can connect to the
+RPC server and ask what version of the threat is installed on the remote computer.
+If the remote version is newer then the local computer will make a request for the new version and will update
+itself with that. If the remote version is older the local computer will prepare a copy of itself and send it to the
+remote computer so that it can update itself. In this way an update can be introduced to any compromised com­
+puter on a network and it will eventually spread to all other compromised computers.
+All of the P2P requests take place over RPC as outlined below.
+The RPC server offers the following routines. (Note that RPC methods 7, 8, 9 are not used by Stuxnet.)
+
+0: Returns the version
+
+number of Stuxnet
+installed
+
+1: Receive an .exe
+
+file and execute it
+(through injection)
+
+2: Load module and
+
+executed export
+
+3: Inject code into
+
+lsass.exe and run it
+
+4: Builds the latest
+
+version of Stuxnet and
+sends to compromised
+computer
+
+
+5: Create process
+
+
+6: Read file
+
+
+7: Drop file
+
+
+8: Delete file
+
+
+9: Write data records
+
+
+Figure 13
+Example of an old client requesting latest version of Stuxnet via P2P
+The RPC client makes the following requests:
+
+
+Call RPC function 0 to get remote version number.
+
+
+Check if remote version number is newer than local version number.
+
+
+If remote version number is newer then:
+
+
+Call RPC function 4 to request latest Stuxnet exe
+
+Receive the latest version of Stuxnet
+Install it locally (via process injection)
+
+If the remote version number is older then:
+
+
+Prepare a standalone .exe file of the local Stuxnet version.
+
+Send the .exe file to the remote computer by calling RPC function 1.
+
+When trying to connect to a remote RPC server this class uses the following logic.
+It will attempt to call RPC function 0 on each of the following bindings in turn, if any RPC call succeeds then
+Stuxnet proceeds with that binding:
+
+
+ncacn_ip_tcp:IPADDR[135]
+
+
+ncacn_np:IPADDR[\pipe\ntsvcs]
+
+
+ncacn_np:IPADDR[\pipe\browser]
+
+
+It will then try to impersonate the anonymous token and try the following binding:
+
+ncacn_np:IPADDR[\pipe\browser]
+
+It then reverts to its own token and finally tries to enumerate through the service control manager (SCM) looking
+for any other bindings that may be available:
+
+ncacn_ip_tcp:IPADDR (searches in the SCM for available services)
+
+If any of the above bindings respond correctly to RPC function 0 then Stuxnet has found a remote compromised
+computer. RPC function 0 returns the version number of the remote Stuxnet infection. Based on this version
+number Stuxnet will either send a copy of itself to the remote computer or it will request a copy of the latest ver­
+sion from the remote computer and install it.
+RPC function 1 is called in order to receive the latest version from the remote computer and RPC function 4 is
+called to send the latest version of Stuxnet to the remote computer.
+Of course Stuxnet does not simply execute the received executable. Instead, it injects it into a chosen process
+and executes it that way as outlined in the Injection Technique section.
+Furthermore, Stuxnet is actually a .dll file so in order to send an executable version of itself to the attacker
+Stuxnet must first build an executable version of itself. It does this by reading in a template .exe from resource
+210 and populating it with all of the addition detail that is needed to make an executable version of the currently
+installed Stuxnet version, including the latest configuration data and information about the currently compro­
+mised computer.
+Because the peer-to-peer mechanism occurs through RPC, it is unlikely as an alternative method of command
+and control as RPC generally is only effective within a local area network (LAN). The purpose of the peer-to-peer
+mechanism is likely to allow the attackers to reach computers that do not have outbound access to the general
+Internet, but can communicate with other computers on the LAN that have been infected and are able to contact
+the command and control servers.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "P2P component", "type" : "TTPS"},
+        {"id": 2, "description": "RPC server", "type" : "EXEF"},
+        {"id": 3, "description": "RPC client", "type" : "EXEF"},
+        {"id": 4, "description": "Compromised computer (local)", "type" : "COUN"},
+        {"id": 5, "description": "Compromised computer (remote)", "type" : "COUN"},
+        {"id": 6, "description": "Stuxnet", "type" : "EXEF"},
+        {"id": 7, "description": "Version number of Stuxnet installed", "type" : "REGI"},
+        {"id": 8, "description": ".exe file (new version)", "type" : "DOCF"},
+        {"id": 9, "description": "lsass.exe", "type" : "EXEF"},
+        {"id": 10, "description": "Standalone .exe file of the local Stuxnet version", "type" : "DOCF"},
+        {"id": 11, "description": "ncacn_ip_tcp:IPADDR[135]", "type" : "NETP"},
+        {"id": 12, "description": "ncacn_np:IPADDR[\\pipe\\ntsvcs]", "type" : "NETP"},
+        {"id": 13, "description": "ncacn_np:IPADDR[\\pipe\\browser]", "type" : "NETP"},
+        {"id": 14, "description": "Anonymous token", "type" : "TAMP"},
+        {"id": 15, "description": "Service control manager (SCM)", "type" : "APPS"},
+        {"id": 16, "description": "Template .exe from resource 210", "type" : "DOCF"},
+        {"id": 17, "description": "Configuration data and information about the currently compromised computer", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "installs"},
+        {"source": 1, "target": 3, "rel_name" : "installs"},
+        {"source": 4, "target": 2, "rel_name" : "starts"},
+        {"source": 5, "target": 2, "rel_name" : "connects to"},
+        {"source": 5, "target": 7, "rel_name" : "checks version"},
+        {"source": 4, "target": 8, "rel_name" : "requests and installs new version from"},
+        {"source": 4, "target": 9, "rel_name" : "injects code into"},
+        {"source": 4, "target": 5, "rel_name" : "prepares and sends .exe file to"},
+        {"source": 2, "target": 11, "rel_name" : "binds to"},
+        {"source": 2, "target": 12, "rel_name" : "binds to"},
+        {"source": 2, "target": 13, "rel_name" : "binds to"},
+        {"source": 2, "target": 14, "rel_name" : "impersonates"},
+        {"source": 2, "target": 15, "rel_name" : "enumerates through"},
+        {"source": 6, "target": 10, "rel_name" : "builds from template and populates with"},
+        {"source": 6, "target": 17, "rel_name" : "includes"}
+    ]
+}

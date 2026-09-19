@@ -1,0 +1,33 @@
+Command 0x80061004: Upload File
+The Upload File command copies the contents of a file on the victim’s machine to the C2
+server. The payload of the data blob contains a data structure (identical to the data structure for
+the Download File command) defining the full filename and path of the file being transferred,
+the number of bytes to read from the file and the offset (if any) to start reading from within the
+file. The format of the command’s argument structure is as follows:
+|Offset in Field Name DescriptionPayload|Col2|Col3|
+|---|---|---|
+|0 (WORD)|wFilenameLength|Length of theszFilename field|
+|2 (variable)|szFilename|Full filename and path of file to write|
+|2+szFilename(DWORD)|dwDataOffset|Offset within file to begin reading data|
+|6+szFilename(DWORD)|dwBytesToRead|Number of bytes to read from the file.|
+The command handler begins by calling CreateFile with the disposition set to
+OPEN_EXISTING . If the CreateFile call is unsuccessful, the command handler returns a
+CommandHeader structure with the dwCommandID field of the CommandData structure set to
+0x80061004 and the dwLastError field is set to the value returned by GetLastError .
+If the dwBytesToRead is -1, the command handler will calculate the number of bytes to read
+from the file by taking the total file size (as reported by GetFileSize ) and subtracting the
+value of the dwDataOffset field. The command handler will allocate a response buffer with
+enough space to read in the specified number of bytes of the file along with a response header
+consisting of a CommandHeader along with a 12 byte payload header. The format of the
+response buffer, following the CommandHeader, is as follows:
+|Offset in Field Name DescriptionPayload|Col2|Col3|
+|---|---|---|
+|0 (DWORD)|dwFileSize|Total size of the file being transferred|
+|4 (DWORD)|dwReadOffset|Offset within file corresponding to the start ofthe data within the payload|
+|8 (DWORD)|dwBytesRead|Number of bytes read from the file|
+|12 (variable)|(data)|Bytes read from the file|
+After moving the file pointer by calling SetFilePointer and supplying the value of the
+dwDataOffset field, the command handler will read the file (up to the number of calculated
+bytes to read) into the (data) section of the response buffer by calling ReadFile. Regardless of
+the success of the file read, the command handler sets the dwFileSize, dwReadOffset and
+dwBytesRead fields appropriately and returns the response buffer to the command dispatch.

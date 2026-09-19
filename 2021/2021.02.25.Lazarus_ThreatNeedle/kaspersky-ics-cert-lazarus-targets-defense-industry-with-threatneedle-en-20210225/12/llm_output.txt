@@ -1,0 +1,110 @@
+
+
+
+Sentence : Overcoming network segmentation
+```
+In the course of this research, we identified another highly interesting technique
+used by the attackers for lateral movement and exfiltration of stolen data. The
+enterprise network under attack was divided into two segments: corporate (a
+network on which computers had internet access) and restricted (a network on
+which computers hosted sensitive data and had no internet access). According
+to corporate policies, no transfer of information was allowed between these two
+segments. In other words, the two segments were meant to be completely
+separated.
+Initially, the attackers were able to get access to systems with internet access
+and spent a long time distributing malware between machines in the network’s
+LAZARUS TARGETS DEFENSE INDUSTRY
+WITH THREATNEEDLE
+11
+© 2021 AO KASPERSKY LAB
+corporate segment. Among the compromised machines were those used by the
+administrators of the enterprise’s IT infrastructure.
+It is worth noting that the administrators could connect both to the corporate
+and the restricted network segments to maintain systems and provide users
+with technical support in both zones. As a result, by gaining control of
+administrator workstations the attackers were able to access the restricted
+network segment.
+However, since directly routing traffic between the segments was not possible,
+the attackers couldn’t use their standard malware set to exfiltrate data from the
+restricted segment to the C2.
+The situation changed on July 2 when the attackers managed to obtain the
+credentials for the router used by the administrators to connect to systems in
+both segments. The router was a virtual machine running CentOS to route
+traffic between several network interfaces based on predefined rules.
+Connection layout between victim’s network segments
+According to the evidence collected, the attackers scanned the router’s ports
+and detected a Webmin interface. Next, the attackers logged in to the web
+interface using a privileged root account. It’s unknown how the attackers were
+able to obtain the credentials for that account, but it’s possible the credentials
+were saved in one of the infected system’s browser password managers.
+LAZARUS TARGETS DEFENSE INDUSTRY
+WITH THREATNEEDLE
+12
+© 2021 AO KASPERSKY LAB
+Log listing Webmin web interface logins
+By gaining access to the configuration panel the attackers configured the
+Apache web server and started using the router as a proxy server between the
+organization’s corporate and restricted segments.
+List of services used on the router
+Several days after that, on July 10, 2020, the attackers connected to the router
+via SSH and set up the PuTTy PSCP (the PuTTY Secure Copy client) utility on
+one of the infected machines. This utility was used to upload malware to the
+router VM. This enabled the attackers to place malware onto systems in the
+restricted segment of the enterprise network, using the router to host the
+samples. In addition, malware running in the network’s restricted segment was
+able to exfiltrate the collected data to the command-and-control server via the
+Apache server set up on the same router.
+LAZARUS TARGETS DEFENSE INDUSTRY
+WITH THREATNEEDLE
+13
+© 2021 AO KASPERSKY LAB
+New connection layout after attacker’s intrusion
+In the course of the investigation we identified malware samples with the
+hardcoded URL of the router used as a proxy server.
+Hardcoded proxy address in the malware
+Since the attackers regularly deleted log files from the router, only a handful of
+commands entered to the command line via SSH could be recovered. An analysis
+of these commands shows that the attackers tried to reconfigure traffic routing
+using the route command.
+Attacker commands
+The attackers also ran the nmap utility on the router VM and scanned ports on
+systems within the restricted segment of the enterprise network. On September
+27, the attackers started removing all traces of their activity from the router,
+using the logrotate utility to set up automatic deletion of log files.
+LAZARUS TARGETS DEFENSE INDUSTRY
+WITH THREATNEEDLE
+14
+© 2021 AO KASPERSKY LAB
+Webmin log
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Attackers", "type" : "ACTO"},
+        {"id": 2, "description": "Corporate segment", "type" : "TAMP"},
+        {"id": 3, "description": "Restricted segment", "type" : "TAMP"},
+        {"id": 4, "description": "Administrator workstations", "type" : "TAMP"},
+        {"id": 5, "description": "Router (virtual machine running CentOS)", "type" : "ROUT"},
+        {"id": 6, "description": "Webmin interface", "type" : "APPS"},
+        {"id": 7, "description": "Apache web server", "type" : "APPS"},
+        {"id": 8, "description": "PuTTy PSCP utility", "type" : "APPS"},
+        {"id": 9, "description": "Malware samples", "type" : "EXEF"},
+        {"id": 10, "description": "Command-and-control server (C2)", "type" : "CCSH"},
+        {"id": 11, "description": "SSH", "type" : "NETP"},
+        {"id": 12, "description": "nmap utility", "type" : "APPS"},
+        {"id": 13, "description": "logrotate utility", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "gained access to"},
+        {"source": 1, "target": 4, "rel_name" : "controlled"},
+        {"source": 1, "target": 3, "rel_name" : "accessed via"},
+        {"source": 5, "description": "Router used by administrators", "type" : "ROUT"},
+        {"source": 6, "target": 5, "rel_name" : "ran on"},
+        {"source": 7, "target": 5, "rel_name" : "set up and used on"},
+        {"source": 8, "target": 9, "rel_name" : "used to upload"},
+        {"source": 9, "target": 3, "rel_name" : "placed onto systems in"},
+        {"source": 10, "target": 7, "rel_name" : "exfiltrated data via"},
+        {"source": 1, "target": 11, "rel_name" : "connected to router via"},
+        {"source": 1, "target": 12, "rel_name" : "ran on router VM"},
+        {"source": 1, "target": 13, "rel_name" : "used for log deletion"}
+    ]
+}

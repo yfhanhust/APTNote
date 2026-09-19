@@ -1,0 +1,50 @@
+Operation Triangulation’ attack chain
+Here is a quick rundown of this 0-click iMessage attack, which used four zero-days and
+was designed to work on iOS versions up to iOS 16.2.
+Attackers send a malicious iMessage attachment, which the application processes
+without showing any signs to the user.
+https://securelist.com/operation-triangulation-the-last-hardware-mystery/111669/ 1/20
+1/12/24, 6:10 PM Operation Triangulation: The last (hardware) mystery | Securelist
+This attachment exploits the remote code execution vulnerability CVE-2023-41990
+in the undocumented, Apple-only ADJUST TrueType font instruction. This instruction
+had existed since the early nineties before a patch removed it.
+It uses return/jump oriented programming and multiple stages written in the
+NSExpression/NSPredicate query language, patching the JavaScriptCore library
+environment to execute a privilege escalation exploit written in JavaScript.
+This JavaScript exploit is obfuscated to make it completely unreadable and to
+minimize its size. Still, it has around 11,000 lines of code, which are mainly
+dedicated to JavaScriptCore and kernel memory parsing and manipulation.
+It exploits the JavaScriptCore debugging feature DollarVM ($vm) to gain the ability
+to manipulate JavaScriptCore’s memory from the script and execute native API
+functions.
+It was designed to support both old and new iPhones and included a Pointer
+Authentication Code (PAC) bypass for exploitation of recent models.
+It uses the integer overflow vulnerability CVE-2023-32434 in XNU’s memory
+mapping syscalls (mach_make_memory_entry and vm_map) to obtain read/write
+access to the entire physical memory of the device at user level.
+It uses hardware memory-mapped I/O (MMIO) registers to bypass the Page
+Protection Layer (PPL). This was mitigated as CVE-2023-38606.
+After exploiting all the vulnerabilities, the JavaScript exploit can do whatever it
+wants to the device including running spyware, but the attackers chose to: (a)
+launch the IMAgent process and inject a payload that clears the exploitation
+artefacts from the device; (b) run a Safari process in invisible mode and forward it to
+a web page with the next stage.
+The web page has a script that verifies the victim and, if the checks pass, receives
+the next stage: the Safari exploit.
+The Safari exploit uses CVE-2023-32435 to execute a shellcode.
+The shellcode executes another kernel exploit in the form of a Mach object file. It
+uses the same vulnerabilities: CVE-2023-32434 and CVE-2023-38606. It is also
+massive in terms of size and functionality, but completely different from the kernel
+exploit written in JavaScript. Certain parts related to exploitation of the above
+mentioned vulnerabilities are all that the two share. Still, most of its code is also
+dedicated to parsing and manipulation of the kernel memory. It contains various
+post-exploitation utilities, which are mostly unused.
+The exploit obtains root privileges and proceeds to execute other stages, which load
+spyware. We covered these stages in our previous posts.
+We are almost done reverse-engineering every aspect of this attack chain, and we will be
+releasing a series of articles next year detailing each vulnerability and how it was
+exploited.
+https://securelist.com/operation-triangulation-the-last-hardware-mystery/111669/ 2/20
+1/12/24, 6:10 PM Operation Triangulation: The last (hardware) mystery | Securelist
+However, there are certain aspects to one particular vulnerability that we have not been
+able to fully understand.

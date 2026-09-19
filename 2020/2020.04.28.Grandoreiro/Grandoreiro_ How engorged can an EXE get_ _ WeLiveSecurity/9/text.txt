@@ -1,0 +1,35 @@
+Self-protection & anti-emulation
+For a Latin American banking trojan, Grandoreiro utilizes a surprisingly large number of
+tricks to evade detection and emulation. In this section, we talk about the most notable
+ones that appeared in several recent versions we have analyzed.
+https://www.welivesecurity.com/2020/04/28/grandoreiro-how-engorged-can-exe-get/ 8/15
+6/15/2020 Grandoreiro: How engorged can an EXE get? | WeLiveSecurity
+Diebold Warsaw GAS Tecnologia and Trusteer are known banking access protection
+software popular in Latin America. Every banking trojan described so far in our series has
+implemented some sort of check for these programs. Grandoreiro is no exception, by
+hooking the LdrLoadDll and LoadLibrary(Ex) APIs to prevent loading DLLs
+belonging to those products
+checking if any of those modules are already loaded
+trying to kill their running processes (based on process names)
+blocking Diebold Warsaw on the firewall level
+trying to break Trusteer by changing its file system path (see Figure 11)
+changing ACLs on main Trusteer binary by running this command twice:
+cacls %PROGRAM_DATA%;
+Trusteer\Rapport\store\exts\RapportCerberus\baseline\RapportGH.dll” /T
+/E /C /P user:perm
+with user:perm set to Todos:N and then Everyone:N
+Figure 11. Simple BAT script used by Grandoreiro to change Trusteer file path in hopes of
+making it unable to execute
+Besides that, it also monitors hooks on important functions. If such a function starts with
+0xE9 (assembly opcode for the jmp instruction), the trojan reloads the function from the
+corresponding library. Based on window and process names, it also checks for tools like
+RegMon, RegShot, Wireshark and Process Explorer. It tries to avoid being debugged by
+calling the IsDebuggerPresent API and setting up a hook via SetWindowsHookEx that
+returns ERROR_ACCESS_DENIED on the WH_DEBUG event.
+Grandoreiro also employs a technique for privilege escalation described in more detail
+here. The method relies on registering a binary as the default handler for .MSC files and
+then running such a file. By doing so, the binary will be executed with elevated privileges.
+This technique no longer works on patched systems due to a fix released in 2017.
+Finally, Grandoreiro detects two virtual environments – VMWare via its special I/O port
+and Virtual PC via the vpcext instruction. Both methods are described in detail here
+(techniques 1 and 2).

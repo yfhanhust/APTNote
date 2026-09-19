@@ -1,0 +1,36 @@
+Kernel mode driver analysis
+The Moriya rootkit’s driver component makes use of the Windows Filtering Platform (WFP) to facilitate the covert channel between the
+compromised host and the C&C server. WFP provides a kernel space API that allows driver code to intercept packets in transit and
+intervene in their processing by the Windows TCP/IP network stack. This makes it possible to write a driver that can filter out distinct
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 7/33
+5/7/2021 Operation TunnelSnake | Securelist
+packet streams, based on developer-chosen criteria, and designate them for consumption by a specific user mode application, as is the
+case in Moriya.
+The driver fetches the distinct Moriya-related traffic using a filtering engine. This is the kernel mode mechanism used to inspect traffic
+according to rules that can be applied on various fields across several layers of a packet (namely data link, IP and transport), making it
+possible to handle matching packets with unique handlers. Such handlers are referred to as callout functions.
+In the case of Moriya, the filtering engine is configured to intercept TCP packets, sent over IPv4 from a remote address. Each packet
+with these criteria will be inspected by a callout function that checks if its first six bytes correspond to the previously registered magic
+value, and if so, copies the packet contents into a special buffer that can be later read by the user mode agent. The matching packet will
+then be blocked in order to hide its presence from the system, while any other packet is permitted to be processed as intended by the
+network stack.
+To allow the crafting of a response back to the server, the callout function saves a special value in a global variable that identifies the
+received TCP stream. This value is called a flowHandle, and is taken from the packet’s corresponding
+FWPS_INCOMING_METADATA_VALUES0 struct. When the user issues a response to the server via the driver, the latter would craft a
+new packet using the FwpsAllocateNetBufferAndNetBufferList0 function and insert the response data and target server based on the
+saved flowHandle to it, using the function FwpsStreamInjectAsync0.
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 8/33
+5/7/2021 Operation TunnelSnake | Securelist
+Fig. 5. Code that creates a new packet, designates it for the flow of the corresponding incoming TCP packet and
+injects data written from user space into it
+As formerly mentioned, the driver registers several functions that are exposed to the user mode agent in order to interact with it:
+IRP_MJ_READ : used to allow the user mode agent to read the body of a Moriya TCP packet from a special buffer to which it is
+copied upon receipt. The function itself waits on an event that gets signaled once such a packet is obtained, thus turning the
+ReadFile function called by the user mode agent into a blocking operation that will wait until the packet is picked up by the driver.
+IRP_MJ_WRITE : injects user-crafted data into a newly created TCP packet that is sent as a response to an incoming Moriya
+packet from the server.
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 9/33
+5/7/2021 Operation TunnelSnake | Securelist
+IRP_MJ_DEVICE_CONTROL : used to register the keyword to check the beginning of every incoming TCP packet in order to
+identify Moriya-related traffic. The passed magic is anticipated to be six characters long.
+Fig. 6. Code used for registering the packet magic value from the driver side

@@ -1,0 +1,66 @@
+04 KONNI RAT ANALYSIS
+The following Konni Rat version is a x64 DLL executable, which has as compile timestamp Mon
+Dec 20 09:02:38 2021 - UTC, same date of the downloader, and where the payload is contained
+in its export function ServiceMain and is directly invoked when registered as Windows service.
+Cluster25 retrieved two different samples of the same Konni version identified by the following
+hashes:
+Once registered as a service, the malware starts solving in runtime all the WinAPIs needed to
+interface with the infected operating system's file system and to communicate with the control
+and monitoring server. The exported functions loaded belong to the following libraries:
+
+kernel32.dll
+
+advapi23.dll
+
+urlmon.dll
+
+2022 // © Cluster25 10
+TLP:WHITE
+Unrestricted // freely shareable content
+
+
+wininet.dll
+
+
+shell32.dll
+
+
+It then creates a pointer memory structure used to store the configuration used by the malware
+during execution, which contains information such as the name of the computer, the time of
+seconds to remain asleep, the domain used to communicate with the adversary command and
+control, and all the information collected during the future enumeration. The configuration
+structure is then passed as argument at a new thread created which is used as main routine by the
+malware to perform the network communications and exfiltration, as visible in the following code
+snippet.
+The thread starts verifying if there is Internet connection available, remaining in sleep if not, then
+adds the value 65001 into the Registry key in Console Codepage, to make Unicode character set
+in cmd.exe by default, and collects data:
+
+Enumerated cached website via FindFirstUrlCacheEntryW and
+
+FindNextUrlCacheEntryW
+Enumerated operating system information using cmd /c systeminfo
+
+Enumerated processes using cmd /ctasklist.exe
+
+2022 // © Cluster25 11
+TLP:WHITE
+Unrestricted // freely shareable content
+Once the enumeration has been completed, it stores all the info into temporary files which will then
+be converted into a CAB file using cmd /c makecab and furtherly encrypted and sent to the
+attacker server via HTTP POST request body to
+hxxp://455686[.]c1[.]biz/up[.]php?name=%COMPUTER-NAME%, passing the operating
+system computer name as parameter as evidences in the network dump reported following:
+If the server response does not contain the string “ success! ” the malware tries to resend the
+request, or it starts to send HTTP GET loop requests to receive commands from the server located
+at hxxp://455686[.]c1[.]biz /dn.php?name=%COMPUTERNAME%&prefix=tt . The commands
+received are parsed from the response and, if containing the character ” - ” are executed via
+CreateProcessAsUserW obtaining the Token belonging to svchost.exe process (likely to avoid
+exceptions during output redirection of the file writing, being the sample located in System32
+folder), otherwise using the CreateProcessW function.
+2022 // © Cluster25 12
+TLP:WHITE
+Unrestricted // freely shareable content
+At the time of the analysis the server was up but it did not provide the commands to be executed,
+probably because the actor set up the Command and Control backend with some form of
+geofencing validation.

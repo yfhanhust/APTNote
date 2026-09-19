@@ -1,0 +1,100 @@
+Analysis
+Distribution vector
+Based on the data collected by the CTU research team, the campaign's primary attack
+vector is spearphishing email that targets mid-level to senior-level executives. These
+emails contain an attachment that includes a malicious payload that installs a copy of
+Mirage.
+CTU researchers have identified several files that drop and execute a copy of Mirage
+onto a target system. These "droppers" are designed to look and behave like PDF documents. However, the droppers are stand-alone executable files that open an embedded
+PDF file and execute the Mirage trojan. In one example, CTU researchers observed an
+executable file (MD5 hash ce1cdc9c95a6808945f54164b2e4d9d2) that upon execution
+drops a copy of Mirage and opens an embedded PDF of a news story titled "Yemeni
+Women can participate in politics just like men, says President Saleh" that was posted
+on the Yemen Observer's website.
+Behavior analysis
+The CTU research team has identified two main variants of the Mirage trojan. These
+variants are based on key evolutionary differences in the execution and encodings used
+in communication with the command and control (C2) servers.
+When Mirage executes, the original file copies itself to a folder under C:\Documents
+and Settings\\ or C:\Windows\ and then deletes the original file. After the initial copy, Mirage starts the newly created file and exits the original. The newly started
+copy creates registry keys to ensure that the system remains infected after every reboot.
+CTU researchers have observed the following filenames created after execution:
+svchost.exe
+ernel32.dll
+thumb.db
+csrss.exe
+Reader_SL.exe
+MSN.exe
+Phone-home and C2 operations
+The data sent by Mirage shares attributes with the malware family known as JKDDOS,
+which was researched by Arbor Networks. In its initial phone-home connection, JKD-
+DOS sends a system profile to the C2 server. This profile contains the CPU speed, memory size, system name and username. Similar information and encoding techniques are
+seen in the initial phone-home requests of Mirage infections.
+Mirage phones home to its C2 servers using a standard HTTP request. From the activity
+CTU researchers have observed when executing Mirage in a malware sandbox, this
+communication commonly occurs over ports 80, 443 and 8080, and it can implement SSL
+for added security.
+The earliest variant of Mirage uses an HTTP POST request to transmit the initial phonehome request. This phone-home request contains detailed system information of the infected system to give the C2 server a rough profile of each system that is infected and
+that is calling home.
+Figure 1. Phone-home request (variant 1).
+The payload is encoded with a simple cipher to mask the data being sent to the C2 server. The cipher encodes the payload by adding each character's ASCII value by its offset
+from the start of the payload.
+|Raw values|M|i|r|a|g|e|
+|---|---|---|---|---|---|---|
+|Raw hex|0x4d|0x69|0x72|0x61|0x67|0x65|
+|Raw decimal|77|105|114|97|103|101|
+|Encoded decimal|77|106|116|100|107|106|
+|Encoded hex|0x4d|0x6a|0x74|0x64|0x6b|0x6a|
+|Encoded values|M|j|t|d|k|j|
+Table 1. Payload encoding.
+The initial payload starts with the word "Mirage", which in its encoded state is "Mjtdkj".
+From there, Mirage encodes and sends the MAC address, CPU information, system
+name and username in the initial request to the C2 server.
+If the C2 server successfully receives the request, then it responds with an HTTP response code "200 OK". The word "Mirage" appears in its payload, followed by two null
+bytes. If there is no response or an invalid response from the C2 server, the infected system continues to send its initial phone-home request at regular intervals.
+Figure 2. Decoded payload (variant 1).
+If the infected system connects successfully to the C2 server, then the infected system
+continues to send regular check-in updates. These updates are transmitted the same
+way as the initial phone-home request; however, only the MAC address of the infected
+system is sent in the payload.
+Figure 3. Decoded check-in update (variant 1).
+The second variant of Mirage uses HTTP GET requests instead of HTTP POST requests
+to transmit the phone-home requests' payload. This evolved variant's initial phonehome request's payload is contained in a Base64-encoded string in the initial request.
+The decoded Base64 payload contains a second level of encoding that has several variations. The data being transmitted in the encoded string contains the same data as the
+previous variant, as well as some additional data. One change is the text at the beginning of the phone-home payload. Instead of the word "Mirage" used in earlier variants,
+later variants use the phrase "Neo, welcome to the desert of the real", a quote from the
+movie The Matrix .
+Figure 4. Sample request (variant 2).
+The CTU research team has seen the encoding used in variant 2 in other malware families. One such malware family is Lingbo, which uses a similar encoding algorithm but
+does not contain some of the major characteristics of Mirage. Samples from both malware families have included strange embedded quotes. Instead of Mirage's quote from
+The Matrix, Lingbo contains the embedded quote "It is the end of the world and I feel
+Fine", from the REM song "It's the end of the world."
+Custom versions and variants
+The CTU research team identified several Mirage variants that had unique attributes not
+designed for widespread targeting. These custom variants were designed to operate under specific conditions and to evade common system defenses. CTU researchers also
+found several samples that contained debugging information, possibly from early ver
+sions.
+One of the variants was seen in a subset of samples that had been modified specifically
+for the environment targeted by the threat actors. These samples had been configured
+with default credentials for the targeted environment's web proxy servers. The following proxy usernames and password combinations appear in the samples collected by
+the CTU research team:
+a1:a1
+pagmb:pa
+quickheal:quickheal
+In the debugging versions, the CTU research team discovered two strings that identified
+the source code paths from which the samples were compiled:
+D:....\MF-v1.2\Server\Debug\Server.pdb (MD5 hash fa26f410d0133f4152ea78df3978c22)
+E:\fox_1.2 20110307\MF-v1.2\Server\Release\MirageFox_Server.pdb (MD5 hash
+1045e26819ff782015202838e2c609f7)
+The .pdb file extension is commonly used with Microsoft Visual Studio. Its use in these
+debugging versions coincides with the samples for Mirage, which were written using
+Microsoft Visual C++. CTU researchers also noted that the original name of the trojan
+used in the path is MirageFox, which is likely the name used by the threat actors.
+This information leads to two potential conclusions:
+
+The two variants of MF-v1.2, the debug version and the release version, allow the
+
+threat actors to customize variants. CTU researchers have already seen this activity.
+2. The use of different drive letters but similar source code paths may indicate that
+the threat actors are keeping a repository of tools on a central file server for shared
+use.

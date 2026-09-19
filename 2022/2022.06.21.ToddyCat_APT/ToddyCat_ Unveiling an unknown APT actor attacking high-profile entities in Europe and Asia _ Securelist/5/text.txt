@@ -1,0 +1,96 @@
+Stage 1 – Dropper
+The dropper installs all the other components and creates multiple registry keys to force
+the legitimate svchost.exe process to load the final Samurai backdoor.
+Infection workflow
+The program debug.exe makes use of a special resolution function that is used every time
+it calls a Windows API. The code checks if the pointer is already resolved and placed into
+a global variable. If the value was not found, it goes on to retrieve the address using the
+https://securelist.com/toddycat/106799/ 3/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+resolution function, which receives a handle to the library that contains the API and an
+encrypted string of the requested API name, following which it decrypts the string using
+an XOR-based algorithm.
+Code snippet used to resolve and call CryptDestroyKey and
+CryptReleaseContext functions
+The dropper was configured to load an encrypted payload stored in another file,
+debug.xml. The data are decrypted using the standard Wincrypt functions with the
+CALG_3DES_112 algorithm and a static key embedded in the code. Once decrypted, the
+file shows a structure that contains multiple payloads and values used to install the next
+stages.
+Field Value
+magic 0x12345678
+DotNet_Loader_v2_Payload websvc.dll payload compatible with .Net Framework
+v2.0
+DotNet_Loader_v4_Payload websvc.dll payload compatible with .Net Framework
+v4.0
+Loader_Dll_Payload iiswmi.dll dll loader
+ServiceName WebUpdate
+Path_DotNet_Loader %COMMONPROGRAMFILES%\System\websvc.dll
+Path_Loader_Dll %COMMONPROGRAMFILES%\microsoft
+shared\WMI\iiswmi.dll
+RegKey_Path_Service_SvcHost SOFTWARE\Microsoft\Windows
+NT\CurrentVersion\Svchost
+RegKey_Path_Interface SOFTWARE\Classes\Interface{6FD0637B-85C6D3A9-CCE9-65A3F73ADED9}
+https://securelist.com/toddycat/106799/ 4/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+Reg_Interface_Payload_v4 Samurai backdoor for .Net Framework v4.0
+Reg_Interface_Payload_v2 Samurai backdoor for .Net Framework v2.0
+Once the values are retrieved from the file, the malware conducts a sequence of actions in
+order to stage the next component in the infection chain:
+
+Attempts to create the directory %COMMONPROGRAMFILES%\Microsoft
+
+Shared\wmi\ that will contain the DLL used for the next stage.
+2. Checks if a service corresponding to the subsequent stage already exists, and if so
+attempts to stop it.
+3. Checks if the .NET framework of version 2.0 is installed by attempting to open the
+registry key SOFTWARE\Microsoft.NETFramework\policy\v2.0
+4. If the key exists, the malware drops the element we refer to as
+DotNet_Loader_v2_Payload to
+%COMMONPROGRAMFILES%\System\websvc.dll; otherwise, it drops the
+contents of DotNet_Loader_v4_Payload in the same path.
+5. Drops a DLL loader used to start the second stage under the path
+%COMMONPROGRAMFILES%\microsoft shared\WMI\iiswmi.dll
+6. Once the aforementioned files are available on the system, the malware tries to
+create the registry key specified below to maintain persistence on the system. The
+value in that key indicates the name of the service that is created to execute the
+binary. Following the example below, once executed the service-related process is
+associated with the command line %SystemRoot%\System32\svchost.exe -k
+httpsvc.
+1
+2
+3
+Registry Key: HKLM\SOFTWARE\Microsoft\Windows
+NT\CurrentVersion\SvcHost
+Value name: httpsvc
+Value: WebUpdate
+https://securelist.com/toddycat/106799/ 5/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+
+After the service is created, the malware attempts to configure the second stage DLL
+
+and entry point within it to be executed when the service is started. This is done by
+setting the corresponding registry keys with the following values:
+1
+2
+3
+4
+5
+6
+7
+Registry Key: $HKLM\System\ControlSet\Services\WebUpdate\Parameters
+Value name: ServiceDll
+Value: %ProgramFiles%\Common Files\microsoft shared\WMI\iiswmi.dll
+Registry Key: $HKLM\System\ControlSet\Services\WebUpdate\Parameters
+Value name: ServiceMain
+Value: INIT
+
+The malware drops the final payload in the infection chain as a compressed,
+
+encrypted and base64 encoded blob under the following registry key:
+1
+2
+3
+Registry Key: $HKLM\SOFTWARE\Classes\Interface{6FD0637B-85C6-D3A9-CCE965A3F73ADED9}
+Value name:
+Value: ILQ3Pz8/Pz87P9IFVEskWKpIeTB0jZx5SVXYXhh1fG...%encoded data%

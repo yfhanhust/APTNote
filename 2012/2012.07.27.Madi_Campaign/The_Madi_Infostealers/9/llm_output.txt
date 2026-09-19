@@ -1,0 +1,183 @@
+
+
+
+Sentence : Miscellaneous
+The infostealer contains 52 timers. Some of them do not perform any important tasks. The authors
+decided to ping the C&C server and save the results under specific file names. Those files are checked and
+parsed in order to find out if the C&C is up and if certain actions can be taken. This is pretty amateurish
+programming.
+Timer 44: simple ping via pangtipo.bat
+Timer 44 is disabled upon execution. Timer 44 checks whether Timer 45 is enabled and returns if it is.
+(Timer 44 is enabled prior to returning.) If Timer 45 is disabled, a "pangtipo.bat" file is created, which
+contains "ping C&C_IP >C:DOCUME~1%USER%TEMPLA~1iexplore.exe.pkxml".
+The bat file is executed, Timer 44 is enabled and Timer 44 returns.
+Timer 11: Simple ping from pangtip.bat
+Timer 11 is disabled upon execution.If Timer 16 is already enabled, Timer 11 re-enables itself and returns.
+If Timer 17 is already enabled, Timer 11 re-enables itself and returns.
+If none of the timers are enabled, it creates the "pangtip.bat" file, which contains "ping C&C_IP
+
+C:DOCUME~1%USER%TEMPLA~1iexplore.exe.pkxm" and executes it via ShellExecute.
+
+Timer 16 is enabled and returns.
+Note: Timers 1, 7, 11, 15, 44 and 48 generate these batch files under different names and the results are
+saved under different names too.
+Timer 7: Was "timeip.php" visited?
+Timer 7 is disabled upon execution. Timer 7 checks whether the timeip.php page was visited. If not, it
+visits the page using IE instrumentation, Timer 7 disables itself and enables Timer 8 (see description
+below).
+It creates the "pangip.bat" file, which contain "ping C&C_IP". Results are saved as "iexplore.exe.pkam".
+Note: the file name used to save the output of the ping commands is based on the infostealer executable
+name, which is "iexplore.exe". If the executable is renamed, the log files will have different names.
+Timer 8: Parse the results of the timeip.php visit
+The timeip.php script returns the current time and the IP address of the victim. The results of the visit
+(done with IE instrumentation in Timer 7) are saved into a buffer which is used during the keylogger log
+creation (see Timer 4 description).
+Timer 22: Ensure there is a backup copy of UpdateOffice (downloader)
+Note: The downloader is the only malware that starts after Windows boots. It's therefore important to
+ensure various backup copies are made.
+Timer 22 checks if "UpdateOffice.exe" is present in the infostealer directory (templates). It shouldn't be, as
+it is only present in the printhood directory. (See Downloader description at the beginning of the article.)
+Since it is not present, it calls a subroutine to get the path to the "Printhood" directory
+(GetSpecialFolderLocation with CSIDL_PRINTHOOD parameter). While concatenating the
+"UpdateOffice.exe" and the "Printhood" folder, the "" character is missing, and therefore, the routine is
+bugged. The returned string is: "C:Documents and Settings%USER%PrintHoodUpdateOffice.exe" instead
+of "C:Documents and Settings%USER%PrintHoodUpdateOffice.exe".
+It then copies (or at least tries to, as the path is wrong) "C:Documents and
+Settings%USER%PrintHoodUpdateOffice.exe" as "srAntiq.dll" in the Templates folder.
+If "OfficeUpdate.exe" isn't present in the "printhood", a copy is made from "srAntiq.dll".
+It retrieves the path to the Startup Folder using the CSIDL_STARTUP: "C:Documents and
+Settings%USER%Start MenuProgramsStartup".
+Timer 22 checks whether "OfficeUpdate.exe" is present in that folder; if not, it will make a copy of
+srAntiq.dll to the Startup folder and returns from Timer 22.
+Timer 25: Check for "fsdiskget.dll"
+Timer 25 checks if "fsdiskget.dll" is present in the malware directory; if not, it returns.
+If the file is present, it enables Timer 23 (see the Data Stealing section for a description).
+Timer 42: lbdiskgo.dll, soltanik.dll and res.exe checking
+Timer 42 checks whether a flag (set by Timer 34 and cleared by Timer 33) is set to 0 and if lbdiskgo.dll,
+soltanik.exe and res.exe are present. If they are, it enables Timer 33; otherwise, it returns.
+Timer 43: lbdiskgo.dll / ladine.dll / res.exe checking
+Timer 43 returns directly if neither "lbdiskgo.dll" or "ladine.dll" are present. If res.exe is present, it
+enables Timer 44 and Timer 48; otherwise, it returns.
+Timer 45: Visit the ReReReRe.htm page
+Timer 45 deletes pangtipo.bat, reads iexplore.pkxml to make sure the C&C replied. (Timer 1 and Timer 16
+provides some more details on the use of such .bat files.)
+Uses FindWindow to check whether IE Instrumentation has been used to visit the special ReReReRe.html
+page, which contains the following title: "r!r!r!r!".
+It looks for different variants such as "r!r!r!r! - Windows Internet Explorer" or "r!r!r!r! - Microsoft
+Internet Explorer".
+If one of them is found, it means the page was visited using IE instrumentation. It disables Timer 45 and
+returns.
+If none of them are found, Timer 45 will visit the URL http://C&CIP/ASLK//asgari/mah/ReReReRe.htm,
+enable Timer 46 (see below), disable Timer 45 and return.
+Timer 46: Parse "ReReReRe.htm" (downloaded by Timer 45)
+Timer 46 goes through all the different running instances of instrumented IE, looking at the title of each
+HTM page. The main interest here is "r!r!r!r!".
+This page is the ReReReRe.htm file downloaded by Timer 45. Timer 46 looks for a special EOF (End Of
+File) marker: "tamamshodfile". This marker is used by the infostealer to make sure the htm page was fully
+downloaded.
+Once the page has been confirmed as valid, it looks for the textarea id S1 which holds double Base64
+encoded PE Files.
+The Base64 encoded data is saved as: ASLASLKK223.dll.
+Timer 47: Double decoding of Base64 encoded payload from ReReReRe.htm
+Note: Timer 46 saves the payload as ASLASLKK223.dll.
+Since the payload file is double encoded, the decoding is performed in two steps:
+ASLASLKK223.dll is decoded to ASLASLKK224.dll to get a single encoded Base64 file.
+ASLASLKK224.dll is decoded to "res.exe" : Final PE file.
+Res.exe is a copy of the Resource Hacker utility. ASLASLKK224.dll is deleted. The use of Res.exe is
+described in the analysis of Timer 39 below.
+Once Timer 47 has finished enumerating all the IE instances, it will call a cleaning routine. It searches for
+" - r!r!r!r! - Windows Internet Explorer" and different variants described in Timer 45 and sends a
+"WM_Close" Message to IE Windows in order to close them.
+Among all those captions, it also searches for " - 404 - File or directory not found." and variants of 404
+pages.
+Once the cleaning is completed, Timer 47 disables itself and returns.
+Timer 49: Visit the SeSeSeSe.htm page
+Timer 49 is almost identical to Timer 45. The only difference is the page visited: SeSeSeSe.htm instead of
+ReReReRe.htm
+See the Timer 45 description for details.
+Timer 50: Parse "SeSeSeSe.htm" (downloaded by Timer 49)
+Timer 50 is almost identical to Timer 46. The only difference is the page parsed: SeSeSeSe.htm instead of
+ReReReRe.htm and local file names. The double encoded payload is saved as "ASLASLKK2231.dll".
+See the Timer 46 description for details.
+Timer 51: Double decoding of Base64 encoded payload from SeSeSeSe.htm
+Note: Timer 50 saves the payload as ASLASLKK2231.dll.
+Since the payload file is double encoded, the decoding is performed in two steps:
+ASLASLKK2231.dll is decoded to ASLASLKK2241.dll to get a single encoded Base64 file.
+ASLASLKK2241.dll is decoded to "Ladine.dll": final PE file.
+Note: At the time of writing, the SeSeSeSe.htm page had been removed from the C&C server.
+A C&C server used by older variants of the infostealer is still available and the old page name was
+"SSSS.htm". The embedded file is a template of a downloader executable (see Timers 35, 36, 37, 38 and 39
+for further information).
+Once Timer 51 has finished enumerating all the IE instances, it will call a cleaning routine. It searches for "
+
+s!s!s!s! - Windows Internet Explorer" and different variants described in Timer 45, and sends a
+
+"WM_Close" Message to IE Windows in order to close them.
+Among all those captions, it also searches for " - 404 - File or directory not found." and variants of 404
+pages.
+Once the cleaning is completed, Timer 51 disables itself and returns.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "C&C_IP", "type" : "CCSH"},
+        {"id": 2, "description": "pangtipo.bat", "type" : "EXEF"},
+        {"id": 3, "description": "C:DOCUME~1%USER%TEMPLA~1iexplore.exe.pkxml", "type" : "DOCF"},
+        {"id": 4, "description": "Timer 44", "type" : "TTPS"},
+        {"id": 5, "description": "pangtip.bat", "type" : "EXEF"},
+        {"id": 6, "description": "C:DOCUME~1%USER%TEMPLA~1iexplore.exe.pkxm", "type" : "DOCF"},
+        {"id": 7, "description": "Timer 11", "type" : "TTPS"},
+        {"id": 8, "description": "pangip.bat", "type" : "EXEF"},
+        {"id": 9, "description": "iexplore.exe.pkam", "type" : "DOCF"},
+        {"id": 10, "description": "Timer 7", "type" : "TTPS"},
+        {"id": 11, "description": "timeip.php", "type" : "URLS"},
+        {"id": 12, "description": "IE instrumentation", "type" : "APPS"},
+        {"id": 13, "description": "Timer 8", "type" : "TTPS"},
+        {"id": 14, "description": "UpdateOffice.exe", "type" : "EXEF"},
+        {"id": 15, "description": "Printhood directory", "type" : "SYSP"},
+        {"id": 16, "description": "srAntiq.dll", "type" : "EXEF"},
+        {"id": 17, "description": "Templates folder", "type" : "SYSP"},
+        {"id": 18, "description": "OfficeUpdate.exe", "type" : "EXEF"},
+        {"id": 19, "description": "Startup Folder", "type" : "SYSP"},
+        {"id": 20, "description": "fsdiskget.dll", "type" : "EXEF"},
+        {"id": 21, "description": "lbdiskgo.dll", "type" : "EXEF"},
+        {"id": 22, "description": "soltanik.dll", "type" : "EXEF"},
+        {"id": 23, "description": "res.exe", "type" : "EXEF"},
+        {"id": 24, "description": "ReReReRe.htm", "type" : "URLS"},
+        {"id": 25, "description": "Timer 46", "type" : "TTPS"},
+        {"id": 26, "description": "tamamshodfile", "type" : "TAMP"},
+        {"id": 27, "description": "ASLASLKK223.dll", "type" : "EXEF"},
+        {"id": 28, "description": "ASLASLKK224.dll", "type" : "EXEF"},
+        {"id": 29, "description": "Timer 47", "type" : "TTPS"},
+        {"id": 30, "description": "SeSeSeSe.htm", "type" : "URLS"},
+        {"id": 31, "description": "ASLASLKK2231.dll", "type" : "EXEF"},
+        {"id": 32, "description": "ASLASLKK2241.dll", "type" : "EXEF"},
+        {"id": 33, "description": "Ladine.dll", "type" : "EXEF"},
+        {"id": 34, "description": "SSSS.htm", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "ping to"},
+        {"source": 2, "target": 3, "rel_name" : "saves results in"},
+        {"source": 5, "target": 1, "rel_name" : "ping to"},
+        {"source": 5, "target": 6, "rel_name" : "saves results in"},
+        {"source": 8, "target": 1, "rel_name" : "ping to"},
+        {"source": 8, "target": 9, "rel_name" : "saves results in"},
+        {"source": 10, "target": 11, "rel_name" : "visits URL"},
+        {"source": 10, "target": 12, "rel_name" : "uses for instrumentation"},
+        {"source": 13, "target": 11, "rel_name" : "parses data from"},
+        {"source": 14, "target": 15, "rel_name" : "located in directory"},
+        {"source": 14, "target": 16, "rel_name" : "copied as"},
+        {"source": 16, "target": 17, "rel_name" : "saved in folder"},
+        {"source": 18, "target": 19, "rel_name" : "located in directory"},
+        {"source": 21, "target": 1, "rel_name" : "downloaded from C&C server"},
+        {"source": 24, "target": 1, "rel_name" : "located on C&C server"},
+        {"source": 25, "target": 24, "rel_name" : "parses data from"},
+        {"source": 26, "target": 24, "rel_name" : "marker in"},
+        {"source": 27, "target": 24, "rel_name" : "saved as payload from"},
+        {"source": 28, "target": 27, "rel_name" : "decoded from"},
+        {"source": 29, "target": 28, "rel_name" : "decodes to final PE file"},
+        {"source": 30, "target": 1, "rel_name" : "located on C&C server"},
+        {"source": 31, "target": 30, "rel_name" : "saved as payload from"},
+        {"source": 32, "target": 31, "rel_name" : "decoded from"},
+        {"source": 33, "target": 32, "rel_name" : "decodes to final PE file"}
+    ]
+}

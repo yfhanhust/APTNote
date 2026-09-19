@@ -1,0 +1,124 @@
+Second-stage payload
+The second-stage payload is a Dalvik executable ( dex ); based on our observations, it always has the
+name prefLog.dex . The malicious functionality is implemented in this stage; however, it is operated by the
+first-stage payload, which loads it whenever necessary.
+AridSpy uses a Firebase C&C domain for receiving commands, and a different, hardcoded C&C domain, for data
+exfiltration. We reported the Firebase servers to Google, since it provides the service.
+When payloads are downloaded and executed, AridSpy sets listeners to monitor when the device screen is on and
+off. If the victim locks or unlocks the phone, AridSpy will take a picture using the front camera and send it to the
+exfiltration C&C server. Pictures are taken only if it is more than 40 minutes since the last picture was taken and
+the battery level is above 15%. By default, these pictures are taken using the front camera; however, this can be
+changed by receiving a command from the Firebase C&C server to use the rear camera. Images are archived in
+the data.zip file on internal storage and uploaded to the exfiltration C&C server.
+AridSpy has a feature intended to avoid network detection – specifically C&C communication. It can deactivate
+itself, as AridSpy states in the code, by changing the exfiltration C&C server used for data upload to a dummy
+hardcoded androidd[.]com domain (a currently registered typosquat). This action occurs based on a command
+received from the Firebase C&C server. The dummy domain would probably look more legitimate, is not flagged
+as malicious, and might not trigger network detection systems.
+Data exfiltration is initiated either by receiving a command from the Firebase C&C server or when a specifically
+defined event is triggered. These events are defined in AndroidManifext.xml and are caused when actions
+occur, such as: internet connectivity changes, the app is installed or uninstalled, a phone call is made or received,
+an SMS message is sent or received, a battery charger is connected or disconnected, or the device reboots.
+If any of these events occurs, AridSpy starts to gather various victim data and uploads it to the exfiltration C&C
+server. It can collect:
+device location,
+contact list,
+call logs,
+text messages,
+thumbnails of photos,
+thumbnails of recorded videos,
+recorded phone calls,
+recorded surrounding audio,
+malware-taken photos,
+file structure of external storage,
+six WhatsApp databases ( wa.db-wal, wa.db-shm, wa.db, msgstore.db-wal, msgstore.db-
+shm, msgstore.db ) that contain exchanged messages and user contacts, if the device is rooted,
+bookmarks and search history from the default browser and Chrome, Samsung Browser, and Firefox apps if installed,
+data in the clipboard,
+fles from external storage with file size smaller than 30 MB and extensions i .pdf, .doc, .docx, .xls, .xlsx,
+.ppt, .pptx, and .opus,
+thumbnails from the Samsung Gallery app stored in
+the /storage/emulated/0/Android/data/com.sec.android.gallery3d/cache/ directory,
+all received notifications,
+Facebook Messenger and WhatsApp communication, and
+logs of all text visible by misusing Accessibility services.
+Besides waiting for events to occur, the Arid Viper operator can extract specific information and upload it
+immediately to the exfiltration C&C server by sending commands to the compromised device. AridSpy can receive
+commands from its Firebase C&C server to obtain data or to control the malware. Operators can exfiltrate:
+device location,
+contact list,
+text messages,
+call logs,
+thumbnails of photos,
+thumbnails of recorded videos,
+a specific image from external storage based on an ID received from the Firebase C&C server,
+a specific video from external storage based on an ID received from the Firebase C&C server,
+recorded audio,
+images taken on demand,
+a specific file by file path received from the C&C, and
+device info such as whether Facebook Messenger and WhatsApp apps are installed, device storage, battery percentage,
+internet connection, Wi-Fi connection data, screen on or off status, and the time zone.
+By receiving control commands, it can:
+deactivate communication by replacing the exfiltration C&C domain with the dummy value androidd[.]com,
+activate communication by replacing the dummy androidd[.]com C&C domain with another domain name,
+allow data upload when on a mobile data plan, and
+change the exfiltration C&C server for data upload.
+AridSpy can snoop on user activity by keylogging all text visible and editable in any application. On top of that, it
+specifically focuses on Facebook Messenger and WhatsApp communications, which are stored and exfiltrated
+separately. To accomplish this task, it misuses built-in accessibility services to record all text visible and uploads it
+to the exfiltration C&C server. Examples of stored WhatsApp communications can be seen in Figure 14.
+Figure 14. Victim’s WhatsApp communication (right) logged by AridSpy (left)
+Before collected data is uploaded to the exfiltration C&C server, it is stored on internal storage,
+in /data/data/<package_name>/files/files/systems/, that belongs to AridSpy. The obtained
+contact list, SMS, call logs, location, captured keys, file structures, and other text information are stored in plain
+text as JSON files. All exfiltrated data is saved using specific filenames that might contain file IDs, filenames, time
+stamps, location, phone number, and AridSpy version. These values are divided by the delimiter #$&, as can be
+seen in Figure 15.
+Figure 15. Filenames of multimedia data exfiltrated from device (highlighted is the embedded malware
+version number)
+All these files from any particular subdirectory are then zipped into data.zip and encrypted using custom
+encryption. Each of the encrypted files uses a randomly generated filename with the _Father.zip suffix. This
+string is hardcoded and appended to every file. The files are then uploaded to the exfiltration C&C server and
+removed from the device.
+While going through the decompiled AridSpy code, we identified a version number, which is used as part of the
+filename when exfiltrating victim data ( #$&V30#$& ), also visible in Figure 15 (highlighted is the version
+number). The AridSpy version has been changing across the campaigns and was included even with its first variant
+disclosed in 2021. For some of the AridSpy samples, the version number is present in the trojanized app and also
+in the second-stage payload. This version might be different, since the downloaded payload can be updated. In
+Table 5, you can see the package names and their versions. Some trojanized apps contained the version number
+only in their payloads, not in the body of the executable.
+Table 5. Malware versions found in samples
+App name Package name SHA-1 Version
+52A508FEF60082E1E4EC
+System Update com.update.system.important E9109D2CEC1D407A0B92 22
+A934FB482F61D85DDA5E
+[without app name] com.weather.services.manager 52A7015F1699BF55B5A9 26
+5F0213BA62B84221C962
+[without app name] com.studio.manager.app 8F7D0A0CF87F27A45A28 26
+60B1DA6905857073C4C4
+Kora442 com.app.projectappkora 27
+```
+                                   6E7E964699D9C7A74EC7
+                               568E62ABC0948691D672
+
+```
+لغشلما قيبطت com.app.workapp 36D9290D68DE34BD6C75 29
+DB6B6326B772257FDDCB
+NortirChat cx.ring 30
+```
+                                   4BE7CF1A0CC0322387D8
+                               16C8725362D1EBC8443C
+
+```
+prefLog.dex com.services.android.handler 97C5AB79A1B6428FF87D 30
+E71F1484B1E3ACB4C8E8
+prefLog.dex com.setting.manager.admin.handler 525BA1F5F8822AB7238B 31
+The Version column of the table suggests that the malware is regularly maintained.
+It is worth mentioning that the trojanized malicious apps used for the Palestinian Civil Registry and job
+opportunity campaigns have implemented malicious functionality that is then also provided in the second-stage
+payload. It seems very unusual to download a payload if the same functionality is already included. The duplicated
+malicious functionality doesn’t seem to be an intended behavior, as it is not implemented in samples for other
+campaigns; rather, it might be code left over from a time before the malware was updated to provide two additional
+stages. Even so, these two trojanized apps can receive commands and spy on victims without needing additional
+payloads. Naturally, the second-stage payload carries the latest updates and malicious code changes, which can be
+pushed to other ongoing campaigns.

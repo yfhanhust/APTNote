@@ -1,0 +1,207 @@
+4 KE3CHANG GROUP ACTIVITY IN 2015-2019 AND TIES TO OKRUM
+From 2015 to 2019, we detected malware that evolved from the BS2005 backdoors from operation
+Ke3chang – the Ketrican backdoors – and a new version of the RoyalDNS malware. In this section, we
+will go through these newly discovered samples, compare them to the malware families previously
+attributed to Ke3chang group, and explain how Okrum fits into the picture.
+4.1 Ke3chang activity in 2015 – Ketrican
+All of the analyzed Ketrican 2015 samples were backdoors supporting the same set of basic commands
+as malware used in operation Ke3chang, such as downloading and uploading files, executing files
+and shell commands, and sleeping for a configurable time. Likewise, each of the files has a hardcoded
+campaign name, the C&C server domain name and URI, as in the samples used in operation Ke3chang.
+The list of IoCs extracted from the Ketrican samples discovered in 2015 can be found in Table 4.
+SHA-1 PE Timestamp C&C server URI Campaign Name
+2748A2928B6A4A528709ABA20AEF93D1EC9010F9 2014-03-12 dyname.europemis[.]com twit4ter name
+94E6CB95585DBB59A61EC4029BC7EBB30BBA57E5 2014-03-17 dream.zepotac[.]com whaced water
+D3A96C0FA84BFEE826E175D4664116A169D15D4E 2014-04-14 translate.europemis[.]com twit4ter baby
+1C7559C57606B359EEB57F0416FE0B2784C01395 2014-09-04 view.beleimprensa[.]org whaced peach
+233FF39DDE5A13CBF78EC1E9C020CF3CF18084E7 2015-01-28 store.ufmsecret[.]org images warm
+A23EE1F17B746C1907293C7F8155E3E7DE135648 2015-06-18 daily.huntereim[.]com whaced pictu
+10BD61F3FB03632E270FEF3AB6515677405A472F 2015-07-31 center.nmsvillage[.]com content video
+809C53F71549D83ED8AB5BAB312249212F6F4149 2015-08-04 store.ufmsecret[.]org images warm
+77369D3735B3B2C24CCAA93ECAA903D816EA9CD9 2015-09-15 control.mimepanel[.]org whaced panel
+844E710D85DD63AA5BF245CEE94C1CC872429BD3 2015-11-06 rain.nmsvillage[.]com twit4ter snow
+B49EDC05658907C888074905CE234BF3CF58D8A0 2015-11-18 wind.deltimesweb[.]com whaced cloud
+4C1198F726ACAD7AF78B36F250A128D5E3C52D8C 2015-11-26 promise.miniaturizate[.]org images tree
+1730D90FFB888877EA2F18198BCC592087218E9A 2015-09-29 item.amazonout[.]com w4rmeg fight
+Table 4 // IoCs extracted from the analyzed Ketrican samples discovered by ESET in 2015
+In the rest of this part of the paper, we will point out the major similarities between the coding style of
+the malware used in operation Ke3chang and the Ketrican backdoor samples discovered by ESET in 2015.
+These share the main features with the BS2005 malware family, but in some places, they have clearly
+evolved.
+12 OKRUM AND KETRICAN // AN OVERVIEW OF RECENT KE3CHANG GROUP ACTIVITY TLP: WHITE
+4.1.1 WORKING DIRECTORY
+The first trait common to both BS2005 and some of the 2015 Ketrican samples is that they create a copy
+of the Windows Command Prompt ( ~~cmd.exe~~ ) in their working directories and then use it to interpret
+backdoor commands. Both BS2005 and Ketrican backdoors use similar command-line patterns to
+execute a file or shell command using their Command Prompt copy and redirect its output to a file, as
+seen in Figure 7.
+Figure 7 // Files and commands are executed using a copy of Command Prompt
+The files created by the malware are stored in a working directory in one of Windows special folders
+(e.g. ~~Local Settings~~ ~~)~~ . The special folder location is updated in different versions of the backdoors
+from operation Ke3chang but the path to the folder is always retrieved by accessing the following
+registry key, rather than using the ~~SHGetSpecialFolderLocation~~ API function:
+```
+    [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell
+Folders]
+
+```
+The ~~Shell Folders~~ registry key is only supported by Windows for backwards compatibility and is not the
+recommended way to access these folders. It is a rather unusual technique to use this key and that links
+the samples used in operation Ke3chang to the samples discovered in 2015.
+4.1.2 ANTI-EMULATION/ANTI-SANDBOX TRICK
+One of the artifacts shared among the analyzed samples is a heuristic to detect an emulated
+environment or a sandbox. The ~~GetTickCount~~ function is called before and after a loop with
+999,999,990 iterations of incrementing a value. If the returned value doesn’t change between calls,
+emulation or a sandbox is detected and the process terminates itself.
+According to the FireEye report, at least one of the BS2005 samples from operation Ke3chang contained
+the very same heuristic. We were able to locate the same heuristic in all Ketrican backdoors discovered
+in 2015, as Figure 8 depicts.
+13 OKRUM AND KETRICAN // AN OVERVIEW OF RECENT KE3CHANG GROUP ACTIVITY TLP: WHITE
+Figure 8 // A trick to detect an emulated environment or a sandbox
+4.1.3 NETWORK COMMUNICATION
+Just like the BS2005 family, the 2015 Ketrican samples control the Internet Explorer browser process
+using the ~~IWebBrowser2~~ COM interface, to make their network communication look legitimate. Data is
+encrypted and encoded, and sent using the HTTP protocol.
+The response from the server is an HTTP page with backdoor commands and arguments included in a
+hidden input field. This data is expected to have a specific format that varies across the samples, but
+the same pattern is used, as shown in Figure 9.
+Figure 9 // Specific format of data received from the C&C server in samples
+from operation Ke3chang (left) and 2015 Ketrican samples
+4.1.4 DATA TRANSFORMATION
+In the BS2005 malware samples, a specific two-step transformation is used for the data before it is sent
+to a remote server. First, the data is encrypted with a custom algorithm and then it is URL-safe, base64
+encoded, meaning that all “+” characters are replaced with “*” characters, which allows the data to be
+transmitted as a part of the URL.
+In one of the samples, the following encryption algorithm is used:
+   - Each byte has 0x27 plus its positional index byte added to it
+
+
+   - The byte is then XORed with its positional index byte
+
+The same transformation is used in other samples from operation Ke3chang, except that constants
+other than 0x27 are used. In the samples discovered in 2015, the malware authors continued with this
+practice, as shown in Figure 10. Ketrican 2015 backdoors also use the combination of encryption and this
+URL-safe, base64 encoding and similarly vary the encryption method.
+14 OKRUM AND KETRICAN // AN OVERVIEW OF RECENT KE3CHANG GROUP ACTIVITY TLP: WHITE
+In some of the samples, a similar weak-encryption algorithm is used except that the constant is
+subtracted instead of being added. In yet other samples, the encryption algorithm has been changed to
+AES.
+Figure 10 // Encryption algorithm used in a BS2005 sample and in a Ketrican backdoor discovered in 2015
+4.1.5 FURTHER ATTRIBUTION CONSIDERATIONS
+Our conclusions about the backdoors discovered in 2015 were also confirmed in a later Palo Alto
+Networks report about a malware family they call TidePool, which included two of the samples we
+analyzed [8] . The Palo Alto Network researchers claim the TidePool malware family is an evolution of
+BS2005 malware family, which is in accordance with our findings.
+However, this fact alone would not be enough to attribute the malware samples detected in 2015 to
+the Ke3chang group, since we have to consider the possibility of malware reuse between different APT
+groups. As also stated in the FireEye report, the source code used in operation Ke3chang is likely shared
+among different developers or teams of developers. Thus, we cannot assume that anybody who uses
+this malware is automatically the Ke3chang group.
+Nevertheless, we can confirm that the threat actor behind the samples discovered in 2015 had the same
+objectives and targeted the same type of organizations as the Ke3chang threat actor – diplomatic
+organizations and missions. This leads us to believe the group behind the Ketrican samples ESET
+discovered in 2015 is indeed the same actor that was behind operation Ke3chang.
+4.2 Ke3chang activity in 2017 – Ketrican
+The Ketrican samples from 2015 described in the previous section and Okrum samples from 2017 could
+easily look like being part of two independent operations targeted against the same organizations.
+However, we discovered a direct link between the two malware families - one of the Okrum backdoors [9]
+was used to drop a 2017 Ketrican sample [10] .
+This dropped backdoor had a PE Timestamp set to Aug 08 2017 that, according to our telemetry, appears
+to be valid. Our analysis showed it was – again – an evolution of backdoors used in operation Ke3chang,
+exhibiting the same coding style with several improvements. At some point, the attackers appear to
+have switched the Okrum backdoor to a freshly compiled Ketrican sample.
+The samples detected in 2017 closely resemble BS2005 backdoors from operation Ke3chang. The same
+set of commands and methods of network communication are supported, and the main features remain
+unchanged.
+8 SHA-1: 2748A2928B6A4A528709ABA20AEF93D1EC9010F9, 809C53F71549D83ED8AB5BAB312249212F6F4149
+9 SHA-1: 1D271F22798313650C91C6FC34551CC8492A2019
+10 SHA-1: D3BFB10DB08C6828C3001C1F825ED6A6BF6F6E01
+15 OKRUM AND KETRICAN // AN OVERVIEW OF RECENT KE3CHANG GROUP ACTIVITY TLP: WHITE
+Again, the authors continued to update the same parts of code as we have witnessed before. The
+special folder used as a working directory was updated to a new value (from ~~Local Appdata/Local~~
+~~Settings~~ to ~~Templates/AppData~~ ).
+Before the collected data is sent to a C&C server (using the very same technique as in the BS2005
+malware), it undergoes the same transformation where encryption is combined with the same URL-safe
+base64 encoding. The encryption routine was updated to AES or RC4.
+The authors also continue to use campaign names to keep track of the ongoing operations and to
+identify victims. Table 5 lists the IoCs extracted from the Ketrican samples detected in 2017.
+SHA-1 PE Timestamp C&C server URI Campaign Name
+58DEA3A56DE1D95353230BE9BBBA582599AFE624 2009-01-14 forcan.hausblow[.]com      - blue
+FE2BF0A613482A40CCF84157361054EE77C07960 2016-12-19 login.allionhealth[.]com      - login
+D3BFB10DB08C6828C3001C1F825ED6A6BF6F6E01 2017-08-08 buy.babytoy-online[.]com region fvejautoexp
+2C8B145EF5AC177C99DFCB8C0221E30B3A363A96 2017-08-08 newflow.babytoy-online[.]com      - blue
+D8AA9E4918E464D00BA95A3E28B8707A148EC4D7 2017-08-09 buy.babytoy-online[.]com region fvejautoexp
+9D41B44AF5BAAF581C0D9D7BEF466213BD8BE01A 2017-08-10 press.premlist[.]com      - press
+F2BFDA51BDA3EE57878475817AF6E5F24FFBBB28 2017-08-23 items.babytoy-online[.]com      - blue
+Table 5 // IoCs extracted from the analyzed Ketrican samples discovered by ESET in 2017
+4.3 Ke3chang activity in 2017 – RoyalDNS
+In 2017, the entities affected by the Ketrican 2015 and Okrum backdoors were targeted with a variation
+of the RoyalDNS malware, which has already been attributed to the Ke3chang group. Its main
+characteristic is using the DNS protocol to communicate with the C&C server.
+The RoyalDNS sample from the NCC Group report was compiled on June 3, 2017 while the data in the
+PE header of the newly discovered sample point to a more recent date, September 25, 2017. Both
+of the samples export the same functions, as seen in Figure 11, and use the very same rare type of
+communication with the C&C server.
+Figure 11 // The functions exported by the RoyalDNS backdoors
+To communicate with the C&C server, a list of locally configured DNS servers is retrieved, and then
+the malware queries for specific TXT records of a C&C domain. The response from the DNS server
+encapsulates the backdoor commands. An example of such a DNS query packet is illustrated in Figure
+
+
+The new RoyalDNS sample uses a different domain name than the original one:
+
+menorustru[.]com
+
+
+
+16 OKRUM AND KETRICAN // AN OVERVIEW OF RECENT KE3CHANG GROUP ACTIVITY TLP: WHITE
+Figure 12 // DNS query as a method to communicate with the C&C server
+4.4 Ke3chang activity in 2018 – Ketrican
+In 2018, we discovered new Ketrican samples. Among all the versions of the Ketrican backdoors we’ve
+found, these have evolved the most.
+An option to load a DLL was added to the traditional set of supported commands. The encryption
+algorithm has been replaced with the XOR cipher (volume serial number of the C volume is used as the
+key).
+The 2018 Ketrican backdoors use the same method of network communication as the samples from
+the BS2005 family – a combination of an HTTP request made via an instance of ~~IWebBrowser2~~ COM
+object and response HTML pages with hidden input fields. What is different is that instead of using the
+~~CoCreateInstance~~ API function to create the COM object instance directly, a registration-free COM
+technique is used.
+Finally, the 2018 Ketrican backdoors share another feature common for Ke3chang group backdoors. They
+are known to modify specific registry keys and values in order to weaken some security settings of the
+compromised machine, which can help them further extend their malicious capabilities to provide those
+not available via the backdoor itself.
+For example, Internet Explorer Enhanced Security configuration can be disabled by setting the following
+registry value:
+```
+    [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings\
+ZoneMap]
+
+  “IEHarden” = 0
+
+```
+By setting this value, prevention of script execution and other valuable protections are disabled.
+This is not a new feature; the same set of registry keys is changed in BS2005 and Tidepool malware families,
+and in the Ketrican samples discovered in 2015, 2017 and 2018. The samples from 2018 are, however, the
+first ones to use PowerShell scripts to modify the keys. The older versions of the malware used registry
+API functions or the ~~reg.exe~~ utility for that.
+SHA-1 PE Timestamp C&C server URI Campaign Name
+C1C89A1A1779515EC1DFD0EFFF293615D523279E 2018-02-01 dsmanfacture.privatedns[.]org      -      
+09B7999160C5D0DC9A7443F0FC248B6C23BC0724 2018-07-17 compatsec[.]com      -      
+6BF0923577FE5939DEA66F466B74683AE2EBBC3E 2018-07-17 compatsec[.]com      -      
+Table 6 // IoCs extracted from 2018 Ketrican samples
+17 OKRUM AND KETRICAN // AN OVERVIEW OF RECENT KE3CHANG GROUP ACTIVITY TLP: WHITE
+4.5 Ke3chang activity in 2019 – Ketrican
+In March 2019, we detected two new Ketrican samples, one of which was similar to the 2018 Ketrican
+backdoor, and the other that has evolved from it. The previous Ketrican samples and the samples
+detected in 2019 largely overlap in commands, network communication, and obfuscation. The 2019
+version also modifies the same rare combination of registry values as all earlier Ketrican samples, which
+is explained in the section above.
+There is one noteworthy difference between the previous Ketrican samples and the 2019 ones: instead
+of executing a new ~~cmd.exe~~ process for each PowerShell command (i.e. to change every registry value),
+there is only one instance of the process, which communicates with the malware over anonymous
+pipes.
+SHA-1 PE Timestamp C&C server URI Campaign Name
+D98D258C234F5CEAD43FD897613B2EA2669AA7C0 2019-01-28 chart.healthcare-internet[.]com      -      
+CE94EC2CFB23D8C662F558C69B64104C78B9D098 2019-04-25 inicializacion[.]com      - cion
+Table 7 // IoCs extracted from 2019 Ketrican samples

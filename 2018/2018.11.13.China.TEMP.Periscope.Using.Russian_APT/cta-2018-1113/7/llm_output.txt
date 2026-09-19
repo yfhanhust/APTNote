@@ -1,0 +1,361 @@
+
+
+
+Sentence : Threat Analysis
+The Infection Vector
+The attempted intrusion we studied targeted the network of a U.K.
+company that provides specialist engineering solutions. The U.K.
+engineering company shared details of the attempted spearphish
+with Recorded Future, and the following IOCs served as a starting
+point for our investigation.
+|Indicator|Description|
+|---|---|
+|193.180.255[.]2|Spearphish sent from this IP|
+|82.118.242[.]243|Source of SMB credential stealing attempts|
+|WIN-AB2I27TG6FK|NetBios server name of the device sendingthe spearphish|
+|WIN-PRH492RQAFV|NetBios server name of the device conductingSMB credential stealing|
+Email headers revealed that the spearphish was sent on July 6,
+2018 at 9:30 AM UTC, via Foxmail. Foxmail is a freeware email client
+developed by Tencent, one of the three largest internet services
+companies in China. Foxmail boasts over three million daily users in
+China and has previously been associated with Chinese APT activity.
+In addition to email addresses belonging to the U.K. engineering
+company’s employees, the same spearphish was also sent to an
+email address possibly belonging to a journalist based in Cambodia.
+The sender account, melissa.coade[at]yahoo[.]com, was spoofing
+Australian journalist and lawyer Melissa Coade, who among other
+things writes about Cambodian civil and social matters and has
+written for the Phnom Penh Post.
+In a spearphishing campaign targeting the Cambodian elections
+in July 2018, Chinese threat actor TEMP.Periscope spoofed the
+sender address and impersonated a worker from a Cambodian
+nongovernmental organization (NGO).
+Recorded Future | www.recordedfuture.com | CTA-2018-1113 | 4
+CYBER THREAT ANALYSIS
+Snippet of a spearphish email shared by the targeted U.K. engineering company.
+The email contained two malicious links. The first, a “file://” link,
+if clicked, would generate an SMB session. The second link was
+to a .url file that was also configured to create an outbound SMB
+connection.
+The threat actor masqueraded as a Cambodian reporter requesting
+further information from the victim to be uploaded to her “report
+website.” However, spelling and punctuation errors in the message
+alerted network defenders at the victim organization.
+Our analysis of the metadata contained within the email header
+and a subsequent controlled interaction with the file share over
+SMB revealed several interesting characteristics of the attempted
+intrusion.
+Recorded Future | www.recordedfuture.com | CTA-2018-1113 | 5
+CYBER THREAT ANALYSIS
+Responder: The “NetBIOS Poisoner”
+First, we analyzed the SMB file path link. We observed the hostname
+WIN-PRH492RQAFV on C2 82.118.242[.]243 when it attempted to
+acquire SMB credentials from the victim network. We then noted
+the hostname WIN-PRH492RQAFV was hardcoded within several
+forked versions of a Python hacktool called Responder on GitHub.
+One version of Responder with this hostname was found in a
+build of P4wnP1 [1] that was uploaded to BeeBin, a free file upload
+service, and another version with the same hostname was found
+within PiBunny.
+1 P4wnP1 is a highly customizable USB attack platform based on a Raspberry Pi Zero
+computer.
+WIN-PRH492RQAFV string present within a modified version of Responder on GitHub.
+Recorded Future | www.recordedfuture.com | CTA-2018-1113 | 6
+CYBER THREAT ANALYSIS
+Responder was released in January 2014. It is described as follows in
+its README file listed on the official GitHub repository: “Responder
+is an LLMNR, NBT-NS, and MDNS poisoner. It will answer to specific
+NBT-NS (NetBIOS Name Service) queries based on their name suffix
+(see: http://support.microsoft.com/kb/163409). By default, the tool
+will only answer to File Server Service request, which is for SMB.
+The concept behind this is to target our answers, and be stealthier
+on the network …”
+Malicious use of Responder was first publicly documented on
+August 11, 2017 as being used by APT28, also known as Fancy
+Bear. The tool was used against hotel visitors to spoof NetBios
+resources. Victims were coerced into connecting to UDP port 137
+and disclosing credentials over SMB to APT28, which the threat
+actor then used to gain elevated access to the network.
+More Lessons From Russia: SMB Credential Harvesting Using
+“file://” Path
+Building on the use of Responder, the threat actor also appeared
+to borrow techniques originating from a different Russian threat
+actor, Dragonfly, also known as Energetic Bear or Crouching Yeti.
+The path “file://82.118.242[.]243/[REDACTED]” used in the spearphish
+was likely to steal SMB credentials by creating an invisible image tag
+that the host attempts to fetch over SMB, while giving the attackers
+a hashed value of the user's NTLM password. When executing the
+code, the browser creates an invisible image tag and sets the URL
+to an attack server using the “file://” protocol scheme, which also
+transmits the user’s login NTLM hash. This created an effective
+watering hole to fingerprint potential victims and gather credentials
+for subsequent incursions into target networks.
+This technique of leveraging the “file://” path to trigger an SMB
+connection was first publicly detailed by US-CERT on March 15, 2018
+as a sophisticated technique used by Russian government actors
+believed to be the Dragonfly threat actor, targeting the energy
+industry and other critical infrastructure sectors.
+Recorded Future | www.recordedfuture.com | CTA-2018-1113 | 7
+CYBER THREAT ANALYSIS
+SWC Hosted On 82.118.242[.]243?
+Registration details for 82.118.242[.]243, the IP associated with the
+SMB credential theft detailed above, proved to be inconclusive.
+WHOIS referenced the IP within a massive range registered to the
+U.K. ISP Virgin Media (82.0.0.0 - 82.47.255.255). However, MaxMind
+resolved the IP to Bulgarian hosting provider Histate Global Corp.
+Based on the listed vulnerabilities in Shodan and scan results for the
+machine, 82.118.242[.]242 is a web server likely running Windows
+Internet Information Services (IIS) 7.5. It has ports 22, 80, 88, 443,
+445, 587, 902, and 5985 open.
+|CVE|Affected Software|
+|---|---|
+|CVE-2010-1256|Microsoft IIS 6.0, 7.0, and 7.5|
+|CVE-2010-1899|Microsoft IIS 5.1, 6.0, 7.0, and 7.5|
+|CVE-2010-2730|Microsoft IIS 7.5|
+|CVE-2010-3972|Microsoft FTP Service 7.0 and 7.5 for IIS 7.0and IIS 7.5|
+|CVE-2012-2531|Microsoft IIS 7.5|
+|CVE-2012-2532|Microsoft FTP Service 7.0 and 7.5 for IIS|
+|CVE-2017-15906|OpenSSH pre-7.6|
+Vulnerabilities likely associated with 82.118.242[.]243.
+Another IP address that falls within the same /24 CIDR range,
+82.118.242[.]124, was flagged in Recorded Future with an abnormally
+high risk score of 89 in July 2018. This was due to the IP appearing
+in the IOC listing by Cisco Talos as second-stage malware associated
+with the VPNFilter botnet. This botnet has been attributed to APT28
+by the U.S. Department of Justice.
+Based on the vulnerability of the web server 82.118.242[.]243 and
+the use of the “file://” SMB credential stealing technique directing
+the victim to the IP, we believe the threat actor compromised the
+web server and used it as a targeted watering hole to illicitly acquire
+SMB credentials from victims during this campaign.
+Recorded Future | www.recordedfuture.com | CTA-2018-1113 | 8
+CYBER THREAT ANALYSIS
+WIN-AB2I27TG6FK and Chinese Threat Actor TEMP.Periscope
+Hostname WIN-AB2I27TG6FK was observed as the NetBios server
+name of the device sending the spearphish from the VPN IP
+193.180.255[.]2.
+Open source research for the hostname WIN-AB2I27TG6FK revealed
+an open directory (Google cached link) at the URL scsnewstoday[.]
+com/news/ that hosted several files containing the hostname in
+the filename (see snapshot of the domain below). The domain
+was previously reported as a C2 used by the Chinese threat actor
+TEMP.Periscope to deliver their AIRBREAK downloader. AIRBREAK,
+also known as Orz, is a JavaScript-based backdoor that retrieves
+commands from hidden strings in compromised webpages and
+actor-controlled profiles on legitimate services.
+File listing on an open directory hosted at http://scsnewstoday[.]com/news.
+In addition to AIRBREAK, the scsnewstoday C2 server reportedly
+hosted other malware and logs relating to TEMP.Periscope
+malicious activity that targeted Cambodian entities in the run-up to
+the country’s elections. The spearphish against the U.K. engineering
+company occurred at the same time this campaign was active —
+in early July 2018. Judging from the naming convention employed
+on filenames in the open directory, C2S and S2C likely relate to
+client-to-server and server-to-client connections with the hostname
+WIN-AB2I27TG6FK, which we assess is likely to be the hostname
+associated with the scsnewstoday[.]com C2. We’d expect to see
+many more files listed if the hostnames in the filenames related to
+the clients, or victims, targeted by TEMP.Periscope.
+Recorded Future | www.recordedfuture.com | CTA-2018-1113 | 9
+CYBER THREAT ANALYSIS
+The domain scsnewstoday[.]com was hosted on U.S. IP 68.65.123[.]230
+and registered to domain hosting service Namecheap until July 11,
+2018. Details of the C2 domain were published just a day earlier,
+which we believe may have unnerved TEMP.Periscope operators,
+resulting in it being dropped. Unfortunately, the open directory is
+no longer accessible, which hampered our ability to understand the
+precise nature of the three files containing the WIN-AB2I27TG6FK
+hostname.
+According to industry reporting, Chinese espionage group
+TEMP.Periscope has conducted large-scale phishing, intrusion,
+remote access trojan (RAT), and data exfiltration activity since at
+least 2013. Targeting has primarily focused on maritime-related
+entities across multiple industries, including engineering, shipping
+and transportation, manufacturing, defense, government offices,
+and research universities. However, the group has also targeted
+professional and consulting services, high-tech industry, healthcare,
+and media and publishing.
+Originating IP for Spearphish 193.180.255[.]2
+This IP appeared in the email header information as the X-ForwardedFor IP, indicating that it was the originating IP address for the
+sender of the spearphish. WHOIS registration data revealed that
+193.180.255[.]2 is registered to Privat Kommunikation Sverige AB,
+which is the full company name of PrivateVPN, a popular commercial
+VPN service. The company states that they support OpenVPN over
+TCP/UDP, L2TP, IPSEC, PPTP, and IKEv2 protocols.
+Recorded Future identified three VPN connections involving the
+193.180.255[.]2 IP between June 30 and July 1, 2018. All three
+connections were over UDP 500 (IKE/IKEv2), originating from
+Bangladesh IP 103.198.138[.]187.
+Additionally, between July 3 and July 10, 2018, 193.180.255[.]2
+established SSH (TCP 22), NetBios (TCP 139), and Microsoft SMB
+(TCP 445) connections to the malicious SMB credential harvesting
+C2 82.118.242[.]243. Interestingly, these connections took place
+during the seven-day window within which the spearphish was sent.
+Recorded Future | www.recordedfuture.com | CTA-2018-1113 | 10
+CYBER THREAT ANALYSIS
+Historic Targeting of U.K. Engineering Company by
+TEMP.Periscope
+Prior to this attempt in July, the same U.K. engineering company
+had previously been targeted in May 2017. This campaign used the
+ETERNALBLUE exploit and a unique DNS tunneler backdoor. The DNS
+tunneler used in the attack was configured to communicate with a
+subdomain of thyssenkrupp-marinesystems[.]org. The domain was
+clearly spoofing German defense contractor ThyssenKrupp Marine
+Systems, which specializes in marine engineering. In addition to
+hosting the spoofed domain, Netherlands-based HostSailor VPS
+IP 185.106.120[.]206 also hosted an open directory containing
+malware and tools for use by the threat actor, not dissimilar to the
+TEMP.Periscope scsnewstoday[.]com C2 and open directory set up.
+Recorded Future analysis on the spoofed domain revealed
+that this server hosted the SeDll Javascript loader SHA256:
+146aa9a0ec013aa5bdba9ea9d29f59d48d43bc17c6a20b7
+4bb8c521dbb5bc6f4, which had been used in August 2017 by
+Leviathan (also known as TEMP.Periscope) to execute another
+Javascript backdoor, AIRBREAK. Crucially, the first mention of
+Leviathan as a Chinese threat actor occurred in October 2017,
+meaning TEMP.Periscope was using the same infrastructure to
+target the U.K. engineering company six months earlier.
+In November 2017, another spearphish leveraging Microsoft
+Equation Editor vulnerability CVE-2017-11882 was sent to the U.K.
+engineering company. This attack delivered a Cobalt Strike payload.
+Output : 
+{
+  "nodes": [
+    {
+      "id": "1",
+      "label": "U.K. Engineering Company"
+    },
+    {
+      "id": "2",
+      "label": "193.180.255[.]2"
+    },
+    {
+      "id": "3",
+      "label": "82.118.242[.]243"
+    },
+    {
+      "id": "4",
+      "label": "WIN-AB2I27TG6FK"
+    },
+    {
+      "id": "5",
+      "label": "scsnewstoday[.]com"
+    },
+    {
+      "id": "6",
+      "label": "TEMP.Periscope"
+    },
+    {
+      "id": "7",
+      "label": "AIRBREAK (Orz)"
+    },
+    {
+      "id": "8",
+      "label": "68.65.123[.]230"
+    },
+    {
+      "id": "9",
+      "label": "PrivateVPN"
+    },
+    {
+      "id": "10",
+      "label": "103.198.138[.]187"
+    },
+    {
+      "id": "11",
+      "label": "ETERNALBLUE Exploit"
+    },
+    {
+      "id": "12",
+      "label": "thyssenkrupp-marinesystems[.]org"
+    },
+    {
+      "id": "13",
+      "label": "HostSailor VPS 185.106.120[.]206"
+    },
+    {
+      "id": "14",
+      "label": "SeDll Javascript Loader SHA256: 146aa9a0ec013aa5bdba9ea9d29f59d48d43bc17c6a20b74bb8c521dbb5bc6f4"
+    },
+    {
+      "id": "15",
+      "label": "CVE-2017-11882"
+    },
+    {
+      "id": "16",
+      "label": "Cobalt Strike Payload"
+    }
+  ],
+  "edges": [
+    {
+      "source": "1",
+      "target": "2",
+      "label": "Spearphish Originating IP"
+    },
+    {
+      "source": "2",
+      "target": "3",
+      "label": "SMB Credential Harvesting C2"
+    },
+    {
+      "source": "4",
+      "target": "5",
+      "label": "C2 Server"
+    },
+    {
+      "source": "6",
+      "target": "5",
+      "label": "Malware Hosting"
+    },
+    {
+      "source": "6",
+      "target": "7",
+      "label": "Backdoor"
+    },
+    {
+      "source": "5",
+      "target": "8",
+      "label": "Hosting IP"
+    },
+    {
+      "source": "2",
+      "target": "9",
+      "label": "Registered to"
+    },
+    {
+      "source": "10",
+      "target": "2",
+      "label": "VPN Connection Originating From"
+    },
+    {
+      "source": "1",
+      "target": "11",
+      "label": "ETERNALBLUE Exploit Used"
+    },
+    {
+      "source": "12",
+      "target": "6",
+      "label": "Spoofed Domain"
+    },
+    {
+      "source": "13",
+      "target": "6",
+      "label": "Hosting Malware and Tools"
+    },
+    {
+      "source": "14",
+      "target": "6",
+      "label": "Used in Attack"
+    },
+    {
+      "source": "15",
+      "target": "1",
+      "label": "Vulnerability Exploited"
+    },
+    {
+      "source": "16",
+      "target": "1",
+      "label": "Delivered Payload"
+    }
+  ]
+}

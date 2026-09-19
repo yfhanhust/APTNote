@@ -1,0 +1,71 @@
+
+
+
+Sentence : Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 75
+The client mode thread begins the process of parsing a command file immediately after the file is saved to the node’s hard
+drive. The encrypted command header (offset 0) is read into memory and decrypted using the public RSA key hard coded
+within the SJM1 binary. To verify successful decryption, the first field of the decrypted header (offset 0) is compared to
+0xB4F4 . A memory buffer of the size specified by the data header size value (offset 12) is allocated and the contents of the
+data header are read into memory. SJM1 has the capability to selectively run commands based on the node type value.
+Offsets 1 and 2 within the data header specify the node types that will execute the given command within the command
+file. If the data header specifies that the node’s node type is not to execute the command, the processing of the command
+file concludes, and the next file, if any, is loaded and parsed.
+The data portion of the command file, if the command type is not 0x4006, is saved to disk within the %SYSDIR%\1008
+directory with a name of the form rundll {4 digit value} .exe . If the verify file flag (field 10 of the command header) is set,
+the client thread reads all but the last 128 bytes of the command file into memory, performs a MD5 hash of the content,
+decrypts the last 128 bytes of the command file to reveal the expected MD5 hash, and then compares the hash values. If
+they do not match, the command file is considered invalid, and parsing of the file terminates. The client mode thread then
+moves to the next command file. The fact that invalid command files are not removed from the command file directory
+means that invalid command files propagate throughout the SJM1 botnet, potentially leaving a considerable amount of
+noise. This behavior was observed when the SJM1 botnet was enumerated in June 2015 by Novetta.
+The client mode thread supports only a subset of the commands found within the RAT channel, but the command
+numbers are identical to the list found in Table 17-4. The client mode supports the commands in Table 17-10.
+|COMMAND NUMBER|DESCRIPTION|
+|---|---|
+|0x4006|Downloads a file from the client node.|
+|0x4007|NOP|
+|0x4008|Executes the file within the data field, then deletes it.|
+|0x4009|NOP|
+|0x400A|Starts a process.|
+|0x400B|Set the actor’s remarks/campaign ID (ofset 28) within the configuration data structure.|
+|0x400C|Deletes a file or directory (if the name specified is a directory).|
+|0x400D|Moves (or renames) file.|
+|0x400E|Creates a directory.|
+|0x400F|Terminates process by name.|
+|0x4010|Resets the last command ID to 0|
+|0x4011|Deletes all command files under the%SYSDIR%\1008directory.|
+|0x4012|Replaces the firstNodeInfo entry in the seed node list.|
+|0x4013|Sets three configuration values (ofsets 888, 1148, and 1212).|
+Table 17-10: Client Mode Thread Supported Command Types
+After the peer node transfers the last of the command files to the client node, the peer node sends a 4-byte (DWORD)
+value of 0x00000002 to the client node indicating the completion of the transfer. The client node only reads the
+last byte (0x02) to determine if the transfer is complete but returns a 4-byte (DWORD) value of 0x00000001 as an
+acknowledgement of the completion of the transfer before disconnecting from the peer node.
+There is no verification that a command’s execution is successful. Coupled with the fact that the node’s last command
+ID is updated prior to receiving even the first command file from the peer node, this can lead to schisms within the SJM1
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SJM1 binary", "type" : "EXEF"},
+        {"id": 2, "description": "%SYSDIR%\\1008 directory", "type" : "TPTH"},
+        {"id": 3, "description": "rundll {4 digit value}.exe", "type" : "EXEF"},
+        {"id": 4, "description": "MD5 hash", "type" : "IOCS"},
+        {"id": 5, "description": "SJM1 botnet", "type" : "TAMP"},
+        {"id": 6, "description": "0xB4F4", "type" : "TAMP"},
+        {"id": 7, "description": "Node types (offsets 1 and 2)", "type" : "TAMP"},
+        {"id": 8, "description": "Table 17-10: Client Mode Thread Supported Command Types", "type" : "TAMP"},
+        {"id": 9, "description": "0x00000002 (DWORD value)", "type" : "TAMP"},
+        {"id": 10, "description": "0x00000001 (DWORD value)", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "saves to"},
+        {"source": 3, "target": 2, "rel_name" : "saved in"},
+        {"source": 4, "target": 3, "rel_name" : "verifies"},
+        {"source": 5, "target": 1, "rel_name" : "uses"},
+        {"source": 6, "target": 1, "rel_name" : "compares to field in decrypted header"},
+        {"source": 7, "target": 1, "rel_name" : "specified by data header for command execution"},
+        {"source": 8, "target": 1, "rel_name" : "supports commands listed in"},
+        {"source": 9, "target": 5, "rel_name" : "indicates transfer completion to client node"},
+        {"source": 10, "target": 5, "rel_name" : "acknowledges transfer completion from client node"}
+    ]
+}

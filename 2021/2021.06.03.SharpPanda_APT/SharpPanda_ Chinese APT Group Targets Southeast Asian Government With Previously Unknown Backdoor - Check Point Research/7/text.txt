@@ -1,0 +1,30 @@
+The Loader
+To ensure only one instance of the loader is running, the loader first creates an event named 9DJ8;;L;'4299FDS12JS and proceeds
+with the execution if the event did not exist before.
+https://research.checkpoint.com/2021/chinese-apt-group-targets-southeast-asian-government-with-previously-unknown-backdoor/ 6/22
+6/8/2021 SharpPanda: Chinese APT Group Targets Southeast Asian Government With Previously Unknown Backdoor - Check Point Research
+For anti-analysis purposes, the loader functionality is implemented as a shellcode, which is stored encrypted inside the binary. The
+loader decrypts the shellcode by XORing it with the 32 byte key:
+[0x8a, 0x4e, 0xd1, 0xbb, 0xc4, 0xcc, 0x75, 0x3a, 0x4b, 0x5f, 0xe1, 0x99, 0x3a, 0x4b, 0x5f, 0x61, 0xd1, 0xbb,
+0xc4, 0x50, 0xe4, 0x99, 0x3a, 0x4b, 0xe4, 0x99, 0xcc, 0x75, 0x3a, 0xe4, 0x90, 0x8a], then loads the needed libraries
+and passes the execution to the shellcode itself.
+Figure 6: List of loaded libraries used for by shellcode to dynamically resolve
+API functions
+Another anti-analysis technique observed being used by the shellcode inside the loader is
+dynamic API resolving using the known hash method. This way, the loader is able to not
+only hide its main functionality but also avoid static detection of suspicious API calls by
+dynamically resolving them instead of using static imports.
+The decrypted shellcode contains a configuration that is used to obtain and correctly run the next stage. It includes the C&C server IP
+and port, as well as some other values that we will discuss later.
+https://research.checkpoint.com/2021/chinese-apt-group-targets-southeast-asian-government-with-previously-unknown-backdoor/ 7/22
+6/8/2021 SharpPanda: Chinese APT Group Targets Southeast Asian Government With Previously Unknown Backdoor - Check Point Research
+Figure 7: Malware configuration
+Once initialized, the shellcode sends the CONNECT HTTP/1.1 message to the IP:port from the configuration and follows up with
+another message containing the identifier (in our case admin ) XORed with a hardcoded 48-byte key. The received message is
+decrypted in the same way and the shellcode checks if it starts with the magic number: 0x11d4 . If the server returns valid data, the
+loader runs several checks on its PE headers, load the backdoor to memory and executes an exported function named MainThread .
+The loader DLL also contains a PE executable in a resource named TXT . The executable is named SurvExe based on the PDB path
+left by the attacker:
+C:\Users\user\Desktop\0814-surexe\x64\SurvExe\x64\Release\SurvExe.pdb .
+This executable is supposed to be responsible for copying the file passed to it as a parameter to the TEMP directory with the name
+OEJFISDOFJDLK . However, the resource is not used and seems to have been left by the attacker from previous malware versions.

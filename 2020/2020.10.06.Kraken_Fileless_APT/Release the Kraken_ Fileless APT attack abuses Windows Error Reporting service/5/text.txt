@@ -1,0 +1,74 @@
+ShellCode Analysis
+Using HollowHunter we dumped the shell code injected into WerFault.exe for further
+analysis. This DLL performs its malicious activities in multiple threads to make its
+analysis harder.
+This DLL is executed by calling the “ DllEntryPoint ” that invokes the “ Main ” function.
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 7/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+Figure 8: Main Process
+The main function calls DllMain which creates a thread to perform its functions in a new
+thread within the context of the same process.
+Figrue 9: Dll main
+The created thread at first performs some anti-analysis checks to make sure it’s not
+running in an analysis/sandbox environment or in a debugger.
+It does this through the following actions:
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 8/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+1) Checks existence of a debugger by calling GetTickCount :
+GetTickCount is a timing function that is used to measure the time needed to execute
+some instruction sets. In this thread, it is being called two times before and after a Sleep
+instruction and then the difference is being calculated. If it is not equal to 2 the program
+exits, as it identifies it is being debugged.
+Figure 10: Created thread
+2) VM detection:
+In this function, it checks if it is running in VmWare or VirtualBox by extracting the
+provider name of the display driver registry key
+(`SYSTEM\ControlSet001\Control\Class\{4D36E968-E325-11CE-BFC108002BE10318}\0000′) and then checking if it contains the strings VMware or Oracle.
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 9/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+Figure 11: VM detection
+3) IsProcessorFeaturePresent :
+This API call has been used to determine whether the specified processor feature is
+supported or not. As you see from the below picture, “0x17” has been passed to this API as
+a parameter which means it checks ___fastfail_ support before proceeding with immediate
+termination.
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 10/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+Figure 12: InProcessorFeaturePresent
+4) NtGlobalFlag :
+The shell code checks NtGlobalFlag in PEB structure to identify whether it is being
+debugged or not. To identify the debugger it compares the NtGlobalFlag value with 0x70 .
+5) IsDebuggerPresent :
+This checks for the presence of a debugger by calling “ IsDebuggerPresent “.
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 11/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+Figure 13: NtGlobalFlag and IsDebuggerPresent check
+After performing all these anti-analysis checks, it goes into a function to create its final
+shellcode in a new thread. The import calls used in this part are obfuscated and resolved
+dynamically by invoking the “ Resolve_Imports” function.
+This function gets the address of “kernel32.dll” using LoadLibraryEx and then in a loop
+retrieves 12 imports.
+Figure 14: Resolve_Imports
+Using the libpeconv library we are able to get the list of resolved API calls. Here is the list
+of imports, and we can expect it is going to perform some process injection.
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 12/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+VirtualAlloc
+VirtualProtect
+CreateThread
+VirtualAllocEx
+VirtualProtectEx
+WriteProcessMemory
+GetEnvironmentVariableW
+CreateProcessW
+CreateRemoteThread
+GetThreadContext
+SetThreadContext
+ResumeThread
+After resolving the required API calls it creates a memory region using VirtualAlloc and
+then calls “DecryptContent_And_WriteToAllocatedMemory” to decrypt the content of
+the final shell code and write them into created memory.
+In the next step, VirtualProtect is called to change the protection to the allocated memory
+to make it executable. Finally, CreateThread has been called to execute the final shellcode
+in a new thread.
+Figure 15: Resolve Imports and Create new thread

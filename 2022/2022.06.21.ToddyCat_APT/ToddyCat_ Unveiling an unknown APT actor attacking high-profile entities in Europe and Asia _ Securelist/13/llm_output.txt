@@ -1,0 +1,115 @@
+
+
+
+Sentence : Other variants
+During our investigations, we discovered several loader and installer variants that evolved
+during 2021 and were used in different campaigns.
+Installers
+All the installers are quite similar in their logic: they load a payload from an external file,
+usually located in the same directory, with a name that differs according to the variant:
+debug.xml
+web.xml
+access.log
+cache.dat
+reg.txt
+logo.jpg
+The files are always decrypted with the same algorithm, CALG_3DES_112, but the loaded
+data are usually tailored for the victim.
+All installers create a new service using a name and description specified in an encrypted
+file. They also set a registry value (either httpsvc or w3esvc) in the following Windows
+registry key:
+1 HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost
+These values cause svchost.exe to automatically start the malicious service and load the
+code in its process address memory. The registry values contain the malicious service
+name. The main difference between the installer variants is related to the final payload.
+Based on initial investigations, we know that the first variants (from December 2020 to
+May 2021) were configured to store their payload inside a registry key, such as:
+1
+2
+$HKLM\SOFTWARE\Classes\Interface{6FD0637B-85C6-D3A9-CCE9-65A3F73ADED9}
+$HKLM\SOFTWARE\Classes\Interface{AFDB6869-CAFA-25D2-C0E0-09B80690F21D}
+Starting from March we also observed new variants configured to store the final backdoor
+inside other encrypted files in the file system. The most common dropped the Stage 2
+loader in the following paths:
+https://securelist.com/toddycat/106799/ 21/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+%System32%\Triedit.dll
+%System32%\fveapi.dll
+and the Stage 3 loader and encrypted payload in the following paths:
+%WINDIR%\Microsoft.NET\Framework\sbs_clrhost.dll
+%WINDIR%\Microsoft.NET\Framework\sbs_clrhost.dat
+%WINDIR%\Microsoft.NET\Framework\Util.dll
+%WINDIR%\Microsoft.NET\Framework\Util.dat
+Starting from September 2021, we observed new samples configured to once again store
+the final payload in the Windows registry, but instead of relying on static registry key
+values, the malware was configured to create a dynamically generated key in
+$HKLM\SOFTWARE\Classes\Interface\, based on the disk drive’s serial number:
+Code snippet to create a registry key based on the Volume Serial Number
+The constants used to generate the final registry key name change for each sample.
+Loaders
+The loaders are basic tools used to decrypt payloads from 3DES and load them into
+memory. They were modified over time along with the installers to account for the
+changes in how the final payload is stored.
+Some loaders, like those mentioned in the previous paragraph, were configured to load
+another payload from an encrypted file and pass the resulting data as arguments for
+another library, a Stage 3 loader, stored in a specific location.
+https://securelist.com/toddycat/106799/ 22/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+Other loaders were configured to load the payload from the registry and pass it to the
+Stage 3 library.
+Some variants included a function to directly run .NET code at runtime, without relying
+on another external Stage 3 library.
+Finally, we observed other loaders that were mainly used on desktop systems to load the
+Ninja Trojan.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Loader and installer variants", "type" : "EXEF"},
+        {"id": 2, "description": "External file (payload)", "type" : "DOCF"},
+        {"id": 3, "description": "debug.xml", "type" : "DOCF"},
+        {"id": 4, "description": "web.xml", "type" : "DOCF"},
+        {"id": 5, "description": "access.log", "type" : "DOCF"},
+        {"id": 6, "description": "cache.dat", "type" : "DOCF"},
+        {"id": 7, "description": "reg.txt", "type" : "DOCF"},
+        {"id": 8, "description": "logo.jpg", "type" : "DOCF"},
+        {"id": 9, "description": "CALG_3DES_112 algorithm", "type" : "TAMP"},
+        {"id": 10, "description": "Encrypted file (service name and description)", "type" : "DOCF"},
+        {"id": 11, "description": "Registry key for service creation", "type" : "REGI"},
+        {"id": 12, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 13, "description": "Malicious service name in registry values", "type" : "TAMP"},
+        {"id": 14, "description": "Registry key for initial payloads", "type" : "REGI"},
+        {"id": 15, "description": "%System32%\\Triedit.dll", "type" : "SYSP"},
+        {"id": 16, "description": "%System32%\\fveapi.dll", "type" : "SYSP"},
+        {"id": 17, "description": "Stage 2 loader path in file system", "type" : "TPTH"},
+        {"id": 18, "description": "%WINDIR%\\Microsoft.NET\\Framework\\sbs_clrhost.dll", "type" : "SYSP"},
+        {"id": 19, "description": "%WINDIR%\\Microsoft.NET\\Framework\\sbs_clrhost.dat", "type" : "DOCF"},
+        {"id": 20, "description": "%WINDIR%\\Microsoft.NET\\Framework\\Util.dll", "type" : "SYSP"},
+        {"id": 21, "description": "%WINDIR%\\Microsoft.NET\\Framework\\Util.dat", "type" : "DOCF"},
+        {"id": 22, "description": "Dynamically generated registry key", "type" : "REGI"},
+        {"id": 23, "description": "Stage 3 loader", "type" : "EXEF"},
+        {"id": 24, "description": ".NET code at runtime", "type" : "EXEF"},
+        {"id": 25, "description": "Ninja Trojan", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loads payload from"},
+        {"source": 1, "target": 3, "rel_name" : "uses file for payload"},
+        {"source": 1, "target": 4, "rel_name" : "uses file for payload"},
+        {"source": 1, "target": 5, "rel_name" : "uses file for payload"},
+        {"source": 1, "target": 6, "rel_name" : "uses file for payload"},
+        {"source": 1, "target": 7, "rel_name" : "uses file for payload"},
+        {"source": 1, "target": 8, "rel_name" : "uses file for payload"},
+        {"source": 1, "target": 9, "rel_name" : "decrypts with algorithm"},
+        {"source": 1, "target": 10, "rel_name" : "reads service name and description from"},
+        {"source": 1, "target": 11, "rel_name" : "creates registry key in"},
+        {"source": 12, "target": 13, "rel_name" : "starts malicious service with name"},
+        {"source": 14, "target": 15, "rel_name" : "stores payload in"},
+        {"source": 14, "target": 16, "rel_name" : "stores payload in"},
+        {"source": 17, "target": 18, "rel_name" : "drops Stage 2 loader in"},
+        {"source": 17, "target": 19, "rel_name" : "drops encrypted payload in"},
+        {"source": 17, "target": 20, "rel_name" : "drops Stage 3 loader in"},
+        {"source": 17, "target": 21, "rel_name" : "drops encrypted payload in"},
+        {"source": 1, "target": 22, "rel_name" : "creates dynamically generated registry key"},
+        {"source": 23, "target": 24, "rel_name" : "runs .NET code with"},
+        {"source": 1, "target": 25, "rel_name" : "loads Ninja Trojan"}
+    ]
+}

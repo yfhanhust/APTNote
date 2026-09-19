@@ -1,0 +1,169 @@
+
+
+
+Sentence : 2014-15 Browser Extension
+The Infected Document
+The infection start from a document cv_Mate.Dimitrescu.doc . The document is constructed in the same way as the documents
+containing the other variant of the malware. The script in it has the same functionality, it will create and execute the dropper %appdata%\
+Microsoft\Word\MSWord.exe
+The Dropper
+The dropper looks the same as the other droppers, only smaller in size. The files that it contains are encrypted with RC4 in overlay. Only
+two files will be dropped:
+%appdata%\Aggea\ivotp.xpi
+%appdata%\Aggea\ylir.js
+The names Aggea, ivotp.xpi, ylir.js are random generated. No clean document is present in the dropper and the initial infected document
+will not close. There is no second dropper either. The javascript file is executed, installs the xpi file as an extension in Firefox and then
+deletes the directory %appdata%\Aggea.
+The Firefox Extension
+The extension file will be renamed to {285364ef-e70c-4386-8e5c-2aa93a78daad}.xpi then will be installed in Firefox. In the browser it
+will appear with the name „langpack-en-GB 15.0.0” as in the picture below.
+[11]
+White Paper
+We tested it in Firefox 35.0, in some newer versions it didn’t work. In this version of the malware the extension will work as the backdoor.
+The functionality is contained in 3 files in the extension package: 1.js, 2.js, main.js.
+1.js
+The file 1.js contains encryption and decryption routines. Algorithm used is AES, and the implementation seems to be copied from
+https:// github.com/chrisveness/crypto/blob/master/aes.js and ran through an obfuscator.
+2.js
+The file 2.js contains the C&C addresses and the network functionality. All data to and from the C&C will be sent through normal
+HTTP but it will be encrypted and converted to base64. The encryption key is generated once when the extension is started but it
+can be changed if the C&C requests as we will see later. In this variant we find 6 C&C addresses (presumably these are previously
+compromised machines):
+http://reckless.dk/wp-includes/class-pomo.php
+http://reckless.dk/wp-includes/class.wp-db.php
+http://fishstalk.esy.es/wp-content/plugins/bbpress/includes/common/menu.php
+http://fishstalk.esy.es/wp-includes/SimplePie/Net/IPv4.php
+http://77-ufo.com/wp-includes/class-menu.php
+http://77-ufo.com/pma/db_table.php
+The strings in the files are not visible because the javascript files are highly obfuscated. The function that sends the data to the C&C
+also receives the response. The function will select each time a C&C that responds from the list. This file would be the equivalent of
+the msvct. dll file from the earlier version.
+main.js
+The file main.js is the actual backdoor (msvck.dll equivalent). The malware starts by creating an ID for the system. The ID is a Md5 hash
+on some data colected from the system. The ID is sent in every request to the C&C as in the previous version with executable files. This
+is an example of the data collected for the ID from a test machine:
+{285364ef-e70c-4386-8e5c-2aa93a78daad}C:\Documents and
+Settings\user\Application Data\Mozilla\Firefox\Profiles\2gmaw237. defaultC:\Documents and Settings\user\Desktop{ec8030f7
+c20a-464f-9b0e-13a3a9e97384}
+There are no line separators, it is just a long string. The ID in this case will be „5815da5d0d5565f342474d976f507807”. The gathered
+data represents:
+{285364ef-e70c-4386-8e5c-2aa93a78daad} – GUID for the extension
+C:\Documents and Settings\user\Application Data\Mozilla\Firefox\Profiles\2gmaw237.default
+Firefox profile folder where the extension was placed
+C:\Documents and Settings\user\Desktop – desktop folder of the active user
+[12]
+White Paper
+{ec8030f7-c20a-464f-9b0e-13a3a9e97384} - GUID for Firefox
+After the ID was generated, an encryption/decryption key will be created. It concatenates the hardcoded string
+„7201895b632dc5044c02ea98b0dbd371” with the string containing the ID. In the case of our example this will make the string
+“7201895b632dc5044c02ea98b0dbd3715815da5d0d5565f342474d976f507807”. Then it makes the Md5 hash on the string which will
+result in “ec398e010a0cb6b6e4f48722dc07eaa3”.
+This final buffer (containing a C like string with the md5) is the decryption key. The key is subsequently used for encryption and
+decryption of every message sent and received from the C&C.
+Next it gathers more data about the system. Again, an example from the test machine:
+5815da5d0d5565f342474d976f507807 {285364ef-e70c-4386-8e5c-2aa93a78daad} winnt x86
+Mozilla Firefox {ec8030f7-c20a-464f-9b0e-13a3a9e97384} 35.0
+C:\Documents and Settings\user\Application Data\Mozilla\Firefox\Profiles\2gmaw237.default
+C:\Documents and Settings\user\Desktop
+0040|||C:\Documents and Settings\user\Application Data\Mozilla\Firefox\Profiles\2gmaw237.default\user.js
+Lines are separated by line feed (0x0A). The data represents:
+5815da5d0d5565f342474d976f507807 – System ID
+{285364ef-e70c-4386-8e5c-2aa93a78daad} – GUID for the extension winnt x86 – Operating system
+{ec8030f7-c20a-464f-9b0e-13a3a9e97384} – GUID for Firefox
+35.0 – Firefox version
+C:\Perl... - %path%
+C:\Documents and Settings\user\Application Data\Mozilla\Firefox\Profiles\2gmaw237.default – Path to Firefox profile
+C:\Documents and Settings\user\Desktop – Desktop folder of the logged user
+C:\Documents and Settings\user\ApplicationData\Mozilla\Firefox\Profiles\2gmaw237.default\user.js – Config file for Firefox which
+can override normal settings, it will try to delete it. If is still present after deletion it will put 0041 instead 0040 as the status.
+The data is encrypted with the key that was generated and sent to the C&C. Finally the malware sets a timer which calls a function
+that sends to C&C, receives from C&C and processes the backdoor commands every five seconds. The commands are made up from 3
+strings separated by „|||”,like „nr|||string1|||string2”.
+nr will be ‚0’ to ‚6’ and represents the backdoor command. string1 and string2 contain file names, urls and other things used by the
+commands. In some commands string2 is not used. The commands are:
+[13]
+White Paper
+„1|||file commandlineOptions”
+Executes the file „file” with command line parameters „commandlineOptions”. stdout and stderr are redirected to a string and the
+content of the string will be sent to the C&C. If the file to be executed does not exists it sends back to the C&C „0011|||file”
+„2|||url|||file”
+Downloads the file from „url” and writes it with the name „file”. Returns to the C&C „0020|||file” if the file was successfuly written,
+„0021|||file” if the file was not written or „0051|||url|||errCode” if the download failed.
+„3|||file”
+Searches the file „file” and sends it to the C&C. In case of an error it will return „0034|||file” if the file is a folder, „0033|||file|||size” if the
+file size is greater than 5000000 bytes, „0031|||file” if the file exists but it couldn’t get information about it, „0032|||file” if the file does
+not exists, „0051|||url|||errCode” if the file could not be sent due to some network problems.
+„4|||file”
+Deletes the file „file”. Returns to the C&C „0040|||file” if the file was deleted or „0041|||file” if the file could not be deleted.
+„5|||string1|||file”
+Sends back „string1” to the C&C. The C&C responds with a buffer which will be written to the file „file”. It sends back to the C&C
+„0020|||file” if the file was successfuly written, „0021|||file” if the file could not be written or „0051|||url|||errCode” in case of network
+problems.
+„6|||path|||depth”
+Lists files and directories from „path” recursively until „depth” level, then it sends the list to the C&C. An example:
+0060|||c:\0
+1|c:\0\Documents|d|ct=NaN|lat=1442919637000|lmt=1442919637000|
+1|c:\0\main.js|17394|ct=NaN|lat=1442919639000|lmt=1442405697000|
+1|c:\0\main1.js.js_format|9486|ct=NaN|lat=1442919639000|lmt=1442404160000|
+2|c:\0\Documents\rec.doc|12|ct=NaN|lat=1442919637000|lmt=1442919637000|
+...
+0061|||path_failed|||error_code
+...
+0061|||c:\0|||10000
+The „path” listed and a return code would be „0060|||c:\0”. „1” and „2” from the start of the lines is the level of a file or directory. The
+count starts at 1 and the maximum level would be „depth”+1This is followed by a file or directory path. After the path a „d” follows, if the
+path specifies a directory, or something like „17394” in case of a file, which is the size of the file. „ct=NaN” is the creation time of a file.
+There is a typo in the code and because of that the creation time is never actually retrieved („winBirtdhDate” instead of „winBirthDate”).
+„lat=1442919637000” is the last access time. „lmt=1442919637000” is last modified time. „0061|||path_failed|||error_code” is optional
+and may appear multiple times, contains a path at which the file enumeration failed. „00061|||c:\0|||10000” at the end is optional and
+appears only if the listing so far contains more than 10000 characters, then no more lines will be added.
+„0|||key”
+Sets a new encryption/decryption key with the C string „key”
+[14]
+White Paper
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "cv_Mate.Dimitrescu.doc", "type" : "DOCF"},
+        {"id": 2, "description": "%appdata%\\Microsoft\\Word\\MSWord.exe", "type" : "EXEF"},
+        {"id": 3, "description": "%appdata%\\Aggea\\ivotp.xpi", "type" : "DOCF"},
+        {"id": 4, "description": "%appdata%\\Aggea\\ylir.js", "type" : "DOCF"},
+        {"id": 5, "description": "%appdata%\\Aggea", "type" : "SYSP"},
+        {"id": 6, "description": "{285364ef-e70c-4386-8e5c-2aa93a78daad}.xpi", "type" : "DOCF"},
+        {"id": 7, "description": "Firefox 35.0", "type" : "APPS"},
+        {"id": 8, "description": "1.js", "type" : "DOCF"},
+        {"id": 9, "description": "2.js", "type" : "DOCF"},
+        {"id": 10, "description": "main.js", "type" : "DOCF"},
+        {"id": 11, "description": "http://reckless.dk/wp-includes/option.php", "type" : "CC"},
+        {"id": 12, "description": "http://reckless.dk/wp-includes/option.php", "type" : "CC"},
+        {"id": 13, "description": "http://reckless.dk/wp-includes/option.php", "type" : "CC"},
+        {"id": 14, "description": "http://reckless.dk/wp-includes/option.php", "type" : "CC"},
+        {"id": 15, "description": "http://reckless.dk/wp-includes/option.php", "type" : "CC"},
+        {"id": 16, "description": "0040|||C:\\Documents and Settings\\user\\Application Data\\Mozilla\\Firefox\\Profiles\\2gmaw237.default\\user.js", "type" : "DOCF"},
+        {"id": 17, "description": "5815da5d0d5565f342474d976f507807", "type" : "REG"},
+        {"id": 18, "description": "{285364ef-e70c-4386-8e5c-2aa93a78daad}", "type" : "REG"},
+        {"id": 19, "description": "winnt x86", "type" : "OS"},
+        {"id": 20, "description": "{ec8030f7-c20a-464f-9b0e-13a33a8f822d}", "type" : "REG"},
+        {"id": 21, "description": "C:\\Documents and Settings\\user\\Application Data\\Mozilla\\Firefox\\Profiles\\2gmaw237.default", "type" : "SYSP"},
+        {"id": 22, "description": "C:\\Documents and Settings\\user\\Desktop", "type" : "SYSP"},
+        {"id": 23, "description": "0040|||C:\\Documents and Settings\\user\\Application Data\\Mozilla\\Firefox\\Profiles\\2gmaw237.default\\user.js", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "description": "cv_Mate.Dimitrescu.doc executes MSWord.exe"},
+        {"source": 2, "target": 5, "description": "MSWord.exe drops Aggea folder"},
+        {"source": 3, "target": 5, "description": "ivotp.xpi is dropped in Aggea folder"},
+        {"source": 4, "target": 5, "description": "ylir.js is dropped in Aggea folder"},
+        {"source": 6, "target": 7, "description": "xpi file is installed in Firefox 35.0"},
+        {"source": 8, "target": 10, "description": "1.js and main.js are part of the backdoor"},
+        {"source": 9, "target": 10, "description": "2.js and main.js are part of the backdoor"},
+        {"source": 11, "target": 6, "description": "C&C URL for reckless.dk (multiple occurrences)"},
+        {"source": 12, "target": 6, "description": "C&C URL for reckless.dk (multiple occurrences)"},
+        {"source": 13, "target": 6, "description": "C&C URL for reckless.dk (multiple occurrences)"},
+        {"source": 14, "target": 6, "description": "C&C URL for reckless.dk (multiple occurrences)"},
+        {"source": 15, "target": 6, "description": "C&C URL for reckless.dk (multiple occurrences)"},
+        {"source": 23, "target": 7, "description": "Firefox config file to be deleted or modified"},
+        {"source": 17, "target": 18, "description": "System ID and GUID for the extension are linked"},
+        {"source": 18, "target": 20, "description": "GUID for the extension is linked to Firefox GUID"},
+        {"source": 20, "target": 7, "description": "Firefox GUID is linked to Firefox version 35.0"}
+    ]
+}

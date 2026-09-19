@@ -1,0 +1,39 @@
+Payload
+After deobfuscating the executable file within the password-protected archive, we are
+presented with a RAT called BitRAT. This RAT is not new, it has been previously
+analyzed by security researchers.
+Upon analyzing the RAT, the most interesting part of this RAT is its configuration
+settings seen as an encrypted block of data (Figure 8). There are two hexadecimal strings
+within the main executable file in BitRAT: the longer string is the encrypted
+configuration, the shorter one is the first part of the key.
+Figure 8. BitRAT's encrypted configuration
+Unlike most other malware, BitRAT uses the Camellia cipher with an initialization
+vector (IV) of 0000000000000000.
+https://www.trendmicro.com/en_us/research/21/i/apt-c-36-updates-its-long-term-spam-campaign-against-south-ameri.html 5/7
+9/22/21, 2:22 PM APT-C-36 Updates Its Long-term Spam Campaign Against South American Entities With Commodity RATs
+Several computational steps are needed to obtain the final key. First, a magic value is
+computed from bytes found on fixed addresses, as shown in Figures 9 and 10.
+Figure 9. The algorithm to compute for the magic value of BitRAT’s final
+key
+Figure 10. The input data to compute for the magic value of BitRAT’s final key
+Each byte is transformed using a simple computation formula, as shown below:
+((((value-0x 08)*0x25) %0x7f)+ 0x7f)% 0x7f
+This formula can be used to compute for the magic value through the following process:
+
+For example, using the data from Figures 9 and 10 will result in the string
+
+“78hf326f87”.
+2. This string is appended to the hardcoded string “38325a784d6f5630”, forming the
+string “38325a784d6f563078hf326f87”.
+3. Afterward, a crc32 checksum is computed from “38325a784d6f563078hf326f87”,
+resulting in “d8e71d19”.
+4. A value of 0x08 is added to the checksum, which then becomes “d8e71d21”.
+
+The MD5 hash is computed from the checksum “d8e71d21”, forming
+
+“b50d97fb1e3d5fc9cc302384f5718714”.
+6. The first half of this MD5 hash, “b50d97fb1e3d5fc9”, is the key for the Camellia
+cipher.
+The configuration is decrypted to the following string, as shown in Figure 11, including a
+command-and-control (C&C) server and a port.
+Figure 11. Decrypted configuration of BitRAT

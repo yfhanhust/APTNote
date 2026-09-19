@@ -1,0 +1,268 @@
+Operating routine
+Trojan.Mirage.1 has the following file suite:
+
+WmiPrvServer.exe — file with a valid HP digital signature:
+
+```
+ CN=Hewlett-Packard Company
+OU=Hewlett-Packard Company
+```
+```
+ OU=Digital ID Class 3 - Microsoft Software Validation v2
+O=Hewlett-Packard Company
+L=Palo Alto
+S=California
+C=US
+```
+
+
+rapi.dll — the loader. It loads on the WmiPrvServer.exe process using the DLL
+Hijacking method,
+
+
+cmdl32.dat — the encrypted shell code with the payload,
+
+
+config.dat — the encrypted configuration.
+
+
+Rapi.dll loader module
+The loader module is injected into the WmiPrvServer.exe process using the DLL Hijacking.
+The program receives the GetProcAddress function address through the PEB (Process
+Environment Block) structure by comparing the strings. After that it receives the addresses of
+the necessary imported functions:
+
+
+LoadLibraryA
+
+
+GetModuleFileNameA
+
+
+VirtualAlloc
+
+
+CloseHandle
+
+
+CreateFileA
+
+
+GetFileSize
+
+
+ReadFile
+
+
+Next, the cmdl32.dat file, located in the same directory from where the parent process of the
+trojan was launched, is read. The loader decrypts the file using the XOR operation with the
+0x88 byte and jumps to the decrypted buffer using the JMP instruction.
+The encrypted shellcode cmdl32.dat
+At the start, the shellcode calculates the size of the payload. The beginning of the payload is
+found through the call of the last shellcode function, and its end is determined by the
+0xDDCCBBAA signature.
+Next, the program receives the list of necessary imported functions. Through the PEB
+structure, the trojan locates the GetProcAddress function, which it instantly uses to get the
+LoadLibraryA function address. The search for the rest of the imports is done through
+these two functions.
+```
+ strcmp
+memcpy
+VirtualAlloc
+VirtualProtect
+WriteFile
+lstrcatA
+GetModuleHandleA
+IsDebuggerPresent
+```
+Next, Trojan.Mirage.1 decrypts the payload using the XOR operation with the 0xCC byte,
+loads the resulting MZPE file onto the memory and calls the mystart exported function.
+The payload
+The payload module represents a dynamic library with the exported functions:
+
+
+OnWork
+
+
+RunUninstallA
+
+
+Uninstall
+
+
+mystart
+
+
+Below, we will dissect two major functions responsible for the trojan operation: mystart
+and OnWork .
+mystart function
+At the beginning, the %TEMP%\\installstat.tmp file is checked to be present. If it exists,
+Trojan.Mirage.1 reads a proxy server address from it and then deletes this file.
+The c:\\programdata\\Tmp\\cmd32\\cmd32 path is used as a home directory,
+herewith the creation, modification and access date for the c:\\programdata\\Tmp\
+\cmd32\\cmd32 and c:\\programdata\\Tmp\\ folders are copied from the %WINDIR%
+\\System32\\winver.exe file.
+The Global\\dawdwere4de2wrw mutex is used to ensure that only one instance of the
+malware is running.
+At this stage, the program checks for the presence of the avp.exe and avpui.exe
+processes. If even one of them is found, then throughout its further operation the trojan will
+additionally verify the presence of the object with the Global\\v2kjgtts1 event name. If
+it locates it, the trojan will halt its further operation.
+Trojan.Mirage.1 can operate in 3 modes. While operating as a service, it checks if the event
+object with the Global\\v2kjgtts1 name exists. If the event object is missing, it copies
+its files from the current directory onto c:\\programdata\\Tmp\\cmd32\\cmd32 and
+injects either into the iexplore.exe process (for the Windows systems, starting from
+Windows Vista and higher) or into the explorer.exe process (for the Windows systems
+below Windows Vista).
+While operating in the context of the explorer.exe or iexplore.exe processes, it
+deletes its files from the %TEMP% directory, checks if the Global\\dawdwere4de2wrw
+mutex is present and creates it if missing. If the trojan is launched with elevated privileges, it
+creates the Windows Event Update service; otherwise, it configures its autorun through the
+[HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows]
+'Load' registry key and proceeds to execute its main functions.
+For the rest of the cases, Trojan.Mirage.1 checks for the Global\\dawdwere4de2wrw
+mutex. If it is missing, the malware injects either into the iexplore.exe process (for the
+Windows systems, starting from Windows Vista and higher) or into the explorer.exe
+process (for the Windows systems below Windows Vista).
+OnWork Function
+After receiving the imported functions, the application proceeds to execute its main
+functions, skipping installation onto the system routine.
+It reads the c:\\programdata\\Tmp\\cmd32\\cmd32\\config.dat file and decrypts
+it using the following algorithm.
+The configuration has the following structure:
+```
+ struct st_config
+ {
+char cnc_addr[32];
+ char cnc_port[16];
+ char interval[16];
+char timeout[16];
+char unk3[16];
+_DWORD unk4;
+ char trojan_name[16];
+ _DWORD unk5;
+ wchar_t campaign[32];
+ };
+```
+Next, Trojan.Mirage.1 collects various information about the infected computer and forms
+the following structure:
+```
+ struct st_info
+ {
+wchar_t version[32];
+ wchar_t pc_name_user[64];
+ wchar_t bot_ip[64];
+ wchar_t macaddr[64];
+```
+```
+ _DWORD osver;
+ _DWORD cpufreq;
+ _DWORD cpunumber;
+ _DWORD physmem;
+ _DWORD is_wow64_process;
+ };
+```
+The %s-v1.0-%s line is stored in the version field; with that, the v1.0 value is hardcoded
+in the analyzed sample, while the two other lines, trojan_name and campaign, are taken
+from the settings.
+Next, an attempt to connect to the C&C server is made. To do so, the trojan checks for the
+proxy server settings in the [HKCU\\Software\\Microsoft\\Windows\
+\CurrentVersion\\Internet Settings] 'ProxyEnable' and [HKCU\
+\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings]
+'ProxyServer' registry entries. If settings are found, the trojan uses the corresponding
+proxy server in its further requests.
+Trojan.Mirage.1 connects to the C&C server listed in its configuration and sends the
+following packet:
+```
+ struct st_hello
+ {
+ _DWORD dword0; // 'f'
+ _DWORD dword4; // random value
+ _DWORD dword8; // random value
+ _DWORD dwordC; // random value
+ wchar_t text[256]; // "Neo,welcome to the desert of real."
+ };
+```
+In response, it receives the following commands to execute:
+0 — send information about the infected computer;
+1 — run the plug-in designed to work with the file system;
+2 — run the plug-in designed to work with the command shell;
+5 — run the plug-in to work with the processes;
+6 — run the plug-in to work with the command shell on behalf of another user;
+7 — run the keylogger plug-in;
+51 — send information about the infected computer;
+52 — download an update for the trojan;
+
+
+53 — disconnect from the server;
+
+
+54 — disconnect from the server;
+
+
+200 — send the information about storage devices installed in the system;
+201 — send the directory listing;
+
+
+202 — delete a file;
+
+
+203 — move a file;
+
+
+204 — upload a file to the server;
+
+205 — download a file from the server;
+
+206 — create a directory;
+
+207 — run a command with the cmd.exe;
+
+300 — send a list of the processes in the infected system to the server;
+301 — kill a process with a specific identifier;
+400 — upload an event log of the keylogger to the server.
+C&C server connection protocol
+The HTTP protocol is used to connect the malware with the C&C server. The requests have
+the following format:
+```
+ POST http://:/result?hl=en&id= HTTP/1.1\r\n
+ Accept: /\r\n
+ Accept-Language: en-us\r\n
+ User-Agent: Mozilla/4.0 (compatible; MSIE 5.5; Windows NT 5.0)\r\n
+ Proxy-Connection: Keep-Alive\r\n
+ Content-Length: %d\r\n
+ Content-Type: application/x-www-form-urlencoded\r\n
+ Encoding: gzip, deflate\r\n
+Host: %s:%d\r\n\r\n
+```
+Where <cnc_addr> is the C&C server address; <cnc_port> is the port of the C&C server;
+<id> is a random string of lower-case letters of the Latin alphabet. The unique <id> is
+generated for each request.
+The data for the POST-request and the response is encrypted with the following algorithm:
+```
+ for ( i = 0; i < data_size; ++i )
+ request[req_header_len + i] = (i ^ 0x7C) + data[i];
+```
+The first DWORD in the server response is the identifier of the command, which should be
+executed by the bot. The rest of the buffer can contain the additional parameters for this
+command.
+The plug-in designed to work with the command shell
+For the input/output redirection from the cmd.exe process, the following three files are used:
+
+
+%TEMP%\\cache\\sysin_%d.log
+
+
+%TEMP%\\cache\\sysout_%d.log
+
+
+%TEMP%\\cache\\systemp_%d.log
+
+
+Where %d is a random number, which is the same for all three files; it is generated at the
+time of the plug-in launch. If the plug-in has been launched with command 6, the command
+buffer should contain the domain and user login and password, from under which the
+command shell is being launched.
+After that, the trojan launches the command shell with the input/output redirection onto the
+files, mentioned earlier. The contents of the sysout_%d.log file will be sent to the C&C
+server, and the response will be stored in the sysin_%d.log file.

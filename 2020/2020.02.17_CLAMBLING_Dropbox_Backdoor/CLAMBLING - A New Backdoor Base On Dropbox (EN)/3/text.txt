@@ -1,0 +1,42 @@
+First Stage Infection
+The threat actor uses Windows Defender Core Process MsMpEng.exe which has a
+legal digital signature to load the malicious DLL file. Load the shellcode from the
+www.talent-jump.com/article/2020/02/17/CLAMBLING-A-New-Backdoor-Base-On-Dropbox-en/ 1/23
+2/18/2020 CLAMBLING - A New Backdoor Base On Dropbox (EN) | 詮睿科技
+payload file then release the final malicious executable to complete the first stage
+infection.
+During the investigation, we found a total of 8 different loader’s filenames [Appendix 1]
+renamed from MsMpEng.exe and placed at C:\ProgramData\Microsoft in its
+separated folder. The loader is just called the function ServiceCrtMain imported
+from mpsvc.dll .
+The malicious DLL file mpsvc.dll has two types [Appendix 2] . The older type will try
+to read shellcode from payload file English.rtf, decode and decompress the
+content using RtlDecompressBuffer to release the final executable (Figure 1).
+Figure 1. Older type of mpsvc.dll
+The newer one has a different way to start the infection. There is a piece of
+shellcode hard-coded in the mpsvc.dll, after decoding the shellcode from
+mpsvc.dll, it will inject and execute to load the shellcode from mpsvc.mui
+(Figure 2), which will release the final executable and inject into the process.
+www.talent-jump.com/article/2020/02/17/CLAMBLING-A-New-Backdoor-Base-On-Dropbox-en/ 2/23
+2/18/2020 CLAMBLING - A New Backdoor Base On Dropbox (EN) | 詮睿科技
+Figure 2. Newer type of mpsvc.dll
+Both of these two types of mpsvc.dll will release a full functional backdoor, which
+can connect to the C&C server. But the final executable released by a newer type of
+mpsvc.dll has some upgrade, including the function to interact with Dropbox API.
+The following article will focus on the malicious executable released by the newer
+type of mpsvc.dll .
+The hardcoded shellcode in a newer type of mpsvc.dll will first allocate 0x80000
+bytes of memory space. Getting the current module’s full path and replace the
+extension dll to mui and read the shellcode in this mui
+file, then jump to the
+base address of mui
+file plus its first byte. (Figure 3)
+www.talent-jump.com/article/2020/02/17/CLAMBLING-A-New-Backdoor-Base-On-Dropbox-en/ 3/23
+2/18/2020 CLAMBLING - A New Backdoor Base On Dropbox (EN) | 詮睿科技
+Figure 3. Decoded shellcode in mpsvc.dll
+In the end, the shellcode in mpsvc.mui has another different piece of hard-coded
+bytes, which will decompress by RtlDecompressBuffer to the final malicious
+executable (Figure 4).
+www.talent-jump.com/article/2020/02/17/CLAMBLING-A-New-Backdoor-Base-On-Dropbox-en/ 4/23
+2/18/2020 CLAMBLING - A New Backdoor Base On Dropbox (EN) | 詮睿科技
+Figure 4. The final malicious executable in buffer.

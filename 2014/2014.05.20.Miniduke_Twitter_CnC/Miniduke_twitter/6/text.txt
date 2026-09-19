@@ -1,0 +1,24 @@
+TwitterJS component
+The TwitterJS module is extracted by creating a copy of the Windows DLL cryptdll.dll, injecting a block of
+code into it and redirecting the exported functions to this code. Here is how the export address table of the
+patched binary looks after modifications.
+This file is then stored in an Alternate Data Stream (ADS) in NTUSER.DAT in the %USERPROFILE%
+folder. Finally this DLL is registered as the Open command when a drive is open, which has the effect of
+starting the bot every time the user opens a disk drive. Below you can find the content of
+the init.cmd script used by MiniDuke to install TwitterJS module onto the system.
+When loaded, TwitterJS instantiates the JScript COM object and decrypts a JScript file containing the
+core logic of the module.
+Prior to executing it, MiniDuke applies a light encoding to the script: The next images show the result of
+two separate obfuscations, we can see that the variables have different values. This is probably done to
+thwart security systems that scan at the entry points of the JScript engine.
+Result of first obfuscation
+Result of second obfuscation
+The purpose of this script is to use Twitter to find a C&C and retrieve JScript code to execute. It first
+generates a Twitter user to search for; this search term changes every 7 days and is actually a match to the
+real account name, not the Twitter account name. The bot then visits the Twitter profiles returned by the
+search and looks for links that end with “.xhtml“. When one is found, it replaces “.xhtml” with “.php” and
+fetches that link. Information about the computer is embedded in the Accept HTTP header.
+The first link on the retrieved page should contain base64 data; the name attribute of the link is used as a
+rolling XOR key to decrypt the JScript code. Finally, MiniDuke calculates a hash of the fetched script and
+compares it with a hardcoded hash in the TwitterJS script. If they match, the fetched script is executed by
+calling eval().

@@ -1,0 +1,425 @@
+Credential Access TA0006
+OS Credential Dumping T1003
+Basic description
+Contents 176
+Threat actors may attempt to dump account login credentials from the operating system or other software.
+These credentials are normally in the form of a password hash or cleartext password. The obtained credentials
+can then be used for lateral movement and access to restricted information.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: LSASS Memory T1003.001
+OS Credential Dumping: LSASS Memory T1003.001
+Basic description
+Contents 177
+The subtechnique known as OS Credential Dumping: LSASS Memory T1003.001 is used by attackers to obtain
+credentials in a Windows OS. This technique involves obtaining account credentials by dumping the memory of
+the process known as LSASS (Local Security Authority Subsystem Service) in Windows operating systems.
+The LSASS process is responsible for user authentication and management of the security of account
+credentials such as passwords. Therefore, it contains important data such as password hashes, session keys,
+and authentication tokens, which can be exploited by attackers to gain privileged access to the system or to
+extend their attacks to other resources on the network.
+The most popular tools employed by attackers are the following:
+
+
+Mimikatz
+
+
+ProcDump
+
+
+Rubeus
+
+
+LaZagne
+
+
+Seth
+
+
+PowerSploit
+
+
+PowerShell Empire
+
+
+secretsdump.py
+
+
+lsassy
+
+
+pypykatz
+
+
+Examples of procedures
+Asian APT groups use the following methods for implementing this technique:
+Example 1
+In Indonesia, Asian threat actors chose an unusual Living-Off-the-Land approach and obtained a memory
+dump of the LSASS process by employing DumpMinitool.exe, which is a legitimate tool delivered together
+with Microsoft Visual Studio.
+C:\Windows\System32\cmd.exe /C $windir\help\help\DumpMinitool.exe --file 1.txt --processId  --dumpType Full
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: LSASS Memory T1003.001
+Example 2
+Contents 178
+Asian APT groups often use the ProcDump.exe tool for a memory dump of the lsass.exe process. In one of the
+investigations conducted by GERT, this tool was detected in a web service directory:
+C:\inetpub\wwwroot\aspnet_client\Procdump.exe
+Example startup:
+procdump.exe -accepteula -ma lsass.exe C:\Windows\Temp\mem.dmp
+Example 3
+Here's another example of using the LoLBin tool after it was renamed to C:\Windows\System32\comsvcs.dll:
+rundll32.exe C:\Windows\System32\111.dll, MiniDump 880 lsass.dmp full
+Example 4
+Mimikatz is very popular among attackers, including Asian APT groups. They primarily use various modifications
+of this popular tool.
+C:\Windows\System32\logfiles\msdol.exe privilege::debug sekurlsa::logonpasswords exit
+Example 5
+In some attacks involving Asian APT groups, one of the other ways they used to gain access to lsass.exe
+memory was using an SSP provider.
+C:\Windows\Help\Help\ssp.exe C:\Windows\Help\Help\Dll7.dll
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: LSASS Memory T1003.001
+Contents 179
+ssp.exe (MD5: AF893448B4D1862C42D6E1CC3AA8878D) is an SSP loader [13], that receives a DLL library as an
+argument. In this case, the DLL library named Dll7.dll (MD5: 871CC8F514011F4796982D5E6E5F35C1) is passed
+to the loader and loaded into the lsass.exe process.
+Example 6
+Another method to obtain a memory dump of lsass.exe that was observed in the Indonesian incident is to steal
+the handle of the lsass.exe process.
+C:\Windows\help\help\duplicatedump.exe -f test -c C:\Windows\Help\Help\LSAPlugin.dll
+duplicatedump.exe [14] is a tool used for stealing passwords from the lsass.exe process by duplicating the
+existing handle of the lsass.exe process to get access to the address space of this process.
+duplicatedump.exe
+MD5: AD2C078AE847EDE5C66494F0DDECD35C
+LSAPlugin.dll
+MD5: EC38F08AAAEADD833B0B356E2783FFD4
+Example 7
+Asian threat actors use many variations of custom-written tools as well as popular tools such as Mimikatz.
+The library EC38F08AAAEADD833B0B356E2783FFD4 has one exportable function named "DO" that is tasked
+with using the API AddSecurityPackage (via RPC) to force the lsass.exe process to load the twindump.dll
+library.
+13 14
+SSP DuplicateDump
+Learn more Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: LSASS Memory T1003.001
+Figure 58 Decompiled malicious library
+Contents 180
+This technique can be detected by tracking unsigned libraries being loaded into the lsass.exe process
+Detection
+To detect attacks related to the technique known as OS Credential Dumping: LSASS Memory T1003.001, you
+are advised to employ the following methods:
+Use antivirus software and other tools to detect malicious programs such as Mimikatz, ProcDump, and others
+that may be used to gather account credentials from LSASS memory.
+Consider the possibility of tracking attempts to access lsass.exe process memory (Process Accessed). This
+can be done using an EDR solution by tracking events based on the WinAPI OpenProcess() function, and by
+using the Sysmon monitoring agent.
+To save a memory dump or load a library into the lsass.exe process, read/write permissions are required.
+Below is a list of access rights and their numerical representations:
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: LSASS Memory T1003.001
+Figure 59 Access rights to the process and decoding their meaning
+Detection can be based on events involving queries to a process with the following rights:
+PROCESS_VM_READ (0x00000010)
+PROCESS_VM_WRITE (0x00000020)
+Contents 181
+For example, the following regular expression includes all possible combinations of rights with read or write
+access:
+^0x\w*[1235679abdef]\w$
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+
+
+Loading a DLL from a shared directory into the lsass.exe process
+
+
+Loading an unsigned DLL into the lsass.exe process
+
+
+You can additionally track the creation of a remote thread in the lsass.exe process (Remote Thread Created)
+from a non-standard process. Startup of memory dump tools can be detected based on Process Created
+events.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: LSASS Memory T1003.001
+Event source Log Event ID
+Windows Security 4688, 4656
+Sysmon Sysmon 1, 6, 7, 8, 10
+SIGMA rules
+
+
+Sigma-Generic-Image Loaded into lsass.exe
+
+
+Sigma-Generic-Lsass Dump via LOLBin
+
+
+Sigma-Generic-LSASS Memory Access via Leaked Handle Seclogon
+
+
+Sigma-Generic-Process Dump via Comsvcs.dll
+
+
+Sigma-Generic-Suspicious LSASS Memory Access
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 183
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: Security Account Manager T1003.002
+OS Credential Dumping: Security Account Manager T1003.002
+Basic description
+Contents 184
+The technique known as OS Credential Dumping: Security Account Manager T1003.002 is also used by
+attackers to get account credentials. This subtechnique involves extracting account credentials from the
+Security Account Manager (SAM) database in Windows operating systems.
+SAM contains information on users and user groups, stores user password hashes, and is required for login
+authentication. It is used to manage user accounts, implement access control, and apply security policies in
+Windows.
+The SAM file (SAM hive) is located in the folder C:\Windows\System32\Config and is accessible only to the
+System Account when the operating system is started. Although the SAM file is protected from direct readand-edit access, attackers use various methods to bypass this restriction.
+Examples of procedures
+Most Asian APT groups that we observed implement this technique by using the standard reg.exe tool and
+saving registry hives to shared directories in the operating system.
+$system32\reg.exe reg save hklm\sam $public\videos\sam.hive
+$system32\reg.exe reg save hklm\security $public\videos\security.hive
+$system32\reg.exe reg save hklm\system $public\videos\system.hive
+They also frequently save the hives to the Recycle Bin and then archive them:
+$system32\reg.exe reg save hklm\sam c:\$recycle.bin\temp\sam.hive
+Example use of commands by the group known as CopperTurtle:
+reg save HKLM\SAM “c:\intel\SamBkup.hiv”
+reg save HKLM\SYSTEM “c:\intel\SystemBkup.hiv”
+reg save HKLM\SAM c:\intel\Sam.hiv
+reg save HKLM\SYSTEM $windir\System.hiv
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: Security Account Manager T1003.002
+Detection
+Contents 185
+Various methods are available to detect the technique known as OS Credential Dumping Security Account
+Manager T1003.002:
+The first method is to track situations in which the reg.exe command is started to save the SAM, SYSTEM, and
+SECURITY registry hives.
+The second method is to monitor all queries to these registry hives with read permissions.
+HKLM\sam\sam\domains\account\users\
+HKLM\SYSTEM\CurrentControlSet\control\lsa\JD
+HKLM\SYSTEM\CurrentControlSet\control\lsa\GBG
+HKLM\SYSTEM\CurrentControlSet\control\lsa\Skew1
+HKLM\SYSTEM\CurrentControlSet\control\lsa\Data
+HKLM\security\cache
+HKLM\security\policy\secrets
+To do so, configure an audit of queries to the registry keys listed above. Object access events occur
+frequently. Therefore, an EDR solution and the standard Windows audit (Event ID 4663) normally tracks
+specific critical-access objects.
+Event source Log Event ID
+Windows Security 4688, 4663
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Detected Access to SAM, SYSTEM and SECURITY registry hives
+
+
+Sigma-Generic-Dumping SAM via Command Line
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: NTDS T1003.003
+OS Credential Dumping: NTDS T1003.003
+Basic description
+Contents 186
+NTDS.dit is the main Windows Active Directory (AD) database that contains information about users, groups,
+computers, and other objects in a network domain environment.
+Database files, transaction logs, and checkpoint files are usually stored in the C:\Windows\NTDS directory on
+all domain controllers.
+Attackers may use password hashes directly from the NTDS.dit file to achieve their objectives. If the attacker
+has already taken control of the domain, it is useful to hack the user passwords because users often re-use
+the same passwords on systems connected to a domain and on their personal devices that are not connected
+to the domain.
+To gain access to the NTDS.dit file on a domain controller, the actor must already have administrative access
+to Active Directory. Alternatively, the attackers can compromise the backup tool of the domain infrastructure
+and copy the NTDS.dit file.
+As soon as the attacker gains access to the file system of the domain controller, they can save the NTDS.
+dit file and the HKEY_LOCAL_MACHINE\SYSTEM, registry hive, which contains the boot key required for
+decrypting the NTDS.dit file.
+Keep in mind that Active Directory maintains a lock on the NTDS.dit file, thereby preventing direct copying of
+this file. However, attackers have several ways to bypass this restriction, including the following:
+
+
+Use the Volume Shadow Copy Service (VSS) to create a snapshot of the volume and then extract the NTDS.
+dit file from this snapshot.
+
+
+Use built-in tools such as DSDBUtil.exe or NTDSUtil.exe to generate Active Directory installation media files.
+
+
+Use PowerShell tools such as Invoke-NinjaCopy from PowerSploit to copy files even while they are in use.
+
+
+Stop Active Directory (though this would most likely result in detection and potential harm to the domain
+infrastructure).
+
+
+Examples of procedures
+Example 1
+One Asian APT group used a custom-written console utility to copy files from one directory into another
+directory using functions of the vssapi.dll library (API shadow copy functions). It was used to perform a dump
+of ntds.dit.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: NTDS T1003.003
+Figure 61 Decompiled malicious utility using vssapi.dll
+Usage example:
+Contents 187
+c:\programdata\microsoft\sc64.exe C:\Windows\ntds\ntds.dit c:\programdata\microsoft\ntds.dit
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: NTDS T1003.003
+Example 2
+Another popular way to dump ntds.dit is to use the ntdsutil.exe utility.
+Asian APT groups have been observed using this utility in a multitude of campaigns.
+Contents 188
+NTDSUtil is a console utility for working with an AD database (ntds.dit) that lets you create IFM for DCPromo.
+IFM (Install from Media) is used with DCPromo so that domain data does not need to be copied over the
+network from a domain controller (DC) to a server that is being converted into a new domain controller.
+NTDSUTIL can be used to extract NTDS.dit locally on a DC by creating an IFM (shadow copy of VSS).
+Example use of NTDSUTIL via PowerShell:
+PowerShell ntdsutil.exe 'ac i ntds' 'ifm' 'create full C:\Windows\temp\ztemp' q q
+Example use of ntdsutil via cmd.exe:
+ntdsutil "ac i ntds" "ifm" "create full C:\Windows\temp" q q
+Example 3
+We also encountered use of the NTDSDumpEx utility, which extracts data from a saved ntds.dit:
+nd.exe -d ntds.dit -o hash.txt -s system.hiv -h -p -m
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping: NTDS T1003.003
+Detection
+Contents 189
+To detect use of the technique known as OS Credential Dumping: NTDS T1003.003, you can track running of
+utilities used for an NTDS.dit dump such as NTDSUTIL, or tools used for shadow copying.
+An EDR solution can also track calls of API functions used to shadow copy sensitive files such as NTDS.dit,
+SAM, SYSTEM, and SECURITY.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Saving ndts.dit via ntdsutil.exe
+
+
+Sigma-Generic-Copying ntds.dit from Volume Shadow Copy
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  Unsecured Credentials T1552
+Unsecured Credentials T1552
+Contents 190
+Technical details  |  Credential Access TA0006  |  Unsecured Credentials: Credentials In Files T1552.001
+Unsecured Credentials: Credentials In Files T1552.001
+Basic description
+Contents 191
+The technique known as Unsecured Credentials: Credentials In Files T1552.001 obtains account credentials
+from files or documents that are stored in an unsecured or poorly protected format. Threat actors use these
+files to collect confidential information, such as usernames, passwords, API keys, or other account credentials.
+This technique relies on the fact that people and companies often store account credentials in various files,
+including configuration files, scripts, logs, and other types of documentation. These files may be inadvertently
+left accessible to unauthorized users or may be stored in unsecured locations, which means that attackers can
+easily obtain them.
+After attackers detect files containing account credentials, they can use various methods to extract this
+information. These methods may include using regular expressions to manually check files, or using templates
+to search for relevant data. They can also use automated parsing tools to extract account credentials from
+structured files such as XML, JSON, or configuration files.
+Examples of procedures
+Example 1
+In most of the observed attacks involving Asian APT groups, we noticed commands that were used to
+search for unsecured account credentials in the SYSVOL folder, which may store scripts for use in a domain
+infrastructure. Attackers most frequently attempt to find a local administrator password assigned in a GPO:
+$system32\cmd.exe /C dir /s /a \dc\SYSVOL\dc.domain.local*.xml
+Here is a search for the word "cpassword":
+$system32\cmd.exe /C findstr /s /i "cpassword" \dc\SYSVOL*.xml
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  Unsecured Credentials: Credentials In Files T1552.001
+Example 2
+Contents 192
+While investigating one of the incidents, we also found that the attackers obtained account credentials from
+the PowerShell script Join1.ps1, which contained the password for the user .
+Example 3
+Technical details  |  Credential Access TA0006  |  Credentials from Password Stores T1555
+Credentials from Password Stores T1555
+Basic description
+Contents 193
+To obtain user credentials, APT groups try to access common places used to store passwords. Passwords are
+stored in multiple locations in the operating system, including in third-party applications such as browsers or
+password managers. After obtaining credentials, attackers can use them for lateral movement and to access
+restricted information.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  Credentials from Password Stores: Credentials from Web Browsers T1555.003
+Contents 194
+Credentials from Password Stores: Credentials from Web Browsers T1555.003
+Basic description
+Especially popular among password stealers, the technique known as Credentials from Password Stores:
+Credentials from Web Browsers T1555.003 obtains account credentials that are stored in browsers. After
+retrieving user account credentials from browsers, attackers can use them in a domain infrastructure because
+users often let browsers save the domain passwords that are used to access internal services via ADFS.
+Here are some locations where popular browsers store files containing sensitive data:
+Google Chrome
+Mozilla Firefox
+Opera
+Microsoft Edge
+$user\$appdata\Google\Chrome\User Data.\Bookmarks
+$user\$appdata\Google\Chrome\User Data.\Cookies
+$user\$appdata\Google\Chrome\User Data.\Login Data
+$user\$appdata\Google\Chrome\User Data.\Web Data
+$user\$appdata\Google\Chrome\User Data.*\Web Data-journal
+$user\$appdata\Google\Chrome\User Data\Local State
+$user\$appdata\Mozilla\Firefox\Profiles.\cookies
+$user\$appdata\Mozilla\Firefox\Profiles.\key3.db
+$user\$appdata\Mozilla\Firefox\Profiles.\key4.db
+$user\$appdata\Mozilla\Firefox\Profiles.\logins.json
+$user\$appdata\Mozilla\Firefox\Profiles.*\places.sqlite
+$user\$appdata\Opera Software\Opera Stable\User Data.\Bookmarks
+$user\$appdata\Opera Software\Opera Stable\User Data.\Cookies
+$user\$appdata\Opera Software\Opera Stable\User Data.\Login Data
+$user\$appdata\Opera Software\Opera Stable\User Data.\Web Data
+$user\$appdata\Opera Software\Opera Stable\User Data\Local State
+$user\$appdata\Opera\Opera Next\User Data.\Bookmarks
+$user\$appdata\Opera\Opera Next\User Data.\Cookies
+$user\$appdata\Opera\Opera Next\User Data.\Login Data
+$user\$appdata\Opera\Opera Next\User Data.\Web Data
+$user\$appdata\Opera\Opera Next\User Data\Local State
+$user\$appdata\Microsoft\Edge\User Data.\Bookmarks
+$user\$appdata\Microsoft\Edge\User Data.\Cookies
+$user\$appdata\Microsoft\Edge\User Data.\Login Data
+$user\$appdata\Microsoft\Edge\User Data.\Web Data
+$user\$appdata\Microsoft\Edge\User Data\Local State
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  Credentials from Password Stores: Credentials from Web Browsers T1555.003
+Examples of procedures
+Example 1
+Contents 195
+In the incident in Malaysia, we detected a sample that gathers account credentials from a browser:
+cmd /c C:\Windows\avpui.exe
+Below is a log file generated by a malicious program:
+Figure 62
+Log file generated by malware
+Example 2
+Another way to collect passwords from browsers was found in a DLL Hijacker sample:
+C:\Windows\Temp\ingame_64.exe
+MD5: F69926D69B648946D07A2EEFC2FEFC9B
+C:\Windows\Temp\ingame.dll
+MD5: C53D8D178E3EB78F01C1EFECFA7EA417
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Credential Access TA0006  |  Credentials from Password Stores: Credentials from Web Browsers T1555.003
+Contents 196
+The attackers brought their own legitimate file and malicious library. When they ran the legitimate file, the
+malicious library was loaded and executed:
+ingame_64.exe -echo c
+The following log files were created:
+000C29A434B2-c-chrome-user-01-0-Default.log
+000C29A434B2-c-edge-user-01-0-Default.log
+Detection
+The primary way to detect the technique known as Credentials from Password Stores: Credentials from
+Web Browsers T1555.003 is to track attempts by non-standard processes (other than legitimate browser
+processes) to access browser files containing user account credentials.
+Event source Log Event ID
+Windows Security 4663
+SIGMA rules
+
+Sigma-Generic-Suspicious Access to Credentials from Web Browsers
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Discovery TA0007  |  Software Discovery T1518

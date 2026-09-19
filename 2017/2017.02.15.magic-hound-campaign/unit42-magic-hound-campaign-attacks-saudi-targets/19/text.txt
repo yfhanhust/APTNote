@@ -1,0 +1,43 @@
+MAGICHOUND.RETRIEVER
+We observed a DropIt sample installing another Trojan we call MagicHound.Retriever. At a high level,
+Retriever is a .NET downloader that downloads secondary payloads from servers associated with
+Magic Hound. While the Trojan itself does not resemble the other Magic Hound tools, it does create
+a folder named “c:\temp” that the Magic Hound loader creates to store its persistence executable, as
+previously discussed. The folder name is quite generic and by itself is not a great correlation point,
+however, this coupled with the shared infrastructure makes a higher fidelity connection between the�
+two.
+The Retriever Trojan uses the following namespace:
+using pcchekapp.grp.ammar.samaneh;
+Android.The malware begins by creating a web service object and uses the following URL within its
+configuration:�
+http:// service.chrome-up[.]date:8080 /WebService.asmx
+It then calls a function called “SetLog2”, which sets variables for the system’s IP address, MAC
+address and hostname. A password variable is available but unused in this sample. The code will
+gather some information about the system, specifically the local IP address, MAC address, and the�
+external IP address of the system. The code obtains the external IP address via an HTTP request
+using to “http://checkip.dyndns.org/” and uses a regular expression to locate an IP address from the
+HTTP response.
+Once these variables are set, the malware uses the SoapHttpClientProtocol class to communicate
+with its C2 server, which issues an HTTP POST requests that appears as:
+As you can see from the above request, the SoapHttpClientProtocol class neatly structures data into
+an HTTP POST request. All subsequent interaction with the C2 server uses the same SOAP web
+service, so we will not show all of the generated HTTP requests. Instead, we will refer to the specific�
+SOAP action (see “SOAPAction” field in previous example, specifically “SetLog2”) that the Trojan�
+requests from the C2 server and the response from the C2 server. After sending the C2 the system
+information, the malware then issues a second request for “GetHasAnything”, which will
+communicate with the C2 server and ask the server if it has a secondary binary for the Trojan to
+install.
+If the C2 server provides any response to the “GetHasAnything” request, it then calls the
+“GetIdAbOne” SOAP method to obtain what we believe is a unique identifier for the system that the�
+Trojan will use for further interaction with the C2. After receiving this variable, the Trojan calls the
+“GetNameAbById” to obtain a base64 string that will be the filename written in a newly created�
+“c:\temp” (decoded from “YzpcdGVtcFw=”) folder. The Trojan will then call “GetAbById”, which the
+C2 will provide a base64 string for the contents for the file to write to c:\temp. After obtaining the�
+unique ID from the C2 server, the Trojan calls the “SetAbStatById” method to notify the C2 server of
+its status of “1” to notify the server it had successfully received the filename and file data.�
+With the file written to the system, the Trojan calls the “GetishideAbById” SOAP action to determine�
+whether or not the C2 server wishes to execute the newly dropped file in a hidden window. This�
+request is followed by a call to “GetisrunasAbById” to determine if the Trojan should use “runas” to
+execute the downloaded executable with elevated privileges, which would display the UAC dialog
+for the user to click.
+Unfortunately, we were unable to obtain a secondary payload from an active C2 server.

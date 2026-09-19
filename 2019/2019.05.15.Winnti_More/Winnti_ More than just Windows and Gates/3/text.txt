@@ -1,0 +1,46 @@
+Technical Analysis
+The Linux version of Winnti is comprised of two files: a main backdoor (libxselinux) and a
+library (libxselinux.so) used to hide it’s activity on an infected system.
+As with other versions of Winnti, the core component of the malware doesn’t natively
+provide the operators with distinct functionality⁸. This component is primarily designed to
+handle communications and the deployment of modules directly from the command-and
+control servers. During our analysis, we were unable to recover any active plugins.
+However, prior reporting⁹ suggests that the operators commonly deploy plugins for
+remote command execution, file exfiltration, and socks5 proxying on the infected host.
+We expect similar functionality to be leveraged via additional modules for Linux.
+‘libxselinux.so’ — the userland rootkit
+https://medium.com/chronicle-blog/winnti-more-than-just-windows-and-gates-e4f03436031a 1/8
+5/16/2019 Winnti: More than just Windows and Gates – Chronicle Blog – Medium
+The library used to hide Winnti’s system activity is a copy of the open-source userland
+rootkit Azazel¹⁰, with minor changes. When executed, it will register symbols for multiple
+commonly used functions, including: open(), rmdir(), and unlink(), and modify their
+returns to hide the malware’s operations. Below is a side-by-side comparison of the
+Azazel source code and the relevant function decompilation from ‘libxselinux.so’.
+Distinct changes to Azazel by the Winnti developers include the addition of a function
+named ‘Decrypt2’, which is used to decode an embedded configuration similar to the
+core implant. Unlike standard Azazel which is configured to hide network activity based
+https://medium.com/chronicle-blog/winnti-more-than-just-windows-and-gates-e4f03436031a 2/8
+5/16/2019 Winnti: More than just Windows and Gates – Chronicle Blog – Medium
+on port ranges, the Winnti-modified version keeps a list of process identifiers and
+network connections associated with the malware’s activity. This modification likely
+serves to simplify the operator’s sample configuration process by not having to denote
+specific ports to hide.
+Strings within this sample associated with the malware’s operations are encoded using a
+single-byte XOR encoding. The following is an example Python function to decode these
+strings.
+libxselinux
+Winnti Linux variant’s core functionality is within ‘libxselinux’. Upon execution, an
+embedded configuration is decoded from the data section using a simple XOR cipher.
+An example Python function to decode this configuration is shown below:
+The decoded configuration is similar in structure to the version Kaspersky classifies as
+Winnti 2.0¹¹, as well as samples in the 2015 Novetta report¹². Embedded in this sample’s
+configuration three command-and-control server addresses and two additional strings
+https://medium.com/chronicle-blog/winnti-more-than-just-windows-and-gates-e4f03436031a 3/8
+5/16/2019 Winnti: More than just Windows and Gates – Chronicle Blog – Medium
+we believe to be campaign designators. Winnti ver. 1, these values were designated as
+‘ tag ’ and ‘ group’. A sample decoded configuration is shown below:
+Winnti Linux samples identified so far fall under three distinct campaign designators:
+For context, embedded Winnti campaign designators have ranged from target names,
+geographic areas, industry, and profanity.
+https://medium.com/chronicle-blog/winnti-more-than-just-windows-and-gates-e4f03436031a 4/8
+5/16/2019 Winnti: More than just Windows and Gates – Chronicle Blog – Medium

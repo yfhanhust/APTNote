@@ -1,0 +1,61 @@
+Operating routine
+scansts.dll
+Once loaded to a process, the library transfers control to the call of scansts_2 the
+exported function by a hardcoded offset.
+In that function the library refers to QuickHeal file, which is located at C:
+\Windows\System32 on the infected system. It then checks for the
+HKLM\Software\BINARY or HKCU\Software\BINARY registry key to determine further
+actions. If the registry keys are absent, the trojan initiates decryption of the QuickHeal
+shellcode and then calls it by passing it as an argument 0 .
+Decryption algorithm:
+```
+ s = ''
+for i in range(len(d)):
+s += chr((((ord(d[i]) + 0x4f) ^ 0xf1) - 0x4f) & 0xff)
+```
+CLNTCON.ocx
+It is the improved version of scansts.dll. The main malicious code is located in the
+DllRegisterServer exported function. The function call decrypts the DLL’s code using an
+algorithm based on the XOR operation. The trojan then refers to CLNTCON.ocp and checks
+for the HKLM\Software\BINARY or HKCU\Software\BINARY registry keys. The
+shellcode is decrypted in two stages: in addition to the mentioned algorithm, the RC4
+algorithm with the CLNTCON.ocp decoding key is also used.
+http_dll.dll
+It is equivalent to CLNCON.ocx except the following options:
+
+
+the main trojan’s code is located in the StartHttpServer exported function,
+
+
+ESETSrv is used as the RC4 decoding key.
+
+
+QuickHeal shellcode
+It is the obfuscated shellcode with an encrypted binary file and configuration. The
+obfuscated portion contains decryption instructions for the code that extracts the payload.
+The payload is extracted by malmain function and defined by the following structure:
+```
+ #pragma pack(push,1)
+struct st_data
+ {
+_DWORD size;
+ _BYTE data[size];
+```
+```
+ };
+struct shellarg
+{
+_DWORD shellcode_ep;
+ _DWORD field_4;
+ st_data mod;
+ _DWORD comp_size;
+ st_data cfg;
+ _DWORD field_14;
+ _DWORD field_18;
+ };
+#pragma pack(pop)
+```
+RtlDecompressBuffer function is used for decompression. During the payload extraction
+process the shellcode verifies executable’s signatures. MZ and PE signatures are replaced
+with XV. Then DllMain is being executed. It receives the pointer to shellarg structure as a
+lpReserved parameter. This structure contains payload’s configuration.

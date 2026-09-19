@@ -1,0 +1,79 @@
+
+
+
+Sentence : How Cloud Snooper communicates through the firewall
+The NF_INET_LOCAL_IN is a type of hook that is triggered before the packet reaches the destination
+port.
+The installed hook handler inspects the socket buffer of every IPv4 packet, looking for a command
+concealed within a header – the command being the source port number of the packet originating from
+the attacker's machine.
+Cloud Snooper - SophosLabs Page 5 of 29
+Cloud Snooper - SophosLabs
+An analysis of the malware samples reveal that it is looking for packets that use any of the following
+source ports. Each unique source port represents a command, such as: 1010, 2020, 6060, 7070,
+8080, or 9999.
+Firewalls typically prevent machines behind the firewall from receiving traffic sent to arbitrary
+destination ports, but they don't pay attention to the source ports, because source ports are normally
+ephemeral, and not relevant to the server or the services it is hosting.
+In a typical cloud instance, the server may be set up to receive traffic from any IP address on port
+80/TCP (for HTTP) and on 443/TCP (for HTTPS), so the firewall will let any traffic to those ports through
+to the server. So long as the traffic coming in to one of these standard ports fits the pattern the
+communications handler is looking for, it will execute one of its built-in instructions. Anything else will
+be ignored, and the server will serve web pages as normal to browsers.
+Practical examples of communication with the Snooper
+For example, if the communications handler receives a TCP SYN packet with an origin port of 6060, the
+malware will decrypt an embedded file (SHA-256:
+ec22c6e3537fcc0003bb73dd42f41ae077b2cb3ad9cdab295bca46dc91eac1e1) that has been encrypted
+with RC4 (the key is 'YaHo0@' ).
+It will then drop that decrypted file as /tmp/snoopy, wait for half a second, and then execute it as a
+usermode application with the call_usermodehelper() syscall. Immediately after that, it deletes the
+/tmp/snoopy file, so the snoopy application remains running in memory with no physical file present.
+The commands passed to two consecutive call_usermodehelper() syscalls are:
+The commands above will run and then delete the file from the filesystem, but an active snoopy process
+listening on ports 2053 and 2080 remains:
+If the command is 9999 as a TCP SYN packet, the /tmp/snoopy process self-terminates (in case killall
+is supported by OS), by passing the following commands to call_usermodehelper() syscall.
+NOTE: executing snoopy again while it's already running has no effect; by using a file lock mechanism,
+snoopy makes sure only one instance is running. If that happens, it will output:
+Cloud Snooper - SophosLabs Page 6 of 29
+Cloud Snooper - SophosLabs
+Here is the logic of the NF_INET_LOCAL_IN hook handler, which listens for SYN packets sent to the
+server, using the various source ports:
+And here is the logic of the NF_INET_LOCAL_OUT hook handler:
+Cloud Snooper - SophosLabs Page 7 of 29
+Cloud Snooper - SophosLabs
+Cloud Snooper - SophosLabs Page 8 of 29
+Cloud Snooper - SophosLabs
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "NF_INET_LOCAL_IN", "type" : "NETP"},
+        {"id": 2, "description": "IPv4 packet", "type" : "TAMP"},
+        {"id": 3, "description": "attacker's machine", "type" : "ACTO"},
+        {"id": 4, "description": "source port number (1010, 2020, 6060, 7070, 8080, 9999)", "type" : "NETP"},
+        {"id": 5, "description": "firewall", "type" : "FIRW"},
+        {"id": 6, "description": "HTTP (port 80/TCP)", "type" : "NETP"},
+        {"id": 7, "description": "HTTPS (port 443/TCP)", "type" : "NETP"},
+        {"id": 8, "description": "embedded file", "type" : "DOCF"},
+        {"id": 9, "description": "SHA-256: ec22c6e3537fcc0003bb73dd42f41ae077b2cb3ad9cdab295bca46dc91eac1e1", "type" : "IOCS"},
+        {"id": 10, "description": "/tmp/snoopy", "type" : "SYSP"},
+        {"id": 11, "description": "usermode application", "type" : "APPS"},
+        {"id": 12, "description": "call_usermodehelper() syscall", "type" : "EXEF"},
+        {"id": 13, "description": "/tmp/snoopy process", "type" : "APPS"},
+        {"id": 14, "description": "ports (2053 and 2080)", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "triggers on"},
+        {"source": 2, "target": 3, "rel_name" : "originates from"},
+        {"source": 2, "target": 4, "rel_name" : "contains command in source port number"},
+        {"source": 5, "target": 2, "rel_name" : "inspects"},
+        {"source": 6, "target": 5, "rel_name" : "lets traffic through"},
+        {"source": 7, "target": 5, "rel_name" : "lets traffic through"},
+        {"source": 8, "description": "embedded file", "type" : "DOCF", "rel_name" : "encrypted with RC4 and decrypted to"},
+        {"source": 9, "target": 8, "rel_name" : "hash of"},
+        {"source": 10, "target": 8, "rel_name" : "saved as"},
+        {"source": 12, "target": 10, "rel_name" : "executes and then deletes"},
+        {"source": 13, "target": 10, "rel_name" : "runs from"},
+        {"source": 14, "target": 13, "rel_name" : "listens on"}
+    ]
+}

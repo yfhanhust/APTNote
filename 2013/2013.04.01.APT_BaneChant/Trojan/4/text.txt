@@ -1,0 +1,27 @@
+Shellcode Analysis
+The spear phishing document was in RTF format which as designed loads MSCOMCTL.ocx and exploits
+CVE 2012-0158. By executing return at 0x27606EFF, it will load EIP with address 0x27583C30 which is
+translated to be JMP ESP to execute shellcode in the stack. See the figure below.
+Figure 3 Stack Corruption To “JMP ESP”
+Like most modern shellcode, its stub decrypts its body using a simple XOR key (see Figure 4). By stepping
+through the shellcode, it attempts to download hxxp://ow.ly/iGKKT and saves it to the temp directory
+with a file name prefixed with “moo”, e.g., “moo1.tmp” (see Figure 5). It is important to note that “ow.ly” is
+not a malicious domain. Instead, it is a URL shortening server. It is believed that the rational for such
+indirect access is to defeat automated URL blacklisting. Figure 6 depicts how a malicious URL could be
+shortened using this service.
+Figure 4 Single Byte XOR Key 0xF1
+Figure 5 URLDownloadToFileA
+Figure 6 URL Shortening Service
+From the network traffic, it is obvious that the real malicious content is located at
+hxxp://symbisecure.com/update/winword.pkg (see Figure 7). As an excecutable file usually contains
+many zeros in series, the zeros would become the XOR key when XOR encoded. For example, 0xAA xor
+0×00 equals to 0xAA. By examining the content using a hex editor, it is obvious that there are many “9E
+44” repeated. Hence, by trying 0x449E (little endian) as an XOR key, it would reveal that it is a PE file. At
+offset zero, it is decrypted to be “MZ”; at offset 0x3C, it is decrypted to be 0x00000E0; and at
+0x000000E0, it is decrypted to be PE (see Figure 8).
+By generalizing this idea, the single or double byte XOR key can be seen as a dword XOR key as it repeats
+over itself. For example, 0x449E XOR key could be seen as 0x449E449E. By counting the DWORD with
+the highest occurance, it could be a probable XOR key if the file is XOR encrypted. This should work for
+samples that are (1, 2 or 4, but not 3 bytes) XOR encrypted.
+Figure 7 Stage 1 Download Content
+Figure 8 Double Byte XOR Encrypted Payload

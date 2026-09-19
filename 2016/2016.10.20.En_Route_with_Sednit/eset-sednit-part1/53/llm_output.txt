@@ -1,0 +1,82 @@
+
+
+
+Sentence : En Route with Sednit
+An example of such a report is shown below:
+id=rA;ù&w=@[System Process]
+```
+   System
+```
+smss.exe
+csrss.exe
+[REDACTED]
+disk=SCSI\Disk&Ven_VMware_&Prod_VMware_Virtual_S[REDACTED]
+build=0xb58f978f
+The report is then encrypted with a simple algorithm: a pseudo-randomly-generated 4-byte value
+is XORed with a hardcoded 4-byte value (different in each sample), and serves as a key to XOR the data.
+The encrypted data are then appended to the key.
+Finally, the resulting encrypted data are sent as the body of an HTTP POST request.
+All communications with the C&C server are sent in the same manner.
+The build identifier was introduced in May 2015. Between then and writing
+this report we have seen 10 different values.
+Main Loop
+After the initialization step, the code enters its main loop, as described in Figure 15. This loop
+comprises the following steps:
+
+
+Establish the network link, with the same tests as executed during initialization
+
+
+Download a configuration file from the C&C server, by sending an HTTP POST request with
+
+
+~~id=XXXXXX&c=1~~ in the body (before encryption). This configuration file provides information
+on how to retrieve and execute an additional payload, and its structure is the following
+(most fields are optional, and self-explanatory):
+[file]
+Execute
+Delete
+[settings]
+Rundll=
+PathToSave=
+FileName=
+IP=
+[/settings]
+[/file]
+
+Download a payload executable from the C&C server, according to the configuration file,
+
+by sending an HTTP POST request with ~~id=XXXXXX&f=~~ i in the body (before
+encryption)
+
+
+Run the payload executable, according to the configuration file
+
+
+Report to the C&C server the return code of the execution (retrieved with the ~~GetLastError~~
+API), by sending an HTTP POST request with ~~id=XXXXXX&l=~~
+
+
+32
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sednit", "type": "ACTO"},
+        {"id": 2, "description": "smss.exe", "type": "EXEF"},
+        {"id": 3, "description": "csrss.exe", "type": "EXEF"},
+        {"id": 4, "description": "SCSI\\Disk&Ven_VMware_&Prod_VMware_Virtual_S[REDACTED]", "type": "MTCP"},
+        {"id": 5, "description": "0xb58f978f", "type": "TAMP"},
+        {"id": 6, "description": "HTTP POST request", "type": "NETP"},
+        {"id": 7, "description": "C&C server", "type": "CCSH"},
+        {"id": 8, "description": "Configuration file from C&C server", "type": "DOCF"},
+        {"id": 9, "description": "Payload executable", "type": "EXEF"},
+        {"id": 10, "description": "GetLastError API", "type": "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 6, "rel_name": "sends"},
+        {"source": 6, "target": 7, "rel_name": "to"},
+        {"source": 7, "target": 8, "rel_name": "provides"},
+        {"source": 7, "target": 9, "rel_name": "downloads"},
+        {"source": 10, "target": 1, "rel_name": "used by"}
+    ]
+}

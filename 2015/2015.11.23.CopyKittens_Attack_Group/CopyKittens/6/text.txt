@@ -1,0 +1,83 @@
+Step Two - Droppers Matryoshka
+Unlike most malwares, CopyKittens’ tools are bound to each other. The Matryoshka infection
+framework is built of three parts:
+
+Dropper
+
+o Obfuscating code and signaling to the C2 that the file has been executed
+o Launching the loader and using it to execute functions.
+o Comparing anti-analysis logic and reporting it back to C2
+
+Reflective Loader
+
+o Employing anti-debugging and anti-sandboxing techniques
+o Runtime API Address resolver
+o Covert DLL injection of the RAT library
+o Persistence file on disk
+
+RAT component
+
+o Configuring the Reflective Loader to survive reboots and process exits
+o DNS Command and Control communication
+o Common RAT functionalities
+Dropper – SCR PE File
+Files with scr extension are just the same as exe executables. Windows screen savers originally
+used this extension but nowadays medium-level threat actors commonly use it as a way to deceive
+the average user who might be deterred from an exe file extension.
+The dropper name always matched the promised content of the spear phishing email.
+In the latest version of the dropper, the lure pdf is saved to the user’s %TEMP% folder with an
+“~st” prefix and random number, followed by a “.pdf” extension. Once the file has been
+successfully saved, the pdf is opened and displayed to the user via ShellExecute API and Open
+command. This is done to lower the target's suspicions and mask the true functionality of the
+executable.
+While the user unsuspectingly reads the document, the following routine runs hidden in the
+background:
+The malware first unpacks the “Reflective Loader” component into the memory and signals to its
+“C2 parents” the attack has been executed by downloading an image file from a remote server.
+The URL of the remote file is built out of two constant strings which again might suggest some
+kind of builder to this platform.
+
+
+We believe the first string to be a unique ID of the target or sample.
+
+
+The second is the full URL –
+
+
+“ HTTP://DOMAIN/”RandomString”/%s(TargetID)/”CampgainIdentifer”/”NameOFFile”.png ”
+After signaling to the attackers, the malware calls a specific export function from the Reflective
+Loader named “_check”. This routine is a copied code from the “Pafish” open source project, led
+6
+by Alberto Ortega (@a0rtega) [5] who describes it as: “A demonstration tool that employs several
+techniques to detect sandboxes and analysis environments in the same way as malware families
+do”.
+Pafish will enumerate and look for known virtualization and sandbox artifacts and then print
+results back to the researcher screen.
+Since the original Pafish code is built to improve security researchers’ ability to discover evasive
+malware, the CopyKittens group has modified the code logic.
+Instead of printing the functions’ results back to the user, the code will now assign a static number
+from 1-27 in the case of an artifact being found, and will return that value to the calling function
+(the SCR dropper in this case).
+Upon returning from the “_check” function, the dropper will perform a simple comparison and if
+an analysis machine has been detected, it will signal the attackers again using almost the same
+URL as it did before but replacing the name of the “.png” file to the letter “n” concatenated with
+the number of the artifact found by Pafish.
+Below is a table demonstrating the artifacts and their corresponding value:
+|sandbox usernames and paths|1,2|
+|---|---|
+|Generic sandbox sleep patch|5|
+|DeleteFile is hooked|6|
+|Sandboxie sbiedll is injected|7|
+|Wine Linux emulator is present|8|
+|Running in Virtualbox VM|9-21|
+|Running in VMWARE VM|22-25|
+|Running in QEMU VM|26,27|
+5 https://github.com/a0rtega/pafish
+7
+During our investigation we were able to identify an example of this behavior in a VirusTotal
+report on one of the domains used by the attackers:
+We believe this URL was submitted by a target or other researchers analyzing the malware.
+After alerting the attackers they have been discovered, the dropper will try to delete the
+temporary files created by him and terminate activity of the infection process.
+In the case no analysis machine is found, Reflective Loader will be called again with the “_dec”
+(possibly abbreviation of the word “decrypt”) and the third stage of the attack will commence.

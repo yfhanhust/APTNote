@@ -1,0 +1,117 @@
+
+
+
+Sentence : First Stage
+Opening the malicious document on a system running a vulnerable version of
+Microsoft Office opens the decoy document for the user to view. Note though
+that this also drops malicious files onto the system that allows the attackers to
+take control of it. After the initial compromise, the attackers may then steal files
+from the compromised system.
+The decoy document, NBC Interview_Excerpts.doc, has the MD5 hash,
+a2da9cda33ce378a21f54e9f03f6c0c9efba61fa . It drops the following files:
+• smcs.exe ( 91e6277a70d48ed953ac9208275e5dc855a8f7a7 ), which
+contains:
+• SafeCredential.DAT ( 303e982d0929ca2c50809323dff66be38a46926a )
+• SafeExt.org ( 2029399fb4be3d88c2ba0a7544b1ebec58157639 ), which
+contains:
+• SafeExt.dll ( cde35c8da8c420aeaf5adda14ba68d18010479fa )
+The malware the malicious documents drop has several components, including:
+• SafeExt.dll: Contains the malware’s main functionality.
+• SafeCredential.DAT: Contains the RC4 key, C&C information, and
+campaign “mark.”
+If User Account Control (UAC) is active, SafeExt.dll will be injected into
+explorer.exe . Otherwise, the file is copied to %Program Files%\Internet
+Explorer\SafeNet** and registered as a Browser Helper Object (BHO). [3]**
+Figure 3: RC4 key, C&C information, and campaign mark
+3 http://en.wikipedia.org/wiki/User_Account_Control and http://en.wikipedia.org/wiki/Browser_
+Helper_Object
+PAGE 3  |  Safe: A Targeted Threat
+The malware then accesses a C&C
+server over HTTP POST to send data
+using the domain name and URL path
+in SafeCredential.DAT . The network
+traffic is encrypted with the RC4 key in
+SafeCredential.DAT . One key
+indicator that can be used to detect
+this network communication is the
+user-agent, Fantasia .
+During our investigation of the C&C
+servers associated with Safe, we
+discovered a backup script that the
+attackers used to archive the files on
+them. This allowed us to acquire the
+source code for the .PHP files used on
+the C&C servers.
+The data that the malware sends from
+a compromised host to report.php is
+decrypted by the C&C server and
+stored in a MySQL™ database. In
+addition to RC4 encryption use, the
+file’s content is XORed with the
+function in Figure 6.
+Figure 4: Check in with the C&C server
+Figure 5: Safe backup script
+The parameters of the query are
+unpacked and sent to a function that
+Figure 6: Safe’s VisualEncrypt function
+inserts the information the
+compromised host provides into the MySQL database. It then checks
+the database to see if the attackers specified instructions to send to the
+compromised host. If there are, these instructions are sent back to the
+compromised host.
+Figure 7: Safe’s check-in function
+PAGE 4 | Safe: A Targeted Threat
+The REQUEST_TYPE_CLIENT_REQUEST function inserts a unique ID for
+each compromised host as well as the Internet and external IP addresses,
+hostname, Windows domain, the system’s disc drive information, and a
+campaign mark. It has a field to store information about any additional malware
+plug-ins that have been installed on the system.
+The malware uses the following marks or campaign tags:
+• 120713
+• 120713p
+• 123456
+• 654321
+• c0814
+• C0821
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "NBC Interview_Excerpts.doc", "type" : "DOCF"},
+        {"id": 2, "description": "a2da9cda33ce378a21f54e9f03f6c0c9efba61fa", "type" : "IOCS"},
+        {"id": 3, "description": "smcs.exe", "type" : "EXEF"},
+        {"id": 4, "description": "91e6277a70d48ed953ac9208275e5dc855a8f7a7", "type" : "IOCS"},
+        {"id": 5, "description": "SafeCredential.DAT", "type" : "DOCF"},
+        {"id": 6, "description": "303e982d0929ca2c50809323dff66be38a46926a", "type" : "IOCS"},
+        {"id": 7, "description": "SafeExt.org", "type" : "DOCF"},
+        {"id": 8, "description": "2029399fb4be3d88c2ba0a7544b1ebec58157639", "type" : "IOCS"},
+        {"id": 9, "description": "SafeExt.dll", "type" : "EXEF"},
+        {"id": 10, "description": "cde35c8da8c420aeaf5adda14ba68d18010479fa", "type" : "IOCS"},
+        {"id": 11, "description": "%Program Files%\\Internet Explorer\\SafeNet", "type" : "SYSP"},
+        {"id": 12, "description": "C&C server", "type" : "CCSH"},
+        {"id": 13, "description": "HTTP POST", "type" : "NETP"},
+        {"id": 14, "description": "report.php", "type" : "URLS"},
+        {"id": 15, "description": "MySQL™ database", "type" : "APPS"},
+        {"id": 16, "description": "Fantasia", "type" : "TAMP"},
+        {"id": 17, "description": "120713", "type" : "TAMP"},
+        {"id": 18, "description": "120713p", "type" : "TAMP"},
+        {"id": 19, "description": "123456", "type" : "TAMP"},
+        {"id": 20, "description": "654321", "type" : "TAMP"},
+        {"id": 21, "description": "c0814", "type" : "TAMP"},
+        {"id": 22, "description": "C0821", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has hash"},
+        {"source": 3, "target": 4, "rel_name" : "has hash"},
+        {"source": 5, "target": 6, "rel_name" : "has hash"},
+        {"source": 7, "target": 8, "rel_name" : "has hash"},
+        {"source": 9, "target": 10, "rel_name" : "has hash"},
+        {"source": 3, "target": 5, "rel_name" : "contains"},
+        {"source": 7, "target": 9, "rel_name" : "contains"},
+        {"source": 9, "target": 11, "rel_name" : "copied to"},
+        {"source": 9, "target": 12, "rel_name" : "communicates with"},
+        {"source": 5, "target": 12, "rel_name" : "contains C&C information for"},
+        {"source": 12, "target": 13, "rel_name" : "uses protocol"},
+        {"source": 14, "target": 12, "rel_name" : "is endpoint of"},
+        {"source": 15, "target": 12, "rel_name" : "stores data in"}
+    ]
+}

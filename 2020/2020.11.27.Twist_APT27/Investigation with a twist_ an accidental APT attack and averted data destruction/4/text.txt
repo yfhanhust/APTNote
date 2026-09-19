@@ -1,0 +1,312 @@
+Polar ransomware
+The method used to run the ransomware is classic and, indeed, characteristic of certain Asian
+groups. Three files are sent to the victim's computer:
+GDFInstall.exe (MD5: 13435101240f78367123ef01a938c560) is a legitimate computer
+game component signed by Ubisoft.
+GameuxInstallHelper.dll (MD5: 1fd8402275d42e7389f0d28b9537db0f) is a .NET DLL
+library (compiled on April 29, 2020) imported when GDFInstall.exe is run.
+https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/incident-response-polar-ransomware-apt27/ 8/23
+11/30/2020 Investigation with a twist: an accidental APT attack and averted data destruction
+This component is not actually legitimate, however: attacker code is executed after the
+GameExplorerInstallW symbol is exported. This frequently used technique of loading
+malicious code in the context of a legitimate application is known as DLL hijacking.
+https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/incident-response-polar-ransomware-apt27/ 9/23
+11/30/2020 Investigation with a twist: an accidental APT attack and averted data destruction
+The file c:\programdata\Sysurl.Hex is read (after being copied from
+c:\windows\system32\Sysurl.Hex, if absent) and then simple XOR decrypted with key
+ABCSCDFRWFFSDJJHGYUOIj. The result is decoded with Base64, yielding a PE file that is
+loaded and run in memory with .NET. The payload and intermediate library are deleted
+before completion. Deletion occurs in the standard (insecure) way, which enables recovering
+the data if disk access is stopped in time and the information has not been overwritten.
+Sysurl.Hex is an encrypted copy of the Polar ransomware.
+This payload call sequence (in which a legitimate application loads a malicious library, which
+in turn decrypts a third component and passes control to it) is very commonly used to run
+the PlugX backdoor, which is widely seen among such Asian APT groups as APT10, APT41,
+https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/incident-response-polar-ransomware-apt27/ 10/23
+11/30/2020 Investigation with a twist: an accidental APT attack and averted data destruction
+TA459, and Bronze Union.
+Let's consider the decrypted and decoded version of the ransomware (MD5:
+841980b4ae02a4e6520ab834deee241b) in greater detail.
+Based on how GameuxInstallHelper.dll is launched, we quickly can guess that this file, too, is
+an executable file compiled with .NET. The compilation date is April 9, 2020. The code entry
+point is the Actions method of the Encode class in the Polar name space (which is the name
+we have used for the malware family).
+The malware deletes system event logs and shadow copies by performing the following
+commands:
+```
+   dism /online /enable-feature /featurename:NetFx3
+vssadmin.exe Delete Shadows /All /Quiet
+   bcdedit /set {default} recoveryenabled no
+   wmic shadowcopy delete
+   wbadmin delete backup
+   wbadmin delete systemstatebackup -keepversions:0
+   bcdedit /set {default} bootstatuspolicy ignoreallfailures
+   bcdedit /set {default} recoveryenabled no
+   wevtutil.exe clear-log Application
+   wevtutil.exe clear-log Security
+   wevtutil.exe clear-log System
+   wbadmin delete catalog -quiet
+   wbadmin delete catalog -quiet
+   wbadmin delete systemstatebackup
+```
+It then looks for and stops the following processes:
+agntsvc.exe
+agntsvc.exe
+agntsvc.exe
+agntsvc.exe
+dbeng50.exe
+dbsnmp.exe
+encsvc.exe
+excel.exe
+firefoxconfig.exe
+infopath.exe
+isqlplussvc.exe
+msaccess.exe
+msftesql.exe
+mspub.exe
+mydesktopqos.exe
+mydesktopservice.exe
+mysqld-nt.exe
+mysqld-opt.exe
+mysqld.exe
+notepad++.exe
+notepad.exe
+ocautoupds.exe
+ocomm.exe
+ocssd.exe
+onenote.exe
+oracle.exe
+outlook.exe
+powerpnt.exe
+sqbcoreservice.exe
+sqlagent.exe
+sqlbrowser.exe
+sqlservr.exe
+sqlwriter.exe
+steam.exe
+synctime.exe
+tbirdconfig.exe
+thebat.exe
+thebat64.exe
+thunderbird.exe
+visio.exe
+winword.exe
+wordpad.exe
+xfssvccon.exe
+Then the malware gets a list of connected disks and starts recursive traversal of directories,
+skipping a few of them:
+C:\Windows
+https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/incident-response-polar-ransomware-apt27/ 11/23
+11/30/2020 Investigation with a twist: an accidental APT attack and averted data destruction
+C:\Program Files
+C:\Program Files (x86)
+C:\ProgramData
+C:\Python
+$SysReset
+$Recycle.Bin
+$RECYCLE.BIN
+It cares only about files with the following extensions:
+.dtd
+.dwg
+.dxf
+.eps
+.fla
+.flv
+.ged
+.gif
+.gz
+.h
+.html
+.ics
+.iff
+.indd
+.ini
+.iso
+.java
+.jpg
+.3dm
+.3ds
+.3g2
+.3gp
+.7z
+.accdb
+.ai
+.aif
+.asf
+.asp
+.aspx
+.avi
+.bak
+.bin
+.bmp
+.c
+.cbr
+.cer
+.cfm
+.class
+.cpp
+.crdownload
+.cs
+.csr
+.css
+.csv
+.cue
+.dat
+.db
+.dbf
+.dds
+.deb
+.dmg
+.dmp
+.doc
+.docx
+.js
+.jsp
+.key
+.keychain
+.log
+.lua
+.m
+.m3u
+.m4a
+.m4v
+.max
+.mdb
+.mdf
+.mid
+.mov
+.mp3
+.mp4
+.mpa
+.mpg
+.msg
+.msi
+.obj
+.odt
+.pages
+.part
+.pct
+.pdb
+.pdf
+.php
+.pkg
+.pl
+.png
+.pps
+.ppt
+.pptx
+.ps
+.tax2014
+.tax2015
+.tex
+.tga
+.thm
+.tif
+.tiff
+.tmp
+.toast
+.torrent
+.txt
+.vb
+.vcd
+.vcf
+.vcxproj
+.vob
+.wav
+.wma
+.psd
+.py
+.rar
+.rm
+.rpm
+.rss
+.rtf
+.sdf
+.sh
+.sitx
+.sln
+.sql
+.srt
+.svg
+.swf
+.swift
+.tar
+.tar.gz
+.wmv
+.wpd
+.wps
+.xcodeproj
+.xhtml
+.xlr
+.xls
+.xlsx
+.xml
+.yuv
+.zip
+.zipx
+Before starting encryption, the malware creates what we will call a base encryption key
+consisting of eight randomly chosen characters from the following alphabet:
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890*!=&?&/
+Two approaches to encryption are used, depending on the file size. Each approach involves a
+different encryption key. The base encryption key is used in both approaches, however.
+First we will look at the approach for encryption of files with size less than 64,052,000 bytes
+(approximately 61 MB). The intermediate password is the SHA-256 hash sum of the base
+encryption key. It is identical for all files and is used with a hard-coded salt and 1,000
+iterations to generate the encryption key and initialization vector. Each key is encrypted with
+AES-CBC. The .locked extension is added to encrypted files.
+https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/incident-response-polar-ransomware-apt27/ 12/23
+11/30/2020 Investigation with a twist: an accidental APT attack and averted data destruction
+Larger files are encrypted in a different way. In this case, the 16-byte encryption key is
+formed by taking the first 8 bytes from the base encryption key and the remaining 8 bytes
+from an additional hard-coded array. This is followed by a custom implementation of AES-
+ECB. Blocks of 16 bytes are encrypted, with the next 12,800 bytes skipped. The result is that
+only small parts of the file—not the entire file—are encrypted. This method was likely to
+chosen to speed up the encryption process. Encrypted files have the .cryptd extension.
+https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/incident-response-polar-ransomware-apt27/ 13/23
+11/30/2020 Investigation with a twist: an accidental APT attack and averted data destruction
+Note that the result is creation of a new file (where the encrypted stream is written). The
+original file is insecurely deleted. Therefore, the original files can also be recovered from
+unallocated disk space if they have not yet been overwritten with fresh information.
+https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/incident-response-polar-ransomware-apt27/ 14/23
+11/30/2020 Investigation with a twist: an accidental APT attack and averted data destruction
+In each directory containing encrypted files, a file named
+readme_contact_alex.dali@iran.ir.htm is created with the following contents:
+```
+   Your companies cyber defense systems have been weighed, measured and have been found
+   wanting!!!
+   The breach is a result of grave neglect of security protocols
+   All of your computers have been corrupted with Polar malware that has encrypted your
+   files.
+We ensure that the only way to retrieve your data swiftly and securely is with our
+   software.
+Restoration of your data requires a private key which only we possess
+   Don't waste your time and money purchasing third party software, without the private
+   key they are useless.
+   It is critical that you don't restart or shutdown your computer.
+   This may lead to irreversible damage to your data and you may not be able to turn
+   your computer back on.
+   To confirm that our software works email to us 2 files from random computers you will
+   get them decrypted.
+   readme_contact_alex.dali@iran.ir.htm contain encrypted session keys we need in order
+   to be able to decrypt your files.
+   The softwares price will include a guarantee that your company will never be
+   inconvenienced by us.
+   You will also receive a consultation on how to improve your companies cyber security
+   If you want to purchase our software to restore your data contact us at:
+   Pt34Jarmys@protonmail.com
+   alex.dali@iran.ir
+We can only show you the door. You're the one who has to walk through it.
+Your personal installation key:REDACTED
+```
+The text of the ransom demand resembles that used by MegaCortex ransomware.
+https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/incident-response-polar-ransomware-apt27/ 15/23
+11/30/2020 Investigation with a twist: an accidental APT attack and averted data destruction
+The ransom demand contains a modified version of the base encryption key. This version is
+derived by encrypting the base encryption key with RSA (with a hard-coded 1024-byte public
+key) and encoding it in Base64.
+After file encryption is completed, the malware writes an image (contained in executable file
+resources) to disk at the path c:\programdata\Rs.bmp and sets it as the desktop background.
+The malware subsequently repeats the same procedure for deleting system event logs and
+shadow copies that it performed at the start. Then it sends an HTTP POST request with the
+name of the victim's computer to a server at
+hxxp://www.therockbrazil.com.br/assinaturas/logs.php.

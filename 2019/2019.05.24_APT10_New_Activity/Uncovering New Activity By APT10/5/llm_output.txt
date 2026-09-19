@@ -1,0 +1,86 @@
+
+
+
+Sentence : Loader
+Abusing a Legitimate Executable
+The loader starts out by running a legitimate executable which is abused to load a
+malicious DLL instead of a legitimate one which it is depended on. The method is known
+as DLL Side-Loading.
+In both variants, the abused executable is jjs.exe which loads jli.dll. The DLL exports the
+following functions:
+JLI_CmdToArgs
+JLI_GetStdArgs
+JLI_GetStdArgc
+JLI_MemAlloc
+JLI_Launch
+The first function called by jjs.exe is JLI_CmdToArgs which is implemented by the
+malware author and behaves differently in each variant.
+Running The Payload
+The malicious DLL maps the data file, svchost.bin, to memory and decrypt it. The
+decrypted content is a shellcode that is injected into svchost.exe and contains the actual
+malicious payload.
+The decryption process resembles previous versions used by the group in
+PlugX\RedLeaves.
+Figure 1: Decryption of the binary file
+The injection flow is rather simple and being done by creating a process in suspended
+state, allocating memory with VirtualAllocEx, writing the shellcode with
+WriteProcessMemory and running it using CreateRemoteThread . The complete
+execution flow is visualized by figure 2 below.
+https://blog.ensilo.com/uncovering-new-activity-by-apt10 2/11
+5/28/2019 Uncovering New Activity By APT10
+Figure 2: Loader’s execution flow
+https://blog.ensilo.com/uncovering-new-activity-by-apt10 3/11
+5/28/2019 Uncovering New Activity By APT10
+Variant 1
+The first variant uses a service as its persistency method. It installs itself (jjs.exe) as the
+service and starts it. When running in the context of the service it performs the
+decryption and injection as described above.
+We have observed the variant delivering both Quasar and PlugX, which we’ll discuss
+later on.
+Among the different samples we tested, we encountered the following service names
+being registered:
+WxUpdateServiceInfo
+HxUpdateServiceInfo
+WinDefendSec
+Web_Client
+clr_optimization_v4.0.30319_31
+clr_optimization_v4.0.30319_37
+Variant 2
+Unlike the first variant, this variant uses the Run registry key for the current user under
+the name “ Windows Updata ” to ensure its persistency rather than installing a service.
+This variant delivered the same PlugX DLL, same as the first loader.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "jjs.exe", "type" : "EXEF"},
+        {"id": 2, "description": "jli.dll", "type" : "EXEF"},
+        {"id": 3, "description": "svchost.bin", "type" : "DOCF"},
+        {"id": 4, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 5, "description": "PlugX", "type" : "APPS"},
+        {"id": 6, "description": "RedLeaves", "type" : "APPS"},
+        {"id": 7, "description": "Quasar", "type" : "APPS"},
+        {"id": 8, "description": "WxUpdateServiceInfo", "type" : "REGI"},
+        {"id": 9, "description": "HxUpdateServiceInfo", "type" : "REGI"},
+        {"id": 10, "description": "WinDefendSec", "type" : "REGI"},
+        {"id": 11, "description": "Web_Client", "type" : "REGI"},
+        {"id": 12, "description": "clr_optimization_v4.0.30319_31", "type" : "REGI"},
+        {"id": 13, "description": "clr_optimization_v4.0.30319_37", "type" : "REGI"},
+        {"id": 14, "description": "Windows Updata (Run registry key for the current user)", "type" : "REGI"},
+        {"id": 15, "description": "APT10", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loads"},
+        {"source": 2, "target": 3, "rel_name" : "maps and decrypts"},
+        {"source": 3, "target": 4, "rel_name" : "injects into"},
+        {"source": 15, "target": 5, "rel_name" : "uses"},
+        {"source": 15, "target": 6, "rel_name" : "uses"},
+        {"source": 15, "target": 7, "rel_name" : "delivers"},
+        {"source": 1, "target": 8, "rel_name" : "registers as service"},
+        {"source": 1, "target": 9, "rel_name" : "registers as service"},
+        {"source": 1, "target": 10, "rel_name" : "registers as service"},
+        {"source": 1, "target": 11, "rel_name" : "registers as service"},
+        {"source": 1, "target": 12, "rel_name" : "registers as service"},
+        {"source": 1, "target": 13, "rel_name" : "registers as service"},
+        {"source": 1, "target": 14, "rel_name" : "registers in Run key"}
+    ]
+}

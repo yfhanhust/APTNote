@@ -1,0 +1,55 @@
+
+
+
+Sentence : Microsoft 365 Defender
+NOTE: The following sample queries lets you search for a week’s worth of events. To explore up to 30 days’ worth of raw data to inspect
+events in your network and locate potential NOBELIUM mass email-related indicators for more than a week, go to the Advanced
+Hunting page > Query tab, select the calendar drop-down menu to update your query to hunt for the Last 30 days .
+To locate possible exploitation activity, run the following query in the Microsoft 365 security center:
+https://www.microsoft.com/security/blog/2021/05/27/new-sophisticated-email-based-attack-from-nobelium/ 14/16
+5/31/2021 New sophisticated email-based attack from NOBELIUM - Microsoft Security
+NOBELIUM abuse of USAID Constant Contact resources in email data
+Looks for recent emails to the organization that originate from the original Constant Contact sending infrastructure and specifically
+from the organization that had accounts spoofed or compromised in the campaign detailed in this report. Run query in Microsoft 365
+security center.
+```
+   EmailUrlInfo
+| where UrlDomain == "r20.rs6.net"
+   | join kind=inner EmailEvents on $left.NetworkMessageId==$right.NetworkMessageId
+   | where SenderMailFromDomain == "in.constantcontact.com"
+   | where SenderFromDomain == "usaid.gov"
+```
+NOBELIUM subject lines used in abuse of Constant Contact service
+Looks for recent emails to the organization that originate from the original Constant Contact sending infrastructure and specifically
+from the organization that had accounts spoofed or compromised in the campaign detailed in this report. It also specifies email subject
+keywords seen in phishing campaigns in late May using the term “Special Alert!” in various ways in the subject. Run query in Microsoft
+365 security center.
+```
+   let SubjectTerms = pack_array ("Special","Alert");
+EmailUrlInfo
+| where UrlDomain == "r20.rs6.net"
+   | join kind=inner EmailEvents on $left.NetworkMessageId==$right.NetworkMessageId
+   | where SenderMailFromDomain == "in.constantcontact.com"
+   | where SenderFromDomain == "usaid.gov"
+   | where Subject has_any (SubjectTerms)
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Microsoft 365 Defender", "type" : "APPS"},
+        {"id": 2, "description": "Advanced Hunting page > Query tab", "type" : "APPS"},
+        {"id": 3, "description": "Last 30 days", "type" : "TAMP"},
+        {"id": 4, "description": "https://www.microsoft.com/security/blog/2021/05/27/new-sophisticated-email-based-attack-from-nobelium/", "type" : "URLS"},
+        {"id": 5, "description": "NOBELIUM", "type" : "ACTO"},
+        {"id": 6, "description": "USAID Constant Contact resources", "type" : "APPS"},
+        {"id": 7, "description": "r20.rs6.net", "type" : "URLS"},
+        {"id": 8, "description": "in.constantcontact.com", "type" : "URLS"},
+        {"id": 9, "description": "usaid.gov", "type" : "URLS"},
+        {"id": 10, "description": "Special Alert!", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 5, "target": 6, "rel_name" : "abuse of"},
+        {"source": 7, "target": 8, "rel_name" : "sent from"},
+        {"source": 8, "target": 9, "rel_name" : "spoofed or compromised in campaign"},
+        {"source": 10, "target": 5, "rel_name" : "used by"}
+    ]
+}

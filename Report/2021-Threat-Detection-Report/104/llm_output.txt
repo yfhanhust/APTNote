@@ -1,0 +1,126 @@
+
+
+
+Sentence : Detection opportunities
+Detection opportunity 1
+Microsoft Office spawning Rundll32 or Regsvr32
+ATT&CK technique(s): T1218.011 Signed Binary Proxy Execution: Rundll32,
+T1218.010 Signed Binary Proxy Execution: Regsvr32
+ATT&CK tactic(s): Defense Evasion
+Details: Since October 2020, we have observed Qbot delivered as a DLL and
+subsequently executed using the signed binaries Rundll32 or Regsvr32, which
+adversaries commonly use to evade defensive controls. Looking for instances
+of either of these processes executed as a child of ~~winword.exe~~ or ~~excel.exe~~ is a
+quick win to detect Qbot’s initial access as well as other threats spawning from
+initial access via Microsoft Office. Additionally, we’ve found success with the
+~~rundll32.exe~~ command-line flag ~~DLLRegisterServer~~ ~~.~~ While this is a legitimate
+function for ~~rundll32.exe~~ ~~,~~ with some baselining you can tune this to identify
+anomalous behavior.
+t t
+89
+t t
+l [Qbot]
+t t
+t t
+t t
+t t
+2021 Threat Detection Report
+Detection opportunity 2
+Execution of ~~esentutl~~ to extract browser data
+ATT&CK technique(s): T1005 Data from Local System
+ATT&CK tactic(s): Collection
+Details: One way Qbot steals sensitive information is by extracting browser data
+from Internet Explorer and Microsoft Edge by using the built-in utility ~~esentutl.~~
+~~exe~~ ~~.~~ As we examined normal ~~esenutil~~ command lines, we determined it’s fairly
+rare to see references to ~~Windows\WebCache~~ in the command line for this
+tool. Writing an analytic looking for a process of ~~esenutil.exe~~ with ~~*Windows*~~
+~~WebCache~~ in the command line may help you catch this behavior.
+Detection opportunity 3
+Scheduled task names and execution
+ATT&CK technique(s): T1053.005 Scheduled Task/Job: Scheduled
+Task,T1218.010 Signed Binary Proxy Execution: Regsvr32
+ATT&CK tactic(s): Persistence, Defense Evasion
+Details: The more things change, the more they stay the same. One of the
+most consistent ways we have detected Qbot over the years is through its use
+of scheduled tasks for persistence. While Qbot has consistently relied on this
+method of persisting, its implementation has varied over time. These variations
+have triggered several different detection analytics.
+One area to focus on is the name of the scheduled task. We often observe this
+in the ~~/tn~~ (task name) parameter on the command line of ~~schtasks.exe~~ . Much
+like the subfolders containing the malware, some versions of Qbot have used
+a random string for the scheduled task name. This is a bit more challenging to
+detect, but using trigram analysis, we have been able to identify likely random
+task names that unearth a variety of pernicious persistence. In addition to the
+scheduled task name, the process it executes can also be useful for detection.
+In the below example (showing the more recent DLL variation of Qbot), you
+can see that the process executed by the task is ~~regsvr32.exe~~ ~~.~~ It is unusual to
+see a scheduled task executing ~~regsvr32.exe~~ at all, let alone for a binary in a
+90
+l [Qbot]
+2021 Threat Detection Report
+user’s profile folder, so looking for that execution presents another detection
+opportunity.
+In other cases, instead of a random string of characters, Qbot uses a GUID for
+the scheduled task name. Since GUIDs use a similar pattern, you can create a
+detection analytic looking for ~~schtasks.exe~~ along with ~~create~~ and a regular
+expression for the GUID pattern. You may still encounter some legitimate
+software doing this, but it should be fairly straightforward to tune out the noise
+based on the parent process of ~~schtasks~~ or by the specific GUID itself.
+In addition to the scheduled task name, you can also look for what is being
+executed, similar to the above example. In the below example, the GUID task
+name executes JavaScript stored in a file with a ~~.npl~~ file extension. You could
+create a detection analytic looking for scheduled task execution of a ~~.npl~~ file, or
+even take it a step further to look for ~~cscript.exe~~ or ~~wscript.exe~~ execution from
+scheduled tasks (though that may take some tuning).
+Kyle Rainey
+I N T E L L I G E N C E
+A N A LY S T
+Kyle has been providing proactive
+and reactive incident response and
+forensics services to Fortune 500
+companies for over five years. As an
+intelligence analyst at Red Canary,
+he leverages his years of experience
+conducting investigations and building
+detections in order to engineer
+impactful, scalable intelligence
+products. Kyle is passionate about
+solving hard problems and constantly
+learning.
+91
+l [Qbot]
+2021 Threat Detection Report
+T H R E AT
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Microsoft Office", "type" : "APPS"},
+        {"id": 2, "description": "Rundll32", "type" : "EXEF"},
+        {"id": 3, "description": "Regsvr32", "type" : "EXEF"},
+        {"id": 4, "description": "Qbot", "type" : "ACTO"},
+        {"id": 5, "description": "DLLRegisterServer", "type" : "TPTH"},
+        {"id": 6, "description": "esentutl.exe", "type" : "EXEF"},
+        {"id": 7, "description": "Internet Explorer", "type" : "APPS"},
+        {"id": 8, "description": "Microsoft Edge", "type" : "APPS"},
+        {"id": 9, "description": "Windows\\WebCache", "type" : "SYSP"},
+        {"id": 10, "description": "schtasks.exe", "type" : "EXEF"},
+        {"id": 11, "description": "Scheduled Task/Job: Scheduled Task", "type" : "TTPS"},
+        {"id": 12, "description": "GUID pattern", "type" : "TPTH"},
+        {"id": 13, "description": "cscript.exe", "type" : "EXEF"},
+        {"id": 14, "description": "wscript.exe", "type" : "EXEF"},
+        {"id": 15, "description": ".npl file", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "spawns"},
+        {"source": 1, "target": 3, "rel_name" : "spawns"},
+        {"source": 4, "target": 2, "rel_name" : "uses"},
+        {"source": 4, "target": 3, "rel_name" : "uses"},
+        {"source": 6, "description": "used by", "target": 4},
+        {"source": 7, "target": 6, "rel_name" : "extracts from"},
+        {"source": 8, "target": 6, "rel_name" : "extracts from"},
+        {"source": 10, "target": 11, "rel_name" : "executes"},
+        {"source": 12, "target": 10, "rel_name" : "used by"},
+        {"source": 13, "target": 15, "rel_name" : "executes"},
+        {"source": 14, "target": 15, "rel_name" : "executes"}
+    ]
+}

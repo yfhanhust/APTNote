@@ -1,0 +1,216 @@
+Downloadable modules
+Probably the most intriguing parts of ModPipe are its downloadable modules. We’ve been
+aware of their existence since the end of 2019, when we first found and analyzed its “basic”
+components.
+In April 2020, after a couple of months of hunting, we found three of these modules in the
+wild. The list of all downloadable modules we found and analyzed, and their IDs –
+represented by a 16-bit unsigned value – are available in Table 1. Our research also suggests
+that the operators use at least four other downloadable modules, whose functionality
+remains completely unknown to us for now.
+It’s worth mentioning that some of these modules can create a named pipe with a GUIDformatted name derived from the module’s ID. Other modules can use this pipe to send
+commands to the module that created it.
+Table 1. Downloadable modules
+Module ID Name Description
+0xA0C0 GetMicInfo Steals database passwords, data and various settings
+0x2000 ModScan Performs scan on the specified IP addresses
+  - ProcList Gets list of the running processes and their loaded modules
+
+0xA000 unknown    
+0xA040 unknown    
+0xA740 unknown    
+0xA080 unknown    
+Downloadable module: GetMicInfo
+GetMicInfo is a downloadable component that targets data related to the MICROS POS
+including passwords tied to two database usernames predefined by the manufacturer: dba
+and micros (see Figure 2). This information is encrypted and stored in DataS5 (for dba) and
+DataS6 (for micros) registry values within one of the following registry keys:
+HKLM\Software\Micros\UserData or
+HKLM\Software\WOW6432Node\Micros\UserData if run in Windows 32-bit on
+Windows 64-bit (WOW64) subsystem
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 4/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+Figure 2. Hex-Rays decompiled code of the function stealing database passwords
+The GetMicInfo module can intercept and decrypt these database passwords, using a
+specifically designed algorithm. So as not to aid other malicious actors, we won’t be
+disclosing the inner workings of the algorithm. Since the decryption mechanism wasn’t
+publicly available, there are at least three possible scenarios of how the attackers could have
+created the algorithm:
+The most probable option is that the attackers acquired and reverse engineered
+the implementation of the ORACLE MICROS RES 3700 POS and the libraries
+responsible for encryption and decryption of the database passwords.
+The attackers could have gained the information describing the implementation of the
+encryption and decryption mechanism from a 2016 data breach described in a
+blogpost by Brian Krebs.
+The malware operators could have bought the code from an underground market.
+Our analysis shows that in cases where the GetMicInfo module decrypts the password for
+the dba username, it will also try to acquire the path to the SQL Anywhere API library from
+the environment variable “SQLANY_API_DLL” and load it if it’s available.
+If the environment variable does not exist, the module tries to load the library using its
+name dbcapi.dll. This library is a part of Sybase SQL Anywhere, which is used by RES 3700
+POS.
+If one of these approaches is successful, GetMicInfo attempts to connect to the database
+using the following connection string:
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 5/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+DBN=micros;UID=dba;ENG=sql%PCNAME%;PWD=%decrypted_DataS5%
+%PCNAME% represents the computer name retrieved via the GetComputerName API and
+%decrypted_DataS5% stands for the decrypted dba user password.
+After establishing a connection, GetMicInfo tries to execute the following SQL queries and
+report the results to the main module, using a pipe message with ID 0x10000013 (see Table
+3 for a full list of pipe messages and their IDs):
+1
+2
+3
+4
+5
+6
+7
+8
+9
+SELECT lan_node_seq,obj_num,name,lan_addr,ob_diskless,type,ip_addr,ip_netmask
+FROM micros.lan_node_def
+SELECT dvc_tbl_seq,obj_num,name,type,com_port_seq,com_port,baud_rate,num_data_bits,num_stop_bits,parity_type,filename FROM micros.dev_def
+SELECT tmed_seq,obj_num,name,type,ca_driver,edc_driver FROM micros.tmed_def
+SELECT * FROM micros.caedc_driver_def
+SELECT * FROM micros.interface_def
+Queried data contain various MICROS RES 3700 POS system definitions and
+configurations (see Figure 3). Other information stolen by the module includes the version
+of the MICROS POS and information about specific registry keys most likely related to
+various credit card services configurations.
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 6/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+Figure 3. Hex-Rays decompiled code of the function that steals database data
+The GetMicInfo module is injected into one of the processes specified by the C&C in the
+install command (0x0C). Based on our findings, it is typically associated with one of the
+following legitimate processes:
+MDSHTTPService.exe (MICROS MDS HTTP Service)
+CALSrv.exe (MICROS CAL Service – Client Application Loader server)
+explorer.exe
+We can confirm that the GetMicInfo module can successfully obtain the database passwords
+from RES 3700 POS v4.7 and v5.4. For all the other versions, we were able neither to
+confirm nor deny the ability of the component to obtain the targeted libraries.
+Downloadable module: ModScan 2.20
+The main purpose of ModScan 2.20 is to collect additional information about the installed
+MICROS POS environment on the machines by scanning selected IP addresses. The
+ModScan 2.20 module is injected into one of the processes specified by the C&C via an
+InstallMod command (0x72). Based on our findings, it is typically associated with one of the
+following legitimate processes:
+MDSHTTPService.exe (MICROS MDS HTTP Service)
+CALSrv.exe (MICROS CAL Service – Client Application Loader server)
+msdtc.exe
+jusched.exe
+spoolsv.exe
+services.exe
+Differences between the injected processes misused by GetMicInfo and those targeted by
+ModScan 2.20 might be caused by the fact that GetMicInfo module is injected only into
+processes running under WOW64.
+The list of IP addresses intended for scanning and the special “ping” IP address are
+specified by the C&C in one of two ways. It is either:
+
+downloaded from the C&C along with the ModScan module, or
+received during runtime, using the named pipe associated with the ModScan module.
+
+The ModScan module handles pipe commands listed in Table 2.
+Table 2. ModScan 2.20 module pipe commands
+Command
+name Command description
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 7/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+Command
+name Command description
+exit Exit
+stop Terminate scanning threads
+scan Start scanning IPs specified in the command data to collect additional information about the environment
+prm Specify special “ping” IP address
+Scanning procedure routine
+
+Before scanning, the module sends a special “ping” message containing a 32-bit value
+
+generated by the GetTickCount Windows API function to TCP ports 50123 (used by
+MDS HTTP Service) and 2638 (used by SAP Sybase database server) of the “ping” IP
+address.
+
+The response from the “ping” IP address should contain the same 32-bit value rotated
+
+right by one bit and XORed with the value 0x6CF6B8A8. If the response on at least
+one of the ports provides the appropriate value, the module will start the scan of the
+selected IP addresses. A decompilation of this ping function is shown in Figure 4.
+Figure 4. Hex-Rays decompiled code of the ModScan ping functionality
+
+When the ModScan module starts the scan, some of the following information may be
+
+gathered, depending on the parameters received along with the scan command:
+Version of the Oracle MICROS RES 3700 POS, which is acquired by sending an
+HTTP Post message (see Figure 5) to the specified IP address on port 50123 used by
+the MDS HTTP Service. The sought-after information is stored between data xml tags
+(%version%) of the response from the service.
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 8/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+POST /%s HTTP/1.1
+Accept: text/xml
+User-Agent: MDS POS Client
+Host: %s:50123
+Content-Length: 459
+Connection: Keep-Alive
+Cache-Control: no-cache
+
+
+MDSSYSUTILS
+Reg_GetValue
+Session
+
+SOFTWARE\MICROS
+HKEY_LOCAL_MACHINE
+Version
+
+
+
+Figure 5. MDS HTTP Service request
+Name of the database, extracted by sending a specially crafted TCP packet
+(possibly using the CMDSEQ command protocol) to the selected IP address on port
+2638 used by the SAP Sybase Database Server. The string representing the name of
+the database is located at offset 0x28 of the response sent by the database server.
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 9/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+Database server data, such as its name, version of the TDS protocol and the TDS
+server version. To gain this information, the ModScan module sends a hardcoded TDS
+4.2 & 5.0 Login Packet (Figure 6) to the specified IP address on port 2638. The
+response includes a Login Acknowledgement packet which, in both cases – success
+and failure – contains information about the database server and the TDS versions
+used. The TDS login packet is hardcoded, with username set to the built-in dba and a
+hardcoded password, which is potentially the default password in some RES 3700
+POS versions. As we haven’t found any public reference to this password, we won’t be
+publishing it in our blogpost.
+Figure 6. TDS 4.2 & 5.0 Login Packet used by the ModScan
+module, dissected using Wireshark
+Downloadable module: ProcList
+The last of the downloadable modules we were able to obtain and dissect was ProcList. This
+is a lightweight module that doesn’t have an assigned ID. Its main purpose is to collect
+information about currently running processes, including: name, process identifier (PID),
+parent process PID, number of threads, token owner, token domain, process creation time,
+and command line.
+https://www.welivesecurity.com/2020/11/12/hungry-data-modpipe-backdoor-hits-pos-software-hospitality-sector/ 10/22
+11/13/2020 Hungry for data, ModPipe backdoor hits POS software used in hospitality sector | WeLiveSecurity
+Optionally, ProcList can also collect information about loaded modules for each of the
+running processes. Collected information is sent to the main module of the backdoor (using
+pipe message 0x10000013).

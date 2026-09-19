@@ -1,0 +1,69 @@
+RAR Archives with KerrDown
+While investigating KerrDown we found multiple RAR files containing a variant of
+the malware. We haven’t yet identified the delivery method or targets of this variant. The
+attacker changed the downloader code by adding more stages and hiding each stage by
+compression and encryption. They also changed the way to execute the malicious code
+from an Office macro to the DLL side-loading technique through a legitimate program.
+The RAR archive
+(SHA256:040abac56542a2e0f384adf37c8f95b2b6e6ce3a0ff969e3c1d572e6b4053ff3)
+has the Vietnamese file name ‘Don khieu nai.rar’ which translates to ‘Complaint letter’ in
+English. The archive contains a legitimate older version of Microsoft Word (Microsoft Word
+2007) executable file that is named ‘Noi dung
+chi tiet don khieu nai gui cong ty.exe’ which translates to ‘Learn more about how to use
+your company’ in English. The attacker used the DLL side loading technique to load a
+malicious DLL by the older version of Microsoft Word. When opening the executable file in
+the archive, it loads the malicious DLL in the same directory. The DLL executes multi
+stage shellcodes and each shellcode employs various technique to hide the next
+stage. The overall installation steps are below:
+https://unit42.paloaltonetworks.com/tracking-oceanlotus-new-downloader-kerrdown/ 5/13
+3/15/2019 Tracking OceanLotus’ new Downloader, KerrDown
+
+The Microsoft Word exe loads wwlib.dll in the same directory and executes ‘FMain’
+
+function of the DLL.
+
+
+The DLL decodes base64 encoded shellcode in the body and executes it.
+
+
+The shellcode decompresses the second shellcode which is compressed with the
+
+
+open source compression code UCL and execute it.
+
+
+The second shellcode decrypts the third shellcode with AES.
+
+
+The third shellcode retrieves the shellcode from the following remote location and
+
+
+executes it: https://cortanasyn[.]com/Avcv
+
+The fourth shellcode loads the embedded Cobalt Strike Beacon DLL in memory and
+
+executes it.
+Figure 6: Execution flow of sideloaded malicious downloader
+Looking at the compile timestamps of all the KerrDown samples in our datasets we were
+able to discern a couple of observations:
+OceanLotus has been using the new downloader in their campaigns since at least
+March 2018 and continues to actively use it in their campaigns. Figure 7 shows the
+timeline of the KerrDown samples:
+https://unit42.paloaltonetworks.com/tracking-oceanlotus-new-downloader-kerrdown/ 6/13
+3/15/2019 Tracking OceanLotus’ new Downloader, KerrDown
+Figure 7: Downloader DLL compile time lines
+While it is already widely believed that the OceanLotus group may originate from
+Vietnam, we wanted to find possible working hour patterns from the samples in our
+datasets. We plotted the compile times based on GMT +7 and found a clear pattern
+of the possible working hours of the group. The OceanLotus group has a typical 9
+AM to 6 PM working pattern with most samples compiled during this period of the
+day. Figure 8 shows the malware compilation timestamps in GMT +7 for each
+unique sample found in our dataset.
+Figure 8: Malware compilation times in GMT +7
+We also observed all the samples were compiled during the weekdays – between
+Monday to Friday. Therefore, it is clear that the OceanLotus group works during
+https://unit42.paloaltonetworks.com/tracking-oceanlotus-new-downloader-kerrdown/ 7/13
+3/15/2019 Tracking OceanLotus’ new Downloader, KerrDown
+weekdays and takes a break during the weekends. Figure 9 shows the samples
+compiled during the week.
+Figure 9: Malware compilation during weekdays

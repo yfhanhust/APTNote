@@ -1,0 +1,34 @@
+JavaScript leverages DynamicWrapperX to run shellcode that launches SugarGh0st
+The JavaScript used in this infection chain is also heavily obfuscated and is embedded
+with base64-encoded data of other components of the attack, including a shellcode.
+When the JavaScript is executed, it drops an encrypted SugarGh0st, a DLL called
+“libeay32.dll” and the decoy document. The JavaScript opens the decoy document and
+copies Wscript.exe to the %TEMP% folder as dllhost.exe. It runs the dropped JavaScript
+again using the dllhost.exe and creates a registry subkey called “CTFMON.exe” in the
+Run registry key to establish persistence.
+Registry
+Key
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
+Subkey CTFMON.exe
+Value “cmd /c start C:\Users\user\AppData\Local\Temp\dllhost.exe
+C:\Users\user\AppData\Local\Temp\~204158968.js”
+The file “libeay32.dll” is a tool called DynamicWrapperX (originally named
+“dynwrapx.dll”) developed by Yuri Popov. This tool is an ActiveX component that enables
+Windows API function calls in scripts (JScript, VBScript, etc.). The attacker can use this
+to run shellcode via the JavaScript dropper. But, they must first run regsvr.exe to install
+the component.
+C:\Windows\system32\regsvr32 /i /s
+C:\Users\ADMINI~1\AppData\Local\Temp\libeay32.dll
+The DynamicWrapperX DLL registers its member functions in the victim’s machine by
+creating a registry subkey CLSID with the value “89565275-A714-4a43-912E
+978B935EDCCC” in Software\Classes\DynamicWrapperX registry key. The JavaScript
+containing the ActiveX components executes the embedded shellcode using the
+DynamixWrapperX DLL.
+https://blog.talosintelligence.com/new-sugargh0st-rat/ 9/19
+1/16/24, 12:16 PM New SugarGh0st RAT targets Uzbekistan government and South Korea
+The shellcode has the API hashes and instructions to load and map to the functions
+necessary for process injection from Kernel32.dll. It also loads two other DLLs,
+User32.dll and shlwapi.dll. Then, it loads the encrypted SugarGh0st “libeay32.lib” from
+the %TEMP% location, decrypts it, and reflectively loads it into the memory space
+allocated in the dllhost.exe process.
+Shellcode that loads and decrypts the encrypted SugarGh0st.

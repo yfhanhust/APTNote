@@ -1,0 +1,173 @@
+
+
+
+Sentence : It all began with PlugX
+Throughout the duration of the attack, one of Velvet Ant’s attack techniques was to hijack execution
+flow, by leveraging different methods such as DLL search order hijacking, Phantom DLL loading and
+DLL side loading.
+Soon after starting the forensic investigation, Sygnia identified the various tools employed by the threat
+actor, determined the scope of compromise, and formulated a remediation plan. The plan combined
+eradication, remediation, and visibility enhancement, which focused on the threat actor’s Tactics,
+Techniques and Procedures (TTPs).
+The plan was executed successfully. Alerts that were configured to identify re-entry attempts were not
+triggered, and Sygnia’s experts worked with the IT and security teams of the victim company to bolster
+overall security. However, the success of the remediation and hardening efforts drove the threat actor to
+focus on legacy operating systems, targeting Windows Server 2003 systems on which the
+https://www.sygnia.co/blog/china-nexus-threat-group-velvet-ant/ 2/17
+6/25/24, 3:03 PM In-Depth Analysis: Velvet Ant's Prolonged Cyber Attack on a Large Organization
+organization’s Endpoint Detection and Response (EDR) product was not installed, and logging was
+limited. The threat actor resumed activity by utilizing previously deployed malware that remained
+dormant for months in the victim environment. The malware was identified as PlugX, a well-known
+remote access Trojan.
+PlugX has been used by multiple Chinese state sponsored groups since 2008. The tool is still widely
+deployed – although its successor, ShadowPad has been in use since 2015. PlugX was primarily
+designed to provide remote access to infected systems. However, it has a modular plugin system,
+which provides attackers with a large set of additional capabilities that can be utilized for nefarious
+purposes.
+The PlugX execution chain in this network consisted of three files: ‘iviewers.exe’, ‘iviewers.dll’ and
+‘iviewers.dll.ui’.
+‘iviewers.exe’ is a legitimate application called ’OLE/COM Object Viewer‘, that is part of the
+Windows SDK.
+‘iviewers.dll’ is the malicious PlugX DLL loader, that is loaded by ‘iviewers.exe’ via DLL search
+order hijacking.
+‘iviewers.dll.ui’ contains the actual malicious payload, which is loaded by ‘iviewers.dll’.
+When ‘iviewers.exe’ is executed, these three files are copied to a sub-directory with a non-fixed name
+under ‘C:\ProgramData’ (or ‘C:\Documents and Settings\All Users\Application Data’, on Windows
+Server 2003 systems), and ‘iviewers.exe’ is installed as a Windows service. Afterwards, several
+‘Svchost’ processes are launched, and code is injected into them.
+Figure 1: Snippet from Sygnia’s Velocity XDR system, showing the three files that were created
+by the malware on an infected system. The creation time of the files was manipulated by the
+malware and does not reflect the actual creation time.
+Figure 2: Snippet from VMRay sandbox, showing a process graph for an execution of
+‘iviewers.exe’.
+Throughout the investigation, Sygnia acquired memory dumps of those ‘Svchost’ processes, which
+proved helpful in tracking the threat actor’s activities – especially on legacy servers, where logs were
+lacking. The memory dumps contained harvested credentials and various commands executed by the
+threat actor.
+https://www.sygnia.co/blog/china-nexus-threat-group-velvet-ant/ 3/17
+6/25/24, 3:03 PM In-Depth Analysis: Velvet Ant's Prolonged Cyber Attack on a Large Organization
+Figure 3: Snippet from a memory dump of an injected ‘Svchost’ process, showing credential
+harvesting.
+Figure 4: Snippet from a memory dump of an injected ‘Svchost’ process, showing part of a
+command that was executed to scan an internal network segment.
+Lateral Movement and C&C
+When moving laterally to workstations installed with newer Windows versions, the threat actor
+consistently tampered with the EDR product prior to installing PlugX. On one occasion, the threat actor
+attempted to disable the EDR product on a target workstation but failed, and then did not proceed to
+install PlugX. This demonstrates a high level of operational security (OPSEC) awareness.
+Impacket, an open-source collection of Python classes, was used for lateral tool transfer, and to
+execute code remotely on hosts. Specifically, the threat actor employed Impacket’s wmiexec.py, a tool
+that utilizes the native Windows Management Instrumentation (WMI) to execute remote commands.
+Figure 5: Snippet from an MFT entry of a file created by WmiExec to store command output.
+This output belongs to a ‘del’ command, which was executed to delete EDR anti-malware logs.
+https://www.sygnia.co/blog/china-nexus-threat-group-velvet-ant/ 4/17
+6/25/24, 3:03 PM In-Depth Analysis: Velvet Ant's Prolonged Cyber Attack on a Large Organization
+The PlugX C&C address, 202.61.136[.]158, was also found in these memory dumps. This allowed the
+creation of network-based detections, and assisted Sygnia in scoping the incident.
+Figure 6: Snippet from VirusTotal, showing that the malware’s C&C IP address was identified as
+a PlugX C&C server.
+The ‘Svchost’ process launched by ‘iviewers.exe’ binds to a pre-configured local port and accepts TCP
+connections. It also creates a new rule in the Windows firewall called ‘Network Discovery (SSDP-In)’, to
+allow these connections. This behavior did not seem to be related to the C&C mechanism, and its
+purpose was initially unclear.
+Figure 7: Snippet from Sygnia’s XDR system, Velocity, showing a Sysmon process creation
+event for a ‘netsh’ command which was launched on a legacy file serve by the injected
+‘Svchost’ process to create a local firewall rule.
+The purpose of the local firewall rule soon became clear, following a kill-switch operation that initiated a
+dramatic turn of events.
+https://www.sygnia.co/blog/china-nexus-threat-group-velvet-ant/ 5/17
+6/25/24, 3:03 PM In-Depth Analysis: Velvet Ant's Prolonged Cyber Attack on a Large Organization
+PlugX is Dead; Long Live PlugX
+Equipped with the forensic investigation findings, the Sygnia team again worked with the victim
+company to eradicate the discovered threats. Dozens of compromised hosts were re-imaged, many of
+the legacy servers were decommissioned, hundreds of indicators of compromise (IOCs) were blocked
+across the network, and all the known instances of threat actor access to the network were eradicated.
+The victim organization has a large network with complex architecture. The post-breach remediation
+plan designed by Sygnia included prioritized tasks divided into immediate and mid-term
+recommendations. As a standard procedure, Sygnia enhanced the organization’s visibility, and
+established advanced monitoring based on the indicators of attack (IOA).
+Several days after eliminating Velvet Ant’s presence, the advanced monitoring capabilities that were
+deployed in the network proved their value, as alerts were triggered when PlugX was deployed on
+newly-infected systems. Sygnia’s investigation team quickly analyzed the new infections and noticed a
+substantial difference in the memory dump acquired from the newly infected hosts – there was no
+external C&C configured. This was puzzling; PlugX is a remote access tool – how can it be deployed
+without a C&C server, and still be effective?
+Additional forensic analysis revealed that the threat actor reconfigured PlugX to use an internal file
+server as its C&C and channeled traffic through that server. This defense evasion technique allowed
+the C&C traffic to blend in with legitimate internal network traffic.
+This meant that the threat actor deployed two versions of PlugX within the network. The first version,
+configured with an external C&C server, was installed on endpoints with direct internet access,
+facilitating the exfiltration of sensitive information. The second version did not have a C&C and was
+deployed exclusively on legacy servers.
+This left us with unanswered questions. How did the threat actor control the legacy file server? And how
+did they manage to restore access to the organization despite the comprehensive remediation
+activities? To answer these questions, Sygnia’s incident response team set up additional network and
+host-based monitoring tools on the file server and closely monitored for any suspicious activities.
+As shown in figure 7, PlugX created a local firewall rule on compromised endpoints and listened on a
+high, random port number. On the file server, port 13742 was opened. Analyzing network connections
+to the file server identified an internal IP address communicating with it on the same port. The internal
+IP address belonged to an F5 load balancer.
+Figure 8: Snippet from Sygnia’s XDR system, Velocity, showing the network connection event
+from the F5 load balancer to the file server on port 13742.
+This load balancer was not part of previous remediation efforts, because it was not supposed to be
+operational in the production network. One team in the organization started deploying the F5 solution in
+the network a long time ago as part of a disaster recovery plan (DRP), but the project was never
+completed.
+https://www.sygnia.co/blog/china-nexus-threat-group-velvet-ant/ 6/17
+6/25/24, 3:03 PM In-Depth Analysis: Velvet Ant's Prolonged Cyber Attack on a Large Organization
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Velvet Ant", "type" : "ACTO"},
+        {"id": 2, "description": "PlugX", "type" : "EXEF"},
+        {"id": 3, "description": "DLL search order hijacking", "type" : "TTPS"},
+        {"id": 4, "description": "Phantom DLL loading", "type" : "TTPS"},
+        {"id": 5, "description": "DLL side loading", "type" : "TTPS"},
+        {"id": 6, "description": "Sygnia", "type" : "ACTO"},
+        {"id": 7, "description": "Tactics, Techniques and Procedures (TTPs)", "type" : "TTPS"},
+        {"id": 8, "description": "Windows Server 2003 systems", "type" : "OPPS"},
+        {"id": 9, "description": "Endpoint Detection and Response (EDR) product", "type" : "APPS"},
+        {"id": 10, "description": "ShadowPad", "type" : "EXEF"},
+        {"id": 11, "description": "iviewers.exe", "type" : "EXEF"},
+        {"id": 12, "description": "OLE/COM Object Viewer", "type" : "APPS"},
+        {"id": 13, "description": "iviewers.dll", "type" : "EXEF"},
+        {"id": 14, "description": "iviewers.dll.ui", "type" : "DOCF"},
+        {"id": 15, "description": "C:\\ProgramData", "type" : "SYSP"},
+        {"id": 16, "description": "C:\\Documents and Settings\\All Users\\Application Data", "type" : "SYSP"},
+        {"id": 17, "description": "Windows service", "type" : "TTPS"},
+        {"id": 18, "description": "Svchost process", "type" : "APPS"},
+        {"id": 19, "description": "Impacket", "type" : "EXEF"},
+        {"id": 20, "description": "wmiexec.py", "type" : "EXEF"},
+        {"id": 21, "description": "Windows Management Instrumentation (WMI)", "type" : "TTPS"},
+        {"id": 22, "description": "202.61.136[.]158", "type" : "CCSH"},
+        {"id": 23, "description": "Network Discovery (SSDP-In) firewall rule", "type" : "FIRW"},
+        {"id": 24, "description": "F5 load balancer", "type" : "ROUT"},
+        {"id": 25, "description": "file server", "type" : "STOR"},
+        {"id": 26, "description": "port 13742", "type" : "NETP"},
+        {"id": 27, "description": "internal IP address", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "employs"},
+        {"source": 1, "target": 4, "rel_name" : "employs"},
+        {"source": 1, "target": 5, "rel_name" : "employs"},
+        {"source": 6, "target": 7, "rel_name" : "focuses on"},
+        {"source": 1, "target": 8, "rel_name" : "targets"},
+        {"source": 9, "target": 8, "rel_name" : "is not installed on"},
+        {"source": 2, "target": 10, "rel_name" : "has successor"},
+        {"source": 11, "target": 13, "rel_name" : "loads"},
+        {"source": 11, "target": 14, "rel_name" : "contains payload of"},
+        {"source": 12, "target": 11, "rel_name" : "is part of"},
+        {"source": 13, "target": 14, "rel_name" : "loads"},
+        {"source": 15, "target": 16, "rel_name" : "or"},
+        {"source": 17, "target": 11, "rel_name" : "installs as"},
+        {"source": 18, "target": 13, "rel_name" : "injects code into"},
+        {"source": 19, "target": 20, "rel_name" : "uses"},
+        {"source": 20, "target": 21, "rel_name" : "utilizes"},
+        {"source": 1, "target": 22, "rel_name" : "configures with"},
+        {"source": 18, "target": 23, "rel_name" : "creates"},
+        {"source": 24, "target": 25, "rel_name" : "communicates with"},
+        {"source": 26, "target": 25, "rel_name" : "opens on"},
+        {"source": 27, "target": 25, "rel_name" : "has IP address that communicates with"}
+    ]
+}

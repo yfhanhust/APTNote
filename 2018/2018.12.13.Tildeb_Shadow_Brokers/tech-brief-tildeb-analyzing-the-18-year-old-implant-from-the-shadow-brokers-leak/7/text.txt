@@ -1,0 +1,84 @@
+The Hardcoded IP Address 137[.]140[.]55[.]211
+There is an interesting blunder in the way the IP address is hardcoded. It ends with 3-space characters
+(shown highlighted in three different colors) as 137.140.55.211  \x00, then null terminated. Connecting to
+the IP address on specific versions of Windows OS works correctly but fails on others. There is a
+technical justification for this behavior.
+As noted earlier, the implant uses the MFC library for all network communications. To connect to the IP
+address, it uses the MFC API CAsyncSocket::Connect() located in the library mfc42.dll . Since MFC
+classes are just C++ wrappers for Windows APIs, the actual implementation of this function is in the
+Windows ntdll.dll library on, for example, Windows XP(SP3) and other operating systems. The figure
+below shows the steps taken to reach the core implementation (for mfc42.dll, File Version: 6.02.8073.0):
+|{mfc42.dll}|Col2|
+|---|---|
+|{mfc42.dll}||
+|||
+|{ws2_32.dll}|Col2|Col3|
+|---|---|---|
+|{ws2_32.dll}|||
+||||
+|{ntdll.dll}|Col2|Col3|
+|---|---|---|
+|{ntdll.dll}|||
+||||
+Figure 6: CAsyncSocket::Connect() API implementation sequence (Windows XP; 32-bit)
+Figure 6 shows the functions that get called in an attempt to convert “a string containing an IPv4 address
+dotted-decimal address into a proper address for the in_addr structure”. And as per Microsoft Developer
+Network’s (MSDN) documentation on the inet_addr() function, passing " " (a space) to the inet_addr
+function will return zero. In actuality, the inet_addr() function first checks if the first character in the passed
+string is a space character. If so, it checks if the next character in the string is the null terminated
+character \x00 . If not, it proceeds to call the ntdll function RtlIpv4StringToAddressA(), which is responsible
+for parsing, sanitizing, and converting the passed string into a proper binary IPv4 address in network
+order.
+RtlIpv4StringToAddressA() checks if every character is in American Standard Code for Information
+Interchange (ASCII) or a digit. If it is in ASCII, it checks if it is the character \x2e (.) . After a successful
+conversion, the Terminator parameter, which “ receives a pointer to the character that terminated the
+converted string,” returns the space character as the terminating character. The code that follows in the
+function inet_addr() then checks whether it is the null \x00 terminating character. If not, it checks whether
+it is an ASCII character; if not, it fails. Otherwise, it continues to check if it is a space character. If so, it
+returns successfully; otherwise, the function fails.
+It is important to note that what contributes to the successful conversion in this case is the fact that the
+Strict parameter of RtlIpv4StringToAddressA() is set to false. It wouldn’t make sense otherwise in the
+context of Tildeb’s operation. MSDN defines the Strict parameter as follows: “ A value that indicates
+whether the string must be an IPv4 address represented in strict four-part dotted-decimal notation. If this
+parameter is TRUE, the string must be dotted-decimal with four parts. If this parameter is FALSE, any of
+four possible forms are allowed, with decimal, octal, or hexadecimal notation. ”
+This also works with Windows NT 4.0. The function inet_addr() has the actual similar implementation of
+RtlIpv4StringToAddressA(), but is less sophisticated.
+9
+For Windows XP, the MFC’s Connect() function works properly. However, this is not the case for
+Windows 7. Figure 7 shows the chain of function calls it takes to actually connect to the IP/domain
+address (this is for mfc42.dll, File Version: 6.6.8063.0). Not every visited function/API is shown.
+```
+          1  CAsyncSocket::Connect()
+          • {mfc42.dll}
+```
+2 getaddrinfo()
+```
+          • {ws2_32.dll}
+      3  GetAddrInfoW()
+      • {ws2_32.dll}
+
+      4  ConvertIp6StringToAddress()
+      • {ws2_32.dll}
+
+      5  RtlIpv6StringToAddressExW()
+      • {ntdll.dll}
+
+      6  GetIp4Address() -> RtlIpv4StringToAddressW()
+      • {ws2_32.dll}
+
+      7  LookupAddressForName()
+      • {ws2_32.dll}
+
+      • ...
+
+```
+Figure 7: CAsyncSocket::Connect() API implementation sequence (Windows 7 ; 32-bit)
+As shown in Figure 7, the chain of calls is different from that of Windows XP, as the file version of the
+MFC library file is different as well. The getaddrinfo() function is more sophisticated at accounting for
+different scenarios and more. The code within the function GetIp4Address() that’s responsible for
+checking the Terminator’s parameter value is notable. After successfully calling the function
+RtlIpv4StringToAddressW(), GetIp4Address() checks the Terminator value if it is the null character \x00
+and only this character. If so, the function returns 1 (success). If it is anything other than \x00, the function
+fails, which is the case in this implant, that is, \x20 . In this case, the setting of the Strict parameter doesn’t
+matter even if it's set to true.

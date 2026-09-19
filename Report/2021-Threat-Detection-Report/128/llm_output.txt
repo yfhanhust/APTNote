@@ -1,0 +1,98 @@
+
+
+
+Sentence : Detection opportunities
+Detection opportunity 1
+Unusual port connections from ~~svchost.exe~~
+ATT&CK technique(s): T1571 Non-Standard Port
+ATT&CK tactic(s): Command and Control
+Details: We as well as others in the community noticed that, soon after TrickBot
+is installed, it makes outbound network connections over HTTPS using TCP
+ports 443, 447, and 449. Furthermore, these connections came from ~~svchost.~~
+~~exe~~ . Based on this information and a “ know normal, find evil ” mindset, we
+determined it was unusual in most environments for svchost to make external
+connections over ports 447 and 449 and decided to create a detection analytic.
+This same analytic approach would work for other threats as well: if you notice a
+threat using non-standard ports, that can be a good opportunity for detection.
+113
+l [TrickBot]
+2021 Threat Detection Report
+Detection opportunity 2
+Scheduled task execution from ~~%appdata%~~
+ATT&CK technique(s): T1053.005 Scheduled Task/Job: Scheduled Task
+ATT&CK tactic(s): Persistence
+Details: Detecting malicious persistence at scale can be difficult in
+environments with a lot of different applications setting up legitimate
+persistence and executing from scheduled tasks. Though detecting the
+execution of every scheduled task can be too noisy in some environments,
+we’ve found that narrowing down scheduled task execution to certain folders
+commonly used by adversaries can help identify evil. In the case of TrickBot,
+we observed it regularly creating scheduled tasks that contain the folder of
+~~Appdata\Roaming~~ . A useful analytic we created to detect TrickBot and other
+threats is looking for a parent process of ~~taskeng.exe~~ or ~~svchost.exe~~ executing
+an ~~.exe~~ located in ~~Appdata\Roaming~~ ~~.~~ This is one that will take a little tuning
+based on the environment, but once tuned, should be helpful for finding evil.
+Detection opportunity 3
+Enumerating domain trusts activity with ~~nltest.exe~~
+ATT&CK technique(s): T1482 Domain Trust Discovery
+ATT&CK tactic(s): Discovery
+Details: We observed operators of TrickBot using ~~nltest.exe~~ to make domain
+trust determinations. While you probably can’t disable ~~nltest.exe~~ ~~,~~ looking for
+instances of it executing with a command line that includes ~~/dclist:~~ ~~,~~
+~~/domain_trusts~~ or ~~/all_trusts~~ has proven to be a high-fidelity analytic to catch
+follow-on activity to both TrickBot as well as Bazar (which didn’t make it into
+our top 10, due in part to its emergence partway through the year). The use of
+nltest means discovery activity is occurring beyond initial access and that Cobalt
+Strike and ransomware such as Ryuk aren’t far behind.
+Katie Nickels
+D I R E C T O R O F
+I N T E L L I G E N C E
+Katie has worked in Security
+Operations Centers and cyber threat
+intelligence for nearly a decade,
+hailing from a liberal arts background
+with degrees from Smith College and
+Georgetown University. Prior to joining
+Red Canary, Katie was the ATT&CK
+Threat Intelligence Lead at The MITRE
+Corporation, where she focused on
+applying cyber threat intelligence
+to ATT&CK and sharing why that’s
+useful. She is also a SANS instructor
+and has shared her CTI and ATT&CK
+expertise with presentations at many
+conferences as well as through Twitter,
+blog posts, and podcasts.
+114
+l [TrickBot]
+2021 Threat Detection Report
+T H R E AT
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 2, "description": "TCP ports 443, 447, and 449", "type" : "NETP"},
+        {"id": 3, "description": "%appdata%", "type" : "SYSP"},
+        {"id": 4, "description": "Appdata\\Roaming", "type" : "TPTH"},
+        {"id": 5, "description": "taskeng.exe", "type" : "EXEF"},
+        {"id": 6, "description": "nltest.exe", "type" : "EXEF"},
+        {"id": 7, "description": "/dclist:", "type" : "TAMP"},
+        {"id": 8, "description": "/domain_trusts", "type" : "TAMP"},
+        {"id": 9, "description": "/all_trusts", "type" : "TAMP"},
+        {"id": 10, "description": "TrickBot", "type" : "ACTO"},
+        {"id": 11, "description": "Bazar", "type" : "ACTO"},
+        {"id": 12, "description": "Cobalt Strike", "type" : "APPS"},
+        {"id": 13, "description": "Ryuk", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 10, "target": 2, "rel_name" : "uses"},
+        {"source": 10, "target": 4, "rel_name" : "creates"},
+        {"source": 5, "target": 4, "rel_name" : "executes from"},
+        {"source": 10, "target": 6, "rel_name" : "uses"},
+        {"source": 6, "target": 7, "rel_name" : "includes in command line"},
+        {"source": 6, "target": 8, "rel_name" : "includes in command line"},
+        {"source": 6, "target": 9, "rel_name" : "includes in command line"},
+        {"source": 10, "target": 12, "rel_name" : "uses"},
+        {"source": 10, "target": 13, "rel_name" : "leads to"}
+    ]
+}

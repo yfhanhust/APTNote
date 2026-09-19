@@ -1,0 +1,63 @@
+Collection (TA0009)
+```
+In preparation of exfiltration of the data needed for their objective, the adversary collected the data
+from various sources within the victim’s network. As described before, the adversary collected data
+from an information repository, Microsoft SharePoint Online in this case. This document was
+exfiltrated and used to continue the intrusion via a company portal and VPN.
+In all cases we’ve seen the adversary copying results of the discovery phase, like file- and directory
+lists from local systems, network shared drives, and file shares on remote systems. But email
+collection is also important for this adversary: with every intrusion we saw the mailbox of some users
+being copied, from both local and remote systems:
+```
+wmic /node: process call create "cmd /c copy c:\Users\\\backup.pst
+c:\windows\temp\backup.pst"
+copy "i:\\\My Documents\.pst"
+copy \\c$\Users\\AppData\Local\Microsoft\Outlook*.ost
+```
+Files and folders of interest are collected as well and staged for exfiltration.
+The goal of targeting some victims appears to be to obtain Passenger Name Records (PNR). How this
+PNR data is obtained likely differs per victim, but we observed the usage of several custom DLL files
+used to continuously retrieve PNR data from memory of systems where such data is typically
+processed, such as flight booking servers.
+The DLL’s used were side-loaded in memory on compromised systems. After placing the DLL in the
+appropriate directory, the actor would change the date and time stamps on the DLL files to blend in
+with the other legitimate files in the directory.
+Adversaries aiming to exfiltrate large amounts of data will often use one or more systems or storage
+locations for intermittent storage of the collected data. This process is called staging and is one of the
+of the activities that NCC Group and Fox-IT has observed in the analysed C2 traffic.
+We’ve seen the adversary staging data on a remote system or on the local system. Most of the times
+the data is compressed and copied at the same time. Only a handful of times the adversary copies the
+data first before compressing (archive collected data) and exfiltrating it. The adversary compresses
+and encrypts the data by using WinRAR from the command-line. The filename of the command-line
+executable for WinRAR is RAR.exe by default.
+This activity group always uses a renamed version of rar.exe. We have observed the following
+filenames overlapping all intrusions:
+jucheck.exe
+RecordedTV.ms
+teredo.tmp
+update.exe
+msadcs1.exe
+The adversary typically places the executables in the following folders:
+C:\Users\Public\Libraries\
+C:\Users\Public\Videos\
+7/22
+C:\Windows\Temp\
+The following four different variants of the use of rar.exe as update.exe we have observed:
+```
+update a -m5 -hp  
+update a -m5 -r -hp  
+update a -m5 -inul -hp  
+update a -m5 -r -inul -hp  
+```
+The command lines parameters have the following effect:
+a = add to archive.
+m5 = use compression level 5.
+r = recurse subfolders.
+inul = suppress error messages.
+hp = encrypt both file data and headers with password.
+The used password, file extensions for the staged data differ per intrusion. We’ve seen the use of .css,
+.rar, .log.txt, and no extension for staged pieces of data.
+After compromising a host with a Linux operating systems, data is also compressed. This time the
+adversary compresses the data as a gzipped tar-file: tar.gz. Sometimes no file extension is used, or the
+file extension is .il. Most of the times the files names are prepended with adsDL_ or contain the word
+“list”. The files are staged in the home folder of the compromised user account: /home//

@@ -1,0 +1,508 @@
+
+
+
+Sentence : ALL YOUR BEACONS ARE BELONG TO US
+To defend against Cobalt Strike, we must first understand how it operates.
+Cobalt Strike works in an agent and server configuration. Each Beacon is deployed (usually surreptitiously) as an agent on the endpoint and is configured to communicate with a Team Server that acts
+as the C2.
+One is rendered useless without the other, which gives us a couple of options in terms of hunting and
+detection capabilities. We can choose to detect and respond to either the Beacon or the Team Server,
+however, there are reasons why you may choose one over the other.
+Detecting and responding to the Beacon likely means that a threat actor is already active on our networks, or that there has been a patient zero victim. This approach is therefore largely reactive. Detecting
+the Team Server has no such requirement and means we do not have to wait for a device to be targeted
+before taking action to defend ourselves.
+To be proactive, which is the ideal scenario, we must be actively looking to locate and identify Cobalt
+Strike Team Servers in the wild. Ideally this would happen as soon as possible once a new Team Server
+is deployed. This would allow us to take preventative actions, thereby cutting the head off the snake
+before it ever has a chance to get close enough to bite.
+So, where can we look to find a source of Team Servers for our data collection purposes?
+DATA COLLECTION
+defining the scope
+There are several data sources we can use to generate a list of Cobalt Strike servers that we will want
+to defend against. These sources can include the following:
+- Threat intelligence feeds
+
+- Industry reports
+
+- Incident response data
+
+- EDR alerts
+
+- Threat hunting
+
+While they are still valuable, many of these sources are reactive in nature and place defenders on the back
+foot. By the time something ends up in an intelligence report or has triggered alerts in your SIEM, something
+bad has potentially already happened.
+25
+There are several public methodologies for identifying Cobalt Strike Team Servers or active Beacons.
+These can include, but are not limited to:
+- Default security certificates
+
+- Default port (50050/TCP)
+
+- A tell-tale extra null byte in HTTP server responses
+
+- Jitter and sleep interval analysis
+
+- JARM signatures
+
+- DNS redirector response
+
+RecordedFuture
+A Multi-Method Approach to Identifying Rogue Cobalt Strike Servers
+https://www.recordedfuture.com/cobalt-strike-servers/
+As already stated, our aim is to stay one step ahead of the bad guys and detect Team Servers in the wild.
+To this end, we have three main options:
+  - Scan the entire Internet using a custom-built scanner with the purpose of detecting and analyzing
+
+Cobalt Strike Team Servers
+- Leverage well-known and established scanning services already available on the Internet such
+
+as Shodan, Rapid7, Censys or ZoomEye
+  - Build a hybrid system that leverages public services in conjunction with a private, more targeted
+
+scanner
+All options have their strengths and weaknesses. They require differing levels of investment and have
+different barriers to entry for any organization looking to implement such a system.
+Building and operating a bespoke Internet-wide scanner and analyzer is the best option in terms of the
+potential quantity of results. It also offers the best ability to add customizations. But this is also the most
+expensive option in terms of the time and skills required to implement it. It might be beyond many organizations’ capabilities or budget.
+The use of public scanning services can be helpful for organizations that do not have an existing way
+of discovering or tracking Cobalt Strike infrastructure. However, without an additional layer of human or
+automated analysis for quality assurance, these services might not yield optimal results. You could not
+achieve a high level of certainty that a server is indeed hosting a Cobalt Strike instance.
+Building a hybrid system is a happy medium between these two approaches. This should provide results
+that have a high level of certainty, but in a more cost-effective manner. Granted, you might not have the same
+volume of results as from a bespoke system, but it would certainly still offer a good return on investment.
+crafting some queries
+Trying to build a scanner to scan the entire Internet, to accurately fingerprint the systems found, and then
+to store all the resulting data is no mean feat. Don’t forget to add to this the potentially significant effort
+required to procure the budget for your AWS (Amazon Web Services) bill if you want to do this continuously
+and rapidly, and to store the results for any length of time.
+This is where services like Shodan can make life easier, as they have already done the legwork for you.
+Other researchers have used similar services like Censys and ZoomEye. Or you can opt to use datasets
+from Rapid7 instead for Cobalt Strike hunting.
+26
+For this paper we will focus on Shodan, but Rapid7 Open Data was also invaluable in our data collection
+phase. You may decide to use one or even all the services mentioned.
+Shodan
+https://www.shodan.io/
+Rapid7 Open Data
+https://opendata.rapid7.com/
+Censys
+https://censys.io/
+ZoomEye
+https://www.zoomeye.org/
+Identifying Cobalt Strike team servers in the wild by using ZoomEye
+https://80vul.medium.com/identifying-cobalt-strike-team-servers-in-the-wild-by-using-zoomeyedebf995b6798
+The important part of this phase is getting relevant data to feed to the next stage of our analysis. Firstly,
+we need to craft search queries to unlock the value in Shodan’s data. To limit false positives, these queries
+need to be based on known Cobalt Strike Team Server characteristics. The results of these queries will still
+need further scrutiny and processing to increase the level of certainty that a server is hosting Cobalt Strike.
+It will take time, experimentation, and regular updates to craft a good set of queries that can account for
+the different versions of Team Server. These queries should also include instances where the threat actor
+has customized their deployment, causing it to go undetected by an existing query set.
+Here, we have crafted a query that can be used to detect the “404 Not Found” HTTP response returned
+from the NanoHTTPD server used in the backend of a Cobalt Strike Team Server.
+Figure 5 - Shodan query to detect Cobalt Strike ‘404 NOT FOUND’ response
+This query searches for a HTTP server returning a “404 Not Found” response that has a content length of
+zero, a content type of “text/plain”, and which returns a “Date” header.
+Figure 6 – Default NanoHTTPD HTTP header response
+The number of results returned via this Shodan query is huge, with more than 322,000 in total. The majority
+of these would likely be false positives. This is due to the way Shodan queries operate; they will trigger on
+any systems that contain the values specifi ed in our query, including systems that contain other headers
+in addition to those specifi ed.
+27
+Figure 7 – Shodan Query results for "404 NOT FOUND" response from Cobalt Strike Team Server
+For those familiar with programming logic or string comparisons, it is best to think of Shodan queries as
+a “contains” comparison, rather than “equals”. To work around this, we will require a tighter, more specifi c
+query to fi lter some of these extraneous results out.
+For example, if we wanted to remove results that contain a “Connection” header, we can append “AND
+NOT “Connection”” to our existing query. This would signifi cantly reduce the number of results and cut
+down on false positives.
+The alternative to fi ltering at the query level is to perform some additional processing of the results, using
+automation or scripting.
+Depending on your level of Shodan API access, you might be forced to refi ne the query quite a bit, or else
+you risk exceeding your API keys limitations. You will defi nitely need more than one query to cover the
+range of Cobalt Strike server confi gurations or customizations, so make sure you adjust your approach
+to suit your API limits.
+There needs to be a balance between having a query that is not so tight that it creates false negatives,
+but also not so loose that you create false positives (which in effect are wasted API query results). API
+limitations aside, in most scenarios a false positive is more favorable than a false negative. False positives
+can be whittled down later, but false negatives are missed Team Servers, which are potentially active in
+the wild and used to conduct attacks.
+Another query that has provided valuable results for detecting Cobalt Strike Team Servers is based on
+JARM fi ngerprinting. JARM is a Transport Layer Security (TLS) fi ngerprinting tool developed by Salesforce,
+which they have leveraged to detect Cobalt Strike Team Servers and other malicious servers.
+Salesforce
+Easily Identify Malicious Servers on the Internet with JARM
+https://engineering.salesforce.com/easily-identify-malicious-servers-on-the-internet-with-jarme095edac525a
+Shodan added JARM search functionality in November 2020, and it is proving to be a powerful tool in the
+threat hunter’s arsenal. The Cobalt Strike Team Server is written in Java, and each Java TLS stack has a
+very specifi c JARM fi ngerprint. As Java 11 is frequently used as the build version for a great number of
+Cobalt Strike Team Servers, its JARM fi ngerprint has also become a JARM fi ngerprint for Cobalt Strike.
+ssl.jarm:"07d14d16d21d2107c42d41d00041d24a458a375eef0c576d23a7bab9a9fb1"
+Figure 8 - Shodan Query for Cobalt Strike/Java 11 SSL JARM fi ngerprint
+28
+Cobalt Strike
+A Red Teamer Plays with JARM
+https://blog.cobaltstrike.com/2020/12/08/a-red-teamer-plays-with-jarm/
+SANS
+Threat Hunting with JARM
+https://isc.sans.edu/forums/diary/Threat+Hunting+with+JARM/26832/
+Searching a known Java 11 JARM associated with Cobalt Strike, we received a little over 6,000 results:
+Figure 9 - Shodan Query Results for SSL JARM fi ngerprint for Cobalt Strike Team Server
+These results contain Cobalt Strike Team Servers as well as legitimate servers running the Java 11 TLS
+stack, so false positives will be present.
+We also need to consider that spoofi ng JARM signatures is a possibility, whereby a server can be confi gured to masquerade as a Cobalt Strike Team Server from a TLS/JARM perspective. These spoofed
+servers might be confi gured to act as a honeypot that could be used to detect systems like ours, that are
+attempting to discover Cobalt Strike Team Servers in the wild. These servers can then be blocked during
+future deployments, potentially thwarting our scanning efforts.
+Stefan Grimminck
+Spoofi ng JARM signatures. I am the Cobalt Strike server now!
+https://grimminck.medium.com/spoofi ng-jarm-signatures-i-am-the-cobalt-strike-server-nowa27bd549fc6b
+Additionally, threat actors with an awareness of JARM fi ngerprinting could also modify their TLS stack in
+a way that alters their JARM fi ngerprint to evade detection. Looking at the top 10 JARM fi ngerprints for
+Team Servers we have observed in the wild, we can confi rm that this is the case. The top result by far is
+the JARM fi ngerprint for the Java 11 TLS stack, but there are several notable deviations from this.
+29
+Figure 10 – Top 10 JARM fi ngerprints
+Other queries can be based on criteria such as Cobalt Strike’s default, self-signed SSL certifi cate, which
+we’ll take a closer look at later in the book.
+ssl.cert.serial:146473198
+Figure 11 - Shodan query to check for Default SSL Serial
+This SSL certifi cate should ideally be changed from the default prior to a live operation or engagement, but
+people often neglect to change it when they deploy a Team Server. This gives us an opportunity to discover
+servers that still use this certifi cate, whether intentionally or not.
+Figure 12 - Shodan Query Results for SSL certifi cate serial for Cobalt Strike Team Server
+30
+Lastly, we can also craft queries based on the numerous Malleable C2 profi les for additional coverage
+(we’ll cover these profi les in more detail in Chapter 3).
+One such example would be a query to detect Team Servers using the Microsoft Update Malleable C2
+profi le. This profi le is confi gured to use a certifi cate common name of www[.]windowsupdate.com, to
+masquerade as a legitimate Microsoft certifi cate.
+Figure 13 – HTTP certifi cate from Microsoft Update malleable C2 profi le
+When we query for servers using this certifi cate common name, we get far fewer results when compared
+to the other queries. But this time we get a higher likelihood of true positives.
+Figure 14 – Shodan query results for “Microsoft Update” HTTP certifi cate
+With some time and experimentation, and further knowledge of Malleable C2 profi les, common certifi cates,
+and HTTP response headers, we can craft multiple queries that will return an abundance of data, which
+we will need to further validate for potential Team Server activity.
+31
+data validation
+Now that we have crafted some queries and started to gather data, how do we validate the results?
+There are a few questions that we can ask of the data, which can increase our confidence of a valid detection:
+
+Do any servers appear in multiple result sets? (i.e., are there detection overlaps?)
+Have any of the collected servers been reported via OSINT channels, threat intelligence feeds,
+or been observed attacking other organizations?
+Can we coerce the Team Server to serve up a Beacon?
+
+At a minimum, we need to interrogate the datasets and intelligence feeds for detection overlaps and
+duplications and check if any of the servers have already been observed carrying out malicious activities.
+Detection overlaps can be used to our advantage here; if we have two or more differing queries or datasets
+that return data containing the same IP address, then it can increase the likelihood that the discovered IP
+is in fact an operating Team Server.
+The ideal scenario is one where we can force a server from our dataset to serve us a Beacon. If we can
+do so, then we will know for certain that we have discovered a Team Server and can mark it for the next
+stages of our CTI lifecycle.
+This will not always be possible, as Team Servers can be protected behind redirectors that can limit
+connections to the Team Server itself, thereby preventing us from retrieving a Beacon. In this instance,
+there are further ways of detecting Cobalt Strike redirectors that can be added into our validation process
+to further increase our detection confidence.
+Sticking with the objective of retrieving a Beacon from a Team Server, we need to know how we can emulate
+a valid stager check-in so that we are served a Beacon.
+There is a bit of behavior that was implemented purposefully to allow interoperability between Cobalt Strike
+and Metasploit Framework generated stagers that can help us here. Both Metasploit and Cobalt Strike
+stage their payloads in such a way that a specially crafted HTTP request – where the Uniform Resource
+Identifier (URI) matches a specific checksum8 value – will cause the Team Server to serve a Beacon.
+Depending on the mode of operation and the architecture of the payload being staged, the URI may need to
+be of a specific length and have a specific checksum8 value. The breakdown of how this works for Cobalt
+Strike can be seen in the table below.
+|Architecture|Mode|Checksum8|URI Length|Example URI|
+|---|---|---|---|---|
+|x86|Normal|92|ANY|/aaaaaw|
+|x64|Normal|93|4|/dVbA|
+|x84|Strict|92|5|/aa910|
+|x64|Strict|93|5|/ab820|
+Table 1 - Stager URI breakdown
+32
+Armed with this knowledge, we can develop a simple Python script that can generate a URI string to satisfy
+any checksum8 validation and URI length checks. This script ultimately could be used to spoof a stager
+check-in.
+Figure 15 –  Python script to generate a URI of a specifi ed length and Checksum8 value
+This approach does have its limitations. If the adversary is using a stageless payload in their deployment,
+or if they have disabled staging altogether, we would not be able to retrieve a payload. A stageless payload
+is one that contains both the payload stage and its confi guration in a self-contained package, so there
+is no requirement for a check-in to the C2 to complete the infection process (for more details see Stager
+vs. Stageless).
+pillaging team servers
+At this point, we have one or even several data sources that are providing us with targets for scanning.
+We also have a means of generating the correct stager URI required for us to try and download a Beacon
+from each of the suspected Team Servers. Combining these two pieces of information, we can begin to
+automate the process of emulating a stager check-in to each of the potential targets, and thus save any
+returned payloads to disk for subsequent processing and analysis.
+33
+Figure 16 - Python function to attempt to download a Cobalt Strike Beacon
+processing
+At this point, we should have some payloads ready for processing, although not all of them will be Cobalt
+Strike Beacons. We may have inadvertently hit on legitimate content or have been served spoofed content
+to mask the presence of an actual Team Server.
+A valid Beacon payload stage is normally a Portable Executable (PE) fi le, most commonly a dynamic-link
+library (DLL), or position-independent shellcode that will decode a PE. We can fi lter out false positives by
+removing fi les that are not PE fi les or that are smaller data fi les (less than 200KB), as Cobalt Strike payloads
+are generally larger than this size. What remains should be Cobalt Strike Beacons ready for confi guration
+extraction.
+34
+beacon config extraction
+As already mentioned, the payload served by a Team Server takes one of two possible forms:
+
+PE DLL (32 or 64 bit)
+Shellcode (32 or 64-bit) that subsequently decodes and refl ectively loads a PE DLL fi le in-memory
+
+If we have been served the latter, then we will need to decode the encoded PE before we can attempt to
+extract the confi guration data. This can be achieved in several ways, but two of the most common and
+easiest to scale are:
+
+Statically, by locating the encrypted PE payload and then decrypting it
+Dynamically, by emulating the shellcode so it self-decrypts, and then writing the decrypted PE
+payload to disk
+
+Using either option requires an understanding of how the shellcode decodes the payload within.
+The fi rst block of the served payload is the decoder routine, which is responsible for XOR decoding the
+embedded PE. Immediately following the shellcode is a 32-bit XOR key that is used to decode both the
+payload size and the payload. Immediately after the XOR key is a 32-bit XOR encoded payload size, which
+is in turn followed by the variable-length, XOR encoded payload.
+Figure 17 - Breakdown of a shellcode stager
+When observed in IDA Pro (a popular disassembler), we can see a call to the decoder function immediately
+prior to the XOR key, with the encoded size and payload immediately following.
+Figure 18 – IDA view of shellcode and other key components of the shellcode stager
+This knowledge will prove useful later when we attempt to decode the payload.
+Inspection of the decoder function reveals that it uses an output differential XOR routine to decode the
+Beacon payload. The XOR key is initially used to decode the fi rst DWORD of the payload, and then updated
+to the value of the fi rst decoded DWORD, which is then used to decode the second DWORD. This process
+is repeated until the entire payload is fully decoded, which is determined by the decoded size DWORD.
+35
+Figure 19 - Output Differential XOR decode routine
+Now we are aware of the structure of the shellcode payload served-up by the Team Server and how it
+performs its decoding. We can develop some code to perform this statically, so that we can retrieve the
+Beacon payload for further processing.
+Figure 20 - Python function to decode a shellcode wrapped Beacon
+36
+This code first checks the shellcode’s target architecture (32/64-bit) based on the opcode of the first
+instruction of the shellcode. The architecture will determine the pattern of the “call” instruction that should
+be located at the end of the decode function.
+If a specified “call” pattern can be found, then we will have located the offset for the end of the decoder
+routine. Once we know this offset, we can then determine the values for the XOR key and payload size
+using their location relative to this offset. With the XOR key and payload size in hand, we can then perform
+the output differential XOR decode process, thereby retrieving the encoded Beacon payload.
+The final stage in processing is the extraction of the config from the Beacon itself. Locating the config
+within a decoded Beacon can be performed quickly using known binary patterns commonly found in the
+config. Cobalt Strike Beacon configs have a particular structure and are single-byte XOR encoded, which
+causes the encoded config to have tell-tale patterns in its encoded form. The structure looks like this
+(using Kaitai Struct):
+Figure 21 - Cobalt Strike Config Entry Structure
+(https://gist.github.com/sixdub/a5361168ba7acecf7a7a214bf7e5d3d3)
+Index is a WORD (2-byte) value starting at offset 0x0 and is effectively the Setting ID number. The fieldtype
+is also a WORD, with three possible values:
+- 0x1 for short
+
+- 0x2 for integer (2 or 4 bytes)
+
+- 0x3 for data or string
+
+The value of fieldtype informs us of how to parse the fieldvalue. The fieldlength is also a 2-byte value
+indicating the length of the following data in the fieldvalue.
+XOR encoding such a rigid collection of structures is highly susceptible to cryptanalysis, causing patterns
+to emerge in the encoded data. This is especially clear when those structures are XOR encoded using a
+non-null preserving XOR encoding scheme.
+37
+Depending on the version of Cobalt Strike Team Server that generated and served the Beacon in question,
+this will determine the pattern we need to search for. The default XOR key value is 0x69 for versions prior
+to version 4, and 0x2e from version 4 onwards.
+It is rare to see Beacons that have strayed from these default XOR values, but it can and does happen. In
+such cases, it would be necessary to brute force the XOR key value.
+The first record in a Beacon’s config is the “Beacon Type” setting. The “Beacon Type” entry in the config has
+an index of 0x1, fieldtype of 0x1, fieldlength of 0x2 and the fieldvalue varies depending on the Beacon Type.
+This means that the first six bytes of the Beacon config remain static and have a hex value of \x00\x01\
+x00\x01\x00\x02. When this is encoded using XOR with a key of 0x69 or 0x2e, we end up with two possible
+output patterns to search for in order to locate the start of a config block. These are \x2e\x2f\x2e\x2f\
+x2e\x2c and \x69\x68\x69\x68\x69\x6b.
+If we find such a pattern, we will simultaneously know where the config starts as well as the value of the
+XOR key used in its encoding. Incidentally, this is also a useful “quick ‘n dirty” means of distinguishing
+between versions 3.x and 4.x of Cobalt Strike.
+If neither pattern is discovered, then we might be looking at one of the rare Beacons using a non-default
+XOR key. But we can still apply the same methodology in order to locate the encoded config by rotating
+through all possible single-byte XOR key values until a matching pattern is found.
+Now that we can find the config within a decoded Beacon and have awareness of the XOR key as well as
+an understanding of the structure of each setting in the config, we can automate the final step of extracting
+the configuration. Once the configuration is parsed and dumped, we can store the results in a database
+for further analysis. SQLite is more than adequate for this purpose, but an ELK (Elasticsearch, Logstash,
+and Kibana) stack works well, too. It all depends on what best serves your needs and fits with existing
+services and solutions.
+Several Beacon config parsers are available and in common use by the security community. Here’s a helpful
+and informative blog post about building a parser using Kaitai Struct.
+Justin Warner
+Using Kaitai Struct to Parse Cobalt Strike Beacon Configs
+https://sixdub.medium.com/using-kaitai-to-parse-cobalt-strike-beacon-configs-f5f0552d5a6e
+38
+automating the hunt for cobalt strike
+Now that we have defi ned our data sources, pillaged some Team Servers for shellcode and Beacons, and
+extracted their confi gs, we need to consolidate everything into an automated workfl ow.
+This automation can serve the needs of key stakeholders across all XDR products and services.
+Figure 22 - Cobalt Strike hunting automation
+Data collected from multiple sources will be passed through a validation process to provide a confi dence
+rating based on several criteria, such as:
+
+Source of data i.e., threat intelligence feed, Shodan, IR etc.
+Confi dence of search query (if any)
+Overlap in detections i.e., same data from multiple sources
+Beacon retrieved and processed
+
+Once evaluated and scored, the data can be stored, disseminated, and acted upon as required. If necessary,
+this data could also be made accessible using an API so that it can be easily leveraged in future automation endeavors. When performed at scale, and over a long period of time, the resulting dataset can offer a
+wealth of information that can be used to bolster defenses, prevent breaches, and enhance intelligence.
+But before we delve into the dataset closely, it’s worth spending a moment familiarizing ourselves with
+Beacon’s confi guration and “Malleable C2 profi les”, so we can take stock of some of the data we have to
+play with.
+39
+Output : 
+### Automating the Hunt for Cobalt Strike: A Comprehensive Guide
+
+#### Introduction
+Cobalt Strike is a widely used penetration testing tool that has unfortunately become popular among threat actors. Its flexibility and robust features make it a powerful tool for both ethical hackers and malicious actors. Detecting and mitigating Cobalt Strike activity is crucial for maintaining the security of an organization's network. This guide provides a comprehensive approach to automating the hunt for Cobalt Strike, from data collection to configuration extraction.
+
+#### Data Collection
+1. **Threat Intelligence Feeds**
+   - **Sources**: Open-source intelligence (OSINT), commercial feeds, and internal incident response (IR) data.
+   - **Tools**: MISP, Anomali, and ThreatConnect.
+2. **Shodan**
+   - **Usage**: Querying Shodan for potential Cobalt Strike C2 servers.
+   - **Queries**: Use specific IP ranges, ports, and keywords associated with Cobalt Strike.
+3. **Internal Network Monitoring**
+   - **Tools**: SIEM (Security Information and Event Management) solutions like Splunk, ELK Stack, or Graylog.
+   - **Logs**: Collect logs from firewalls, proxies, and endpoints to detect anomalous network traffic.
+
+#### Data Validation
+1. **Source of Data**
+   - Evaluate the reliability and credibility of each data source.
+2. **Confidence of Search Query**
+   - Assess the accuracy and specificity of search queries used in data collection.
+3. **Overlap in Detections**
+   - Cross-reference detections from multiple sources to increase confidence.
+4. **Beacon Retrieved and Processed**
+   - Verify that a Cobalt Strike Beacon has been successfully retrieved and processed.
+
+#### Pillaging Team Servers
+1. **Identifying Team Servers**
+   - Use Shodan queries, threat intelligence feeds, and network monitoring to identify potential Cobalt Strike C2 servers.
+2. **Pillaging for Shellcode and Beacons**
+   - Develop scripts to interact with identified servers and retrieve shellcode or Beacon payloads.
+
+#### Extracting Configurations
+1. **Identifying Payloads**
+   - Filter out non-PE files and small data files (< 200KB) to focus on potential Cobalt Strike Beacons.
+2. **Decoding Shellcode-Wrapped Beacons**
+   - Use static or dynamic methods to decode the payload:
+     - **Static Decoding**: Locate and extract the encrypted PE payload, then decrypt it using the XOR key.
+     - **Dynamic Decoding**: Emulate the shellcode to self-decrypt the payload.
+3. **Extracting Configuration Data**
+   - Identify the config within the decoded Beacon using known binary patterns.
+   - Parse the config structure using Kaitai Struct or a custom parser.
+
+#### Automating the Workflow
+1. **Data Collection and Validation**
+   - Develop scripts to automate data collection from multiple sources.
+   - Implement validation logic to score and filter detections.
+2. **Pillaging Team Servers**
+   - Use automated scripts to interact with identified C2 servers and retrieve payloads.
+3. **Processing Payloads**
+   - Automate the decoding and configuration extraction process.
+4. **Storing and Disseminating Data**
+   - Store processed data in a database (SQLite, Elasticsearch) for further analysis.
+   - Develop an API to make the dataset accessible for future automation.
+
+#### Example Workflow
+1. **Data Collection Script**
+   ```python
+   import requests
+
+   def collect_data_from_shodan(api_key):
+       url = f"https://api.shodan.io/shodan/host/search?key={api_key}&query=cobalt+strike"
+       response = requests.get(url)
+       return response.json()
+
+   def collect_threat_intelligence(feed_url):
+       response = requests.get(feed_url)
+       return response.json()
+   ```
+
+2. **Pillaging Script**
+   ```python
+   import socket
+
+   def pillage_team_server(ip, port):
+       with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+           s.connect((ip, port))
+           # Send a request to retrieve the payload
+           s.sendall(b'GET /payload HTTP/1.1\r\nHost: example.com\r\n\r\n')
+           data = s.recv(4096)
+       return data
+   ```
+
+3. **Payload Processing Script**
+   ```python
+   def decode_shellcode(payload):
+       # Static decoding logic
+       xor_key = payload[4:8]
+       encoded_size = payload[8:12]
+       encoded_payload = payload[12:]
+       decoded_payload = b''
+       key = int.from_bytes(xor_key, byteorder='little')
+       for i in range(int.from_bytes(encoded_size, byteorder='little')):
+           decoded_byte = (encoded_payload[i] ^ key) & 0xFF
+           key = decoded_byte
+           decoded_payload += bytes([decoded_byte])
+       return decoded_payload
+
+   def extract_config(decoded_payload):
+       # Config extraction logic
+       xor_key = 0x69 if b'\x2e\x2f\x2e\x2f' in decoded_payload else 0x2e
+       config_start = decoded_payload.find(b'\x2e\x2f\x2e\x2f') if xor_key == 0x69 else decoded_payload.find(b'\x69\x68\x69\x68')
+       config_data = decoded_payload[config_start:]
+       # Parse the config structure
+       return parse_config(config_data, xor_key)
+
+   def parse_config(config_data, xor_key):
+       parsed_config = {}
+       offset = 0
+       while offset < len(config_data):
+           index = int.from_bytes(config_data[offset:offset+2], byteorder='little') ^ xor_key
+           field_type = int.from_bytes(config_data[offset+2:offset+4], byteorder='little') ^ xor_key
+           field_length = int.from_bytes(config_data[offset+4:offset+6], byteorder='little') ^ xor_key
+           field_value = config_data[offset+6:offset+6+field_length]
+           parsed_config[index] = (field_type, field_value)
+           offset += 6 + field_length
+       return parsed_config
+   ```
+
+4. **Storing and Disseminating Data**
+   ```python
+   import sqlite3
+
+   def store_data(db_path, data):
+       conn = sqlite3.connect(db_path)
+       cursor = conn.cursor()
+       cursor.execute('CREATE TABLE IF NOT EXISTS detections (ip TEXT, port INTEGER, config BLOB)')
+       cursor.executemany('INSERT INTO detections VALUES (?, ?, ?)', data)
+       conn.commit()
+       conn.close()
+
+   def disseminate_data(api_url, data):
+       headers = {'Content-Type': 'application/json'}
+       response = requests.post(api_url, json=data, headers=headers)
+       return response.status_code
+   ```
+
+#### Conclusion
+Automating the hunt for Cobalt Strike involves a multi-faceted approach that includes data collection, validation, pillaging, and configuration extraction. By implementing these steps in an automated workflow, security teams can more effectively detect and mitigate Cobalt Strike activity, enhancing their overall security posture.

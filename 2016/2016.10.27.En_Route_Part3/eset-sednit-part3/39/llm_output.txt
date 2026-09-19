@@ -1,0 +1,59 @@
+
+
+
+Sentence : En Route with Sednit
+These three functions are called by Windows processes to access files, directories and registry keys
+respectively. The logic inserted by the rootkit is pretty simple: if the accessed artifact path matches
+one of the ~~Hide rules~~, then the function returns as if the artifact does not exist on the system.
+On the other hand, if the accessed artifact path is not rootkit-protected, the original SSDT function
+is executed. For example, the hook code for ~~ZwSetInformationFile~~ to hide files is presented
+in Figure 13.
+Figure 13. Hook code for ~~ZwSetInformationFile~~ to hide files
+With the arrival of 64-bit versions of Windows, the SSDT became protected by Kernel Patch
+Protection [26], preventing the insertion of hooks into this table. This probably explains why
+a different implementation of the concealment functionality was introduced in the rootkit,
+as described below.
+Minifilter Driver
+The Windows filter manager [25] allows registering a driver as a minifilter, so that its code will
+be called on certain I/O operations. Such a minifilter driver can register a pre -operation callback
+or a post -operation callback on each I/O operation it registers to filter.
+Minifilter drivers are ordered based on a value called “altitude”: the filter manager executes driver
+callbacks registered for an I/O operation in the descending order of altitude. This ordering allows,
+for example, prioritizing anti-virus minifilters over data-processing minifilters, in order to detect
+malicious files before opening them.
+In our case, the rootkit driver registers itself as a minifilter of altitude ~~370030~~ . This altitude
+is normally associated with a Windows legacy driver named ~~passThrough.sys~~ [27], which
+is an example of a minifilter open-sourced by Microsoft [28] . Thus, the rootkit takes the place
+of ~~passThrough.sys~~ in the minifilter stack, and provides callbacks for hiding.
+22
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sednit", "type" : "ACTO"},
+        {"id": 2, "description": "Windows processes", "type" : "OPPS"},
+        {"id": 3, "description": "files", "type" : "DOCF"},
+        {"id": 4, "description": "directories", "type" : "TPTH"},
+        {"id": 5, "description": "registry keys", "type" : "REGI"},
+        {"id": 6, "description": "rootkit", "type" : "EXEF"},
+        {"id": 7, "description": "SSDT", "type" : "TAMP"},
+        {"id": 8, "description": "Kernel Patch Protection", "type" : "TTPS"},
+        {"id": 9, "description": "minifilter driver", "type" : "EXEF"},
+        {"id": 10, "description": "Windows filter manager", "type" : "OPPS"},
+        {"id": 11, "description": "pre-operation callback", "type" : "TTPS"},
+        {"id": 12, "description": "post-operation callback", "type" : "TTPS"},
+        {"id": 13, "description": "passThrough.sys", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "accesses"},
+        {"source": 2, "target": 4, "rel_name" : "accesses"},
+        {"source": 2, "target": 5, "rel_name" : "accesses"},
+        {"source": 6, "target": 7, "rel_name" : "hooks into"},
+        {"source": 8, "target": 7, "rel_name" : "protects"},
+        {"source": 9, "target": 10, "rel_name" : "registers with"},
+        {"source": 9, "target": 11, "rel_name" : "provides"},
+        {"source": 9, "target": 12, "rel_name" : "provides"},
+        {"source": 9, "target": 6, "rel_name" : "replaces"},
+        {"source": 13, "target": 9, "rel_name" : "replaced by"}
+    ]
+}

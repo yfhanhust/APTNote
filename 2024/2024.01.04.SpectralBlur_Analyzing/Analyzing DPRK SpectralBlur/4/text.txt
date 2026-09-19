@@ -1,0 +1,174 @@
+Triage
+The sample of SpectralBlur mentioned in his tweets and triage has a SHA-1 hash of
+06c8c84fb0a85bdf3520608b0a5c910b77e3b8c1 . Popping over to VirusTotal to grab the
+sample, we can see that currently it is not flagged as malicious by any of the AV engines:
+SpectralBlur on VirusTotal (Scan Date: Aug. 2023)
+Triggering a rescan of the malware on VirusTotal shows it is (now) detected by at least
+one AV engine (ESET).
+Moreover its worth noting that the previous scan of the malware (refereneced in the
+screenshot above) was performed in August 2023. Thus, though at that time no AV
+engine flagged the item as malicous, between now and then, detections could have been
+added.
+Looking at telemetric data we can see its name is either .macshare or mac.jpg, and at
+least on one macOS system it was found in /Users/Shared/.macshare .
+Prefixing the name with a '.' will hide the file from Finder (unless the viewing of hidden
+files has been enabled).
+This SpectralBlur sample was initially submitted to VirusTotal on 2023-08-16 from
+Colombia (CO). Interestingly in VirusTotal’s telemetric data, we can also see that at least
+one of Objective-See’s tools (which, integrate with VirusTotal, for example to allow users
+to submit unrecognized files) encountered the malware in the wild too …how cool!
+Using [WhatsYourSign](https://objective-see.com/products/whatsyoursign.html) we can see the binary is not signed:
+WhatsYourSign shows the malware is not signed
+You can also extract codesigning information (or lack thereof) from the terminal via
+macOS’s codesign utility:
+https://objective-see.org/blog/blog_0x78.html 2/11
+6/26/24, 9:33 AM Objective-See's Blog
+```
+    % codesign -dvv SpectralBlur/.macshare
+    SpectralBlur/.macshare: code object is not signed at all
+```
+Via the terminal we can also see its a 64bit Intel ( x86_64 ) binary:
+```
+    % file SpectralBlur/.macshare
+    SpectralBlur/.macshare: Mach-O 64-bit executable x86_64
+```
+Next let’s pull out any embedded strings, as this can give a good idea of the malware’s
+capabilities and also guide continued analysis:
+```
+    % strings SpectralBlur/.macshare
+There is NO WARRANTY, to the extent permitted by law.
+
+%s.d
+
+/dev/null
+
+SHELL
+
+/bin/sh
+
+...
+
+```
+Other than some strings related to the shell, not a lot! Maybe others are obfuscated? (We
+also didn’t show function names or API imports in the strings output, as these show up
+better via nm ).
+Using nm we can extract symbols which will include the Malware’s function names, as well
+as APIs that the malware calls into (“imports”). Let’s start with just function names, which
+will be found the __TEXT segment/section: __text . We can use nm ’s -s to limit its output
+to just a specified segment/section:
+https://objective-see.org/blog/blog_0x78.html 3/11
+6/26/24, 9:33 AM Objective-See's Blog
+```
+    % nm -s __TEXT __text SpectralBlur/.macshare
+    0000000100001540 T _hangout
+    00000001000034f0 T _init
+0000000100001570 T _init_fcontext
+0000000100001870 T _load_config
+0000000100003650 T _main
+0000000100002a10 T _mainprocess
+0000000100003370 T _mainthread
+00000001000031c0 T _openchannel
+00000001000029a0 T _proc_die
+0000000100001b10 T _proc_dir
+0000000100002420 T _proc_download
+0000000100002290 T _proc_download_content
+00000001000027e0 T _proc_getcfg
+00000001000028c0 T _proc_hibernate
+00000001000019f0 T _proc_none
+00000001000029d0 T _proc_restart
+00000001000025a0 T _proc_rmfile
+0000000100002860 T _proc_setcfg
+0000000100001a90 T _proc_shell
+0000000100002930 T _proc_sleep
+0000000100001a20 T _proc_stop
+00000001000026b0 T _proc_testconn
+0000000100002160 T _proc_upload
+0000000100002040 T _proc_upload_content
+00000001000015f0 T _read_packet
+0000000100001930 T _save_config
+0000000100001500 T _sigchild
+00000001000011f0 T _socket_close
+
+0000000100000d10 T _socket_connect
+
+0000000100001140 T _socket_recv
+
+00000001000010c0 T _socket_send
+
+0000000100000be0 T _wait_read
+0000000100001730 T _write_packet
+00000001000017e0 T _write_packet_value
+0000000100001270 T _xcrypt
+
+```
+Looks like functions dealing with a config (e.g., load_config ), network communications
+(e.g., socket_recv, socket_send ), and encryption ( xcrypt ). But also then, standard
+backdoor capabilities implemented (as noted by Greg), in function prefixed with proc .
+And what about the APIs the malware imports to call into? Again we can use nm, this time
+the -u flag:
+https://objective-see.org/blog/blog_0x78.html 4/11
+6/26/24, 9:33 AM Objective-See's Blog
+```
+    % nm -m SpectralBlur/.macshare
+_connect
+_dup2
+
+_execve
+
+...
+
+_fork
+_fread
+
+_fwrite
+
+...
+
+_gethostbyname
+_getlogin
+_getpwuid
+_getsockopt
+
+_grantpt
+
+...
+
+_ioctl
+_kill
+
+...
+
+_pthread_create
+_rand
+
+_recv
+
+_send
+
+_socket
+_unlink
+_waitpid
+_write
+
+...
+
+```
+From these imports we can surmise that the malware performs file I/O ( fread, fwrite,
+unlink ), network I/O ( socket, recv, send ), and spawning/managing processes ( execve,
+fork, kill ).
+We’ll see these APIs are invoked by the malware often in response to commands. For
+example, the malware’s proc_rmfile function invokes the unlink API to remove a file:
+```
+    1int proc_rmfile(int arg0, int arg1) {
+    2  var_10 = arg1;
+    3  var_18 = var_10 + 0x10;
+4  ...
+
+5  unlink(var_18);
+
+6  ...
+
+```
+Based on this triage (and Greg’s report), we’ve developed what is likely a reasonable
+understanding of the malware. Still, its always good to validate triages with continued
+static, but also dynamical analysis. So …onward!

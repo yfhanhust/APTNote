@@ -1,0 +1,63 @@
+03 DOWNLOADER ANALYSIS
+The artifact found and extracted from the zip is a Windows x32 executable, named
+“ поздравление.scr ” and compiled in date Mon Dec 20 09:16:02 2021 . From the recent
+compilation date, it seems to have been developed specifically for the attack under analysis, and
+it can be identified by the following hash:
+2022 // © Cluster25 5
+TLP:WHITE
+Unrestricted // freely shareable content
+The sample has the behavior of a trojan malware, and it is intended to resemble the legitimate
+scrnsave.scr Windows application. When executed, it drops under the %TEMP% directory an
+image named Happy.jpg (which is embedded in the resource section) and opens it as a
+foreground window to trick the victim into believing that it is a legitimate Russian themed happy
+holidays screensaver.
+Subsequently, in the background, the malware starts its malicious activities by downloading the
+next stage payload from an HTTP GET request to the Command-and-Control domain
+i758769.atwebpages.com, passing as parameters the hardcoded user id numbered as 18756
+and a type used as a flag to specify if the infected machine was 32 or 64 bit. The Command-and
+Control Apache webserver response was configured to respond with HTTP status code 401,
+having the attacker set a fake .htaccess (likely to ensure it went unnoticed at security checks),
+returning as a response, in any case, a compressed CAB file encoded in base64 visible in the
+evidence below.
+2022 // © Cluster25 6
+TLP:WHITE
+Unrestricted // freely shareable content
+After the CAB downloading, the malware starts the file decompression using expand.exe process
+logging a file named - a.log - when the decompression is finished. The following image illustrates
+the snipped of code described.
+2022 // © Cluster25 7
+TLP:WHITE
+Unrestricted // freely shareable content
+To optimize the time wasted during CAB decompression, the malware writes and executes the
+following BAT file into the %TEMP% directory, which was contained in the data section encoded
+in base64 :
+The script’s scope is to wait for the decompression to finish by using the creation of a.log file as
+flag and automatically execute the content of the CAB extraction, which is the install.bat file (one
+of the files contained into the CAB), and finally delete itself using "%~DPNX0”, a bat script
+convention used to specify the BAT file itself. As previously described the CAB file’s
+decompressed content contains the following files:
+
+
+Install.bat
+
+
+scrnsvc.ini
+
+
+scrnsvc.dll
+
+
+Install.bat file is the launcher of the next stage infection, which hides the tracks of the previous
+activities by moving all the files into the System32 directory and installing and starting the final
+2022 // © Cluster25 8
+TLP:WHITE
+Unrestricted // freely shareable content
+implant scrnsvc.dll as a Windows service named ScreenSaver Management Service, which,
+when registered, loads the configuration file scrnvsvc.ini. The Windows service is installed by
+configuring svchost.exe as a process container of the DLL executable representing Konni RAT
+malware. Install.bat has already been seen among the TTPs belonging to this threat actor, which
+content is visible below, where, in this case, it appears to have been slightly modified, and therefore
+more likely to deceive detection signatures referring to files used in previous intrusions.
+2022 // © Cluster25 9
+TLP:WHITE
+Unrestricted // freely shareable content

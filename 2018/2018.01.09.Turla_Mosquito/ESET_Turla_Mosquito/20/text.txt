@@ -1,0 +1,84 @@
+4.1 Installer
+The installer generally comes as a fake Flash installer and is bundled with two additional components
+later dropped on the disk. As explained above, we identified several users who downloaded this fake
+Flash installer from a URL and IP used by Adobe for the distribution of the legitimate Flash installer.
+We detailed the different hypotheses that could explain this behavior in the previous section.
+Crypter
+In recent versions, the installer is always obfuscated with what seems to be a custom crypter.
+Figure 6 shows an example of a function obfuscated with this tool.
+Figure 6 Obfuscated function
+Firstly, the crypter makes heavy use of opaque predicates along with arithmetic operations.
+For example, the obfuscated function will compute a number from hardcoded values and then
+check if this number is greater than another hardcoded value. Thus, at each execution the control
+flow will be the same, but emulation is required to determine which path is correct. Therefore,
+the code becomes far more complex to analyze for both malware researchers and automated
+algorithms in security software. This may slow down emulation so much that the object won’t
+be scanned, due to time constraints – and hence software known or shown to be malicious
+(if not obfuscated) won’t be detected.
+12
+Secondly, after the first layer is de-obfuscated, a call to the Win32 API ~~SetupDiGetClassDevs~~
+~~(0,0,0,0xFFFFFFFF)~~ is performed, and the crypter then checks whether the return value equals
+~~0xE000021A.~~ This function is generally used to request information about the devices of the system.
+However, this specific ~~Flags~~ value ( ~~0xFFFFFFFF~~ ) is not documented, but according to our tests,
+the return value is always ~~0xE000021A~~ on Windows 7 and Windows 10 machines. We believe
+this API call and the following check are used to bypass sandboxes and emulators that do not
+implement it correctly.
+Thirdly, the real code is divided into several chunks that are decrypted, using a custom function,
+and re-ordered at run time to build a PE in memory. It is then executed in-place by the crypter’s
+PE loader function. This PE loader contains several debug strings as shown in Figure 7.
+Figure 7 Debug strings in the PE loader function
+Installation
+Once decrypted, the installer searches the ~~%APPDATA%~~ subtree and drops two files in the deepest
+folder it finds. When searching for this folder, it avoids any folder that contains ~~AVAST~~ in its name.
+It then uses the filename of one of the non-hidden files in this folder, truncated at the extension,
+as the base filename for the files it will drop. If all the files in the directory are hidden, or the directory
+is empty, it takes the name of a DLL from ~~%WINDIR%\System32~~ . The loader it drops will have a ~~.tlb~~
+extension and the main backdoor a ~~.pdb~~ extension. Interestingly, it does not use ~~WriteFile~~ to drop
+these two DLLs. Instead, it creates a file, maps it in memory and calls ~~memmove~~ to copy data.
+It is probably designed to avoid some sandboxes and security products hooks on ~~WriteFile.~~
+We have also seen older variants of the installer dropping only one file, with the ~~.tlb~~ extension.
+In that case, the same file contains both loader and backdoor functions. ~~DllMain~~ chooses which
+code to execute.
+It writes a simple and unencrypted log file in ~~%APPDATA%\kb6867.bin.~~ The full log file is created
+in the same directory as the two DLLs and has the ~~.tnl~~ extension.
+13
+Figure 8 Files created by the malware in the random child directory of ~~%APPDATA%~~
+Then, it establishes persistence by using either a Run registry key or COM hijacking [9] . If the antivirus
+display name, retrieved using Windows Management Instrumentation (WMI), is “Total Security”,
+it adds ~~rundll32.exe [backdoor_path], StartRoutine~~ in ~~HKCU\Software\Run\auto_update~~ .
+Otherwise, it will replace the registry entry under ~~HKCR\CLSID{d9144dcd-e998-4eca-ab~~
+~~6a-dcd83ccba16d}\InprocServer32~~ or ~~HKCR\CLSID{08244ee6-92f0-47f2-9fc9-929ba~~
+~~a2e7235}\InprocServer32~~ with the path to the loader. These CLSIDs correspond respectively
+to ~~EhStorShell.dll~~ and to ~~ntshrui.dll~~ . These DLLs are launched legitimately by a lot of processes,
+including ~~explorer.exe~~, the main windows GUI. Thus, the loader will be called each time
+~~explorer.exe~~ is started. Finally, it adds an entry in the registry to store the path to the original
+hijacked DLL and to the main backdoor, as shown in Figure 9.
+// Path to the loader
+HKCR\CLSID{d9144dcd-e998-4eca-ab6a-dcd83ccba16d}\
+InprocServer32
+     - C:\Users\Administrator\AppData\Roaming\Adobe\Acrobat\9.0\
+
+AdobeSysFnt09.tlb
+// the name of the above replaced dll
+HKCU\Software\Microsoft\Windows\OneDriveUpdate explorer.exe
+     - %SystemRoot%\system32\EhStorShell.dll;
+
+{d9144dcd-e998-4eca-ab6a-dcd83ccba16d};new
+// Path to the main backdoor
+HKCU\Software\Microsoft\Windows\OneDriveUpdate (Default)
+     - C:\Users\Administrator\AppData\Roaming\Adobe\Acrobat\
+
+9.0\AdobeSysFnt09.pdb
+Figure 9 Registry modifications to establish persistence
+Other CLSIDs are hardcoded in the binary but we have not seen any use made of them. The full list
+is available in the IoCs section.
+As explained in the previous section, the installer sends some information — such as the unique
+id of the sample, the username or the ARP table — to a URL at an Adobe domain, ~~get.adobe.com~~ ~~.~~
+It will also launch a real Adobe Flash installer, which is either downloaded from Google Drive
+or embedded in the fake installer.
+Before launching the main backdoor, the installer creates an administrative account ~~HelpAssistant~~
+(or ~~HelpAsistant~~ in some samples) with the password ~~sysQ!123.~~ Also, the ~~LocalAccountToken~~
+~~FilterPolicy~~ is set to ~~1~~, allowing remote administrative actions. We believe this account name
+was used to remain stealthy as this is the name used when a legitimate Remote Assistance session
+is run [10] .
+14

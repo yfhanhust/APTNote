@@ -1,0 +1,63 @@
+
+
+
+Sentence : Operation Blockbuster: Loaders, Installers and Uninstallers Report 43
+|Offset|Size|Description|
+|---|---|---|
+|0|4 bytes (DWORD)|IP address|
+|4|2 bytes (WORD)|Port|
+|6|2 bytes|not used|
+|OFFSET|SIZE|DESCRIPTION|
+|---|---|---|
+|0|8 bytes|Victim Identifier|
+|8|4 bytes (DWORD)|unused by IndiaKilo (used by IndiaIndia)|
+|12|4 bytes (DWORD)|unused by IndiaKilo (used by IndiaIndia)|
+|16|4 bytes (DWORD)|Wait time between C2 server contacts (in minutes)|
+|20|4 bytes (DWORD)|Last C2 server contact time (intime() form)|
+|24|80 bytes|Array of 10 C2 server entries with each entry having the following format:OfsetSizeDescription04 bytes (DWORD)IP address42 bytes (WORD)Port62 bytesnot used|
+Table 12-1: Configuration File Structure of IndiaIndia and IndiaKilo
+IndiaKilo uses the same C2 selection and connection procedure and protocol as IndiaIndia for Task #4. The code between
+IndiaKilo and IndiaIndia for the C2 server connection task is identical. The generation of process information, however,
+differs slightly between IndiaKilo and IndiaIndia. A notable difference is the inclusion of debugger and VM detection:
+IndiaKilo calls IsDebuggerPresent to determine if a debugger is attached to its process and attempts to open a handle
+to the events VMwareUserManagerEvent and VBoxHookNotifyEvent to determine if the malware is running in a
+VM. The detection of a VM environment or a debugger does not directly alter the flow of execution inside IndiaKilo, but
+the information is stored within the process list file the malware generates (Task 5) and then encrypts before sending to
+the C2 server (Task 6).
+After deleting the process information file (Task 7), IndiaKilo receives a 4-byte status response from the C2 server
+indicating if additional data is to follow (Task #8). If the status value is set to 4, then the C2 server transmits two files,
+which IndiaKilo saves in the %TEMP% directory with filenames beginning with TS . After downloading and decrypting the
+two files to the victim’s hard drive, IndiaKilo activates the first binary with the following command line (Task 9):
+  
+After executing the command, IndiaKilo responds to the C2 server with a 4-byte value (DWORD) of 4 for a successful
+launch of the command or 3 for a failure (Task #10). In the event that the files failed to execute, the two downloaded files
+are securely deleted by IndiaGolf by overwriting their contents with random bytes before deleting them from the victim’s
+hard drive.
+The connection between the C2 server and IndiaKilo terminates after the status update is transmitted and the last C2
+server contact time is updated in the configuration in memory. The configuration in memory is then encrypted and saved
+to disk (Task #11).
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "IndiaKilo", "type" : "ACTO"},
+        {"id": 2, "description": "IndiaIndia", "type" : "ACTO"},
+        {"id": 3, "description": "C2 server", "type" : "CCSH"},
+        {"id": 4, "description": "%TEMP% directory", "type" : "SYSP"},
+        {"id": 5, "description": "Process information file", "type" : "DOCF"},
+        {"id": 6, "description": "TS files (2 files)", "type" : "DOCF"},
+        {"id": 7, "description": "IsDebuggerPresent", "type" : "EXEF"},
+        {"id": 8, "description": "VMwareUserManagerEvent", "type" : "REGI"},
+        {"id": 9, "description": "VBoxHookNotifyEvent", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "similar_to"},
+        {"source": 1, "target": 3, "rel_name" : "communicates_with"},
+        {"source": 1, "target": 5, "rel_name" : "creates"},
+        {"source": 1, "target": 4, "rel_name" : "saves_to"},
+        {"source": 1, "target": 6, "rel_name" : "downloads"},
+        {"source": 3, "target": 1, "rel_name" : "responds_to"},
+        {"source": 7, "target": 1, "rel_name" : "calls"},
+        {"source": 8, "target": 1, "rel_name" : "checks_for"},
+        {"source": 9, "target": 1, "rel_name" : "checks_for"}
+    ]
+}

@@ -1,0 +1,116 @@
+Detection opportunities
+Detection opportunity 1
+PowerShell string obfuscation
+ATT&CK technique(s): T1059.001 Command and Scripting Interpreter:
+PowerShell, T1027 Obfuscated Files or Information
+ATT&CK tactic(s): Execution
+Details: Emotet was primarily delivered through malicious documents that
+108
+l [Emotet]
+2021 Threat Detection Report
+executed heavily obfuscated PowerShell. Though obfuscation is meant to
+deter defenders, we can use it to create detection analytics. One way to
+detect Emotet’s obfuscated code is to look for a PowerShell process executing
+commands that use the format operator ~~-f~~ to concatenate strings. To further
+refine the analytic, you can also look for the format indexes ~~{0}~~ and ~~{1}~~ . In many
+malicious instances of PowerShell, the format indices will be out of order, as
+we see in the following decoded PowerShell string used by Emotet, ~~{3}{1}{0}{2}~~ ~~.~~
+Such an analytic may require additional tuning for other normal-format index
+strings that are common in your environment.
+Detection opportunity 2
+Rundll32 execution by ordinal
+ATT&CK technique(s): T1218.011 Signed Binary Proxy Execution: Rundll32
+ATT&CK tactic(s): Defense Evasion
+Details: In the latter half of 2020, we observed Emotet begin using execution
+by ordinal via ~~rundll32.exe~~ ~~.~~ An ordinal is the numeric position of the exported
+function in the DLL Export Address table. We have had success detecting this by
+looking for ~~rundll32.exe~~ executing DLL export functions by ordinal, which are
+denoted by #. In the example below, the DLL is ~~Chpieog.dll~~ and the ordinal is ~~#1~~ ~~.~~
+We detect this simply by looking for ~~rundll32~~ process execution with command
+lines matching a regular expression for ordinal calls. While this is a legitimate
+way to execute a DLL, it’s fairly rare, and our strategy has proven successful in
+identifying the early stages of Emotet execution.
+109
+l [Emotet]
+2021 Threat Detection Report
+Detection opportunity 3
+PowerShell executing processes using wmiclass
+ATT&CK technique(s): T1059.001 Command and Scripting Interpreter:
+PowerShell, T1047 Windows Management Instrumentation
+ATT&CK tactic(s): Execution
+Details: In some Emotet campaigns we observed the WMI Provider Host
+~~(~~ ~~wmiprvse.exe~~ ~~)~~ spawning PowerShell with an encoded command. After
+decoding the first layer, we noticed use of the ~~wmiclass~~ .NET class to call the
+Create method of the Win32_Process class in order to execute the Emotet
+payload. To detect this behavior we look for PowerShell processes with a
+decoded command line containing references to ~~wmiclass~~ and ~~win32_process~~ ~~.~~
+PowerShell command-line detection analytics are always at risk of evasion
+through obfuscation, but we found this analytic to be reliable in finding Emotet
+in 2020.
+Bonus forensic analysis opportunity
+Identifying Emotet maldocs with a broken parent-child process chain
+Details: Emotet campaigns sometimes feature the intentional circumvention
+of the creation of a direct child process of an Office application. Subsequent
+malicious Emotet processes spawn as child processes of ~~wmiprvse.exe~~ by
+proxying execution through COM and WMI. Generally speaking, processes that
+spawn as a child of an Office application are less frequent and can be subject to
+more defender scrutiny. By spawning indirectly as a child of ~~wmiprvse.exe~~, this
+behavior offers an adversary two distinct potential advantages:
+110
+l [Emotet]
+2021 Threat Detection Report
+
+Many security products are unable to reconstruct the broken process chain
+
+caused by proxying execution through COM, so it can be difficult to enrich
+data sources based on context alone
+
+Child processes of ~~wmiprvse.exe~~ are common. For example, in SCCM
+
+environments, WMI and COM are used heavily to remotely spawn processes
+Even though adversaries try to evade defenses by breaking process chains, we
+can still detect and investigate their behavior. When we observed Emotet using
+this technique, we still wanted to identify the offending malicious document
+that executed the processes, so we figured out a regular procedure to find the
+original maldoc. We thought it would be useful to share the steps we use to find
+the maldoc in case you find yourself in a similar situation.
+
+Search within a time window of execution of the first detected process.
+
+For example, if we detected ~~wmiprvse.exe~~ spawning ~~powershell.exe~~ to
+execute an encoded command to download the Emotet payload, and
+~~powershell.exe~~ started at 13:00 hours UTC (UTC or GTFO), we would search
+between 12:59-13:01. We would gradually expand our search to 12:55-13:05
+hours and beyond if we didn’t find the maldoc in the first search
+
+Because we suspect a malicious document, filter the process search results
+
+for Microsoft Office products
+
+Narrow the search even further by filtering the resulting Office processes
+
+for module loads of VBA-related DLLs, including ~~vbeui.dll~~ and ~~vbe7.dll~~ ~~.~~ The
+presence of these DLLs being loaded is a potential indicator of macro use
+
+Check the file modifications and command line of the remaining processes
+
+for malicious documents
+Kyle Rainey
+I N T E L L I G E N C E
+A N A LY S T
+Kyle has been providing proactive
+and reactive incident response and
+forensics services to Fortune 500
+companies for over five years. As an
+intelligence analyst at Red Canary,
+he leverages his years of experience
+conducting investigations and building
+detections in order to engineer
+impactful, scalable intelligence
+products. Kyle is passionate about
+solving hard problems and constantly
+learning.
+111
+l [Emotet]
+2021 Threat Detection Report
+T H R E AT

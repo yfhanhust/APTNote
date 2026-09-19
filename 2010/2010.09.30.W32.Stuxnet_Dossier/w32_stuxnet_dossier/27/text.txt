@@ -1,0 +1,113 @@
+LNK Vulnerability (CVE-2010-2568)
+Stuxnet will copy itself and its supporting files to available removable drives any time a removable drive is
+inserted, and has the ability to do so if specifically instructed. The removable-drive copying is implemented by
+exports 1, 19, and 32. Export 19 must be called by other code and then it performs the copying routine immedi­
+ately. Exports 1 and 32 both register routines to wait until a removable drive is inserted. The exports that cause
+replication to removable drives will also remove infections on the removable drives, depending on a configura­
+tion value stored in the configuration data block. Different circumstances will cause Stuxnet to remove the files
+from an infected removable drive. For example, once the removable drive has infected three computers, the files
+on the removable drive will be deleted.
+If called from Export 1 or 32, Stuxnet will first verify it is running within services.exe, and determines which
+version of Windows it is running on. Next, it creates a new hidden window with the class name ‘AFX64c313’ that
+waits for a removable drive to be inserted (via the WM_DEVICECHANGE message), verifies it contains a logical
+volume (has a type of DBT_DEVTYP_VOLUME), and is a removable drive (has a drive type of DEVICE_REMOV­
+ABLE). Before infecting the drive, the current time must be before June 24, 2012.
+Next, Stuxnet determines the drive letter of the newly inserted drive and reads in the configuration data to de­
+termine if it should remove itself from the removable drive or copy itself to the removable drive. When removing
+itself, it deletes the following files:
+  - %DriveLetter%\~WTR4132.tmp
+
+  - %DriveLetter%\~WTR4141.tmp
+
+  - %DriveLetter%\Copy of Shortcut to.lnk
+
+  - %DriveLetter%\Copy of Copy of Shortcut to.lnk
+
+  - %DriveLetter%\Copy of Copy of Copy of Shortcut to.lnk
+
+  - %DriveLetter%\Copy of Copy of Copy of Copy of Shortcut to.lnk
+
+If the removable drive should be infected, the drive is first checked to see if it is suitable, checking the following
+conditions:
+  - The drive was not just infected, determined by the current time.
+
+  - The configuration flag to infect removable drives must be set, otherwise infections occur depending on the
+
+date, but this is not set by default.
+  - The infection is less than 21 days old.
+
+  - The drive has at least 5MB of free space.
+
+  - The drive has at least 3 files.
+
+If these conditions are met, the following files are created:
+  - %DriveLetter%\~WTR4132.tmp (~500Kb)
+
+(This file contains Stuxnet’s main DLL in the stub section and is derived from Resource 210.)
+  - %DriveLetter%\~WTR4141.tmp (~25Kb)
+
+(This file loads ~WTR4132.tmp and is built from Resource 241.)
+  - %DriveLetter%\Copy of Shortcut to.lnk
+
+  - %DriveLetter%\Copy of Copy of Shortcut to.lnk
+
+  - %DriveLetter%\Copy of Copy of Copy of Shortcut to.lnk
+
+  - %DriveLetter%\Copy of Copy of Copy of Copy of Shortcut to.lnk
+
+The .lnk files are created using Resource 240 as a template and four are needed as each specifically targets one
+or more different versions of Windows including Windows 2000, Windows XP, Windows Server 2003, Windows
+Vista, and Windows 7. The .lnk files contain an exploit that will automatically execute ~WTR4141.tmp when sim­
+ply viewing the folder.
+~WTR4141.tmp then loads ~WTR4132.tmp, but before doing so, it attempts to hide the files on the removable
+drive. Hiding the files on the removable drive as early in the infection process as possible is important for the
+threat since the rootkit functionality is not installed yet, as described in the Windows Rootkit Functionality sec­
+tion. Thus, ~WTR4141.tmp implements its own less-robust technique in the meantime.
+~WTR4141.tmp hooks the following APIs from kernel32.dll and Ntdll.dll:
+From Kernel32.dll
+  - FindFirstFileW
+
+
+  - FindNextFileW
+
+
+  - FindFirstFileExW
+
+From Ntdll.dll
+  - NtQueryDirectoryFile
+
+  - ZwQueryDirectoryFile
+
+It replaces the original code for these functions with code that checks for files with the following properties:
+  - Files with an .lnk extension having a size of 4,171 bytes.
+
+  - Files named ~WTRxxxx.TMP, sized between 4Kb and 8 Mb, where xxxx is:
+
+    - 4 decimal digits. (~wtr4132.tmp)
+
+    - The sum of these digits modulo 10 is null. (Example: 4+1+3+2=10=0 mod 10)
+
+If a request is made to list a file with the above properties, the response from these APIs is altered to state that
+the file does not exist, thereby hiding all files with these properties.
+After the DLL APIs are hooked, ~WTR4132.tmp is loaded. To load a .dll file normally, a program calls the “Load­
+Library” API with the file name of the .dll file to be loaded into memory. W32.Stuxnet uses a different approach,
+not just in the first .dll file Figure 14
+but in several different USB Execution Flow
+parts of the code. This
+method is described in
+the Bypassing Behavior
+Blocking When Loading
+DLLs section.
+~WTR4132.tmp contains
+the main Stuxnet DLL in
+the .stub section. This is
+extracted into memory
+and then Export 15 of
+the DLL is called execut­
+ing the installation of
+Stuxnet. Export 15 is
+described in the Installa­
+tion section.
+The diagram to the right
+describes the execution
+flow.

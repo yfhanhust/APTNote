@@ -1,0 +1,68 @@
+
+
+
+Sentence : Windows Win32k.sys Local Privilege Escalation (MS10-073)
+Stuxnet exploited a 0-day vulnerability in win32k.sys, used for local privilege escalation. The vulnerability was
+patched on October 12, 2010. The vulnerability resides in code that calls a function in a function pointer table;
+however, the index into the table is not validated properly allowing code to be called outside of the function
+table.
+The installation routine in Export 15, extracts and executes Resource 250, which contains a DLL that invokes the
+local privilege escalation exploit. The DLL contains a single export—Tml_1. The code first verifies that the execu­
+tion environment isn’t a 64-bit system and is Windows XP or Windows 2000.
+If the snsm7551.tmp file exists execution ceases, otherwise the file ~DF540C.tmp is created, which provides an
+in-work marker.
+Next, win32k.sys is loaded into memory and the vulnerable function table pointer is found. Next, Stuxnet will ex­
+amine the DWORDs that come after the function table to find a suitable DWORD to overload as a virtual address
+that will be called. When passing in an overly large index into the function table, execution will transfer to code
+residing at one of the DWORDs after the function table. These DWORDs are just data used elsewhere in win32k.
+sys, but hijacked by Stuxnet. For example, if the ASCII string ‘aaaa’ (DWORD 0x60606060) is located after the
+function table, Stuxnet will allocate shellcode at address 0x60606060 and then pass in an overly large function
+table index that points to the DWORD ‘aaaa’ (0x60606060).
+Because the available space at the address (in the above example 0x60606060) may be limited, Stuxnet uses
+a two stage shellcode strategy. Memory is allocated for the main shellcode and at the chosen hijacked address,
+Stuxnet only places a small piece of shellcode that will jump to the main shellcode.
+Next, Stuxnet drops a malformed keyboard layout file into the Temp directory with the file name ~DF.
+tmp. The malformed keyboard layout file contains a byte that will result in the overly large index into the func­
+tion table. NtUserLoadKeyboardLayoutEx is called to load the malformed keyboard layout file successfully invok­
+ing the exploit. The original keyboard layout is restored and then the malformed keyboard layout file is deleted.
+The shellcode then loads the main Stuxnet DLL in the context of CSRSS.EXE.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "win32k.sys", "type" : "EXEF"},
+        {"id": 2, "description": "MS10-073", "type" : "CVES"},
+        {"id": 3, "description": "Stuxnet", "type" : "ACTO"},
+        {"id": 4, "description": "Export 15", "type" : "DOCF"},
+        {"id": 5, "description": "Resource 250", "type" : "DOCF"},
+        {"id": 6, "description": "DLL", "type" : "EXEF"},
+        {"id": 7, "description": "Tml_1", "type" : "EXEF"},
+        {"id": 8, "description": "Windows XP or Windows 2000", "type" : "OPPS"},
+        {"id": 9, "description": "snsm7551.tmp", "type" : "DOCF"},
+        {"id": 10, "description": "~DF540C.tmp", "type" : "DOCF"},
+        {"id": 11, "description": "win32k.sys (vulnerable function table pointer)", "type" : "EXEF"},
+        {"id": 12, "description": "DWORDs after the function table", "type" : "TAMP"},
+        {"id": 13, "description": "'aaaa' (DWORD 0x60606060)", "type" : "TAMP"},
+        {"id": 14, "description": "shellcode at address 0x60606060", "type" : "EXEF"},
+        {"id": 15, "description": "main shellcode", "type" : "EXEF"},
+        {"id": 16, "description": "malformed keyboard layout file (~DF.tmp)", "type" : "DOCF"},
+        {"id": 17, "description": "Temp directory", "type" : "SYSP"},
+        {"id": 18, "description": "NtUserLoadKeyboardLayoutEx", "type" : "EXEF"},
+        {"id": 19, "description": "CSRSS.EXE", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 3, "target": 2, "rel_name" : "exploits"},
+        {"source": 4, "target": 5, "rel_name" : "extracts and executes"},
+        {"source": 5, "target": 6, "rel_name" : "contains"},
+        {"source": 6, "target": 7, "rel_name" : "exports"},
+        {"source": 9, "target": 3, "rel_name" : "checks existence of"},
+        {"source": 10, "target": 3, "rel_name" : "creates if not exists"},
+        {"source": 1, "target": 11, "rel_name" : "loads into memory and finds"},
+        {"source": 12, "target": 13, "rel_name" : "contains"},
+        {"source": 13, "target": 14, "rel_name" : "allocated as shellcode address"},
+        {"source": 15, "target": 14, "rel_name" : "jumps to from hijacked address"},
+        {"source": 16, "target": 17, "rel_name" : "drops into"},
+        {"source": 16, "target": 3, "rel_name" : "contains byte causing large index"},
+        {"source": 18, "target": 16, "rel_name" : "calls to load"},
+        {"source": 19, "target": 6, "rel_name" : "loads in context of"}
+    ]
+}

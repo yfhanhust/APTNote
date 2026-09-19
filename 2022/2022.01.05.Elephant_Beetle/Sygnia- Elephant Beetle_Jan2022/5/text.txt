@@ -1,0 +1,118 @@
+When the attacker uses pen testing tactics
+After compromising a web server, the threat group upload a custom Java-written scanner that supports scanning
+IP range/list of IP addresses for a specific port or for an HTTP interface. The tool accepts parameters like URI to
+scan, User-Agent, and more from a configuration file and then writes the result to an output file.
+This tool was widely used by the group and was found on almost every compromised asset. It is used to scan
+targets in the asset’s proximity and then leveraged to identify installed applications, which could be exploited.
+The threat group also often downloaded the source code of the application residing on that server. This act,
+combined with the threat group scans for specific proprietary web interfaces, indicates that they have extensive
+understanding and knowledge in the field of pen testing.
+Code snippet from the tool:
+```
+public class MainApp {
+ public static int MAX_THREAD = 10;
+ public static Config config;
+ public static void main(String[] args) {
+  if (args.length != 2) {
+   System.out.println(\n\t[+] (1.0) Usage: conFile ip.ip.ip.*|file\n);
+   System.exit(0);
+  }
+…
+       if (ar.size() < MAX_THREAD) {
+        ObserverNotifier observer1 = new ObserverNotifier();
+        PortScanner observable1 = init(currHost, config, observer1);
+        Thread thread = new Thread(observable1);
+thread.start();
+ar.add(thread);
+…
+ private static PortScanner init(String ipAddress, Config config, ObserverNotifier observer) {
+  PortScanner observable = new PortScanner();
+observable.setTarget(ipAddress);
+observable.setConfig(config);
+observable.addObserver(observer);
+  return observable;
+ }
+```
+Figure 10: Snippet from the source code of the Java scanner (named ‘p.j’).
+```
+name=Generic
+verbose=false
+Req.redirect=true
+Req.ssl=false
+Req.revDns=true
+Req.timeout=3000
+Req.path=
+Req.method=GET
+Req.port0=9080
+Req.header0=User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:52.0) Gecko/20100101 Firefox/52.0
+Res.status0=200
+9080 of < Host >/< IP > | RuleEval: / Code: 404 / Server: null ;
+9080 of < Host >/< IP > | RuleEval: / Code: 404 / Server: null ;
+9080 of < Host >/< IP > | RuleEval: Found as status 200, / Code: 200 / Server: null ;
+```
+Figure 11: Output file content of a generic URI scan conducted on :9080 with the above-mentioned tool.
+Additional port scanner tools that have common Java code with the abovementioned tool has been identified,
+most of them without a complex URL scan feature, but have different features such as TLS fingerprinting. One of
+the port scanner’s variants that was found (under the name p.j), contains a usage document that suggests that
+it is an updated version of the tool (1.2 comparing to 1.0), but actually supports only port scanning of IP range/list
+of IP addresses.
+9
+```
+public class MainApp {
+ public static int MAX_THREAD = 100;
+public static void main(String[] args) {
+  if (args.length < 3) {
+   System.out.println(\n\t[1.2][+]Usage: ip.ip.ip.*|file startPort endPort\n);
+   System.exit(0);
+  }
+  File hosts = new File(args[0]);
+  if (hosts.exists()) {
+   try {
+    BufferedReader br = new BufferedReader(new FileReader(hosts));
+    int count = 0;
+    ArrayList ar = new ArrayList();
+    String currHost;
+```
+Figure 12: Snippet from the source code of a newer version of the same Java scanner (named also ‘p.j’).
+Another scanning-related tool that was identified by Sygnia is ‘SslTest’. This is also a JAR file (originally named ‘sl.j’)
+that allows the threat group to perform SSL fingerprinting to a remote host and indicates them specifically
+regarding a certificate expiry date.
+```
+public class SslTest {
+ public static void main(String[] args) throws Exception {
+  if (args.length != 2) {
+   System.out.println(Usage: host port);
+   return;
+  }
+…
+socket.startHandshake();
+   Certificate[] certs = socket.getSession().getPeerCertificates();
+   System.out.println(Certs retrieved: + certs.length);
+   for (int i = 0; i < certs.length; i++) {
+    Certificate cert = certs[i];
+    System.out.println(Certificate is: + cert);
+    if (cert instanceof X509Certificate)
+     try {
+       ((X509Certificate)cert).checkValidity();
+       System.out.println(Certificate is active for current date);
+     } catch (CertificateExpiredException cee) {
+       System.out.println(Certificate is expired);
+```
+Figure 13: Snippet from the source code of the SSL certificates scanner.
+In addition, when compromising a Windows machine in a domain environment, the threat group leveraged the
+Net binary and queried information regarding high privileges domain accounts and groups (Domain Admins,
+Enterprise Admins). An example of that is a simple batch script that includes a file containing a list of hostnames
+and for each executes net view command for enumeration of open shares on the target machines.
+```
+@echo off
+for /f tokens=* %%a in (C:\temp\net.txt) do (
+echo trying %%a: >> C:\temp\log.txt
+net view %%a >> C:\temp\log.txt 2>&1
+)
+```
+Figure 14: Batch Script used to query open shares on machines from ‘C:\temp\net.txt’.
+The threat group also executed a Microsoft-developed script named ‘querySpn.vbs’, which was used to query
+Service Principal Names within the domain. This tool is used for discovering potential targets and as a preparation
+for a future Kerberoasting, where tickets of privileged accounts with potentially crack-able passwords will be
+issued.
+10

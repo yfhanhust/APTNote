@@ -1,0 +1,51 @@
+Control DLL
+The winmm.dll malicious library maintains another library in its body, which is decrypted and loaded into the
+process memory without creating any files on local disk. According to file version info the original name of this
+library is "PlusDLL.dll". This is the platform’s main control component. When the additional DLL has been properly
+allocated in the memory, winmm.dll passes control to it with a parameter – a string which contains bot settings.
+The settings string, in encrypted form, is also located in the winmm.dll body – after the magic word "PLUSUNIT".
+Encrypted bot settings
+After decryption, the string contains the following:
+url=lp.gasoft.us:80|ver=1018|tag=33|group=lp80wi
+Apparently, when the Winnti malware managed to get into focus of security researchers: the authors made
+modifications of the methods used to store these initial settings. In some samples, the settings were hidden even
+in the executable file’s header:
+PAGE 15| “Winnti” | More than just a game
+Encrypted settings in the header of malicious executable
+In other variants, the ‘PLUSUNIT’ magic string was modified:
+UUUSUN”” instead of PLUSUNIT
+The PlusDLL library has an embedded driver. The driver is stored in %WINDIR%\System32\ file,
+registered as a service and started by NtLoadDriver system API function. Immediately after that, the driver’s file is
+removed, as well as all the registry entries created during service registration. The executable preserved the
+original driver names which are "PortLess" and "PointFilter"; however, the driver files used during infection are
+saved  as "sp1itter.sys" and "acplec.sys".
+The purpose of the driver is to hide network connections established by the malware. For example, if the user
+decides to check a list of established connections (e.g., using the ‘netstat –a’ command or the tcpview program)
+while the bot is communicating to the control center, the driver will protect and hide the malware connections.
+This approach is used by many rootkits on the Windows platform.
+The driver uses an interesting method to get the list of addresses to protect connections with. This information is
+available in the PlusDLL control library, which normally operates in the context of the explorer.exe process when
+the infection is active on the computer. The address information is sent from the user space (from PlusDLL) to the
+kernel space, where the driver works, via call to NtSetQuotaInformationFile API function.
+PAGE 16| “Winnti” | More than just a game
+During initialization, the driver hooks the NtSetQuotaInformationFile function:
+Hook on NtSetQuotaInformationFile function
+Every time the function is called, the driver checks its parameters: to be precise it is HANDLE FileHandle and PVOID
+Buffer parameters .
+The FileHandle parameter holds a descriptor of the partition on the hard drive where the function is expected to
+set disk quotas.
+The Buffer parameter is a memory buffer with information of new quotas to be set. The driver checks whether the
+value of the FileHandle parameter is equal to minus two. When the system calls the NtSetQuotaInformationFile
+function to actually change the quotas, the descriptor must be associated with one of the disks. Normally such
+descriptors in the Windows system are positive integers which obviously means that it cannot be equal to minus
+two. The negative value is set by the PlusDLL library in order to make the driver detect that the
+NtSetQuotaInformationFile function was called by that library. When calling NtSetQuotaInformationFile, PlusDLL
+sends information about the network addresses to be protected by the driver via the Buffer parameter. If
+FileHandle is not equal to minus two, the hook function in the driver passes control to system's original code of
+NtSetQuoataInformationFile API function and everyhin works as it should be on an uninfected system.
+PAGE 17| “Winnti” | More than just a game
+Sending data from the PlusDLL.dll library to the sp1itter.sys driver
+Note that 64-bit versions of Windows do not allow unsigned drivers to run. The malicious driver’s 64-bit versions
+were signed using stolen certificates. During the time that we have been tracking the Winnti group, we found 11
+certificates that were used to sign the malware used by the group (not necessarily drivers only). Ten of them
+belong to various companies in the gaming industry.

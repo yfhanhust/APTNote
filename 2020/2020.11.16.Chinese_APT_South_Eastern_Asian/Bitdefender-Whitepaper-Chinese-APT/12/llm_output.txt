@@ -1,0 +1,203 @@
+
+
+
+Sentence : FunnyDream
+The attackers used the backdoor prevalently as DLL files, but we observed an executable to be used as well. The files
+we found implement many persistence mechanisms, their droppers and loaders use many different file names for the
+payload, all of that suggesting that the backdoor is custom made.
+FunnyDreamDropper
+Most of the droppers of the FunnyDream have the pdb path set to ” C:\works\prjs\z3_build\build\DllBuilder\Release**
+Dll_deploy.pdb” . There are also samples with “E:\Works\Zu3\Project\build\DllBuilder\Release\Dll_deploy.pdb”, “ E:*
+Works\Zu3\Project\build\gen17\bin\wininstall.pdb ” pdbs. Moreover, the pdb path of some samples reflects the
+persistence that the dropper installs (e.g. E:\Works\Zu3\Project\build\gen17_link_dll\bin\wininstall.pdb, E:\Works*
+Zu3\Project\build\gen17_reg_exe_HKLM\bin\wininstall.pdb ). In the case of droppers that deal with persistence, the
+11
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+mechanisms used are the Run registry key and the Startup folder, this being done using com objects identified with
+CLSID_ShellLink (IShellLink and IPersistFile) and WScript.Shell(RegWrite method ) .
+The dropper contains a resource named “BIN” containing the backdoor in the form of a template binary (usually
+unencrypted) that sometimes is customized before dropping by replacing the string “funnydream” with a file
+path that will be deleted after the backdoor is loaded or by adding to the string “prettygirl” the C&C address
+encoded using base64 with “ xyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw_- ” or
+“ xyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw_= ” charsets.
+One representative dropper ( 10f9a1578b3f80b7413bf20b56541c86 ) revealed some of the methods used by the
+attackers and showed how deeply they are infiltrated into the victims’ network.
+10f9a1578b3f80b7413bf20b56541c86
+This sample we found to be located at “ %USERS%\public\libraries\msvcrt.dll ”, but on many machines it was executed
+from the “ netlogon ” shared folder. Using WMI (windows management instrumentation), the attackers executedthe
+“cmd.exe /c \\netlogon\initialization.bat” command on the remote machine. The initialization.bat starts
+the dropper by running “ rundll32 \\netlogon\msvcrt.dll,Start ”.
+That trace, besides being more evidence of lateral movement, proves that the attackers already infected some domain
+controllers from the victim’s network.
+This sample also creates in %APPDATA% a folder called “ maxbear ” and it drops the FunnyDreambackdoor binary
+from the “ BIN ” resourceto a file with randomized name using the format string “%s\maxbear\%c%c%c%c%cutil.exe ”,
+similar to those presented below:
+C:\Users\\AppData\Roaming\maxbear\U8VCQutil.exe
+C:\Users\\AppData\Roaming\maxbear\BDPTSutil.exe
+C:\Users\\AppData\Roaming\maxbear\H7kSFutil.exe
+C:\Users\\AppData\Roaming\maxbear\I7YaOutil.exe
+C:\Users\\AppData\Roaming\maxbear\Y7KFPutil.exe
+C:\Users\\AppData\Roaming\maxbear\Q7RK1util.exe
+Ultimately, the dropper executes the FunnyDream binary by invoking the “ Start ” function exported by the payload using
+rundll32.exe .
+FunnyDream backdoor
+This component has multiple capabilities, such as gathering user information and sending it to the command and
+control server, cleaning traces of malware deployment, detection evasion and, of course, backdoor behavior (executing
+commands and sending the results to the C&C server).
+This backdoor is used by attackers to run other tools (like ccf32.exe) to exfiltrate intelligence. It appears under
+a vast variety of names, being deployed by a dropper or manually by the attackers. A good example is the
+3db71a32bebe09bf25442766ceca5ddc sample, which we have seen to be deployed by a dropper as C:\Users\**
+appdata\roaming\maxbear\n7mj7util.exe, but also, we encountered it as a local %USERS%\public\libraries\msvcrt.
+dll file. In some cases, this sample was executed from netlogon share as \\netlogon\msvcrt.dll** exactly like the
+dropper described previously.
+12
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+Other paths of the FunnyDream binaries related to the attack are:
+%PUBLIC%\libraries\winmsg.dll
+%COMMON_APPDATA%\microsoft\netframework\winmsg.dll
+%PUBLIC%\bin\winmsg.dll
+%PUBLIC%\libraries\winuser.dll
+%COMMON_APPDATA%\wmiutil.dll
+%PUBLIC%\libraries\wmihelp.dll
+C:\Users\\appdata\local\temp\unikeytn.exe
+%COMMON_APPDATA%\microsoft\netframework\vssvb.exe
+%COMMON_APPDATA%\conhosts.exe
+%PUBLIC%\libraries\conhosts.exe
+The paths presented above correspond to binaries that are deployed manually. For some of them, we have evidence
+that they are deployed using a bat file via WMI . Moreover, that bat file installs the persistence for the deployed
+backdoor (usually by using reg.exe for writing to Run key or using sc.exe ):
+ reg add HKLM\Software\Microsoft\Windows\CurrentVersion\Run /v unikey /t REG_SZ /d “C:\users\**
+appdata\local\temp\UniKeyTN.exe”
+ sc create “Office Update” binpath= “cmd /c start /b C:\ProgramData\Microsoft\NetFramework\vssvb.exe”**
+start= auto
+C&C communication
+Communication with the C&C server starts by obtaining the address. Usually it is in plain text, but there are also cases
+where they are base64 encoded with a custom charsetorXor-ed as shown in the image:
+Fig. 6 – C&C address deobfuscation
+Some samples, after obtaining the address, initiate a TCP connection directly to the C&C server, but there are binaries
+with a more complex logic, like the ones below:
+b190911ebc6cce700f02bc90a3294fd2
+It starts by looking into Software\Microsoft\Windows\CurrentVersion\Internet Settings registry corresponding to each
+user for extracting the “ ProxyServer ” string. Then, it parses the string to find a http proxy and, if that exists, it tries to
+initiate a connection by sending a packet using a TCP connection to that proxy:
+ “CONNECT : HTTP/1.0\r\nUser-Agent: Mozilla/5.0 (compatible; MSIE 10.0;
+Windows NT 6.1;)\r\nProxy-Connection: Keep-Alive\r\nContent-Length: 0\r\nHost: \r**
+nPragma: no-cache\r\n\r\n”**
+The expected value received from the proxy is “ 200 Connection established\r\n ” which suggests that a connection is
+established.
+If a proxy is not set at all, the binary uses a raw TCP to transmit its packets.
+13
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+The payload of a packet is transformed by XOR-ingit with a random value and compressing it with zLibalgorithm. The
+resulted buffer is set as body for an http packet formed from the next template:
+Fig. 7 – HTTP request template
+The Host header is assigned the C&C address and the POST path is formed as follows:
+/////// .
+ad5a170f3ec0a4a152da0f920c9e3c0f
+This sample, like the previous one, obtains the proxy by looking into the registry, but it searches for a socks proxy.
+If such exists, it initiates a TCP connection to the proxy server and sends a 13-byte message corresponding to the
+following “VER=0x4”, “CMD=0x1”, “DSTPORT”, “DSTIP” “ID=’htun ” packet which should create a tunnel to the C&C
+through the proxy.
+The payload of a packet is compressed in the same way as b190911ebc6cce700f02bc90a3294fd2 does, the
+difference appears in the http packet template, in which the obfuscated payload is embedded:
+Fig. 8 – HTTP replay template
+The http packet corresponds to an HTTP replay and the “%s” parameter is filled with the “ Date ” header option assigning
+to it the current time in the “ %a, %d %b %Y %H:%M:%S GMT ” format (e.g. “ Date: Tue, 15 Nov 1994 08:12:31 GMT ”)
+Backdoor Capabilities
+As stated above, the backdoor tries to delete a file whose file path replaced the “funnydream” string from the template.
+Usually the deleted file is the dropper component.
+The second action some executables take is to run the “ whoami/upn&whoami/fqdn&whoami/logonid&whoami/all ”,
+which extracts much user information from the system, and to send the output to the C&C.
+Another distinct characteristic of some samples is that they check for the existence of “ Bka.exe ” or “ BkavUtil.exe ”
+processes. If such a process exists, then the backdoor, in a separated thread, enumerates the system windows using
+EnumWindows function. The WNDENUMPROC callback function used for enumeration searches for a specific visible
+window that has the window text set to “ OK ” and it belongs to the “ BkavSystemServer.exe ” process. To that window
+a “ BM_CLICK ” message is sent. The backdoor capabilities are implemented in two classes called CShellManager and
+CFileManager .
+The CShellManager class is responsible for creating a cmd.exe process and for connecting the stdin/stdout/stderr of
+that process to the C&C to receive commands and send back the output of those commands.
+14
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+The CFileManager implements operations like file upload, file download, directory listing, file and directory removal/
+movement and, of course, the file execution operation (using ShellExecuteA or CreateProcessA ).
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "FunnyDream", "type" : "ACTO"},
+        {"id": 2, "description": "DLL files", "type" : "EXEF"},
+        {"id": 3, "description": "Executable file", "type" : "EXEF"},
+        {"id": 4, "description": "Persistence mechanisms", "type" : "TTPS"},
+        {"id": 5, "description": "Run registry key", "type" : "REGI"},
+        {"id": 6, "description": "Startup folder", "type" : "SYSP"},
+        {"id": 7, "description": "CLSID_ShellLink (IShellLink and IPersistFile)", "type" : "APPS"},
+        {"id": 8, "description": "WScript.Shell(RegWrite method)", "type" : "APPS"},
+        {"id": 9, "description": "BIN resource", "type" : "DOCF"},
+        {"id": 10, "description": "funnydream string", "type" : "TAMP"},
+        {"id": 11, "description": "prettygirl string", "type" : "TAMP"},
+        {"id": 12, "description": "C&C address encoded with base64", "type" : "CCSH"},
+        {"id": 13, "description": "10f9a1578b3f80b7413bf20b56541c86", "type" : "IOCS"},
+        {"id": 14, "description": "%USERS%\\public\\libraries\\msvcrt.dll", "type" : "SYSP"},
+        {"id": 15, "description": "\\netlogon shared folder", "type" : "NETP"},
+        {"id": 16, "description": "WMI (windows management instrumentation)", "type" : "APPS"},
+        {"id": 17, "description": "cmd.exe /c \\netlogon\\initialization.bat", "type" : "EXEF"},
+        {"id": 18, "description": "%APPDATA% folder called maxbear", "type" : "SYSP"},
+        {"id": 19, "description": "msvcrt.dll with Start function", "type" : "EXEF"},
+        {"id": 20, "description": "C:\\Users\\AppData\\Roaming\\maxbear\\U8VCQutil.exe", "type" : "SYSP"},
+        {"id": 21, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 22, "description": "%PUBLIC%\\libraries\\winmsg.dll", "type" : "SYSP"},
+        {"id": 23, "description": "%COMMON_APPDATA%\\microsoft\\netframework\\winmsg.dll", "type" : "SYSP"},
+        {"id": 24, "description": "%PUBLIC%\\bin\\winmsg.dll", "type" : "SYSP"},
+        {"id": 25, "description": "%PUBLIC%\\libraries\\winuser.dll", "type" : "SYSP"},
+        {"id": 26, "description": "%COMMON_APPDATA%\\wmiutil.dll", "type" : "SYSP"},
+        {"id": 27, "description": "%PUBLIC%\\libraries\\wmihelp.dll", "type" : "SYSP"},
+        {"id": 28, "description": "C:\\Users\\appdata\\local\\temp\\unikeytn.exe", "type" : "SYSP"},
+        {"id": 29, "description": "%COMMON_APPDATA%\\microsoft\\netframework\\vssvb.exe", "type" : "SYSP"},
+        {"id": 30, "description": "%COMMON_APPDATA%\\conhosts.exe", "type" : "SYSP"},
+        {"id": 31, "description": "%PUBLIC%\\libraries\\conhosts.exe", "type" : "SYSP"},
+        {"id": 32, "description": "reg add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v unikey /t REG_SZ /d “C:\\users\\appdata\\local\\temp\\UniKeyTN.exe”", "type" : "TTPS"},
+        {"id": 33, "description": "sc create “Office Update” binpath= “cmd /c start /b C:\\ProgramData\\Microsoft\\NetFramework\\vssvb.exe” start= auto", "type" : "TTPS"},
+        {"id": 34, "description": "C&C communication logic", "type" : "TTPS"},
+        {"id": 35, "description": "ProxyServer string in registry", "type" : "REGI"},
+        {"id": 36, "description": "b190911ebc6cce700f02bc90a3294fd2 sample", "type" : "IOCS"},
+        {"id": 37, "description": "ad5a170f3ec0a4a152da0f920c9e3c0f sample", "type" : "IOCS"},
+        {"id": 38, "description": "Bka.exe process", "type" : "EXEF"},
+        {"id": 39, "description": "BkavUtil.exe process", "type" : "EXEF"},
+        {"id": 40, "description": "BkavSystemServer.exe process", "type" : "EXEF"},
+        {"id": 41, "description": "CShellManager class", "type" : "TAMP"},
+        {"id": 42, "description": "CFileManager class", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"from": 1, "to": 2, "label": "uses"},
+        {"from": 1, "to": 3, "label": "uses"},
+        {"from": 1, "to": 4, "label": "implements"},
+        {"from": 4, "to": 5, "label": "writes to"},
+        {"from": 4, "to": 6, "label": "writes to"},
+        {"from": 4, "to": 7, "label": "uses"},
+        {"from": 4, "to": 8, "label": "uses"},
+        {"from": 9, "to": 10, "label": "contains"},
+        {"from": 9, "to": 11, "label": "contains"},
+        {"from": 9, "to": 12, "label": "encodes"},
+        {"from": 13, "to": 14, "label": "writes to"},
+        {"from": 15, "to": 16, "label": "uses"},
+        {"from": 17, "to": 18, "label": "creates"},
+        {"from": 19, "to": 20, "label": "writes to"},
+        {"from": 21, "to": 20, "label": "executes"},
+        {"from": 22, "to": 23, "label": "writes to"},
+        {"from": 24, "to": 25, "label": "writes to"},
+        {"from": 26, "to": 27, "label": "writes to"},
+        {"from": 28, "to": 29, "label": "writes to"},
+        {"from": 30, "to": 31, "label": "writes to"},
+        {"from": 32, "to": 5, "label": "writes to"},
+        {"from": 33, "to": 5, "label": "writes to"},
+        {"from": 34, "to": 35, "label": "reads from"},
+        {"from": 36, "to": 37, "label": "uses similar logic"},
+        {"from": 38, "to": 39, "label": "checks for existence of"},
+        {"from": 39, "to": 40, "label": "interacts with window of"},
+        {"from": 41, "to": 21, "label": "creates"},
+        {"from": 42, "to": 21, "label": "creates"}
+    ]
+}

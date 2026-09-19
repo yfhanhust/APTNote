@@ -1,0 +1,45 @@
+Overview
+Recent operations we attribute to this threat actor rely on the same intrusion vector: spearphishing emails with attached archives containing a malicious LNK file.
+Despite looking like documents from the
+Explorer or popular archive-extraction products,
+the shortcuts lead to cmd.exe. These shortcut
+files have the following structure:
+https://securelist.com/deathstalker-mercenary-triumvirate/98177/ 1/13
+11/26/2020 Lifting the veil on DeathStalker, a mercenary triumvirate | Securelist
+Clicking them initiates a convoluted sequence resulting in the execution of arbitrary code on
+the victim’s machine. A short PowerShell script, passed through cmd.exe’s arguments,
+bootstraps the following chain:
+https://securelist.com/deathstalker-mercenary-triumvirate/98177/ 2/13
+11/26/2020 Lifting the veil on DeathStalker, a mercenary triumvirate | Securelist
+Stage 0’s role is to extract and execute the next element of the chain, as well as a decoy
+document embedded inside the LNK file to display to the user. This creates the illusion
+of having clicked on a real document and ensures the victim doesn’t get suspicious.
+https://securelist.com/deathstalker-mercenary-triumvirate/98177/ 3/13
+11/26/2020 Lifting the veil on DeathStalker, a mercenary triumvirate | Securelist
+Stage 1 is a PowerShell script containing C# assembly designed to connect to a dead
+drop resolver (more on this in the next paragraph) and obtain cryptographic material
+used to decode the last stage of the chain by extracting a “DLL” file from the shortcut
+and locating a Base64-encoded list of URLs at a fixed offset. This establishes
+persistence by creating a shortcut (using the dropped icon) in the Windows startup
+folder pointing to the VBE startup script.
+Finally, on stage 2, the actual malware implant used to take control of the victim’s
+machine. It connects to one of the dead drop resolvers to get the address of the real
+C&C server and enters a loop that looks for orders every few seconds.
+Upon system restart, the VBE startup script – which closely resembles stage 0 – is
+automatically executed, once again leading all the way to Powersing stage 2.
+Communications with the C&C server involve the exchange of JSON-encoded objects.
+Powersing only has two tasks:
+Capture periodic screenshots from the victim’s machine, which are immediately sent to
+the C&C server (two built-in commands allow operators to change screenshot quality
+and periodicity)
+Execute arbitrary Powershell scripts provided by the C&C
+On stages 1 and 2, security software evasion is carried out with a high degree of variation
+across the different samples we’ve analyzed. Depending on the AV detected on the machine,
+Powersing may opt for alternative persistence methods, or even stop running entirely. We
+suspect that the group behind this toolset performs detection tests before each of their
+campaigns and updates their scripts based on the results. This indicates an iterative and fastpaced approach to software design. It’s worth pointing out that stage 2 actively looks for
+traces of virtualization (for example, vendor specific MAC addresses) and malware analysis
+tools on the machine, and reports this information to the C&C server.
+To wrap up this section, we’d like to mention that Powersing isn’t a monolithic malware
+platform. Instead, it’s a stealthy foothold inside the victim’s network with its key role to
+enable the projection of further tools.

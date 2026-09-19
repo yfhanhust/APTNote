@@ -1,0 +1,79 @@
+
+
+
+Sentence : Digging into the details – Lampion 1st stage
+The 1st stage has random functions to generate random names that will be used to rename the next malicious files
+created on the victim’s machine. Line 27 is where the Wscript object is created that will be used to create a .lnk file on
+the Windows StartUp folder. All the malware source code is commented on the next images.
+https://seguranca-informatica.pt/targeting-portugal-a-new-trojan-lampion-has-spread-using-template-emails-from-the-portuguese-government-finance-tax/#.Xh… 7/25
+1/6/2020 Targeting Portugal: A new trojan 'Lampion' has spread using template emails from the Portuguese Government Finance & Tax
+Figure 13: Random functions that generate random names – (1/5).
+The next figure has the function to decrypt the URLs from which the 2nd stage of malware is downloaded.
+Figure 14: Decryption function used to decrypt the URLs where the next stage is available – (2/5).
+Next, all the shortcuts (.lnk) files are deleted from the operating system StartUp folder (line 65).
+After that, all the VBS files from the operating system StartUp folder are also removed to prevent other files can start with
+the OS. A randomly named folder is created in the Windows AppData directory that will keep the malicious files.
+https://seguranca-informatica.pt/targeting-portugal-a-new-trojan-lampion-has-spread-using-template-emails-from-the-portuguese-government-finance-tax/#.Xh… 8/25
+1/6/2020 Targeting Portugal: A new trojan 'Lampion' has spread using template emails from the Portuguese Government Finance & Tax
+Figure 15: Some operations are performed, such as create folders on AppData and setting the default process security
+level with VBScript – (3/5).
+Now is time to download the 2nd stage from the Internet. Two files are obtained from 2 AWS S3 buckets.
+Figure 16: Trojan 2nd stage is downloaded from two AWS S3 buckets – (4/5).
+The URLs are encoded with the following strings:
+
+logs = Decrypt("&aQ^>jhjqfFi`0o%B%~\tkLYya'jL^[{m[e1hYb~Z!$miU)e$5k3i]#*[OWHi(jc#
+(F$bWHcVW\pWe;deW3m$i_$TY%emc^%s&M$Tp^_OfxK")
+ur = Decrypt("{PL^7j\j9f)is0D%9%aiXZ~]E^\i#k+ZW^(eU-ZNe^]5^;i}ZaYm'Y/wYH$6im)6$tksiw#|[dWNi)ja#
+
+(~$oWzc+Wip@e6d2W&m.ix$uYde&ch%{F,#8'9/T#F(]$`ZdbrbY#")
+https://seguranca-informatica.pt/targeting-portugal-a-new-trojan-lampion-has-spread-using-template-emails-from-the-portuguese-government-finance-tax/#.Xh… 9/25
+1/6/2020 Targeting Portugal: A new trojan 'Lampion' has spread using template emails from the Portuguese Government Finance & Tax
+To get the result of plain-text URLs, SI-LAB is keeping the decryption code available on GitHub. The result is as follows.
+Figure 17: Clean URLs as a result of the decrypted function output (available here).
+As observed, the output shows us two AWS-hosted addresses that contain two malicious files, namely:
+
+
+hxxps[:]//fucktheworld.s3.us-east-2.amazonaws[.]com/0.zip
+
+
+hxxps[:]//sdghsuidhoidoghsdc19c.s3.us-east-2.amazonaws[.]com/P-19-2.dll
+
+
+The 0.zip file is a DLL with additional code loaded by PE File P-19-2.dll during its execution. It is the PE file that will be
+executed each time the infected machine starts. This file is overly large (32 MB in size), with a lot of trash to make it
+difficult to detect.
+Continuing to the last part of the 1st stage, the VBS file, in the last phase a VBS file is created in the AppData folder
+( C:\Users\user\AppData\Roaming\lkuuxelnxqy.vbs ).
+Also, a .lnk is created in the Windows StartUp folder ( C:\Users\user\AppData\Roaming\Microsoft\Windows\Start
+Menu\Programs\Startup\lkuuxelnxqy.lnk) which will then execute the next malware stage (P -19-2.dll).
+https://seguranca-informatica.pt/targeting-portugal-a-new-trojan-lampion-has-spread-using-template-emails-from-the-portuguese-government-finance-tax/#.X… 10/25
+1/6/2020 Targeting Portugal: A new trojan 'Lampion' has spread using template emails from the Portuguese Government Finance & Tax
+Figure 18: VBS file is executed and the operating system is restarted – (5/5).
+Finally, WScript.Shell runs the created VBScript file, the victim’s computer is forced to restart, and the malware itself (P-19
+2.dll) runs on the infected machine.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Lampion", "type" : "ACTO"},
+        {"id": 2, "description": ".lnk file on Windows StartUp folder", "type" : "DOCF"},
+        {"id": 3, "description": "VBS files from the operating system StartUp folder", "type" : "DOCF"},
+        {"id": 4, "description": "Randomly named folder in Windows AppData directory", "type" : "SYSP"},
+        {"id": 5, "description": "2nd stage of malware", "type" : "DOCF"},
+        {"id": 6, "description": "AWS S3 buckets", "type" : "CCSH"},
+        {"id": 7, "description": "0.zip", "type" : "DOCF"},
+        {"id": 8, "description": "P-19-2.dll", "type" : "EXEF"},
+        {"id": 9, "description": "C:\\Users\\user\\AppData\\Roaming\\lkuuxelnxqy.vbs", "type" : "DOCF"},
+        {"id": 10, "description": "C:\\Users\\user\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\lkuuxelnxqy.lnk", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "creates"},
+        {"source": 1, "target": 3, "rel_name" : "deletes"},
+        {"source": 1, "target": 4, "rel_name" : "creates in"},
+        {"source": 1, "target": 6, "rel_name" : "downloads from"},
+        {"source": 6, "target": 5, "rel_name" : "hosts"},
+        {"source": 5, "target": 7, "rel_name" : "contains"},
+        {"source": 5, "target": 8, "rel_name" : "executes"},
+        {"source": 1, "target": 9, "rel_name" : "creates in"},
+        {"source": 1, "target": 10, "rel_name" : "creates in"}
+    ]
+}

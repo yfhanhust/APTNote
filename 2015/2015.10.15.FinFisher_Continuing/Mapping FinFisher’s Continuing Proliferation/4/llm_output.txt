@@ -1,0 +1,132 @@
+
+
+
+Sentence : Part 1: Fishing for FinFisher
+In this section, we describe our scans for FinFisher servers, and how we unmasked the true location of the master servers to
+identify governments using FinFisher.
+Each FinFisher sample includes the address of one or more C&C servers that the spyware reports back to. These C&C
+servers are typically FinSpy Relays, which forward connections back and forth between a device infected with FinFisher,
+and a FinSpy Master. The purpose of the FinSpy Relay is explicitly to make it “ practically impossible ” (their emphasis) for
+a researcher to discover “the location and country of the Headquarter [sic]”. [8]
+https://citizenlab.org/2015/10/mapping-finfishers-continuing-proliferation/ 1/18
+2015/10/28 Mapping FinFisher’s Continuing Proliferation
+Figure 1: How targets infected with FinFisher communicate with the FinSpy Master via one or more FinSpy Relays. [9]
+We employed zmap [10] to scan the entire IPv4 Internet (/0) several times since the end of December 2014 and throughout
+2015, using a new FinFisher server fingerprint that we devised by analyzing FinFisher samples. Our scans yielded 135
+servers matching our fingerprint, which we believe are a mix of FinSpy Masters and FinSpy Relays.
+When one queries a FinFisher server, or types the server’s address into a web browser, the server typically returns a
+decoy page. A decoy page is a page designed to disguise the fact that the server is a spyware server. We found some
+variation in the decoy pages used by FinFisher servers that we detected, though the bulk used either www.google.com
+or www.yahoo.com . Peculiarly, FinSpy Relays appear to return decoy pages fetched by their FinSpy Master, rather than
+directly fetching the decoy pages themselves. Thus, in many cases, the pages returned by the FinSpy Relays contain
+location data apparently about the FinSpy Master (e.g., certain Google and Yahoo pages embed the requester’s IP
+address or localized weather), which can reveal the location of FinSpy Masters.
+Okay Google, What is my IP?
+We noticed that when we issued a query like “What is my IP address?” to a Google-decoy FinFisher server, the server
+would respond with a different IP address. In the case below, a FinFisher server 206.190.159.xxx (located in the United
+States) reported that its IP address was the Indonesian IP 112.78.143.xxx, which matches a FinFisher server first detected in
+August 2012 by Claudio Guarnieri. [11] We hypothesize that 206.190.159.xxx is a FinFisher proxy, designed to obscure the
+location of the FinFisher master, which is at 112.78.143.xxx.
+Figure 2: A FinFisher server in the US seems to be a proxy for a master in Indonesia.
+Specifically, we sent queries of the form:
+GET /search?q=my+ip+address&nord=1 HTTP/1.1
+Host: [ip of server]
+User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:38.0) Gecko/20100101 Firefox/38.0
+Figure 3: Queries we sent to Google-decoy FinFisher servers to reveal the IP address of the master. [12]
+The fact that FinFisher proxies can apparently reveal the IP of the master is quite peculiar. We illustrate below how we
+believe a query like “What is my IP address?” is routed through FinSpy Relays to the FinSpy Master:
+https://citizenlab.org/2015/10/mapping-finfishers-continuing-proliferation/ 2/18
+2015/10/28 Mapping FinFisher’s Continuing Proliferation
+Figure 4: How we believe a “What is my IP address?” query is routed through FinSpy Relays to a FinSpy Master.
+It appears that the “What is my IP Address?” query is delivered from our Measurement Machine by the FinSpy Relay to
+the FinSpy Master, and then submitted to Google by the FinSpy Master . Therefore, Google returns the IP address of the
+FinSpy Master, which is then sent back to the Measurement Machine via the FinSpy Relay .
+How’s the Weather in Caracas?
+A significant number of FinFisher servers we detected used www.yahoo.com as their decoy page. While we were unable
+to devise a method to find the exact IP address of Yahoo-decoy FinFisher endpoints, we were still able to retrieve location
+information from Yahoo, by examining the userLocation object in the decoy page’s source code. Yahoo utilizes a
+user’s location to customize several elements of Yahoo’s homepage, including weather and news.
+Figure 5: Weather conditions in Caracas returned by a FinFisher server in Lithuania.
+The userLocation object returned by 185.8.106.xxx (located in Lithuania) is shown below:
+"userLocation":
+{"woeid":395269,
+"zip":"Caracas",
+"city":"Caracas",
+"state":"Distrito Federal",
+"country":"Venezuela",
+"countryCode":"VE",
+...}
+Figure 6: A FinFisher server in Lithuania seems to be a proxy for a master in Venezuela.
+The userLocation object allows us to obtain city and country information for FinFisher endpoints, though we cannot
+determine their precise IP address. We issued a query similar to the following to each Yahoo-decoy FinFisher server to
+obtain a page with the userLocation object:
+GET https://www.yahoo.com/ HTTP/1.1
+Host: www.yahoo.com
+User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:38.0) Gecko/20100101 Firefox/38.0
+Figure 7:Queries we sent to Yahoo-decoy FinFisher servers to reveal the location of the master. [13]
+Since Yahoo, like Google, implements SSL redirection by default, we had to devise a method to talk to Yahoo in plain
+HTTP. While Google provides the “nord=1” URL parameter to avoid SSL redirection, Yahoo apparently does not have
+an analogous publicized solution. However, we found that by sending plain HTTP GET requests to the resource
+“https://www.yahoo.com/” we could communicate with www.yahoo.com in plain HTTP without triggering SSL
+redirection.
+Other Decoys
+https://citizenlab.org/2015/10/mapping-finfishers-continuing-proliferation/ 3/18
+2015/10/28 Mapping FinFisher’s Continuing Proliferation
+While the majority of FinFisher servers we detected used either Google or Yahoo as a decoy page, we identified a
+number of other servers whose operators had apparently customized the decoy page to a different URL.
+One server used the Italian news source libero.it as a decoy. We noted that libero.it sets the “Libero” cookie, which
+contains the IP address of the computer that visited the libero.it website. When accessing 185.8.106.xxx, the Libero-decoy
+FinFisher server, the cookie was set to include the Italian IP 93.146.250.xxx . [14] Servers that we traced to Macedonia used
+Macedonian newsmagazine time.mk as a decoy. Servers we traced to Taiwan used Taiwanese web portal
+pchome.com.tw as a decoy. We were unable to trace other servers which used file download site filehippo.com as a
+decoy. A handful of other untraceable servers returned custom HTML code as a decoy (e.g., a webpage with a META
+redirect to www.google.com).
+General Comments
+This design peculiarity is only the latest instance of fingerprintable anomalies in spyware decoy pages. FinFisher
+competitor Hacking Team formerly used decoy pages on its C&C server for Remote Control System (RCS), but apparently
+removed them [15] after our research revealed that anomalies in the decoy pages could be used to fingerprint RCS
+servers. [16] We have also previously used decoy pages to fingerprint FinFisher servers. [17] We believe that FinFisher or its
+clients may also be realizing that decoy pages are problematic, as we have observed fewer FinFisher servers returning
+decoy pages over time.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "FinFisher samples", "type" : "DOCF"},
+        {"id": 2, "description": "C&C servers (address in FinFisher samples)", "type" : "CCSH"},
+        {"id": 3, "description": "FinSpy Relays", "type" : "CCSH"},
+        {"id": 4, "description": "Infected device with FinFisher", "type" : "DOCF"},
+        {"id": 5, "description": "FinSpy Master", "type" : "CCSH"},
+        {"id": 6, "description": "zmap", "type" : "APPS"},
+        {"id": 7, "description": "IPv4 Internet (/0)", "type" : "NETP"},
+        {"id": 8, "description": "135 servers matching fingerprint", "type" : "CCSH"},
+        {"id": 9, "description": "Decoy page (google.com or yahoo.com)", "type" : "URLS"},
+        {"id": 10, "description": "206.190.159.xxx (US FinFisher server)", "type" : "CCSH"},
+        {"id": 11, "description": "112.78.143.xxx (Indonesian IP address)", "type" : "CCSH"},
+        {"id": 12, "description": "Measurement Machine", "type" : "DOCF"},
+        {"id": 13, "description": "userLocation object (Yahoo decoy page)", "type" : "REGI"},
+        {"id": 14, "description": "185.8.106.xxx (Lithuanian FinFisher server)", "type" : "CCSH"},
+        {"id": 15, "description": "Caracas, Venezuela", "type" : "COUN"},
+        {"id": 16, "description": "libero.it (Italian news source decoy page)", "type" : "URLS"},
+        {"id": 17, "description": "93.146.250.xxx (Italian IP address)", "type" : "CCSH"},
+        {"id": 18, "description": "time.mk (Macedonian newsmagazine decoy page)", "type" : "URLS"},
+        {"id": 19, "description": "pchome.com.tw (Taiwanese web portal decoy page)", "type" : "URLS"},
+        {"id": 20, "description": "filehippo.com (file download site decoy page)", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "includes address of"},
+        {"source": 2, "target": 3, "rel_name" : "is typically a relay for"},
+        {"source": 4, "target": 2, "rel_name" : "reports back to"},
+        {"source": 3, "target": 5, "rel_name" : "forwards connections to"},
+        {"source": 6, "target": 7, "rel_name" : "scans"},
+        {"source": 8, "target": 2, "rel_name" : "matches fingerprint of"},
+        {"source": 9, "target": 3, "rel_name" : "used by"},
+        {"source": 10, "target": 11, "rel_name" : "proxies for"},
+        {"source": 12, "target": 3, "rel_name" : "queries via"},
+        {"source": 13, "target": 9, "rel_name" : "embedded in"},
+        {"source": 14, "target": 15, "rel_name" : "reveals location of master at"},
+        {"source": 16, "target": 17, "rel_name" : "sets cookie with IP address of"},
+        {"source": 18, "target": 3, "rel_name" : "used as decoy page by"},
+        {"source": 19, "target": 3, "rel_name" : "used as decoy page by"},
+        {"source": 20, "target": 3, "rel_name" : "used as decoy page by"}
+    ]
+}

@@ -1,0 +1,60 @@
+
+
+
+Sentence : 4.2 The Crypter
+WastedLocker is protected with a custom crypter, referred to as CryptOne by Fox-IT
+InTELL. On examination, the code turned out to be very basic and used also by other
+malware families such as: Netwalker, Gozi ISFB v3, ZLoader and Smokeloader .
+The crypter mainly contains junk code to increase entropy of the sample and hide the
+actual code. We have found 2 crypter variants with some code differences, but mostly
+with the same logic applied.
+The first action performed by the crypter code is to check some specific registry key. In
+the variants analysed the registry key is either: interface{b196b287-bab4-101a-
+b69c-00aa00341d07} or interface{aa5b6a80-b834-11d0-932f-
+https://research.nccgroup.com/2020/06/23/wastedlocker-a-new-ransomware-variant-developed-by-the-evil-corp-group/ 5/21
+6/30/2020 WastedLocker: A New Ransomware Variant Developed By The Evil Corp Group – NCC Group Research
+00a0c90dcaa9} . These keys relate to the UCOMIEnumConnections Interface and
+the IActiveScriptParseProcedure32 interface respectively. If the key is not detected,
+the crypter will enter an infinite loop or exit, thus it is used as an anti-analysis technique.
+In the next step the crypter allocates a memory buffer calling the VirtualAlloc API. A
+while loop is used to join a series of data blobs into the allocated buffer, and the contents
+of this buffer are then decrypted with an XOR based algorithm. Once decrypted, the
+crypter jumps into the data blob which turns out to be a shellcode responsible for
+decrypting the actual payload. The shellcode copies the encrypted payload into another
+buffer allocated by calling the VirtualAlloc API, and then decrypts this with an XOR based
+algorithm in a similar way to that described above. To execute the payload, the shellcode
+replaces the crypter’s code in memory with the code of the payload just decrypted, and
+jumps to its entry point.
+As noted above, we have observed this crypter being used by other malware families as
+well. Related information and IOCs can be found in the Appendix.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "WastedLocker", "type" : "EXEF"},
+        {"id": 2, "description": "CryptOne by Fox-IT InTELL", "type" : "TTPS"},
+        {"id": 3, "description": "Netwalker", "type" : "EXEF"},
+        {"id": 4, "description": "Gozi ISFB v3", "type" : "EXEF"},
+        {"id": 5, "description": "ZLoader", "type" : "EXEF"},
+        {"id": 6, "description": "Smokeloader", "type" : "EXEF"},
+        {"id": 7, "description": "interface{b196b287-bab4-101a-b69c-00aa00341d07}", "type" : "REGI"},
+        {"id": 8, "description": "interface{aa5b6a80-b834-11d0-932f-00a0c90dcaa9}", "type" : "REGI"},
+        {"id": 9, "description": "UCOMIEnumConnections Interface", "type" : "TAMP"},
+        {"id": 10, "description": "IActiveScriptParseProcedure32 interface", "type" : "TAMP"},
+        {"id": 11, "description": "VirtualAlloc API", "type" : "APPS"},
+        {"id": 12, "description": "XOR based algorithm", "type" : "TTPS"},
+        {"id": 13, "description": "shellcode", "type" : "EXEF"},
+        {"id": 14, "description": "encrypted payload", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "protected by"},
+        {"source": 2, "target": 3, "rel_name" : "used by"},
+        {"source": 2, "target": 4, "rel_name" : "used by"},
+        {"source": 2, "target": 5, "rel_name" : "used by"},
+        {"source": 2, "target": 6, "rel_name" : "used by"},
+        {"source": 7, "target": 9, "rel_name" : "related to"},
+        {"source": 8, "target": 10, "rel_name" : "related to"},
+        {"source": 2, "target": 11, "rel_name" : "calls"},
+        {"source": 2, "target": 12, "rel_name" : "uses for decryption"},
+        {"source": 13, "target": 14, "rel_name" : "decrypts and copies"}
+    ]
+}

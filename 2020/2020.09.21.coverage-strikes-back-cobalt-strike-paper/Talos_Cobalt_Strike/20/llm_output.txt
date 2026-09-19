@@ -1,0 +1,131 @@
+
+
+
+Sentence : The art and science of detecting Cobalt Strike
+match a hex string, rather than actual bytes.
+• 1:54110 MALWARE-OTHER Html.Trojan.CobaltStrike
+HTML beacon download attempt
+• 1:54111 MALWARE-OTHER Html.Trojan.CobaltStrike
+HTML beacon download attempt
+• 1:54112 MALWARE-OTHER Html.Trojan.CobaltStrike
+HTML beacon download attempt
+• 1:54113 MALWARE-OTHER Html.Trojan.CobaltStrike
+HTML beacon download attempt
+For the PowerShell method, we have again a ton of
+obfuscated code underneath it, so the coverage should
+target generic function calls. For this, we went with the
+PowerShell command arguments, and supplemented that
+with matching on a Wscript.Shell object being created.
+• 1:54114 MALWARE-OTHER Html.Trojan.CobaltStrike
+powershell payload download attempt
+• 1:54115 MALWARE-OTHER Html.Trojan.CobaltStrike
+powershell payload download attempt
+Lastly, we have the VBA Method. Our researchers found
+this easy to cover because HTA files don’t often interface
+with Excel workbooks, let alone one that tinkers with the
+“AccessVBOM” registry key.
+• 1:54116 MALWARE-OTHER Html.Trojan.CobaltStrike
+VBA payload download attempt
+• 1:54117 MALWARE-OTHER Html.Trojan.CobaltStrike
+VBA payload download attempt
+From there, we cloned all that to ClamAV coverage to get
+the following signatures:
+• Html.Trojan.CobaltStrike-7932561-0
+• Html.Trojan.CobaltStrike-7932562-0
+• Html.Trojan.CobaltStrike-7932563-0
+• Html.Trojan.CobaltStrike-7932564-0
+TARGET MODULE: SCRIPTED WEB DELIVERY
+In Cobalt Strike, there’s a feature called “scripted web
+delivery.” Executing a scripted web delivery attack simply
+means that you pick one of the Cobalt Strike payloads/
+listeners and Cobalt Strike will then host that payload at
+a user-configured URI. These can be generated in three
+different languages: Bitsadmin, PowerShell and Python.
+After hosting the payload, Cobalt Strike provides a
+command that can be executed, in the language of choice,
+that reaches out and grabs the malicious payload from an
+attacker-controlled web server and executes it.
+We are only going to concentrate on the PowerShell
+implementation, as it is the most commonly used module.
+The initial execution is using a web client to download an
+additional PowerShell payload from the attacker controlled
+web server and then continue to execute that code.
+Payload
+After reaching out to grab the real payload, we get a huge
+obfuscated PowerShell script from the web server, almost
+200KB in size.
+This script contained code reuse from the HTA module,
+but we still needed to go one layer deeper and verify the
+shellcode was unique in this module. We base64-decode
+the data and decrypt it using the same 0x23 default
+XOR key — and it’s already much larger than the previous
+payload.
+It’s not raw shellcode like we saw in the HTA payloads,
+you can immediately see that the “MZ” header is present.
+This seems to be a stageless beacon included in the
+powershell script. You might wonder why it wasn’t
+included in the HTA attack. The reason is the HTA module
+is executing a Powershell one-liner and Windows has
+a character limit on command line strings, 32767. That
+number is even lower when executing a command from
+cmd.exe, 8191. The character limit varies across a variety
+of execution methods and these numbers are not always
+going to be correct.
+Since this payload is downloaded using a small one-liner to
+execute a string retrieved from the Cobalt Strike controlled
+server, that limit is bypassed and a more reliable payload
+can be provided.
+Detection
+To detect something, we first have to narrow down what
+we can actually see in Snort or ClamAV. We are not able
+to deobfuscate a PowerShell script coming across the
+network prior to detection — it’s simply not feasible without
+introducing latency for the client in most cases.
+So, for detection, we are left with the initial obfuscated
+payload downloaded. That’s not so bad because Cobalt
+Strike, in its current configuration, once again has a
+© 2020 Cisco. All rights reserved. talos-external@cisco.com | talosintelligence.com page 16 of 29
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cobalt Strike", "type" : "ACTO"},
+        {"id": 2, "description": "Html.Trojan.CobaltStrike", "type" : "TTPS"},
+        {"id": 3, "description": "HTML beacon download attempt", "type" : "TTPS"},
+        {"id": 4, "description": "PowerShell command arguments", "type" : "TTPS"},
+        {"id": 5, "description": "Wscript.Shell object", "type" : "APPS"},
+        {"id": 6, "description": "VBA Method", "type" : "TTPS"},
+        {"id": 7, "description": "AccessVBOM registry key", "type" : "REGI"},
+        {"id": 8, "description": "ClamAV signatures", "type" : "DOCF"},
+        {"id": 9, "description": "Scripted web delivery", "type" : "TTPS"},
+        {"id": 10, "description": "Bitsadmin", "type" : "APPS"},
+        {"id": 11, "description": "Python", "type" : "EXEF"},
+        {"id": 12, "description": "Attacker-controlled web server", "type" : "CCSH"},
+        {"id": 13, "description": "Obfuscated PowerShell script", "type" : "DOCF"},
+        {"id": 14, "description": "Base64-decoded and decrypted data", "type" : "DOCF"},
+        {"id": 15, "description": "Stageless beacon", "type" : "EXEF"},
+        {"id": 16, "description": "MZ header", "type" : "TAMP"},
+        {"id": 17, "description": "HTA module", "type" : "DOCF"},
+        {"id": 18, "description": "Windows command line character limit", "type" : "SYSP"},
+        {"id": 19, "description": "Snort", "type" : "APPS"},
+        {"id": 20, "description": "talos-external@cisco.com", "type" : "MAIL"},
+        {"id": 21, "description": "talosintelligence.com", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "performs"},
+        {"source": 1, "target": 4, "rel_name" : "targets"},
+        {"source": 1, "target": 5, "rel_name" : "creates"},
+        {"source": 1, "target": 6, "rel_name" : "uses"},
+        {"source": 1, "target": 7, "rel_name" : "modifies"},
+        {"source": 1, "target": 8, "rel_name" : "bypasses_with"},
+        {"source": 1, "target": 9, "rel_name" : "implements"},
+        {"source": 9, "target": 10, "rel_name" : "uses"},
+        {"source": 9, "target": 11, "rel_name" : "uses"},
+        {"source": 12, "target": 13, "rel_name" : "hosts"},
+        {"source": 12, "target": 14, "rel_name" : "serves"},
+        {"source": 12, "target": 15, "rel_name" : "delivers"},
+        {"source": 17, "target": 6, "rel_name" : "includes"},
+        {"source": 18, "target": 9, "rel_name" : "bypasses"},
+        {"source": 19, "target": 3, "rel_name" : "detects"}
+    ]
+}

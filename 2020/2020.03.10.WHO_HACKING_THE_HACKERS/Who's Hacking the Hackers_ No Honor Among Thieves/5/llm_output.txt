@@ -1,0 +1,63 @@
+
+
+
+Sentence : table of contents Malware analysis
+While reviewing some detection data last week, we stumbled on a new detection of njRat in one
+of the environments we are monitoring. njRat is popular in the Middle East and gives its operators
+the ability to hijack the victim’s machine for keylogging, taking screenshots, file manipulation and
+exfiltration, webcam and microphone recording.
+While njRat is a fairly prevalent threat and popular RAT, this particular infection caught our eye.
+https://www.cybereason.com/blog/whos-hacking-the-hackers-no-honor-among-thieves 1/15
+3/14/2020 Who's Hacking the Hackers: No Honor Among Thieves
+Initial detection of the njRat in the Cybereason Defense Platform.
+The process appears to be masquerading as a legitimate Windows application (explorer.exe ).
+However, when checking its hash on VirusTotal, the sample seems to be very new, just a few
+hours old at the time. In the affected environment, it looks as if the njRat is contacting two IP
+addresses: one of them was unknown to us at the time (capeturk.com - more on that later) and
+the other, (anandpen.com) a compromised website of an Indian office supplies manufacturer.
+|Hostname|IP|
+|---|---|
+|capeturk.com|104.206.239.81|
+|www.anandpen.com|209.99.16.94|
+IP addresses and hostnames contacted by the malware.
+https://www.cybereason.com/blog/whos-hacking-the-hackers-no-honor-among-thieves 2/15
+3/14/2020 Who's Hacking the Hackers: No Honor Among Thieves
+anandpen.com is a hacked WordPress website that serves malware from one of its internal
+WordPress directories. This is a common practice by attackers who are exploiting vulnerable
+WordPress installations. In this case, one of the payloads was served through the /wp-
+includes/images/media/1/explorer.zip path on the anandpen.com domain.
+After running a few YARA queries and searching for all of the samples on VT associated with the
+two aforementioned IP addresses, we found dozens of different samples of the same njRat
+hosted on the same server. Each sample had a different creation time, but they were all hosted
+on the same server and actively targeting victims.
+As mentioned before, all of the observed samples (including the detection on one of the
+environments we are monitoring) had the name of a legitimate Windows process, like svchost.exe
+or explorer.exe, yet all of them were executed from subdirectories inside %AppData%. Clearly,
+some mischief was taking place, but the root cause for these executions was unknown since the
+files were dropped in the environment prior to the deployment of our product.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "njRat", "type" : "APPS"},
+        {"id": 2, "description": "Middle East", "type" : "COUN"},
+        {"id": 3, "description": "explorer.exe (masquerading njRat)", "type" : "EXEF"},
+        {"id": 4, "description": "capeturk.com", "type" : "CCSH"},
+        {"id": 5, "description": "104.206.239.81", "type" : "CCSH"},
+        {"id": 6, "description": "anandpen.com", "type" : "CCSH"},
+        {"id": 7, "description": "209.99.16.94", "type" : "CCSH"},
+        {"id": 8, "description": "/wp-includes/images/media/1/explorer.zip", "type" : "DOCF"},
+        {"id": 9, "description": "svchost.exe (masquerading njRat)", "type" : "EXEF"},
+        {"id": 10, "description": "%AppData%", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "popular in"},
+        {"source": 1, "target": 3, "rel_name" : "masquerades as"},
+        {"source": 1, "target": 4, "rel_name" : "contacts C2 server"},
+        {"source": 1, "target": 5, "rel_name" : "contacts IP address"},
+        {"source": 1, "target": 6, "rel_name" : "contacts compromised website"},
+        {"source": 1, "target": 7, "rel_name" : "contacts IP address"},
+        {"source": 6, "target": 8, "rel_name" : "serves payload from path"},
+        {"source": 1, "target": 9, "rel_name" : "masquerades as"},
+        {"source": 3, "target": 10, "rel_name" : "executed from"}
+    ]
+}

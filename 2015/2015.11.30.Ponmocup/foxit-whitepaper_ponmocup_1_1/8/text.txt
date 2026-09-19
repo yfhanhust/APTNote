@@ -1,0 +1,375 @@
+5 Installation, persistence and functionality
+This chapter describes the core components of Ponmocup, its method
+of installation, achieving persistence and its modular system of plug-ins
+aimed at providing a wide variety of functions on compromised systems.
+5.1 The Ponmocup installer
+The installer is responsible for persistently installing
+various Ponmocup components on a system. This para
+graph focuses on components installed directly on disk.
+All other core components are stored and encrypted in
+the registry. Without these, the initiator described in this
+chapter cannot function.
+Depending on the privileges available to the installer,
+the initiator can either be installed in the system direc
+tory or in the Application Data directory. When run with
+administrative privileges, the initiator will be named after
+an existing file in the system directory, with 1–2 random
+characters appended. For example, a randomly selected
+legitimate file could be:
+|Col1|Col2|C:|\W|i|nd|ow|s\|S|ys|te|m3|2\|m|sg|71|1.|ac|m|Col20|Col21|Col22|Col23|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+||n|d t|he|P|on|m|oc|up|in|iti|at|or|wo|ul|d|be|na|m|ed|:|||
+|||C:|\W|i|nd|ow|s\|S|ys|te|m3|2\|m|sg|71|1A|.D|LL|||||
+This effectively means
+that the core function-
+alities of Ponmocup
+are uniquely encrypted
+and stored in a unique
+location for every victim.
+16 | fox-it | Ponmocup | A giant hiding in the shadows | November 2015
+If stored in the system directory the file will have the R
+(Read-only), S (System) and H (Hidden) attributes set. The
+installer adds a scheduled task to start the initiator during
+system boot, with the privileges of NT AUTHORITY\
+SYSTEM:
+```
+  
+```
+
+System
+HighestAvailable
+```
+  InteractiveTokenOrPassword
+</LogonType>
+
+
+
+```
+
+```
+  
+```
+C:\Windows\system32\
+runDLL32.exe
+"C:\Windows\system32\
+msg711A.DLL",ZBADQX
+```
+  
+```
+
+Without administrative privileges the initiator is stored
+in the Application Data directory with a random name
+(6–10 characters) and initiated during system boot via
+a run-key in the registry.
+During installation some additional tasks are carried out
+by the installer to ensure persistence. One of these tasks,
+not often seen, is to delete all system restore points and
+to disable the system restore option itself. To achieve this
+Ponmocup makes use of two APIs from the srclient.DLL
+library; srclient.ResetSR and srclient.DisableSR. These
+APIs are not documented by Microsoft, which is one of
+|Col1|Col2|Col3|Col4|Col5|Col6|Col7|
+|---|---|---|---|---|---|---|
+|ks|||||||
+|ks|||||||
+|ks|||||||
+Starting the Ponmocup core is a three part process
+consisting of the DLL on disk (initiator), a custom UPX
+compressed DLL in memory (loader) and the payloads
+in registry (main module and plug-ins):
+1 The initiator is started by the scheduled task or run key;
+2 Once loaded into memory the initiator transfers
+control to a (modified) UPX compressed DLL;
+3 This DLL acts as a loader for the main module and
+plug-ins.
+The loader has the most important responsibilities in this
+process, as it has to find the main module and plug-ins,
+which are all encrypted and only stored in registry; both
+the encryption key and location are based on unique
+aspects of a victim’s machine. This effectively means
+that the core functionalities of Ponmocup are uniquely
+encrypted and stored in a unique location for every victim.
+fox-it | Ponmocup | A giant hiding in the shadows | November 2015 | 17
+4 https://isc.sans.edu/
+forums/diary/Some+tricks+
+from+Confickers+bag/5830/
+Figure 8: Overview of the process of loading Ponmocup
+the indicators that the operators have a thorough under
+standing of windows internals, which displays a certain
+level of sophistication which is seen throughout the entire
+framework. One of these particular APIs (ResetSR) was
+also used by the Conficker worm [ 4] .
+5.2 Core functionality
+The core of Ponmocup are the components installed on
+a victim’s machine by default. These mainly include the
+components responsible for starting the main module,
+but also include persistent plug-ins providing specific
+tasks for persistence purposes.
+As shown in Figure 8, loading Ponmocup is a multi-step
+process which is best broken down into three categories:
+files on disk, activity in memory and the usage of stored
+information in the Windows registry.
+The following unique information about the victim’s
+machine is used to base the encryption on:
+
+
+Date and time of the system directory creation
+
+
+Volume serial number of the root directory of the
+
+
+volume Ponmocup is installing on, retrieved through
+the GetVolumeInformation API
+
+Date and time of the System Volume Information
+
+directory creation
+As can be seen in the code snippet below, these unique
+Using this machine specific information the loader
+can find the location of the encrypted main module
+and plug-ins in the Windows Registry, decrypt their
+contents and execute the payloads. Before decrypting,
+these machine-specific values are verified against the
+checksums, which were stored in the registry during
+installation, to check if none of these values have changed.
+If these checks succeed, the decryption routine is started.
+After decryption the loader verifies the integrity of the
+|vaFaToA|al16orlghef tn|uebeoriseheex|s aytncthvmam|reesrymaluainp|eakeptiisesmle|chy wonusaroof|XOhiaededuw|R’chsl.usleha|disigedant t|witushtltod phe|h tedyulure|hetomoniqg-igis|ireduenstr|concifilyiny k|mryedgethey|binptvenees|edthrsraWimi|ve miotendgh|aluan othowt l|e,infe ls Roo|fomothocek l|Col23|Col24|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|||HW|KEjt|Y_np|CUgz|Rc|RE|NT|U|SE|R\|S|of|tw|a|re|\w|kc|xj|x|lv|\|\|
+|Ito•••|n tmoheut  |hisdu ulinToMPe|cleniqedtaairs|ase, aue al snist|thnd ks fizemoen|e peyoll odut|‘Wers, towf dleplu|jtnisthes:ec;g-|penvaryin|gzctlupt(s).|’ kplue oed|eyg-f t co|stinhint|ors.s ren|esOnegt (|thceistfr|e P dryst|onecke4|mryy iby|ocptes tte|updyps);|updyps);|updyps);|
+|||/kkkk/kkk|eyeyeyey*eyeyey|se_1_1_1_1xo_1_1_1|tu[0[1[2[3r[0[1[2|p] ] ] ]*/]]]|k====^=^=^=|eytsdt k  |syswVsyeykekeke|/32olsv_1yy_y_|dumol[21[1[1[|irei]3]3]3]|.dSenf+;;;|wLriod k|owalirey|Da;.d_1|tew[0|TiLo]|mwD+|eatk|^eTey|tsi_1|ys32dir.    dwHighDateTime;me ^ tsysvolinfodir.dwHighDateTime;[1] - 0x6F6F6F70;|
+18 | fox-it | Ponmocup | A giant hiding in the shadows | November 2015
+
+Some of these plug-ins that belong to the PIN
+
+can be persistent, but some plug-ins might only
+be executed once. Knowing the PIN ID could
+help identify what type of tasks may have been
+executed on a victim’s machine.
+
+If, for example, this value stores 0x4A39, the
+
+PIN ID is 19001. Please see the next paragraph
+for more detailed information.
+
+
+Run counter
+
+
+The main module increases a counter in registry
+
+
+share more than 4000 different versions, indicating this
+framework is under continuous development.
+The following paragraphs describe some of the more
+prominent plug-ins used in the Ponmocup framework.
+Plug-ins can either be present in memory only, or remain
+persistent by being stored and encrypted in the same
+registry key as the main module. Whether or not a plug-in
+remains persistent is dependent on the type of functional
+ities the plug-in provides. Once retrieved, a plug-in can make
+5 The PIN number – a term
+used by the operators and of
+unknown origin – is one of the
+values stored in the registry.
+|Col1|Col2|rsinetr. Tecyin: adosioexaC (disiop, wrs|std iy kheifigtwocunomlitann ‘rohio|entn ceyqcalploffrdp tofempltle) in30vidichn n|bhawuallyugse(Wo sthide b-eW03esaru|y upthicityde-int 0ORtoe p.elndOR’ (taemb|sinerh sovesx2DreluoiaDypnbaer|g5.2tof thlois0ethg-iw,n)e_icovsica|the, tresepepoa sree In Ithinoeallerallnd|mo ethpld dsstas[4D oD ce PWmiy wviey ana|acneug-ebibnd]),f tanEOd, rritwllm|hicrymainulearofhebheRDesteoDLe|neptins ag vbyd Pwcoe fade_ultn af tLsby|spanmoreeraEhirrouerreins phegith|ecddthsionahechesndss[g inlumvee o|ifiapuleornslyade_po3tor3]pg-iosn ap|c inpeanou.zinerrendbyesanlugn 1tuera|fondd tghgcos[3ingtetd-in10imniqto|rmithelythnt] ips fhe0xID0.pouers|atseoteseiais ulugurtva0‘1130rtid.|iolf ttheter Pnsse-iheluBB003anen|n,ordEadn.reB0’).t-|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|000000004d 5a 90 00 03 00 00 0004 00 00 0000000010b8 00 00 00 00 00 00 0040 00 00 00000000204c 0400 00bb 0b 00 0000 00 00 000000003000 00 00 00 00 00 00 0000 00 00 00000000400e 1f ba 0e 00 b4 09 cd21 b8 01 4c0000005069 73 20 70 72 6f 67 7261 6d 20 630000006074 20 62 65 20 72 75 6e20 69 6e 20000000706d 6f 64 65 2e 0d 0d 0a24 00 00 000000008050 45 00 00 4c 01 04 0000 00 00 00|    c 6 4 0|ff000080d14000|f 00 0 2 6 4 0 0|fa001ef00|0 00 0 5 6 5 0 0|01004e300|0 00 0 662 0 0|00008f000|       || || | | | | | ||M..L....istmP|Z...... bodE.|..........pree.L|........ogru...|.......!rn....|..@......am i$..|........L cn...|......!aD....|........TnnOS....|.|.|.|.|h|o| |.|.||||
+fox-it | Ponmocup | A giant hiding in the shadows | November 2015 | 19
+Identifier Name Purpose Versions
+3003
+6
+1100 new
+downloader
+This plug-in is known as the main module of the Ponmocup framework. Retrieves and
+executes additional plug-ins.
+1300 history tool Collects and exfiltrates browser history from all popular browsers. This plug-in is
+deprecated and it’s functionality are currently implemented in the 14XX plug-in range.
+1350 avkill Disables anti-virus related services that could potentially stop Ponmocup from functioning. 104
+135
+1
+85
+587
+1
+26
+10
+24
+9
+1
+Retrieves browser history for all popular browsers, and checks if any URLs of interest to
+the operators were visited by the victim (only checked using a checksum). If this is the
+case these URLs are exfiltrated to a back-end server where this information is logged.
+This plug-in is only retrieved if the target is in one of the following countries of interest:
+
+Australia, Belgium, Canada, Switzerland, Germany, Denmark, Estonia, France, United
+
+Kingdom, Mexico, Netherlands, Norway, New Zealand, Portugal, Sweden, United States
+Retrieves browser history for all popular browsers, and checks if any URLs of interest to
+the operators were visited by the victim (only checked using a checksum). If this is the
+case these URLs are exfiltrated to a back-end server where this information is logged.
+This plug-in is only retrieved if the target is in one of the following countries of interest:
+
+Australia, Canada, New Zealand, United States, United Kingdom
+
+Retrieves browser history for all popular browsers, and checks if any URLs of interest to
+the operators were visited by the victim (only checked using a checksum). If this is the
+case these URLs are exfiltrated to a back-end server where this information is logged.
+This plug-in is only retrieved if the target is in one of the following countries of interest:
+Advertisement fraud plug-in. Plug-in can inject code into the processes of Chrome,
+Firefox and Internet Explorer. When certain keywords are detected, a victim can be
+redirected to an alternative page (taken from an encrypted config in the registry).
+This plug-in is specifically used for the PIN [8] 3xx, 160xx and 170xx ranges.
+Advertisement fraud plug-in. Plug-in can inject code into the processes of Chrome,
+Firefox and Internet Explorer. When certain keywords are detected, a victim can be
+redirected to an alternative page (taken from an encrypted config in the registry).
+Advertisement fraud plug-in. Plug-in can inject code into the processes of Chrome,
+Firefox and Internet Explorer. When certain keywords are detected, a victim can be
+redirected to an alternative page (taken from an encrypted config in the registry).
+1400
+decide
+16XX socks Precursor of the 18XX plug-in range, allowing the operators to connect to a victim directly,
+this connection is typically set-up to a specific port opened in the Windows firewall.
+18XX socks 2 Precursor of the 25XX plug-in range, allowing the operators to connect to a victim directly,
+this connection is typically set-up to a specific port opened in the Windows firewall.
+Used to directly connect to infected machines. To make sure machines behind a device
+providing network address translation (NAT) can still be reached individually, UPnP
+is used, and ports 1900 (UDP) and 2869 (TCP) are opened in the Windows firewall.
+2550 proxy 2 Similar to the other plug-ins in the 2500 range, this plug-in can be used to directly
+|Col1|Col2|Col3|Col4|Col5|
+|---|---|---|---|---|
+||14  |02|||
+||14  |03|||
+||150 |7|||
+|1 |511||||
+|1 |512||||
+|1|6X|X|||
+|1|8X|X|||
+|2|50|0|||
+|2|55|0|||
+|Col1|Col2|Col3|Col4|Col5|
+|---|---|---|---|---|
+|devk |cidusn|e_ot|a6||
+|de  |cid|e|||
+|pp |c7||||
+|pp |c||||
+|pp |c||||
+|so|cks||||
+|so|cks|2|||
+|pr|oxy||||
+|pr|oxy|2|||
+20 | fox-it | Ponmocup | A giant hiding in the shadows | November 2015
+|•||AuKin|strgd|aliom|a, B,|elMe|giuxic|m,o,|Col10|Col11|Col12|Col13|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|RthcaTh•|etre oseis|ievpe thplAu|esraesug-str|brtore Uinali|owsRLis oa,|sewes anlCa|r hrerey rnad|istvisiexetra,|istvisiexetra,|istvisiexetra,|istvisiexetra,|istvisiexetra,|
+|RthcaTh•|etre oseis|ievpe thplUn|esraesug-ite|brtore Uind S|owsRLis ota|sewes anltes|r hrerey r, U|istvisiexetrni|istvisiexetrni|istvisiexetrni|istvisiexetrni|istvisiexetrni|
+|AFireTh|dvrefdiris|ertoxecpl|ise anteug-|md Id tin|entnto ais s|frernn ape|auetlteci|d p Exrnfca|d p Exrnfca|d p Exrnfca|d p Exrnfca|d p Exrnfca|
+|AFireTh|dvrefdiris|ertoxecpl|ise anteug-|md Id tin|entnto ais s|frernn ape|auetlteci|d p Exrnfca|d p Exrnfca|d p Exrnfca|d p Exrnfca|d p Exrnfca|
+|AFireTh|dvrefdiris|ertoxecpl|ise anteug-|md Id tin|entnto ais s|frernn ape|auetlteci|d p Exrnfca|d p Exrnfca|d p Exrnfca|d p Exrnfca|d p Exrnfca|
+|Prth|ecis|urco|sornn|ofect|thio|e 1n is|8X ty|X ppic|luall|luall|luall|luall|
+|Prth|ecis|urco|sornn|ofect|thio|e 2n is|5X ty|X ppic|luall|g-iy s|g-iy s|g-iy s|
+|Upris|seovus|d tidied|o dng, a|ire nend|ctltwpo|y corrts|onk a 19|nedd00|ctre (U|toss tDP|infra) a|infra) a|
+|Sico|minn|larec|tot t|tho in|e ofe|thecte|r pd|luma|g-ichi|ns ine|n ts.|he|
+Identifier Name Purpose Versions
+2600 SIP scanner Scans devices on the local subnet of the target for SIP (Sessions Initiation Protocol) agents
+
+7
+3
+3
+
+2610 router
+scanner
+
+and, if a SIP agent is present, exfiltrates information returned by the agent.
+Scans gateway IP address of the target for common ports used by routers, and exfiltrates
+basic information returned by the services running on these ports.
+1 Grabs and exfiltrates FTP and Bitcoin credentials and attempts to do so for every local
+user on the infected machine by bruteforcing the passwords of these accounts (using
+a list of commonly used passwords).
+2 The specifically targeted FTP clients and Bitcoin wallets are similar to the list used by
+the infamous Pony Loader (2.0) Trojan [9] .
+3 Stolen FTP credentials are mainly used to spread Ponmocup, with the delivery method
+described in chapter 4.
+1 Grabs and exfiltrates FTP and Bitcoin credentials and attempts to do so for every
+local user on the infected machine by bruteforcing the passwords of these accounts
+(using a list of commonly used passwords).
+2 The specifically targeted FTP clients and Bitcoin wallets are similar to the list used by
+the infamous Pony Loader (2.0) Trojan.
+3 Stolen FTP credentials are primarily used to further spread Ponmocup, using the
+delivery method discussed in chapter
+4 The functionalities of this plug-in appear to be similar to plug-in #2700, but the
+operators are likely using this plug-in for special (spec) occasions.
+Grabs and exfiltrates stored Facebook credentials and cookies and attempts to do so for
+every local user on the infected machine by attempting to bruteforce these accounts
+using a list of commonly used passwords. Fox-IT has not yet observed abuse of these
+credentials on a large scale. It is therefore suspected that they may be used in the event
+of a significant loss in the number of victims, necessitating the introduction of a new
+spreading mechanism by the Ponmocup operators.
+
+2700
+2701
+2750
+
+FTPg
+FTPg_spec
+fbcookie
+
+2760 sysinfo Gathers extensive information about an infected machine, also scans for a long and
+diverse list of analysis and monitoring software.
+
+Grabs and exfiltrates generic and specific Bitcoin wallet data. Specifically targeted
+Bitcoin wallets:
+
+
+Multibit
+
+
+Electrum
+
+
+
+2810
+
+btcg
+
+6 vkusnota is a Russian term
+to describe something tasty
+(though typically associated
+with food)
+7 ppc is short for pay-per-click
+8 For a description of the
+concept of PINs,
+see paragraph 5.2.
+9 https://www.damballa.
+com/pony-loader-2-0-steals-
+credentials-bitcoin-wallets-
+source-code-sale/
+3101 ppc Most recently developed advertisement fraud plug-in, generates ad-fraud traffic to
+websites stored in a separate configs file in registry.
+Table 3: Overview of Ponmocup’s most important plug-ins
+
+|Col1|anngwaermi(sp|dthlletsplarec|atte ps areato) o|emasredplcc|ptswsiPoug-asi|s tormilnminon|o ddsaroc#2s.|o softoup70|o fthethe, u0,|orselisinbu|evacstg tt t|ercousehehe|yund|tsby|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+||d cngno thtat|oo tot yatin|ki bretthg t|esutobeyhe|anefosermaint|d arcvey bro|ttee td aedu|mhebuusecti|ptssesed ion|toacc ofn tof|dou thhea n|o sntes evew|o fseen|ort|
+||ch|ine|, a|lso|sc|an|s f|or|a l|on|g a|nd|||
+||lle|t d|ata|. S|pe|cif|ca|lly|ta|rge|te|d|||
+|g-iy.|n,|ge|ner|at|es|ad|-fr|aud|tr|af|c|to|||
+|Col1|Col2|Col3|Col4|Col5|
+|---|---|---|---|---|
+||||1       ||
+|||1|6   ||
+||||5||
+||||2  ||
+|||3|4||
+
+fox-it | Ponmocup | A giant hiding in the shadows | November 2015 | 21
+To efficiently distribute certain functionalities to a
+victim, plug-ins can be grouped into a so called ‘PIN’
+as earlier mentioned. For example, the PIN that has
+been most actively used since June 2012 is identified
+as PIN 19001 and contains 10 unique plug-ins. The table
+below contains an overview of the most frequently
+used PINs and what plug-ins they are comprised of:
+PIN Plug-ins
+15001 1511, 1600, 2500, 2700, 2810

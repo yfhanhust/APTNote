@@ -1,0 +1,86 @@
+
+
+
+Sentence : The rootkit
+The Stuxnet PLC rootkit code is contained entirely in the fake s7otbxdx.dll. In order to achieve the aim of continu­
+ing to exist undetected on the PLC it needs to account for at least the following situations:
+  - Read requests for its own malicious code blocks.
+
+  - Read requests for infected blocks (OB1, OB35, DP_RECV).
+
+  - Write requests that could overwrite Stuxnet’s own code.
+
+Stuxnet contains code to monitor and intercept these types of request. The threat modifies these requests so
+that Stuxnet’s PLC code is not discovered or damaged. The following list gives some examples of how Stuxnet
+uses the hooked exports to handle these situations:
+• s7blk_read
+Used to read a block, is monitored so that Stuxnet returns:
+   - The original DP_RECV (kept as FC1869) if DP_RECV is requested.
+
+   - An error if the request regards one of its own malicious blocks.
+
+   - A cleaned version (disinfected on the fly) copy of OB1 or OB35 if such a block is requested.
+
+• s7blk_write
+Used to write a block, is also monitored:
+   - Requests to OB1/OB35 are modified so that the new version of the block is infected before it’s written.
+
+   - Requests to write DP_RECV are also monitored. The first time such a request is issued, the block will be writ­
+
+ten to FC1869 instead of DP_RECV. Next time an error will be raised (since these system blocks are usually
+written only once).
+   - Also note that the injection of sequence C takes place through a s7blk_write operation. Exact conditions are
+
+not determined.
+• s7blk_findfirst and s7blk_findnext
+Used to enumerate blocks of a PLC. Stuxnet will hide its own blocks by skipping them voluntarily during an
+enumeration. Note that Stuxnet recognizes its own blocks by checking a specific value it sets in a block header.
+• s7blk_delete
+Used to delete blocks, is monitored carefully:
+   - Requests to delete a SDB may result in PLC disinfection.
+
+   - Requests to delete OB are also monitored. It seems the blocks are not necessarily deleted. They could be in­
+
+fected. For instance, deletion of OB80 (used to handle asynchronous error interrupts) can result in an empty
+OB80 being written.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Stuxnet PLC rootkit", "type" : "EXEF"},
+        {"id": 2, "description": "s7otbxdx.dll", "type" : "DOCF"},
+        {"id": 3, "description": "PLC (Programmable Logic Controller)", "type" : "TAMP"},
+        {"id": 4, "description": "DP_RECV", "type" : "EXEF"},
+        {"id": 5, "description": "FC1869", "type" : "EXEF"},
+        {"id": 6, "description": "OB1", "type" : "EXEF"},
+        {"id": 7, "description": "OB35", "type" : "EXEF"},
+        {"id": 8, "description": "s7blk_read", "type" : "TTPS"},
+        {"id": 9, "description": "s7blk_write", "type" : "TTPS"},
+        {"id": 10, "description": "sequence C injection", "type" : "TTPS"},
+        {"id": 11, "description": "s7blk_findfirst", "type" : "TTPS"},
+        {"id": 12, "description": "s7blk_findnext", "type" : "TTPS"},
+        {"id": 13, "description": "s7blk_delete", "type" : "TTPS"},
+        {"id": 14, "description": "OB80 (asynchronous error interrupt handler)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contained in"},
+        {"source": 1, "target": 3, "rel_name" : "runs on"},
+        {"source": 1, "target": 4, "rel_name" : "monitors and modifies"},
+        {"source": 1, "target": 5, "rel_name" : "keeps as backup of"},
+        {"source": 1, "target": 6, "rel_name" : "modifies and infects"},
+        {"source": 1, "target": 7, "rel_name" : "modifies and infects"},
+        {"source": 8, "target": 4, "rel_name" : "requests to read"},
+        {"source": 8, "target": 5, "rel_name" : "returns when requested"},
+        {"source": 8, "target": 6, "rel_name" : "returns cleaned version of"},
+        {"source": 8, "target": 7, "rel_name" : "returns cleaned version of"},
+        {"source": 9, "target": 4, "rel_name" : "monitors and modifies"},
+        {"source": 9, "target": 5, "rel_name" : "writes to instead of target"},
+        {"source": 9, "target": 6, "rel_name" : "infects before writing"},
+        {"source": 9, "target": 7, "rel_name" : "infects before writing"},
+        {"source": 10, "target": 9, "rel_name" : "occurs through"},
+        {"source": 11, "target": 3, "rel_name" : "enumerates blocks of"},
+        {"source": 12, "target": 3, "rel_name" : "enumerates blocks of"},
+        {"source": 13, "target": 3, "rel_name" : "deletes blocks from"},
+        {"source": 13, "target": 6, "rel_name" : "monitors and potentially infects"},
+        {"source": 13, "target": 14, "rel_name" : "writes empty version of"}
+    ]
+}

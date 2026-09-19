@@ -1,0 +1,75 @@
+Payload from non-ASUS-related cases
+The payload included into the compromised videogames is rather simple. First of all, it checks whether the
+process has administrative privileges.
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 14/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+Pseudocode checking if the process has got admin rights
+Next, it checks the registry value at HKCU\SOFTWARE\Microsoft\Windows{0753-6681-BD59-8819} . If
+the value exists and is non-zero, the payload does not run further. Otherwise, it starts a new thread with a
+malicious intent.
+The file contains a hardcoded miniconfig—an annotated example of the config is provided below.
+C2 URL: https://nw.infestexe[.]com/version/last.php
+Sleep time: 240000
+Target Tag: warz
+Unwanted processes:
+wireshark.exe;perfmon.exe;procmon64.exe;procmon.exe;procexp.exe;procexp64.exe;netmon.exe
+Apparently, the backdoor was specifically created for this target, which is confirmed by an internal tag (the
+previous name of the game is “ The War Z” ).
+If any of the unwanted processes is running, or the system language ID is Simplified Chinese or Russian,
+the malware does not proceed. It also checks for the presence of a mutex named Windows-{0753-6681-
+BD59-8819}, which is also a sign to stop execution.
+After all checks are done, the malware gathers information about the system including:
+Network adapter MAC address
+System username
+System hostname and IP address
+Windows version
+CPU architecture
+Current host FQDN
+Domain name
+Current executable file name
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 15/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+Drive C: volume name and serial number
+Screen resolution
+System default language ID
+This information is concatenated in one string using the following string template:
+“%s|%s|%s|%s|%s|%s|%s|%dx%d|%04x|%08X|%s|%s”.
+Then the malware crafts a host identifier, which is made up of the C drive serial number string XOR-ed with
+the hardcoded string “ *&b0i0rong2Y7un1 ” and encoded with the Base64 algorithm. Later on, the C: serial
+number may be used by the attackers to craft unique backdoor code that runs only on a system with
+identical properties.
+The malware uses HTTP for communication with a C2 server and crafts HTTP headers on its own. It uses
+the following hardcoded User-Agent string: “Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36
+(KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36”
+Interestingly, when the malware identifies the Windows version, it uses a long list:
+Microsoft Windows NT 4.0
+Microsoft Windows 95
+Microsoft Windows 98
+Microsoft Windows Me
+Microsoft Windows 2000e
+Microsoft Windows XP
+Microsoft Windows XP Professional x64 Edition
+Microsoft Windows Server 2003
+Microsoft Windows Server 2003 R2
+Microsoft Windows Vista
+Microsoft Windows Server 2008
+Microsoft Windows 7
+Microsoft Windows Server 2008 R2
+Microsoft Windows 8
+Microsoft Windows Server 2012
+Microsoft Windows 8.1
+Microsoft Windows Server 2012 R2
+Microsoft Windows 10
+Microsoft Windows Server 2016
+The purpose of the code is to submit system information to the C2 server with a POST request and then
+send another GET request to receive a command to execute.
+The following commands were discovered:
+DownUrlFile – download URL data to file
+DownRunUrlFile – download URL data to file and execute it
+RunUrlBinInMem – download URL data and run as shellcode
+UnInstall – set registry flag to prevent malware start
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 16/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+The UnInstall command sets the registry value HKCU\SOFTWARE\Microsoft\Windows{0753-6681-
+BD59-8819} to 1, which prevents the malware from contacting the C2 again. No files are deleted from the
+disk, and the files should be discoverable through forensic analysis.

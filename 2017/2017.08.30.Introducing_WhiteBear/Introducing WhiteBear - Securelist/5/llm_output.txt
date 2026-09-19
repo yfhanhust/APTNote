@@ -1,0 +1,173 @@
+
+
+
+Sentence : WhiteBear Main module/orchestrator
+Sample MD5: 06bd89448a10aa5c2f4ca46b4709a879
+Type, size: PE DLL, 394 kb
+Compilation timestamp: 2002.02.05 17:31:28 (GMT)
+Linker version: 10.0 (MSVC 2010)
+Unsigned Code
+The main module has no exports, only a DllMain entry which spawns one
+thread and returns. The main module maintains multiple BINARY
+resources that include executable, configurations, and encryption data:
+101 – RSA private (!) key
+102 – RSA public key
+103 – empty
+104 – 16 encrypted bytes
+105 – location (“%HOMEPATH%\ntuser.dat.LOG3”)
+106 – process names (e.g. “iexplore.exe, firefox.exe, chrome.exe,
+outlook.exe, safari.exe, opera.exe”) to inject into
+107 – Transport module for interaction with C&C
+108 – C2 configuration
+109 – Registry location
+(“\HKCU\SOFTWARE\Microsoft\WindowsNT\CurrentVersion\Explorer\Scr
+een Saver”)
+110 – no information
+111 – 8 zero bytes
+Values 104 – 111 are encrypted with the RSA private key (resource 101)
+and compressed with bzip2.4. The RSA key is stored with header stripped
+in a format similar to Microsoft’s PVK; the RSA PRIVATE KEY header is
+appended by the loader before reading the keys into the encryption code.
+Resource 109 points to a registry location called “external storage”, built
+in resources are called “PE Storage”.
+In addition to storing code, crypto resources, and configuration data in PE
+resources, WhiteBear copies much of this data to the victim host’s
+registry. Registry storage is located in the following keys. Subkeys and
+stored values listed below:
+[HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ScreenS
+aver] [HKCU\SOFTWARE\Microsoft\Windows
+NT\CurrentVersion\Explorer\ScreenSaver]
+Registry subkeys:
+{629336E3-58D6-633B-5182-576588CF702A} Contains the RSA private
+key used to encrypt/decrypt other resources / resource 101
+{3CDC155D-398A-646E-1021-23047D9B4366} Resource 105 – current
+file location
+{81A03BF8-60AA-4A56-253C-449121D61CAF} Resource 106 – process
+names
+{31AC34A1-2DE2-36AC-1F6E-86F43772841F} Contains the internet C&C
+transport module / resource 107
+{8E9810C5-3014-4678-27EE-3B7A7AC346AF} Resource 108 – C&C
+config
+{28E74BDA-4327-31B0-17B9-56A66A818C1D} Resource 110 “plugins”
+{4A3130BD-2608-730F-31A7-86D16CE66100} Resource 111
+{119D263D-68FC-1942-3CA3-46B23FA652A0} Unique Guid (“ObjectID”)
+{1DC12691-2B24-2265-435D-735D3B118A70} “Task Queue”
+{6CEE6FE1-10A2-4C33-7E7F-855A51733C77} “Result Queue”
+{56594FEA-5774-746D-4496-6361266C40D0} unknown
+{831511FA-190D-5D85-8A4A-279F2F592CC7} unknown
+Finally, if the main WhiteBear module fails to use registry storage, it uses
+“FS Storage” in file %TEMP%\KB943729.log. The module reads all of its
+data and binary components from one of the storages and then verifies
+the integrity of data (RSA+bzip2 compression+signature).
+The module maintains functionality which is divided into a set of
+subsystems that are loosely named by the developers:
+
+
+result queue
+
+
+task queue
+
+
+message processing system
+
+
+autorun manager
+
+
+execution subsystem
+
+
+inject manager
+
+
+PEStorage
+
+
+local transport manager/internal transport channel
+
+
+It creates the following temporary files:
+%TEMP%\CVRG72B5.tmp.cvr
+%TEMP%\CVRG1A6B.tmp.cvr
+%TEMP%\CVRG38D9.tmp.cvr
+%TEMP%\~DF1E05.tmp contains the updated body of the loader during
+an update.
+Every day (as specified by local time) the main module restarts the
+transport subsystem which includes:
+
+
+message processing
+
+
+named pipe transport (“NPTransport”)
+
+
+If the registry/file storage is empty, the module performs a ‘migration’ of
+hardcoded modules and settings to the storage location. This data is
+encrypted with a new RSA key (which is also stored in the registry).
+The data in the registry is prepended with a 0xC byte header. The
+maximum size of each registry item is 921,600 bytes; if the maximum size
+is exceeded, it is split into several items. The format of the header is
+shown below:
+[4:service DWORD][4:chunk index][4:chunk size including header]
+Every time the orchestrator module is loaded it validates that the storage
+area contains the appropriate data and that all of the components can be
+decrypted and validated. If these checks fail the module reinstalls a
+configuration from the resource “REINSTALL”.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "WhiteBear Main module/orchestrator", "type" : "EXEF"},
+        {"id": 2, "description": "06bd89448a10aa5c2f4ca46b4709a879", "type" : "IOCS"},
+        {"id": 3, "description": "PE DLL, 394 kb", "type" : "EXEF"},
+        {"id": 4, "description": "%HOMEPATH%\\ntuser.dat.LOG3", "type" : "SYSP"},
+        {"id": 5, "description": "iexplore.exe, firefox.exe, chrome.exe, outlook.exe, safari.exe, opera.exe", "type" : "APPS"},
+        {"id": 6, "description": "C2 configuration", "type" : "CCSH"},
+        {"id": 7, "description": "\\HKCU\\SOFTWARE\\Microsoft\\WindowsNT\\CurrentVersion\\Explorer\\Screen Saver", "type" : "REGI"},
+        {"id": 8, "description": "%TEMP%\\KB943729.log", "type" : "DOCF"},
+        {"id": 9, "description": "%TEMP%\\CVRG72B5.tmp.cvr", "type" : "DOCF"},
+        {"id": 10, "description": "%TEMP%\\CVRG1A6B.tmp.cvr", "type" : "DOCF"},
+        {"id": 11, "description": "%TEMP%\\CVRG38D9.tmp.cvr", "type" : "DOCF"},
+        {"id": 12, "description": "%TEMP%\\~DF1E05.tmp", "type" : "DOCF"},
+        {"id": 13, "description": "\\HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ScreenSaver", "type" : "REGI"},
+        {"id": 14, "description": "{629336E3-58D6-633B-5182-576588CF702A}", "type" : "REGI"},
+        {"id": 15, "description": "{3CDC155D-398A-646E-1021-23047D9B4366}", "type" : "REGI"},
+        {"id": 16, "description": "{81A03BF8-60AA-4A56-253C-449121D61CAF}", "type" : "REGI"},
+        {"id": 17, "description": "{31AC34A1-2DE2-36AC-1F6E-86F43772841F}", "type" : "REGI"},
+        {"id": 18, "description": "{8E9810C5-3014-4678-27EE-3B7A7AC346AF}", "type" : "REGI"},
+        {"id": 19, "description": "{28E74BDA-4327-31B0-17B9-56A66A818C1D}", "type" : "REGI"},
+        {"id": 20, "description": "{4A3130BD-2608-730F-31A7-86D16CE66100}", "type" : "REGI"},
+        {"id": 21, "description": "{119D263D-68FC-1942-3CA3-46B23FA652A0}", "type" : "REGI"},
+        {"id": 22, "description": "{1DC12691-2B24-2265-435D-735D3B118A70}", "type" : "REGI"},
+        {"id": 23, "description": "{6CEE6FE1-10A2-4C33-7E7F-855A51733C77}", "type" : "REGI"},
+        {"id": 24, "description": "{56594FEA-5774-746D-4496-6361266C40D0}", "type" : "REGI"},
+        {"id": 25, "description": "{831511FA-190D-5D85-8A4A-279F2F592CC7}", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has MD5"},
+        {"source": 1, "target": 3, "rel_name" : "is type and size"},
+        {"source": 1, "target": 4, "rel_name" : "points to file location"},
+        {"source": 1, "target": 5, "rel_name" : "injects into processes"},
+        {"source": 1, "target": 6, "rel_name" : "has C2 configuration"},
+        {"source": 1, "target": 7, "rel_name" : "points to registry location"},
+        {"source": 1, "target": 8, "rel_name" : "uses file for storage"},
+        {"source": 1, "target": 9, "rel_name" : "creates temporary file"},
+        {"source": 1, "target": 10, "rel_name" : "creates temporary file"},
+        {"source": 1, "target": 11, "rel_name" : "creates temporary file"},
+        {"source": 1, "target": 12, "rel_name" : "contains updated body of loader"},
+        {"source": 1, "target": 13, "rel_name" : "points to registry location"},
+        {"source": 14, "rel_name" : "contains RSA private key", "target": 1},
+        {"source": 15, "rel_name" : "contains current file location", "target": 1},
+        {"source": 16, "rel_name" : "contains process names", "target": 1},
+        {"source": 17, "rel_name" : "contains internet C&C transport module", "target": 1},
+        {"source": 18, "rel_name" : "contains C2 configuration", "target": 1},
+        {"source": 19, "rel_name" : "contains plugins", "target": 1},
+        {"source": 20, "rel_name" : "unknown", "target": 1},
+        {"source": 21, "rel_name" : "unique Guid (ObjectID)", "target": 1},
+        {"source": 22, "rel_name" : "task queue", "target": 1},
+        {"source": 23, "rel_name" : "result queue", "target": 1},
+        {"source": 24, "rel_name" : "unknown", "target": 1},
+        {"source": 25, "rel_name" : "unknown", "target": 1}
+    ]
+}

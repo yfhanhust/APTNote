@@ -1,0 +1,46 @@
+Analysis – BalkanDoor
+BalkanDoor is a simple backdoor with a small number of commands (download and execute a
+file, create a remote shell, take a screenshot). It can be used to automate tasks on the
+compromised computer or to automatically control several affected computers at once. We have
+seen six versions of the backdoor, ranging in supported commands, evolving since 2016.
+The initial dropper unpacks all components, opens a decoy PDF (in some cases) and executes a
+batch installation script that ensures persistence of the backdoor.
+The backdoor registers itself as a service, under a legitimately-looking service name (e.g.
+WindowsSvc, WindowsPrnt, WindowsConn or WindowsErr); the accompanying batch scripts can
+further ensure persistence by using Registry Run Keys or Startup folder.
+After the backdoor is installed, the computer connects to a C&C server, identifying itself by the
+computer name and requesting the commands. The backdoor can connect to any of the C&Cs
+from a hardcoded list – a measure to increase resilience. It connects via the HTTP or HTTPS
+protocol; if HTTPS is used, then the server certificates are ignored.
+If the connection is not successful, the backdoor is capable of using the user-configured proxy on
+the victim’s computer and repeating the connection attempt.
+The backdoor commands come in a format of an INI file, with properties determining the
+commands, command arguments and intended recipients. Specifying the list of recipients allows
+the attacker to send their commands to several compromised computers at once, e.g. to
+automatically take screenshots of all compromised computers.
+Commands Functionality
+cn Specifies computer name(s) of the intended recipients of the commands
+du, int Download and execute a file
+du, ra, de, rpo Download and execute a file, in the specified context and on a specified desktop
+rip Create a remote shell accessible from the specified IP address
+scr_int, scr_dur Capture a series of screenshots of the specified duration
+Furthermore, the backdoor itself can be executed in several modes, determined by the command
+line arguments with which it is executed. These modes themselves can serve as backdoor
+commands (when executed from the remote shell):
+Argument Functionality
+/unlock Unlocks the screen
+/rcmd Creates a remote shell and redirects its input/output to the specified IP address
+/takescr Captures a series of screenshots, duration determined by other arguments
+/run Executes the specified command using cmd.exe
+/runx Executes the specified command using cmd.exe, on the active (input) desktop
+https://www.welivesecurity.com/2019/08/14/balkans-businesses-double-barreled-weapon/ 5/18
+/inst Installs itself as a service and starts the main procedure (see /nosvc)
+8/15/2019 In the Balkans, businesses are under fire from a double ~~-~~ barreled weapon | WeLiveSecurity
+/start Starts the associated service, which starts the main procedure (see /nosvc)
+/nosvc Main payload, communicates with C&C and interprets backdoor commands
+Among the BalkanDoor capabilities, the most notable is passwordless screen-unlocking.
+This feature comes in handy to the attackers in cases when a logged-in user locks the computer.
+The “Lock screen” is just another Desktop for the system, so any malware with the necessary
+privileges can switch to a real desktop by command. No password is required to perform this
+operation.
+Figure 3. Code responsible for unlocking the computer when the backdoor is executed remotely with an “/unlock” argument

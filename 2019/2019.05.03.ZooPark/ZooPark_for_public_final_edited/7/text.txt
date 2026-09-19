@@ -1,0 +1,142 @@
+Version 4.0 (2017) - modern spyware
+This malware variant represents a significant improvement on version 2.0, which seems to
+indicate that version 3.0 was some kind of fork.
+Who’s who in the Zoo. Cyberespionage operation targets
+Android users in the Middle East.
+12
+Kaspersky Lab
+Version 4 malicious code structure
+Once again, all observed samples are signed by the same certificate, this time valid since 2017:
+Who’s who in the Zoo. Cyberespionage operation targets
+Android users in the Middle East.
+Kaspersky Lab
+All the samples represents backdoored legitimate applications with malicious code injection:
+|MD5|Package|ITW name|
+|---|---|---|
+|519018ecfc50c0cf6cd0c88cc41b2a69|ltd.banehappy.drofirewall|FirewallFA.apk|
+|5ad36f6dd060e52771a8e4a1dd90c50c|free.vpn.proxy.unblock.android.easy.app|DVPNEasy.apk|
+|b44b91b14f176fbf93d998141931a4aa|com.del.tele.acc|DeleteTelegram.apk|
+Since this version has evolved from v2, its configuration is very similar to the previous variant:
+|Col1|519018ecfc50c0cf6cd0c88cc41b2a69|5ad36f6dd060e52771a8e4a1dd90c50c|b44b91b14f176fbf93d998141931a4aa|
+|---|---|---|---|
+|Baseurl|"http://www.rhubarb3.com/"|"http://www.rhubarb3.com/"|"http://www.rhubarb3.com/"|
+|FunctionCode|"none"|"none"|"none"|
+|UserLocation|""|""|""|
+|TypeFile|"(FirewallFA)"|"(VPNEasy)"|"(DeleteTelegram)"|
+|KeyKey|"dafak"|"dafak"|"dafak"|
+13
+Even if the Baseurl is the address of the C2 server, this is a legacy variable from version 2.
+Actually, the main C2 server address is determined like in version 3, by sending a request to
+an intermediate server. All the samples found contain two encrypted intermediate server
+addresses:
+Who’s who in the Zoo. Cyberespionage operation targets
+Android users in the Middle East.
+14
+Kaspersky Lab
+After decoding IMAGE_ADDRESSES the real request would be:
+Then the malware finds out which of the requested images contains a valid IP address for
+the main C2 server, like version 3.
+google_logo.jpg
+The main C2 server has an IP from the same subnet as version 3
+The main entry point for this version is triggered by two specific events:
+This receiver starts the main malicious service called GooglePlayService, which controls
+other components. After launch, it creates all the working directories, inits the database and
+checks if the current device is rooted by searching for the following su binaries and
+Superuser.apk:
+It also registers two additional receivers:
+Who’s who in the Zoo. Cyberespionage operation targets
+Android users in the Middle East.
+15
+Kaspersky Lab
+They are triggered after the device connection changes or the screen turns on/off. In the first
+case it starts uploading the stolen data to the C2; in the second it processes preloaded C2
+server commands.
+This version has a huge internal configuration containing dozens of parameters that regulate
+the malicious activities. This configuration can be updated from the C2 server.
+Part of the stolen information is stored in an internal SQL database, called testunitdb.
+Actually, this version is able to steal additional information compared to version 3:
+
+Browser data: search history;
+
+Clipboard data;
+
+Keylogs;
+
+The keylogger implementation based on the AccessibilityService is something we have
+already seen in other spyware families. Basically, it listens for specific events such as
+changing the text of any EditText element on the screen (type = 16), opening a
+PopupWindow, Menu, Dialog, etc. (for instance, windows that may contain EditText fields
+(type = 32)). When the second event is found, the malware initializes the keylogger instance,
+logging typed text and the related contextual application name.
+Who’s who in the Zoo. Cyberespionage operation targets
+Android users in the Middle East.
+16
+Kaspersky Lab
+This means the Keylogger is able to log any typed credentials for any application with
+system forms.
+
+Arbitrary files/folders;
+
+Capturing photos/videos/audio;
+Capturing screenshots/screen records;
+External applications data – default list: Telegram, WhatsApp, IMO, Chrome (can be
+extended in the configuration).
+External apps attacked by ZooPark malware
+This version also implements some backdoor functionality:
+Shell command execution (with or without root);
+Silently sending SMSs;
+
+Making calls.
+
+Communications with C2 server
+After the malware obtains the main C2 address, it connects to the C2 server on port 6666.
+All the transmitted data is encrypted with RSA, with its Java public key file located in
+\assets\puki.
+It also generates an AES key and sends it to the C2 server for additional responses.
+Interestingly, the developers used the “secure random” fix for key generation:
+Who’s who in the Zoo. Cyberespionage operation targets
+Android users in the Middle East.
+17
+Kaspersky Lab
+This shows the developers’ concerns about cryptography. Since this attack is very targeted,
+we can assume the developers paid special attention to work on outdated devices that are
+vulnerable to this “insecure random” attack.
+Here is the scheme of client-server communications:
+Interestingly, the malware decrypts and saves commands received from its C2 server in files
+within its own directory to process them later:
+Who’s who in the Zoo. Cyberespionage operation targets
+Android users in the Middle East.
+Kaspersky Lab
+As mentioned in this code snippet, the malware operates with “Pac” serializable objects that
+are used as tasks from the server to execute (when the “type” value is even) and as report
+containers for C2 submission (when the “type” value is odd). The “Pac” report with the
+completed task has a “type” value +1 compared to the related task. All reports are saved in
+the “TO_GO” directory.
+Here is the full list of possible tasks from the C2 server:
+|Pactype|Description|
+|---|---|
+|2|Update malware with specified config.|
+|4|Execute shell command with runtime.|
+|6|Zip specified file/folder and save it in the “TO_GO” directory.|
+|8|Write task content in temporary zip file, extract everything from it and delete it.|
+|10|Copy specified file/folder to specified directory.|
+|12|Move specified file/folder to specified directory.|
+|14|Rename specified file/folder.|
+|16|Delete specified file/folder.|
+|18|Make specified directory.|
+|20|Silently send SMS to specified number with specified content.|
+|22|Make a call to specific number.|
+|24|Create a file system tree of the specified path and save it in the “TO_GO”directory.|
+|26|Update intermediate C2 server list (servers with images).|
+18
+The malware also starts a shell server that can execute commands without root privileges on
+the victim device:
+Who’s who in the Zoo. Cyberespionage operation targets
+Android users in the Middle East.
+19
+Kaspersky Lab
+The SHELL_SERVER_PORT value will be submitted to the C2 server, so the attackers will
+be able to connect.
+Who’s who in the Zoo. Cyberespionage operation targets
+Android users in the Middle East.
+Kaspersky Lab

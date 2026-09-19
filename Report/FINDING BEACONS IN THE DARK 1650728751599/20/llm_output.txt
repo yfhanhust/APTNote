@@ -1,0 +1,391 @@
+
+
+
+Sentence : DEBRIEF
+In this final chapter, we’ll reassess the CTI questions defined in the planning and direction phase, and the
+steps undertaken during each subsequent phase to arrive at our solution. We’ll then recap the insights,
+trends, observations, and discoveries uncovered throughout the CTI lifecycle as they pertain to each of
+our key stakeholders, and how the data can be leveraged to enhance detection and correlation capabilities across the XDR solution space.
+planning & direction
+“How do we proactively defend against Cobalt Strike?”
+We discussed how this question was too broad to allow for adequate concentration on the desired
+outcome. So, it had to be broken into more focused, direct, closed-loop questions for various XDR stakeholders:
+“How can we improve incident correlation and reduce alert fatigue?” – SOC Team
+“How can we fine-tune EDR to detect Beacon payloads?” – Product Engineering
+“What features are helpful for training models to classify Cobalt Strike
+Beacon payloads and configurations?” – Data Science
+“How can we improve correlation and campaign tracking relating to Cobalt Strike?” – Incident Response
+“How can we track Team Servers and campaigns?” – Threat Intelligence
+We also highlighted that the by-product of directed intelligence efforts still has a use, and that feeding
+contextualized information into an XDR-capable platform has benefits to teams beyond the stakeholder
+who requested the intelligence.
+collection
+Collection is the first phase of an intelligence-led, proactive defense posture.
+In the collection phase, the aim was to generate a list of potential Cobalt Strike Team Servers while
+keeping false positives to a minimum. This ensures that the data collected is relevant, accurate and
+(most importantly) timely: That is to say, it’s collected before anyone is targeted.
+While several options were possible, we opted to demonstrate how to build a system that leverages data
+collected by public Internet scanning services in order to lower the barrier to entry for organizations.
+123
+In this regard, we demonstrated how to craft several queries based on some of Cobalt Strike’s known
+characteristics that can be used to discover active Team Server Infrastructure, such as:
+- Cobalt related HTTP response headers
+
+- SSL JARM fingerprints
+
+- SSL certificate serial numbers
+
+- Malleable C2 profile settings
+
+With queries crafted and data gathered, we discussed how a Team Server stages its Beacons and how
+we might use this knowledge to our advantage to obtain said Beacons for further analysis.
+As part of this, we provided some Python scripts that can be leveraged in your own systems, so you may
+start to pillage and plunder Team Servers before they can do the same to you.
+processing
+With a bounty of Beacons in hand, we started the process of extracting the “configgy goodness” that will
+provide the information from which we will extract our Intelligence.
+The first step was to separate the wheat from the chaff, so to speak. We removed any invalid payloads
+from our dataset based on size and data type.
+Next, we discussed how to decode the shellcode-based payloads to make it possible for us to access
+the embedded PE and its config. This involved extracting the XOR key and payload size from the shellcode and performing the differential XOR decode process.
+Once the PE was decoded, we discussed the Beacons’ config formatting, its structure and its XOR encoding. These are details which are essential for the config extraction process.
+With our newfound understanding of the structure of each setting in the config, we touched on how
+automation of this final step (config extraction) would be possible.
+From here, the analysis and intelligence dissemination phases can take place.
+analysis
+The insights, trends and discoveries uncovered during the analysis phase have been leveraged to enhance detection and correlation capabilities for various products and services within our XDR solution
+space, including anti-malware, EDR and SOC services.
+Let’s review how some of this information was of benefit.
+insights
+The insights uncovered during the analysis phase included a raft of host and network-based indicators.
+From IPs, netblocks and certificates, to process names, injection techniques and pipe names, this information is fed to blocklists to enhance detection. It is also correlated to provide intelligence insights for
+various products and services.
+For BlackBerry, these insights are used to inform and enhance our various commercial cybersecurity
+products and service offerings. For you, the information can be similarly distributed across your internal
+XDR framework to provide an additional layer of protection against Cobalt Strike vector attacks.
+124
+trends
+The frequency of configuration settings, deployment of Team Servers and prevalence of Beacons helps
+us to fine-tune EDR rules for alerting purposes. Knowing the most popular configuration values, such as
+named pipes or target processes for injections, can help analysts and investigators to swiftly craft rules
+to grab most low-hanging fruit with a high degree of confidence.
+discoveries
+Perhaps the biggest revelation during the analysis phase was the discovery of what can best be described as hidden watermarks embedded in Beacon configurations.
+After considerable analysis, it appears that the SSL public key embedded in configs can often be used
+to cluster Beacons configured on the same server, while the misleadingly named PROCINJ_STUB can
+be used to track which Team Server builds were used. The DEPRECATED_SPAWNTO configuration can
+also be used to perform clustering in some instances.
+These sparsely documented “hidden watermarks” have proved invaluable for enhancing intelligence
+correlation (more so than the actual watermark setting!).
+dissemination
+After enriching our dataset during the human analysis phase, we were ready to disseminate our research and findings to our various stakeholders.
+Let’s look at how some of the data was consumed by various teams and XDR product and services
+stakeholders.
+threat intelligence
+As demonstrated under the “Beacon of Hope” chapter, the main benefit to threat intelligence has been
+increased correlation with known threat groups. This led to greater confidence when performing attribution and a broader understanding of active threat groups and campaigns.
+The “watermark” values have allowed us to perform some powerful monitoring, by tracking values such
+as the SSL public keys to cluster Beacons and Team Servers.
+We can then use these values to further our knowledge and understanding of campaigns, as well as
+produce some cool graphs and charts to keep our management team happy!
+125
+Figure 97 – Cobalt Strike detections by industry vertical
+We can use this information to correlate against detections originating on endpoints we protect and
+monitor. In instances where we have details of threat groups, we can immediately deploy our IR teams
+to engage with the clients, providing them with full campaign details and indicators before they even
+complete a compromise assessment.
+With IABs increasingly establishing a foothold, then deploying Beacon and selling access to the highest bidder within a matter of days, this speedy response can present a brief window of opportunity to
+disrupt campaigns before more (often fi nancially motivated) threats are deployed. It also presents the
+possibility of separately tracking threat actors who solely perform IAB services vs. those who deploy
+ransomware and other threats, as in the case of StrongPity/MountLocker/Phobos.
+threat hunting
+Once equipped with the dataset, our internal threat hunting teams wasted no time in identifying Team
+Server traffi c and Beacons from a variety of sources, including private data feeds and online malware
+repositories, such as VirusTotal.
+Part of the reason for Cobalt Strike’s prominence is that, when it is confi gured carefully, it can operate
+surreptitiously. When packaged and deployed with additional care, it can be used to evade detection in
+many security solutions and services. While most security vendors fare perfectly well at detecting and
+blocking Cobalt Strike Beacon payloads on disk, when it’s deployed in-memory via complex stagers,
+things get a little more complicated due to transformations and injection techniques.
+One such example our threat hunters uncovered was a strange process connecting to a known Team
+Server IP. The process was odd, in that it was clearly a legitimate version of Java, used to invoke an
+open-source web server application developed by Oracle, called GlassFish. After some research, it was
+discovered that the threat group called WINNTI has been exploiting a remote code execution vulnerability in GlassFish webservers to deploy Cobalt Strike Beacon payloads against selected targets.
+Having the ability to hunt for and monitor Team Server IPs is invaluable. It helps to not only improve the
+effi cacy of cybersecurity products and services, which is far and away the main aim, but also to uncover
+new and exciting intelligence fi ndings. In this instance, we found an exploitable web server application
+126
+and further TTPs employed by the WINNTI group. Our customers benefit from enhanced protection and
+monitoring, and we all get richer in shared intel!
+NTT
+The Operations of Winnti group
+https://hello.global.ntt/-/media/ntt/global/insights/white-papers/the-operations-of-winnti-group.pdf
+incident response
+Unsurprisingly, our incident response team frequently encounters Cobalt Strike Beacon at the heart
+of their investigations. To that end, correlating our dataset with public and private intelligence allows
+incident responders to perform attribution with a higher degree of accuracy. They can also correlate
+incident and campaign timelines, as well as uncover related IOCs to use for hunting during live investigations and compromise assessments. This helps them perform further actor and campaign profiling,
+and it offers the chance to gather further contextual information around Team Servers. This in turn
+leads to better intelligence production, enhanced alerting capabilities and more publishable research
+opportunities across the XDR solutions and services space.
+forensics
+On that face of it, the dataset might not seem overly beneficial to forensic analysts. However, mining the
+data for common filenames, module and export names, profile strings, rich headers and import hashes
+provides a wealth of generic indicators that can be leveraged to assist in cybersecurity forensics. As
+mentioned, Cobalt Strike Beacon payloads often reside entirely in-memory, and sometimes under exploited processes. Being able to quickly and efficiently ascertain whether Beacon is active on a system
+when looking at a memory dump can be highly beneficial to investigators.
+To that end, keyword files can be crafted and used to grep memory for common strings, and YARA rules
+can be written to detect fragments of Malleable C2 profiles. Additionally, automatically correlating IPs
+found in-memory with Team Server infrastructure via your forensic framework of choice offers a powerful mechanism to aid further forensic workflows, such as automatically extracting and processing
+Beacon payloads and configurations from memory.
+data science
+Having a curated and labelled dataset comprised of Beacons, parsed configuration settings and intelligence correlations presents a couple of interesting opportunities for the application of machine
+learning.
+The first, perhaps most obvious application, is the identification of Beacon DLLs for classification purposes. Using the corpus of Beacon payloads pillaged from Team Servers, we can train a variety of supervised machine learning (ML) models using methods such as KNN and SVC to classify Cobalt Strike
+Beacon payloads accurately and reliably based on PE file features.
+The second, perhaps less obvious application, is the identification of clusters of infrastructure belonging
+to individual threat groups. To do this, we first need to figure out how best to coerce Beacon configuration settings into usable ML training features (for example, hashing strings and performing hamming
+distance calculations against Malleable C2 profiles). Then we can train a classifier to not only spot relationships between configurations, but also to reveal what decisions led to those conclusions. This can
+lead to the discovery of new intelligence and allow us to determine if previously unseen Beacons relate
+to known groups and campaigns.
+127
+Figure 98 – Covariance ranking of features used to train a Cobalt Strike Beacon detection model
+(feature labels redacted)
+We plan to revisit this topic more in-depth in a future book!
+soc
+SOC analysts can take the enriched dataset and begin to select common indicators with which to build
+rules for alerting. The most obvious data to consume fi rst is the IP and port listings, as well as URIs, certifi cate information and module names. These are typically indicators that most EDR platforms support
+and that tend to yield high-confi dence alerts.
+In general, anything that benefi ts the SOC also benefi ts our XDR products and services. We can use
+correlation techniques to improve the accuracy of alerts, thereby reducing alert fatigue. But we can also
+begin to provide context and meaning beyond simply tagging traffi c as originating from Cobalt Strike
+Beacon.
+These days, the most powerful opportunity for SOC analysts is in identifying threat groups from incident
+alerts and providing actionable intelligence alongside contextual details. This will empower analysts
+and responders alike in their decision-making and case-handling from the moment an incident occurs.
+red team
+Although red teams were not a direct stakeholder in any phase of our CTI lifecycle, it’s worth spending
+some time considering the implications of some of the fi ndings with respect to OPSEC when deploying
+Cobalt Strike.
+The fi rst consideration is around the general hardening of Team Server infrastructure. We’ve observed
+128
+several threat groups deploying complex tunnelling mechanisms to obscure their C2 infrastructure in
+the past, and we expect this to become more commonplace, especially as it helps to defeat automated
+hunting systems. From SOCKS proxies to TOR fronting, SSH tunnelling and general IP hardening, we
+expect red teamers and threat actors will likely step up their game with respect to network OPSEC.
+The next major consideration concerns the new “watermarks”, and the possibilities that now exist for
+tracking Team Server operators based on these hidden values. Whilst some of the values may be trivially spoofed without harming the functionality of Beacon, such as the PROCINJ_STUB and DEPRECAT-
+ED_SPAWNTO, others, like the SSL public key, cannot be tampered with as easily without breaking the
+C2 check-in process. This would leave operators with little choice but to rotate public/private keys often,
+which would likely be a hassle to perform with any regularity.
+It might seem like creating a highly customized Beacon would be an obvious choice for attackers. But
+that’s the beauty of this method of correlation. While the intention of many bad actors was to use Cobalt
+Strike to blend in with the crowd, it is now becoming apparent that there is sufficient “uniqueness” in
+Beacon configurations to track and monitor users.
+The main consideration for attackers when deploying Cobalt Strike these days is how best to strike a
+balance when customizing Beacon. Use a default Malleable C2 profile and you risk being easily blocked
+on the endpoint, while conversely, if you supply a highly customized profile, you risk being easily tracked.
+Finally, a perhaps more drastic approach to evade detection would be to write your own customized
+port of Beacon to interoperate with Team Server. This is exactly the method that researchers at Intezer
+recently discovered, with a Linux port of Beacon build for RedHat distributions and leveraging OpenSSL
+for cryptography. Interestingly, the new Beacon, dubbed Vermilion Strike, retains the configuration data
+from Windows Beacons (simply ignoring irrelevant settings), meaning the possibility for clustering on
+the SSL public key and other hidden watermarks still exists.
+Intezer
+Vermilion Strike: Linux and Windows Re-implementation of Cobalt Strike
+https://www.intezer.com/blog/malware-analysis/vermilionstrike-reimplementation-cobaltstrike/
+Defenders and attackers will continue to play the cat and mouse game. We wait for the inevitable advances in OPSEC with bated breath.
+129
+evaluation and feedback
+The evaluation and feedback stage has led to continuous improvement throughout the CTI lifecycle, and
+indeed, will most likely continue to yield improvements long after this book has been published.
+During the early phase of the lifecycle, most feedback was focused on enhancing our automation platform, with the primary focus on producing more intelligence data to allow us greater options for clustering. Initially we started with a dataset mostly comprising parsed Beacon configuration data, but over
+time, this has grown considerably to ultimately include:
+Team Server information
+- First/Last seen dates and times
+
+- Certificate name/serial/domain/hash
+
+- Geolocation
+
+
+
+ASN
+
+
+Netblock
+Beacon configuration
+
+
+Configuration settings
+
+
+Time zone offset
+
+
+Malleable C2 profile identification
+
+
+Domain fronting
+
+
+Rich headers
+
+
+Import hashes
+
+
+Compile times
+
+
+
+
+Module name
+
+
+Exports
+Miscellaneous
+
+
+Threat actor
+
+
+Labels
+
+
+OSINT correlation
+
+
+
+
+Since disseminating the dataset to our various stakeholders, feedback is becoming more tailored to
+each consumer’s specific circumstances. Some stakeholders require confidence ratings for IP blocklists, others want real-time updates for new Team Servers and Beacons discovered in the wild, while
+some want charts and graphs to plot the Cobalt landscape. Some of these tasks take minutes to complete, while others are perhaps slightly more involved, and will feed back into our software development
+lifecycle for planning and implementation.
+fulfilling the xdr mission
+As the CTI discipline matures, we find the process becoming less of an art and more of a science. This
+newly emerging intelligence paradigm has led to huge benefits for cyber awareness across all security
+products and services in the XDR solution space. Intelligence-led protection will pave the way for smarter, more unified security services with increased awareness. Greater intelligence and awareness will
+ultimately lead to significant gains in machine-based detection capabilities, as well as superior real-time
+contextual information.
+Combining the holistic view of the security landscape offered by XDR with contextual intelligence and
+deep insights offers many exciting new opportunities in the cybersecurity arena. One such avenue, machine-based decision-making in response to incidents, seems imminently achievable. By automatically
+deriving playbooks from contextual intelligence correlated with alerts, we can potentially greatly aid
+decision making and case management in response to incidents for SOC and IR teams alike.
+130
+beyond the hype and back again
+A final word on CTI; we created this book as a case study highlighting the importance of the lifecycle,
+and how to think about the processes that may be required. There are ideas on building a data-gathering
+and intelligence-creation pipeline, using automation to collect and ingest data, correlating what you are
+seeing, and linking to existing research.
+We tried to frame this as a defined, structured approach; one that needs to be repeatable. In this way,
+it’s more science, and less art. While all of this is true, working in this field is immensely rewarding and
+at times, downright awesome.
+Don’t take the seriousness with which we’ve talked about frameworks and proper procedures in this
+book as meaning you will have less fun. The truth is quite the opposite: By ensuring you have the right
+processes and technology in place, the people working with the data will have more time to focus on the
+cool shi… stuff. It provides the base from which to let creativity flow.
+Being involved in the work of threat intelligence often does not feel like a job. The rush when a hypothesis is proven correct is addictive. So too is the personal challenge you can set for yourself when you
+experience a moment of finding your hypothesis is wrong. Wanting, even needing, to understand the
+data and why you were wrong is intoxicating.
+Our lofty hope is that this book can be used to help teams understand the environment they operate in,
+to make better decisions. We hope to get you to a point of taking proactive measures to stop or detect
+malice sooner. And we want more people to experience the rush of doing this important work.
+To all the analysts, researchers, IR, SOC and intelligence teams reading this, we hope you’re having as
+much fun as we are in making the world a better, safer place.
+– The BlackBerry Research and Intelligence Team
+131
+Disclaimer
+The information contained in this book is intended for educational purposes only. BlackBerry does
+not guarantee or take responsibility for the accuracy, completeness and reliability of any third-party
+statements or research referenced herein. The analysis expressed in this report reflects the current
+understanding of available information by our research analysts and may be subject to change as
+additional information is made known to us. Readers are responsible for exercising their own due
+diligence when applying this information to their private and professional lives. BlackBerry does not
+condone any malicious use or misuse of information presented in this report.
+132
+Output : 
+This book serves as a comprehensive case study on the Cyber Threat Intelligence (CTI) lifecycle, focusing on the identification, collection, analysis, dissemination, and application of intelligence to enhance cybersecurity. Here’s a structured summary of its key points:
+
+### Introduction
+- **Purpose**: To highlight the importance of the CTI lifecycle and provide a structured approach for teams.
+- **Scope**: Focuses on building a data-gathering and intelligence-creation pipeline, using automation, and correlating findings with existing research.
+
+### Key Concepts
+1. **Cyber Threat Intelligence (CTI) Lifecycle**:
+   - **Identification**: Define the scope and objectives of the CTI effort.
+   - **Collection**: Gather data from various sources (e.g., open-source intelligence, dark web, honeypots).
+   - **Processing**: Normalize and enrich the collected data for analysis.
+   - **Analysis**: Derive insights and actionable intelligence from the processed data.
+   - **Dissemination**: Share the intelligence with relevant stakeholders.
+   - **Feedback**: Evaluate the effectiveness of the intelligence and refine processes.
+
+2. **Stakeholders**:
+   - **SOC (Security Operations Center)**: Builds rules for alerting based on enriched datasets to reduce alert fatigue.
+   - **Red Team**: Considers OPSEC (Operational Security) implications when deploying tools like Cobalt Strike.
+   - **Machine Learning and Data Science Teams**: Use datasets for training models to classify threats and identify clusters of infrastructure.
+   - **Threat Intelligence Analysts**: Correlate findings with existing research and provide context to SOC alerts.
+
+### Detailed Breakdown
+
+#### 1. Identification
+- **Objective Setting**: Define what the CTI effort aims to achieve (e.g., detecting specific threat actors, understanding attack patterns).
+- **Scope Definition**: Determine the types of threats and data sources to focus on.
+
+#### 2. Collection
+- **Data Sources**:
+  - Open-source intelligence (OSINT)
+  - Dark web forums
+  - Honeypots
+  - Threat feeds
+- **Automation**: Use scripts and tools to automate the collection process, ensuring a continuous flow of data.
+
+#### 3. Processing
+- **Normalization**: Standardize the format of collected data for consistency.
+- **Enrichment**: Add context and additional information to the raw data (e.g., geolocation, ASN, netblock).
+
+#### 4. Analysis
+- **Techniques**:
+  - **Correlation**: Link related pieces of intelligence to form a comprehensive picture.
+  - **Pattern Recognition**: Identify common patterns and anomalies in the data.
+  - **Machine Learning**: Train models to classify threats and identify clusters of infrastructure.
+
+#### 5. Dissemination
+- **Stakeholder Engagement**:
+  - **SOC**: Provide indicators for alerting (e.g., IP addresses, URIs, certificate information).
+  - **Red Team**: Offer insights on hardening techniques and OPSEC considerations.
+  - **Threat Intelligence Analysts**: Share detailed reports and context to support decision-making.
+
+#### 6. Feedback
+- **Continuous Improvement**:
+  - Evaluate the effectiveness of the intelligence.
+  - Refine processes based on stakeholder feedback.
+  - Expand the dataset with new information (e.g., Team Server details, Beacon configurations).
+
+### Case Study: Cobalt Strike
+- **Overview**: Focuses on tracking and analyzing Cobalt Strike usage by threat actors.
+- **Data Collection**:
+  - Automate the collection of Beacon payloads from Team Servers.
+  - Gather metadata about Team Servers (e.g., first/last seen dates, certificate information).
+- **Analysis**:
+  - Identify unique features in Beacon configurations to track specific operators.
+  - Use machine learning to classify Beacon DLLs and identify clusters of infrastructure.
+- **Dissemination**:
+  - Provide SOC analysts with common indicators for alerting.
+  - Offer red teams insights on hardening techniques and OPSEC considerations.
+  - Share detailed reports with threat intelligence analysts.
+
+### Future Directions
+- **Machine Learning**: Explore advanced ML techniques to improve threat detection and classification.
+- **Real-time Updates**: Develop systems for real-time updates of new threats and indicators.
+- **Contextual Intelligence**: Enhance decision-making by providing more context and actionable insights.
+
+### Conclusion
+- **Importance of CTI**: Emphasizes the role of structured, repeatable processes in enhancing cybersecurity.
+- **Fun and Rewarding**: Highlights the personal and professional satisfaction of working in threat intelligence.
+- **Call to Action**: Encourages readers to apply these principles to improve their own security practices.
+
+### Disclaimer
+- The book is intended for educational purposes only. BlackBerry does not condone malicious use or misuse of the information provided.
+
+This structured approach ensures that teams can effectively leverage CTI to enhance their cybersecurity posture, reduce alert fatigue, and make more informed decisions.

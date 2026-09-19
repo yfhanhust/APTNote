@@ -1,0 +1,54 @@
+
+
+
+Sentence : Naming and TTPs
+Based on PDBs paths and in-the-wild filenames, we can infer the internal name of at least the PowerShell and
+.NET stages: Sardonic Loader, by combining the PDB path for the .NET assembly “C:\Users\dev_win10_00\
+Documents\ Sardonic \ SardonicUtility \ Loader Assembly\obj\x86\Release\MSDAC.pdb” and PowerShell
+script name “sldr.ps1”. Additionally, judging from the PDB parent directories and loader name, the name used by
+the attackers for the entire backdoor ecosystem is likely Sardonic.
+In the attack we investigated, we saw a few interesting TTPs: Firstly, inspecting command lines used in the attack, we
+found evidence of both the smbexec and wmiexec tools from the Impacket suite, which are used for lateral movement.
+The usage of a “C:\Windows\TEMP\execute.bat” path is a smbexec IOC, and a command line ending with “>
+\127.0.0.1\ADMIN$__ 2>&1” (with the timestamp in Unix format with fractional seconds) is an
+indicator of wmiexec usage, as can be seen in the source code for both tools.
+Another interesting technique is the use of the ping command to check connectivity to the C&C servers after running
+the first-stage PowerShell script. This indicates the attackers did not observe the expected C&C connection from the
+machine, which is because one of the links in the loader chain was blocked by the security solution. This technique is
+used to ensure that the failure is not due to network connectivity issues or firewalls.
+Thirdly, the attackers tried to evade detection by renaming the PowerShell script from “sldr.ps1” to “s.txt” and
+“s.ps1”. This did not succeed in bypassing the security solution.
+Finally, from previous versions we saw earlier this year, the BADHATCH loader has been improved with an RC4
+layer of encryption, whose key is not contained in the loader script, but received as a command-line argument.
+This is a defense evasion tactic aimed at sample repositories (either public, like VirusTotal, or private): without
+the separately stored key, it is impossible to obtain the payload of these scripts, even if such a sample is found.
+However, we found at least one loader file from a different attack that reused this password (hex-encoded:
+b640a9c0e64704e1e202a07774613a29971fe5aa). We do not know yet if this key holds for multiple samples or if
+this is a one-time error on their part.
+11
+Bitdefender Whitepaper
+FIN8 Threat Actor Goes Agile with New Sardonic Backdoor
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sardonic Loader", "type" : "EXEF"},
+        {"id": 2, "description": "C:\\Users\\dev_win10_00\\Documents\\ Sardonic \\ SardonicUtility \\ Loader Assembly\\obj\\x86\\Release\\MSDAC.pdb", "type" : "SYSP"},
+        {"id": 3, "description": "sldr.ps1", "type" : "EXEF"},
+        {"id": 4, "description": "C:\\Windows\\TEMP\\execute.bat", "type" : "TPTH"},
+        {"id": 5, "description": "Impacket suite smbexec and wmiexec tools", "type" : "APPS"},
+        {"id": 6, "description": "127.0.0.1", "type" : "CCSH"},
+        {"id": 7, "description": "C&C servers", "type" : "CCSH"},
+        {"id": 8, "description": "s.txt and s.ps1", "type" : "DOCF"},
+        {"id": 9, "description": "BADHATCH loader", "type" : "EXEF"},
+        {"id": 10, "description": "RC4 encryption layer key (b640a9c0e64704e1e202a07774613a29971fe5aa)", "type" : "IOCS"},
+        {"id": 11, "description": "VirusTotal", "type" : "STOR"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contained in"},
+        {"source": 1, "target": 3, "rel_name" : "related to"},
+        {"source": 4, "target": 5, "rel_name" : "used by"},
+        {"source": 6, "target": 7, "rel_name" : "pinged by"},
+        {"source": 8, "target": 1, "rel_name" : "renamed from"},
+        {"source": 9, "target": 10, "rel_name" : "uses encryption key"}
+    ]
+}

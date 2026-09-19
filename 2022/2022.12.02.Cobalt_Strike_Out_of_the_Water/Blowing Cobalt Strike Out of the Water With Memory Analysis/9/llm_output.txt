@@ -1,0 +1,107 @@
+
+
+
+Sentence : LithiumLoader
+This last Cobalt Strike sample is part of a DLL side-loading chain where a custom installer
+for a type of security software was used. DLL side-loading is a technique that hijacks a
+legitimate application to run a separate, malicious DLL.
+SHA256: 8129bd45466c2676b248c08bb0efcd9ccc8b684abf3435e290fcf4739c0a439f
+This 32-bit LithiumLoader DLL is part of a custom attacker-created Fortinet VPN
+installation package submitted to VirusTotal as FortiClientVPN_windows.exe (SHA256:
+a1239c93d43d657056e60f6694a73d9ae0fb304cb6c1b47ee2b38376ec21c786).
+The FortiVPN.exe file is not malicious or compromised. Because the file is signed,
+attackers used it to evade antivirus detection.
+The installer is a self-extracting RAR archive that contains the following files:
+File name Description
+FortiVPN.exe Legit signed FortiClient VPN Online installer v7.0.1.83
+GUP.exe Legit signed WinGup for Notepad++ tool v5.2.1.0
+gup.xml WinGup config file
+libcurl.dll LithiumLoader
+Table 2a. FortiClientVPN_windows.exe file contents.
+The self-extracting script commands are as follows:
+Table 2b. List of self-extracting script commands.
+When the installer is run, all files get silently dropped to the local %AppData% folder and
+both executable files get started. While the FortiClient VPN installer executes, the
+WinGup tool side-loads the libcurl.dll LithiumLoader malware. The malware does so
+because it imports the following functions from a legit copy of the libcurl library as shown
+in Figure 3.:
+https://unit42.paloaltonetworks.com/cobalt-strike-memory-analysis/ 7/19
+12/7/22, 9:10 AM Blowing Cobalt Strike Out of the Water With Memory Analysis
+Figure 3. Import address table of WinGup.exe.
+This threat also tries to add the %AppData% folder path to the exclusion list in Windows
+Defender via PowerShell.
+On the startup of GUP.exe, the malicious libcurl.dll file is loaded into the process space as
+it statically imports the functions shown in Figure 3, above. While all four libcurl
+functions are run, only curl_easy_cleanup contains a malicious routine that was injected
+while compiling a new version of the library. Thus, we’re not dealing with a patched
+version of the legitimate DLL. This is a cleaner solution that doesn’t break the code after
+the inserted malicious routine, as is often seen in other malware.
+This curl_easy_cleanup function usually contains only one subroutine (Curl_close) and
+has no return value (as shown in its source code on GitHub). The altered function is as
+shown in Figure 4.
+Figure 4. Modified curl_easy_cleanup export function of libcurl.dll.
+The load_shellcode function decrypts the shellcode via XOR and key 0xA as shown in
+Figure 5.
+https://unit42.paloaltonetworks.com/cobalt-strike-memory-analysis/ 8/19
+12/7/22, 9:10 AM Blowing Cobalt Strike Out of the Water With Memory Analysis
+Figure 5. Shellcode loader function load_shellcode().
+This function runs the Cobalt Strike stager shellcode indirectly via EnumSystemGeoID
+instead of directly jumping to it. This Windows API function has three parameters, the
+last one of which is a callback function abused by LithiumLoader.
+The Cobalt Strike stager shellcode is borrowed from Metasploit and is the reverse HTTP
+shell payload, which uses the following API functions:
+LoadLibrary
+InternetOpenA
+InternetConnectA
+HttpOpenRequestA
+InternetSetOptionA
+HttpSendRequestA
+GetDesktopWindow
+InternetErrorDlg
+VirtualAllocStub
+InternetReadFile
+The shellcode connects to the IP address of a university in Thailand.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cobalt Strike sample", "type" : "TTPS"},
+        {"id": 2, "description": "DLL side-loading chain", "type" : "TTPS"},
+        {"id": 3, "description": "Custom installer for security software", "type" : "APPS"},
+        {"id": 4, "description": "LithiumLoader DLL", "type" : "DOCF"},
+        {"id": 5, "description": "SHA256: 8129bd45466c2676b248c08bb0efcd9ccc8b684abf3435e290fcf4739c0a439f", "type" : "IOCS"},
+        {"id": 6, "description": "Fortinet VPN installation package", "type" : "APPS"},
+        {"id": 7, "description": "FortiClientVPN_windows.exe", "type" : "EXEF"},
+        {"id": 8, "description": "SHA256: a1239c93d43d657056e60f6694a73d9ae0fb304cb6c1b47ee2b38376ec21c786", "type" : "IOCS"},
+        {"id": 9, "description": "FortiVPN.exe", "type" : "EXEF"},
+        {"id": 10, "description": "GUP.exe", "type" : "EXEF"},
+        {"id": 11, "description": "gup.xml", "type" : "DOCF"},
+        {"id": 12, "description": "%AppData% folder", "type" : "SYSP"},
+        {"id": 13, "description": "Windows Defender exclusion list", "type" : "REGI"},
+        {"id": 14, "description": "PowerShell", "type" : "APPS"},
+        {"id": 15, "description": "libcurl.dll (LithiumLoader)", "type" : "DOCF"},
+        {"id": 16, "description": "curl_easy_cleanup function", "type" : "EXEF"},
+        {"id": 17, "description": "load_shellcode function", "type" : "EXEF"},
+        {"id": 18, "description": "Cobalt Strike stager shellcode", "type" : "DOCF"},
+        {"id": 19, "description": "Metasploit", "type" : "APPS"},
+        {"id": 20, "description": "IP address of a university in Thailand", "type" : "CCSH"},
+        {"id": 21, "description": "Thailand", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "is part of"},
+        {"source": 3, "target": 4, "rel_name" : "contains"},
+        {"source": 4, "target": 5, "rel_name" : "has SHA256 hash"},
+        {"source": 4, "target": 6, "rel_name" : "is part of"},
+        {"source": 7, "target": 8, "rel_name" : "has SHA256 hash"},
+        {"source": 9, "target": 6, "rel_name" : "is part of"},
+        {"source": 10, "target": 6, "rel_name" : "is part of"},
+        {"source": 11, "target": 6, "rel_name" : "is part of"},
+        {"source": 12, "target": 7, "rel_name" : "contains"},
+        {"source": 12, "target": 10, "rel_name" : "contains"},
+        {"source": 14, "target": 13, "rel_name" : "modifies"},
+        {"source": 15, "target": 16, "rel_name" : "contains function"},
+        {"source": 16, "target": 17, "rel_name" : "calls"},
+        {"source": 17, "target": 18, "rel_name" : "loads"},
+        {"source": 18, "target": 19, "rel_name" : "is borrowed from"},
+        {"source": 18, "target": 20, "rel_name" : "connects to"}
+    ]
+}

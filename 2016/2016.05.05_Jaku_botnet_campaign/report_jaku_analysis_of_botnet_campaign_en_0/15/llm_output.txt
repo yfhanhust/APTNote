@@ -1,0 +1,349 @@
+
+
+
+Sentence : C2 TELEMETRY DATABASES
+SQLite Databases . All JAKU C2 servers identified have viewable directories via the local web server. From a
+web browser, it is possible to view the content of a directory named /img :
+```
+Index of /img
+Icon  Name          Last modified   Size Description
+
+[DIR] Parent Directory
+[IMG] near.jpg        09-Dec-2015 19:59 451M
+
+Apache/2.2.21 (Unix) DAV/2 mod_ssl/2.2.21 OpenSSL/1.0.0c PHP/5.3.8 mod_apreq2-20090110/2.7.1 mod_perl/2.0.5
+Perl/v5.10.1 Server at pic3.mooo.com Port 80
+```
+Near.jpg . The file called near.jpg is not an image file. When examined, the file is found to be a SQLite2
+format database:
+```
+$ file near.jpg
+near.jpg: SQLite 2.x database
+```
+This database contains details of the malware/botnet victim hosts. It details the network information, dates and
+times the malware first 'called home', the last call-home time, the last updated time and a history of the
+malware beaconing to the C2 server:
+```
+$ sqlite near.jpg .schema
+CREATE TABLE child (uid TEXT PRIMARY KEY, version REAL, pip TEXT, info TEXT, infouptime INTEGER,
+iplist TEXT, instime INTEGER,lasttime INTEGER, downfile TEXT, downver REAL);
+CREATE TABLE dist2 (id INTEGER PRIMARY KEY, pubdownfile TEXT, pubdownver REAL, pubdowncnt INTEGER,
+pridownfile TEXT, pridownver REAL, pridowncnt INTEGER);
+CREATE TABLE history (id INTEGER PRIMARY KEY, uid TEXT, ctime INTEGER);
+CREATE TABLE tvdist (id INTEGER PRIMARY KEY, tvdownfile TEXT, tvdownver REAL, tvdowncnt INTEGER);
+CREATE INDEX idx_instime ON child(instime);
+CREATE INDEX idx_lasttime ON child(lasttime);
+CREATE INDEX idx_version ON child(version);
+```
+TLP-WHITE |  36
+HISTORY Table . The history table contains a list of all beacons set by the malware on the victim machine to
+the C2 server:
+|COLUMN DESCRIPTION|Col2|
+|---|---|
+|UID|A unique identifier of the victim. This matches the UID in the CHILD table|
+|CTIME|The data/time of a beacon made from the victim machine to the C2 server. As with all the data/times in the SQLitedatabase, the format is in "UNIX Epoch" format.|
+Example query of HISTORY table:
+```
+$ sqlite -column -header near.jpg "SELECT * FROM HISTORY LIMIT 5;"
+id     uid                   ctime
+
+1      {610313D3-6359-4543-8314-64E1DF6DBF20} 1430186473
+2      {610313D3-6359-4543-8314-64E1DF6DBF20} 1430188242
+3      {12941DFB-6ECD-45CD-B7B2-9C0F8F16DF6F} 1430359648
+4      {66CEAD40-85D9-4AA8-9B59-3DF9E079FA69} 1430443896
+5      {211E31DB-C944-4C66-A91C-7C7BDF7CE5EF} 1430447441
+$ sqlite -column -header near.jpg 'SELECT STRFTIME("%Y-%m-%d %H:%M:%S",CTIME,"UNIXEPOCH") AS
+"DATE/TIME" FROM HISTORY WHERE UID="{211E31DB-C944-4C66-A91C-7C7BDF7CE5EF}"
+DATE/TIME
+
+2015-05-01 02:30:41
+2015-05-01 06:30:34
+2015-05-01 07:04:07
+2015-05-01 07:30:34
+2015-05-01 08:30:35
+2015-05-01 09:00:35
+2015-05-01 09:30:35
+2015-05-01 10:00:35
+2015-05-01 10:31:55
+2015-05-01 11:01:16
+2015-05-01 11:30:36
+2015-05-01 12:00:35
+2015-05-01 12:30:34
+2015-05-01 13:00:39
+2015-05-01 13:30:34
+2015-05-01 14:00:35
+2015-05-01 14:30:34
+2015-05-04 13:30:40
+2015-05-04 14:00:39
+2015-05-04 14:30:39
+2015-05-04 15:00:38
+```
+TLP-WHITE |  37
+CHILD Table . Analysis has shown that the table CHILD is information that relates to victim hosts:
+|COLUMN DESCRIPTION|Col2|
+|---|---|
+|UID|A unique identifier of the victim. This allows the C2 server to track victims if and when their IP addresschanges.|
+|VERSION|Believed to be the version of the malware on the victim machine.|
+|PIP|The public IP address of the victim. This is updated as and when the victim machines external IPaddress changes.|
+|INFO|The details gathered by the malware from the victim machine (See below).|
+|INFOUPTIME|The date/time that the INFO field was updated in the database. Believed to be the date/time on the C2server.|
+|IPLIST|A list of IP addresses from all the victim machines network interfaces.|
+|INSTIME|The date/time that the malware was originally installed on the victim machine.|
+|LASTTIME|The date/time of the last beacon received by the C2 server from the malware on the victim machine.|
+|DOWNFILE|Unknown. Never observed populated.|
+|DOWNVER|Unknown. Never observed populated.|
+INFO Column Commands . The INFO column contains output from the execution of the following commands:
+```
+systeminfo
+net use
+net user
+tasklist /svc
+netstat -ano
+dir "%USERPROFILE%\Recent"
+dir "%APPDATA%\Microsoft\Windows\Recent"
+dir /s/b "%USERPROFILE%\Favorites"
+```
+TLP-WHITE |  38
+Example query of CHILD table:
+```
+$ sqlite -list near.jpg "SELECT * FROM CHILD WHERE UID = '{211E31DB-C944-4C66-A91C-7C7BDF7CE5EF}';"
+{211E31DB-C944-4C66-A91C-7C7BDF7CE5EF}|12|...|
+<>
+Host Name:         ***-PC
+OS Name:          Microsoft Windows 7 Ultimate
+OS Version:        6.1.7600 N/A Build 7600
+OS Manufacturer:      Microsoft Corporation
+OS Configuration:     Standalone Workstation
+OS Build Type:       Multiprocessor Free
+Registered Owner:     ***
+Registered Organization:
+Product ID:        00426-292-0000007-85307
+Original Install Date:   12/24/2014, 2:53:55 PM
+System Boot Time:     5/1/2015, 9:00:02 AM
+System Manufacturer:    Hewlett-Packard
+System Model:       HP EliteBook 8530p
+System Type:        X86-based PC
+Processor(s):       1 Processor(s) Installed.
+01: x64 Family 6 Model 23 Stepping 10 GenuineIntel ~2801 Mhz
+BIOS Version:       Hewlett-Packard 68PDV Ver. F.11, 12/8/2009
+Windows Directory:     C:\Windows
+System Directory:     C:\Windows\system32
+Boot Device:        \Device\HarddiskVolume1
+System Locale:       en-us;English (United States)
+Input Locale:       en-us;English (United States)
+Time Zone:         (UTC+05:00) Islamabad, Karachi
+Total Physical Memory:   1,978 MB
+Available Physical Memory: 970 MB
+Virtual Memory: Max Size: 3,957 MB
+Virtual Memory: Available: 2,406 MB
+Virtual Memory: In Use:  1,551 MB
+Page File Location(s):   C:\pagefile.sys
+Domain:          WORKGROUP
+Logon Server:       \***-PC
+Hotfix(s):         N/A
+Network Card(s):      2 NIC(s) Installed.
+01: Intel(R) 82567LM Gigabit Network Connection
+Connection Name: Local Area Connection
+DHCP Enabled:  Yes
+DHCP Server:   192.168.1.1
+IP address(es)
+02: Intel(R) WiFi Link 5300 AGN
+Connection Name: Wireless Network Connection
+Status:     Media disconnected
+<>
+New connections will be remembered.
+There are no entries in the list.
+<>
+User accounts for \***-PC
+
+***        Administrator      Guest
+The command completed successfully.
+<>
+```
+TLP-WHITE |  39
+```
+Image Name           PID Services
+========================= ======== ============================================
+…
+chrome.exe          3644 N/A
+chrome.exe          4028 N/A
+chrome.exe          2248 N/A
+svchost.exe          2560 WinDefend
+wmpnetwk.exe         3696 WMPNetworkSvc
+taskeng.exe          608 N/A
+Services.exe         1408 N/A
+WmiPrvSE.exe         2176 N/A
+WmiPrvSE.exe         3088 N/A
+TrustedInstaller.exe     3832 TrustedInstaller
+cmd.exe            3780 N/A
+conhost.exe          3284 N/A
+tasklist.exe         2872 N/A
+<>
+Active Connections
+Proto Local Address     Foreign Address    State      PID
+TCP  0.0.0.0:135      0.0.0.0:0       LISTENING    708
+TCP  0.0.0.0:445      0.0.0.0:0       LISTENING    4
+TCP  0.0.0.0:554      0.0.0.0:0       LISTENING    3696
+TCP  0.0.0.0:49158     0.0.0.0:0       LISTENING    516
+TCP  192.168.1.7:139    0.0.0.0:0       LISTENING    4
+TCP  192.168.1.7:49162   64.233.167.188:5228  ESTABLISHED   3416
+TCP  [::]:135        [::]:0         LISTENING    708
+TCP  [::]:445        [::]:0         LISTENING    4
+TCP  [::]:554        [::]:0         LISTENING    3696
+TCP  [::]:2869       [::]:0         LISTENING    4
+TCP  [::]:10243       [::]:0         LISTENING    4
+TCP  [::]:26143       [::]:0         LISTENING    4
+TCP  [::]:49152       [::]:0         LISTENING    400
+TCP  [::]:49153       [::]:0         LISTENING    780
+TCP  [::]:49154       [::]:0         LISTENING    896
+TCP  [::]:49155       [::]:0         LISTENING    500
+TCP  [::]:49156       [::]:0         LISTENING    952
+```
+TLP-WHITE |  40
+```
+TCP  [::]:49157       [::]:0         LISTENING    1436
+TCP  [::]:49158       [::]:0         LISTENING    516
+…
+UDP  0.0.0.0:500      :                  896
+UDP  0.0.0.0:4500      :                  896
+UDP  [::]:500        :                  896
+UDP  [::]:4500       :                  896
+UDP  [::]:5004       :                  3696
+UDP  [::]:5005       :                  3696
+UDP  [::]:5355       :                  1156
+UDP  [::1]:1900       :                  3440
+UDP  [::1]:49778      :                  3440
+UDP  [fe80::ad52:568:3375:927b%11]:546 :            780
+UDP  [fe80::ad52:568:3375:927b%11]:1900 :            3440
+UDP  [fe80::ad52:568:3375:927b%11]:49777 :           3440
+<>
+Volume in drive C has no label.
+Volume Serial Number is 887D-B326
+Directory of C:\Users***\Recent
+File Not Found
+<>
+Volume in drive C has no label.
+Volume Serial Number is 887D-B326
+Directory of C:\Users***\AppData\Roaming\Microsoft\Windows\Recent
+…
+12/24/2014 05:04 PM        702 ELECTRIC BILL RECORD.lnk
+01/30/2015 07:05 PM        652 eReport ***.lnk
+04/01/2015 10:33 PM        702 Faster Fingure First.lnk
+04/27/2015 12:29 AM        156 Hardware and Sound.lnk
+04/19/2015 09:44 PM       3,823 Hydrangeas.lnk
+01/07/2015 01:55 PM        702 Item by part no. NEW.lnk
+12/24/2014 04:16 PM        533 KU.lnk
+03/08/2015 07:46 PM       3,378 Media.lnk
+```
+TLP-WHITE |  41
+```
+01/29/2015 03:02 PM        587 multan 042.lnk
+04/18/2015 12:26 AM        156 Network and Internet.lnk
+03/30/2015 12:06 PM        592 Outlook.com.lnk
+12/27/2014 03:13 PM        222 OVI (G).lnk
+03/08/2015 07:25 PM       1,926 Phone.lnk
+01/01/2015 09:10 PM        417 PICNIC PIC.lnk
+03/20/2015 05:20 PM        594 Pictures.lnk
+04/08/2015 09:20 PM        156 Programs.lnk
+03/30/2015 12:06 PM        541 qt.lnk
+04/19/2015 09:44 PM       2,031 Sample Pictures.lnk
+03/08/2015 07:09 PM        515 scaning docs.lnk
+01/09/2015 11:55 AM       2,562 Scanned Documents.lnk
+04/11/2015 07:08 PM        409 TIPU PIC.lnk
+03/20/2015 05:20 PM       1,555 Untitled.lnk
+04/25/2015 07:30 PM        515 VIDEO_TS.lnk
+01/01/2015 08:34 PM        460 VLC PLAYER 2011.lnk
+02/01/2015 12:15 AM        674 VTS_01_0.lnk
+04/19/2015 01:12 PM        674 VTS_01_5.lnk
+04/01/2015 10:33 PM        672 waqas inverter.lnk
+03/08/2015 07:46 PM       4,172 WhatsApp Images.lnk
+55 File(s)     53,597 bytes
+4 Dir(s) 38,160,457,728 bytes free
+…
+|1430447441|192.168.1.8|1430447441|1430751638||
+```
+TLP-WHITE |  42
+Output : 
+The provided document appears to be a detailed forensic analysis of an infected system, likely compromised by malware that collects and exfiltrates information. Here’s a structured summary of the key points:
+
+### **Database Schema Analysis**
+1. **Table Structure:**
+   - The database contains multiple tables with various fields.
+   - Example fields include timestamps, IP addresses, service names, and file paths.
+
+2. **Data Extraction:**
+   - Data is extracted from the system using commands like `systeminfo`, `tasklist`, `netstat`, and directory listings.
+   - The data includes:
+     - System information (e.g., OS version, hardware details).
+     - Running processes and their associated services.
+     - Network connections and listening ports.
+     - File lists from recent directories.
+
+### **Key Data Points:**
+1. **System Information:**
+   - **OS Version:** Windows 7
+   - **Hardware Details:** 
+     - Volume Serial Number: `887D-B326`
+     - IP Address: `192.168.1.7`
+
+2. **Running Processes:**
+   - Common processes like `chrome.exe`, `svchost.exe`, and `wmpnetwk.exe`.
+   - Malicious or suspicious processes:
+     - `cmd.exe` (PID 3780)
+     - `conhost.exe` (PID 3284)
+
+3. **Network Connections:**
+   - Listening ports on various services.
+   - Established connections to external IP addresses:
+     - `192.168.1.7:49162 -> 64.233.167.188:5228` (PID 3416)
+   - UDP and TCP ports with associated PIDs.
+
+4. **Recent Files:**
+   - List of files in the `C:\Users\***\Recent` directory.
+   - Example files:
+     - `ELECTRIC BILL RECORD.lnk`
+     - `eReport ***.lnk`
+     - `Sample Pictures.lnk`
+
+5. **Directory Listings:**
+   - Recent directories and their contents.
+   - Free disk space: 38,160,457,728 bytes.
+
+### **Timestamps and IP Addresses:**
+- **Timestamp:** `1430447441` (April 30, 2015, 09:50:41 PM UTC)
+- **IP Address:** `192.168.1.8`
+- **Last Beacon Time:** `1430751638` (May 4, 2015, 06:20:38 PM UTC)
+
+### **Potential Indicators of Compromise (IOCs):**
+1. **Suspicious Processes:**
+   - `cmd.exe` and `conhost.exe` running with unusual PIDs.
+   - Processes without associated services.
+
+2. **Network Connections:**
+   - Established connections to known malicious IP addresses or unusual ports.
+
+3. **File Anomalies:**
+   - Unexpected files in recent directories.
+   - Files with suspicious names or extensions.
+
+### **Recommendations:**
+1. **Isolate the System:**
+   - Disconnect the infected system from the network to prevent further data exfiltration.
+
+2. **Conduct a Full Forensic Analysis:**
+   - Use specialized tools to analyze the system for additional malware.
+   - Examine the registry, system logs, and other artifacts for signs of compromise.
+
+3. **Update and Patch:**
+   - Ensure all systems are up-to-date with the latest security patches.
+   - Install and configure a reputable antivirus solution.
+
+4. **User Education:**
+   - Train users on recognizing phishing attempts and suspicious activities.
+   - Implement strong password policies and multi-factor authentication.
+
+5. **Monitor Network Traffic:**
+   - Use intrusion detection systems (IDS) to monitor network traffic for unusual patterns.
+   - Regularly review logs for any signs of compromise.
+
+By following these steps, you can help secure the system and prevent future incidents.

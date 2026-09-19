@@ -1,0 +1,50 @@
+Behavior Analysis
+The malware is delivered through spear-phishing email messages. The infection starts with a
+macro-armed Excel document. The Macro contains a base64 encoded executable payload,
+copied as “monitor.exe”, which will be deployed in a just created folder, named “.Monitor” under
+“C:\Users\Public”. Through the usage of Windows Task Scheduler, “monitor.exe” is added to a
+new task, named “ SystemErrorReporter ”, whose execution is scheduled every minute.
+Analyzing the resources embedded into “ monitor.exe ”, it is possible to discover some further
+information, such as the credentials used to access a Microsoft Exchange server hosted in
+Lebanon. For privacy reasons, the primary communication server will not be publicly released.
+hardcoded credentials of the implant
+We guess the attackers have compromised the account “ media@xxx.local ”, belonging to the
+local domain of the targeted institution, and used it to perform malicious operations. In this
+specific case, the access to the mail server is used by the malware to get a list of commands to
+be executed through the retrieving and parsing of a CMD list. So, it acts like a command-and
+control server.
+https://blog.telsy.com/apt34-aka-oilrig-attacks-lebanon-government-entities-with-maildropper-implant/ 2/6
+3/3/2020 Telsy TRT
+Retrieving and parsing CMDs
+If the mail server is down or deny the access, the malware uses a backup URL,
+“ hxxp://godoycrus.com ” to get the commands list, according to the evidences below:
+Switch between Command and Control servers
+The malware is capable to perform the following primary operations:
+[+] arbitrary commands execution
+[+] download and upload of files
+[+] data exfiltration
+The following is a extraction of the commands handling code snippet:
+https://blog.telsy.com/apt34-aka-oilrig-attacks-lebanon-government-entities-with-maildropper-implant/ 3/6
+3/3/2020 Telsy TRT
+Code handling code snippet
+Interesting the way through which the malware retrieves the commands from the mail server. It
+access to the Inbox folder and search for emails containing a specific subject:
+“ Resume7AKF1PMAVAHI7SYK ” . If one or more emails are found, the malware tries to extract
+the content of the attachment files, that corresponds to a Base64-encoded command that should
+be executed.
+Once the attachments are inspected, the current email is definitely deleted using the
+“ HardDelete ” flag. In this way the email message does not even appear in the trash folder.
+As shown above, the retrieved commands are executed using the “ ExecAllCmds ” method and
+the result is sent to the C2 through the “ SendResult ” method. If the malware is using the
+Exchange server as C2, the output of the commands execution is sent as email message. Once
+again, the malware uses a specific pattern to build the email: its subject is build starting from the
+https://blog.telsy.com/apt34-aka-oilrig-attacks-lebanon-government-entities-with-maildropper-implant/ 4/6
+3/3/2020 Telsy TRT
+string “ Great! 7AKF1PMAVAHI7SYK ”, appending the current date to it. The email body contains
+only the string “ This is our reusme! ” ( showing with a syntax error ) and the attachment is a “. txt ”
+file named “ resume.txt ”, which contains the encoded information returned by the commands
+execution. The following image is another evidence about what observed:
+All the data exchanged between the implant and the server is encrypted using an AES+RSA
+schema. The data is first ciphered using AES algorithm with an auto-generated key, then the key
+is encrypted using RSA and prepended to the data that will be sent to the server, as shown
+following:

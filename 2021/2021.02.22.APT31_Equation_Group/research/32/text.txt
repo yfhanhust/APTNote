@@ -1,0 +1,41 @@
+Enum value rotation
+For some unknown reason, Jian contains the syscall definitions for a 32-bit exploit, on top
+of those needed for the 64-bit exploit. While they aren’t used in practice, as the sample is
+64-bit, they still give us a glimpse of how their 32-bit exploit would have looked.
+We can see that Jian’s 32-bit logic for each syscall ID once again matches that of the
+Equation Group sample, up to the level of adjusting some IDs based on the refined Service
+Pack Major Number.
+30/36
+Figure 29: Jian’s logic for configuring 32-bit syscalls, using a refined Service Pack value.
+The problem is, if we check the actual syscall numbers for Windows XP Service Pack 0
+and Service Pack 1, we can see that the condition for setting the value of SP_delta is
+flawed. It was correct for the Equation Group exploit, but is not correct here as APT31
+modified the wSpMajor_refined value during the exploit’s initialization.
+31/36
+Figure 30: Jian’s rotation of almost all wSpMajor values.
+This value update is even stranger, as the Equation Group exploits have no mention of it
+whatsoever:
+Figure 31: Equation Group exploit setting the value of wSpMajor_refined .
+You might ask, “Why would someone perform the above value rotation?” The answer is
+actually rather simple. From our past analyses of several exploits attributed to Chineseaffiliated actors, we saw that the developers have a habit of using the value 0 as a marker
+for “illegal value.” This can be clearly seen as all Service Pack values above 6 are mapped
+back to the value 0, which marks them as “illegal.” This was also the case for the OS
+Version Enum, which was fully incremented by 1, making Windows NT use a value of 1
+instead of 0, and reserving the sacred value of 0 to mark an error state.
+And yet, this time the developers used only a partial rotation for the Service Pack value,
+causing a collision with the legitimate value for Service Pack 0 which for some reason they
+didn’t remap to “1”. This means that 0 is simultaneously an illegal value that shouldn’t be
+32/36
+supported, and a legitimate value that is crucial for configuring the correct syscall
+numbers. The correct adjustment should probably have been to increment all values by 1,
+map the illegal values to 0, and adjust the syscall check to wSpMajor_refined != 1 .
+Once again, we see a weird pattern. Even under the premise that Chinese exploits should
+reserve the value 0 for illegal values, the code still looks odd. A developer writing this
+exploit from scratch would probably have just incremented the wSpMajor_refined
+value by 1, while remembering that in future checks Service Pack 0 is marked with the
+value 1. Instead, as if not to break an existing piece of code, the syscall initialization still
+checks for 0, and this value is simultaneously both valid and illegal at the same time.
+A more probable explanation is that the original code was the Equation Group version,
+and that the developers affiliated with Chinese attack groups were afraid to break it, thus
+going only half-way in remapping the values. This fear of breaking the code also reflects
+on their poor understanding of the overall exploit.

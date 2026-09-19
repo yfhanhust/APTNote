@@ -1,0 +1,95 @@
+
+
+
+Sentence : 3. Backdoor Overview – Bvp47
+After some effort, our forensic team successfully extracted the backdoor file on the compromised machine
+and found that the string "Bvp" is more common in the sample file and the value 0x47 is used in the encryp
+tion algorithm. We will temporarily name the sample file " Bvp47".
+File Structure
+|File Properties|Col2|
+|---|---|
+|Filename|initserial or others|
+|Hash（MD5）|58b6696496450f254b1423ea018716dc|
+|File Size|299,148 bytes|
+|File Path|/usr/bin/modload|
+|Platform|Linux|
+File Structure
+ELF
+Payload
+The basic file structure of Bvp47 includes two parts: loader and payload. The loader is mainly responsible
+for the decryption and memory loading of the payload. The payload is compressed and encrypted. The 18
+slices are simply divided into three types T0, T1, T2, named Slice0x00-Slice0x11:
+
+
+T0{Slice0x00}
+
+
+T1{Slice0x01-Slice0x10}
+
+
+T2{Slice0x11}
+
+
+After decompression analysis, the sizes of the 18 slices of Bvp47 are as follows:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn
+4
+The 18 slices are sorted according to the amount of Bvp engine API calls used by each slice (for the intro
+duction of Bvp engine, see following chapters) and the amount of export functions, the details are as
+follows (the red part is modules that need to be focused on):
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 5
+Usage Scenario
+Our team reproduced the use of the Bvp47 backdoor in our own environment and roughly clarified its
+usage scenarios and basic communication mechanisms. As an important backdoor platform for long-term
+control of victims after a successful invasion, Bvp47 generally lives in the Linux operating system in the
+demilitarized zone that communicates with the Internet. It mainly assumes the core control bridge commu
+nication role in the overall attack, as shown in the following figure:
+After analysis, the actual network attack data packet process was restored.
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 6
+The process of covert communication between Bvp47 and the control server is as follows:
+
+Once the control end (192.168.91.131) sends a TCP protocol SYN packet with a certain length of a
+
+specific payload (length is 136 bytes) to the "victim IP" (192.168.91.128); 1357 port (the live port can
+be reused directly);
+
+After receiving the special SYN packet, the "victim IP" (192.168.91.128) will immediately follow the
+
+instructions to connect to port 2468 of the "control end";
+
+The "victim IP" (192.168.91.128) enters the controlled process;
+
+Bvp47 exploits one weakness that common network detection devices generally do not check data packets
+during the TCP handshake. Bvp47 injects data in the first SYN packet in order to avoid detection by
+network security devices.
+[Step 1]  The payload data in the mentioned SYN packet is as follows:
+[Step 3] The content of the packet sent by the victim IP after the successful TCP handshake is as follows:
+In the analysis later in this article, Bvp47 builds its covert communication system from cryptography,
+network, and Linux OS. Such covert communication system is cutting edge and can be seen as an advanced
+version of "SYNKnock" (old version of Cisco devices only conduct simple verification).
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 7
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Bvp47", "type" : "EXEF"},
+        {"id": 2, "description": "initserial or others", "type" : "DOCF"},
+        {"id": 3, "description": "58b6696496450f254b1423ea018716dc", "type" : "IOCS"},
+        {"id": 4, "description": "/usr/bin/modload", "type" : "SYSP"},
+        {"id": 5, "description": "Linux", "type" : "OPPS"},
+        {"id": 6, "description": "192.168.91.131", "type" : "CCSH"},
+        {"id": 7, "description": "192.168.91.128", "type" : "COUN"},
+        {"id": 8, "description": "1357 port", "type" : "NETP"},
+        {"id": 9, "description": "2468 port", "type" : "NETP"},
+        {"id": 10, "description": "TCP protocol SYN packet", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "has hash"},
+        {"source": 2, "target": 4, "rel_name" : "located in"},
+        {"source": 1, "target": 5, "rel_name" : "runs on"},
+        {"source": 6, "target": 7, "rel_name" : "controls"},
+        {"source": 6, "target": 8, "rel_name" : "uses port"},
+        {"source": 7, "target": 9, "rel_name" : "connects to port"},
+        {"source": 10, "target": 6, "rel_name" : "sent by"},
+        {"source": 10, "target": 7, "rel_name" : "received by"}
+    ]
+}

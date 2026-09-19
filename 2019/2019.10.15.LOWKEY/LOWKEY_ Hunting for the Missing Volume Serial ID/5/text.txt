@@ -1,0 +1,53 @@
+RC5 Brute Forcer
+With this knowledge we decided to take a reference implementation of RC5 and add a main
+function that accounts for the key derivation algorithm used by the malware samples (see Figure
+5). Brute forcing is possible as the key is derived from a single DWORD; even though the final
+key length might be 28 bytes, there are only 4294967296 possible keys. The code shown in
+Figure 5 generates all possible volume serial numbers, derives the key from them and tries to
+decrypt 51 36 94 A4 26 5B 0F 19 to 00 00 00 00 00 00 00 00. Running the RC5 brute forcer for a
+couple of minutes shows the correct volume serial number for the sample, which is 0xc25cff4c.
+Note if you want to run the brute forcer yourself
+The number of DWORDs of the key in the reference implementation we used is represented by
+the global c, and we had to change it to 7 to match the malware’s key length of 28 bytes. There
+were some issues with the conversion because in the malware a zero byte within the generated
+key ultimately leads to a shorter key length. The implementation we used uses a hard-coded key
+length (c), so we generated multiple executables with c = 6, c = 5, c = 4… as these usually only
+ran for a couple of minutes to cover the entire key space. All the samples mentioned in the
+Appendix 1 could be solved with c = 7 or c = 6.
+https://www.fireeye.com/blog/threat-research/2019/10/lowkey-hunting-for-the-missing-volume-serial-id.html 5/17
+10/16/2019 LOWKEY: Hunting for the Missing Volume Serial ID | FireEye Inc
+Figure 5: Main function RC5 brute forcer
+The decrypted payload belongs to the malware family POISONPLUG (MD5:
+84b69b5d14ba5c5c9258370c9505438f ). POISONPLUG is a highly obfuscated modular
+backdoor with plug-in capabilities. The malware is capable of registry or service persistence, selfremoval, plug-in execution, and network connection forwarding. POISONPLUG has been
+observed using social platforms to host encoded command and control commands.
+We confirmed the findings from Kaspersky and additionally found a second command and control
+URL hxxps://steamcommunity[.]com/id/oswal053, as mentioned in our APT 41 report.
+https://www.fireeye.com/blog/threat-research/2019/10/lowkey-hunting-for-the-missing-volume-serial-id.html 6/17
+10/16/2019 LOWKEY: Hunting for the Missing Volume Serial ID | FireEye Inc
+Taking everything into account that we learned from DEADEYE.APPEND
+(MD5: 37e100dd8b2ad8b301b130c2bca3f1ea ), we decided to take another look at the
+encrypted mui file ( e58d4072c56a5dd3cc5cf768b8f37e5e ). Attempts to brute force the first bytes
+to match with the ones of the decrypted POISONPLUG payload did not yield any results.
+Fortunately, we found additional samples that use the same encryption scheme. In one of the
+samples the malware authors included two checks to validate the decrypted payload. The
+expected plaintext at the specified offsets for DEADEYE.APPEND (MD5:
+7f05d410dc0d1b0e7a3fcc6cdda7a2ff ) is shown in Table 2.
+|Offset|Expected byte after decryption|
+|---|---|
+|0|0x48|
+|1|0x8B|
+|0x3C0|0x48|
+|0x3C1|0x83|
+Table 2: Byte comparisons after decrypting in DEADEYE.APPEND (MD5:
+7f05d410dc0d1b0e7a3fcc6cdda7a2ff )
+Applying these constraints to our brute forcer and trying to decrypt mui file
+( e58d4072c56a5dd3cc5cf768b8f37e5e ) once moreresulted in a low number of successful hits
+which we could then manually check. The correct volume serial number for the encrypted mui is
+0x243e2562. Analysis determined the decrypted file is XMRig miner. This also explains why the
+dropper downloads two files. The first, .mui is the crypto miner, and the
+second C:\Windows\System32\wcnapi.mui, is the configuration. The decrypted mui contains
+another layer of obfuscation and is eventually executed with the command x -c wcnapi.mui. An
+explanation on how the command was obtained and the additional layer of obfuscation is given in
+the next part of the blog post.
+For a list of samples with the corresponding volume serial numbers, please refer to Appendix 1.

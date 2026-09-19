@@ -1,0 +1,142 @@
+
+
+
+Sentence : Appendix Loader Trojan
+The payload dropped to the system by the macro is an executable that is responsible for installing and
+executing a dynamic link library (DLL) to the system. This executable contains the same decryption
+algorithm as the loader we analyzed in the DealersChoice attacks in late 2016
+(https://researchcenter.paloaltonetworks.com/2016/10/unit42-dealerschoice-sofacys-flash-player-exploit-
+platform/).
+The loader has several coding features that make it interesting. For example, upon execution, the loader
+attempts to load the following library: api­ms­win­core­synch­l1­2­0.dll. This DLL is part of the
+Universal Windows Platform app to Windows 10. Typically, a developer would not link directly to this file,
+but to WindowsApp.lib, which gives access to the underlying APIs. It appears the loader included
+definitions of wrappers for Windows API functions that cannot be called directly because they are not
+supported on all operating systems.
+Upon execution, the loader will decrypt the embedded payload (DLL) using a custom algorithm followed
+by decompressing it using the RtlDecompressBuffer API. This API is normally used for Windows
+drivers, but there is nothing to prevent a userland process from using it, and the parameters are
+documented (https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/content/ntifs/nf-ntifsrtldecompressbuffer) on MSDN. The compression algorithm used is LZNT1 with maximum compression
+level. The payload is decrypted using a starting 10-byte XOR key of: 0x3950BE2CD37B2C7CCBF8. Once
+decrypted, the data is then passed to the decompression routine. The payload is in the loader at file
+offset: 0x19880 – 0x1F23C size of 0x59BD. The payload can be decrypted and decompressed with
+the following Python script:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+import ctypes
+nt  = ctypes.windll.ntdll
+def decompress_buffer(data):
+final_size = ctypes.c_ulong(0)
+uncompressed =ctypes.c_buffer(0x7c00)
+nt.RtlDecompressBuffer(0x102,uncompressed,0x7C00,ctypes.c_char_p(data),0x59BD,ctypes.byref(fi
+return uncompressed.raw
+def main():
+Startkey="3950BE2CD37B2C7CCBF8".decode('hex')
+with open("C:\temp\carvedDLL.dat","rb") as fp:
+Payload=fp.read()
+decrpted=[]
+Count=0
+for i in Payload:
+InnerCount=0
+key=ord(i)
+for x in range(0,len(Startkey)):
+result = (ord(Startkey[x]) + Count * InnerCount) & 0xFF
+InnerCount+=1
+key ^= result
+Count+=1
+decrpted.append(key)
+decompressed=decompress_buffer(str(bytearray(decrpted)))
+with open("C:\temp\CarvedDLL_decrypted.dat","wb") as wp:
+wp.write(bytearray(decompressed))
+print "Finished"
+if name == 'main':
+main()
+The loader will drop the following files in the %LOCALAPPDATA% file path:
+Cdnver.dll
+Cdnver.bat
+To evade observable detection from Windows explorer, file attributes are set to hidden.
+%LOCALAPPDATA% would be the user’s path from the user who launched the executable, i.e.,
+C:\Users\user\AppData\Local where the user would contain the user’s logon account.
+To execute the dropped DLL, the loader first checks the integrity level of the executing process, and if it
+does not have the necessary permissions, the loader will enumerate the system’s processes searching for
+explorer.exe. This process was most likely chosen as it typically runs with administrator privileges.
+The loader will attempt to use the permission of explorer.exe to execute the dropped DLL via
+CreateProcessAsUser. If the user who executed the loader is admin or has sufficient privileges this
+step is skipped. The execution is handled using the Windows rundll32.exe program and calls the
+DLL’s export via ordinal number 1. Example:
+start rundll32.exe “C:\Users\user\AppData\Local\cdnver.dll”,#1
+For persistence, the loader will add the following registry key UserInitMprLogonScript to HKCU
+\Environment with the following value:
+C:\Users\user\AppData\Local\cdnver.bat
+This entry would cause the batch file to be executed any time the user logs on. The batch file contains
+the following information:
+start rundll32.exe “C:\Users\user\AppData\Local\cdnver.dll”,#1
+The use of the UserInitMprLogonScript is not new to Sofacy, as Mitre’s ATT&CK framework
+(https://attack.mitre.org/wiki/Technique/T1037) shows Sofacy’s use of this registry key as an example of
+the Logon Scripts (https://attack.mitre.org/wiki/Technique/T1037) persistence technique.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Appendix Loader Trojan", "type" : "EXEF"},
+        {"id": 2, "description": "Macro", "type" : "DOCF"},
+        {"id": 3, "description": "DLL (dynamic link library)", "type" : "EXEF"},
+        {"id": 4, "description": "api-ms-win-core-synch-l1-2-0.dll", "type" : "OPPS"},
+        {"id": 5, "description": "WindowsApp.lib", "type" : "OPPS"},
+        {"id": 6, "description": "RtlDecompressBuffer API", "type" : "APPS"},
+        {"id": 7, "description": "LZNT1 compression algorithm", "type" : "TAMP"},
+        {"id": 8, "description": "XOR key: 0x3950BE2CD37B2C7CCBF8", "type" : "IOCS"},
+        {"id": 9, "description": "Payload file offset: 0x19880 – 0x1F23C (size of 0x59BD)", "type" : "TAMP"},
+        {"id": 10, "description": "%LOCALAPPDATA% file path", "type" : "SYSP"},
+        {"id": 11, "description": "Cdnver.dll", "type" : "DOCF"},
+        {"id": 12, "description": "Cdnver.bat", "type" : "DOCF"},
+        {"id": 13, "description": "explorer.exe", "type" : "EXEF"},
+        {"id": 14, "description": "CreateProcessAsUser function", "type" : "APPS"},
+        {"id": 15, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 16, "description": "UserInitMprLogonScript registry key", "type" : "REGI"},
+        {"id": 17, "description": "HKCU\\Environment registry path", "type" : "TPTH"},
+        {"id": 18, "description": "Sofacy group", "type" : "ACTO"},
+        {"id": 19, "description": "Logon Scripts persistence technique (T1037)", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "drops"},
+        {"source": 1, "target": 3, "rel_name" : "installs and executes"},
+        {"source": 1, "target": 4, "rel_name" : "attempts to load"},
+        {"source": 6, "rel_name" : "uses for decompression", "target": 7},
+        {"source": 8, "rel_name" : "used for decryption", "target": 9},
+        {"source": 1, "rel_name" : "drops files to", "target": 10},
+        {"source": 10, "rel_name" : "contains", "target": 11},
+        {"source": 10, "rel_name" : "contains", "target": 12},
+        {"source": 1, "rel_name" : "checks and uses for privileges", "target": 13},
+        {"source": 1, "rel_name" : "uses to execute DLL with ordinal #1", "target": 15},
+        {"source": 16, "rel_name" : "added to", "target": 17},
+        {"source": 18, "rel_name" : "used by", "target": 19}
+    ]
+}

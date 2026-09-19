@@ -1,0 +1,67 @@
+
+
+
+Sentence : Gaining entry
+In at least two incident response (IR) engagements, Blue Mockingbird has exploited public-facing web applications (T1190:
+Exploit Public-Facing Application) that implemented Telerik UI for ASP.NET AJAX. This suite of user interface components
+accelerates the web development process, but some versions are susceptible to a deserialization vulnerability, CVE-2019
+18935. The exploitation of this CVE is not unique to Blue Mockingbird, but it has been a common point of entry.
+https://redcanary.com/blog/blue-mockingbird-cryptominer/ 1/11
+5/26/2020 Blue Mockingbird activity mines Monero cryptocurrency
+In exploiting this vulnerability, two DLLs are uploaded to a web application running on a Windows IIS web server. In
+telemetry, investigators will notice w3wp.exe writing the DLLs to disk and then immediately loading them into memory
+a�erward. In some cases, this will cause w3wp.exe to temporarily freeze and fail to successfully serve HTTP responses.
+For a diagnostic to determine whether you are potentially a�ected by the Telerik CVE, you can search the IIS access logs for
+the string POST Telerik.Web.UI.WebResource.axd . In victim environments, our IR partners found entries similar to
+these:
+```
+                      2020-04-29 02:01:24 10.0.0.1 POST
+                  /Telerik.Web.UI.WebResource.axd type=rau 80 
+                  Mozilla/5.0+
+
+                  (Windows+NT+10.0;+Win64;+x64;+rv:54.0)+Gecko/20100101+Firefo
+
+                  - 200 0 0 625
+
+                  2020-04-29 02:01:27 10.0.0.1 POST
+
+                  /Telerik.Web.UI.WebResource.axd type=rau 80 
+                  Mozilla/5.0+
+
+                  (Windows+NT+10.0;+Win64;+x64;+rv:54.0)+Gecko/20100101+Firefo
+
+                  - 500 0 0 46
+
+```
+In the entries, the string 200 refers to HTTP response code 200 where the POST request was successful, and the string 500
+refers to HTTP code 500 where the POST request was not processed successfully by the web server. These code 500 entries
+happened when the w3wp.exe process loaded the uploaded DLLs into memory and temporarily froze.
+Searching the IIS access logs for entries like these is a good idea even if you don’t explicitly know whether you use Telerik
+UI, as some web applications require the suite as a dependency behind the scenes.
+If you have endpoint detection and response (EDR) or similar tools, you’ll notice cmd.exe or other suspicious processes
+spawning from w3wp.exe .
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Blue Mockingbird", "type" : "ACTO"},
+        {"id": 2, "description": "public-facing web applications (T1190: Exploit Public-Facing Application)", "type" : "TTPS"},
+        {"id": 3, "description": "Telerik UI for ASP.NET AJAX", "type" : "APPS"},
+        {"id": 4, "description": "CVE-2019-18935", "type" : "CVES"},
+        {"id": 5, "description": "two DLLs", "type" : "EXEF"},
+        {"id": 6, "description": "Windows IIS web server", "type" : "OPPS"},
+        {"id": 7, "description": "w3wp.exe", "type" : "EXEF"},
+        {"id": 8, "description": "IIS access logs", "type" : "DOCF"},
+        {"id": 9, "description": "/Telerik.Web.UI.WebResource.axd", "type" : "URLS"},
+        {"id": 10, "description": "cmd.exe", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "exploits"},
+        {"source": 2, "target": 3, "rel_name" : "affects"},
+        {"source": 3, "target": 4, "rel_name" : "vulnerable to"},
+        {"source": 1, "target": 5, "rel_name" : "uploads"},
+        {"source": 5, "target": 6, "rel_name" : "to"},
+        {"source": 7, "target": 8, "rel_name" : "writes and loads from"},
+        {"source": 9, "target": 8, "rel_name" : "accessed by"},
+        {"source": 10, "target": 7, "rel_name" : "spawns from"}
+    ]
+}

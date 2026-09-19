@@ -1,0 +1,94 @@
+RatankbaPOS Analysis
+RatankbaPOS is deployed through a process injection dropper that is also capable of installing itself persistently, checking
+a C&C for either an update or a command to delete itself, dropping the RatankbaPOS implant to disk, and finally searching
+for the targeted POS process and module for injection and ultimately the theft of POS data.
+The dropper first sets up persistence by creating a registry key in HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows_
+_CurrentVersion\Run\igfxgpttray . It uses its own module file name for the registry key value. Next, it makes an HTTP request
+to a hardcoded URL hxxp://www[.]webkingston[.]com/update.jsp?action=need_update using a hardcoded User-Agent
+(UA) of “Nimo Software HTTP Retriever 1.0” (Fig. 41) to request either instruction from the C&C to delete itself and remove
+the persistence registry key or to download an updated implant with which to replace itself. If no response is returned from
+the C&C, RatankbaPOS will begin the process injection search.
+Figure 41: RatankbaPOS dropper requesting and receiving update from C&C
+1 We acknowledge the excellent work from @ashley_shen_920, @051R15, and @kjkwak12 with their documentation of North Korean-related attacks on VANXATM
+which was targeting ATM devices and not directly POS.
+North Korea Bitten by Bitcoin Bug 23
+The process injection search begins by taking a snapshot of the process list using CreateToolhelp32Snapshot. The implant
+dropper/injector will then case-insensitive search for a process named xplatform.exe which we assess is likely associated
+with Tobesoft’s XPLATFORM UI/UX design software. If a process name match is found then a TH32CS_SNAPMODULE
+CreateToolhelp32Snapshot call is used to make a snapshot of xplatform.exe’s running module list. Loaded modules
+are then iterated using Module32First and Module32Next while converting each result to lowercase by adding 0x20 to
+any uppercase letters and then finally comparing the string to ksnetadsl.dll (Fig. 42) that we assess is associated with
+a KSNET POS framework . Finally, the filesize of ksnetadsl.dll is checked to make sure it is 98,304 bytes (Fig. 42). If a
+successful match is found then the process ID (PID) of xplatform.exe is returned. Lastly, RatankbaPOS will be written to
+disk as c:\windows\temp\hkp.dll and the PID of xplatform.exe process will be used to inject hkp.dll into xplatform.exe using
+LoadLibraryA and CreateRemoteThread (Fig. 43).
+Figure 42: Dropper/injector searching for ksnetadsl.dll and correct filesize
+North Korea Bitten by Bitcoin Bug 24
+Figure 43: Injecting RatankbaPOS into xplatform.exe
+RatankbaPOS will first hook the KSNETADSL.dll module at offset 0xB146 (Fig. 44). Interestingly there is code for
+RatankbaPOS to check KSNETADSL.dll for an exported function named 1000B146, which seems like an unusual export
+name for which to check, but this code will never be used because ‘!strcmp(“1000B146”, “1000B146”)’ will always be true.
+We hypothesize that this feature was included either by mistake or was previously used for debugging. RatankbaPOS will
+also log messages to a file stored in c:\windows\temp\log.tmp.
+Figure 44: RatankbaPOS
+setting KSNETADSL.dll
+injection offset
+At this point in the reverse
+engineering process, we
+would naturally begin
+reversing the KSNETADSL.
+dll module; however, we
+have only been able to find
+two such modules with a
+filesize of 98,304 bytes:
+
+
+f2f6b4770718eed349fb7c77429938ac1deae7dd6bcc141ee6f5af9f4501a695
+
+
+6c8c801bb71b2cd90a2c1595092358e46cbfe63e62ef6994345d6969993ea2d6
+
+
+North Korea Bitten by Bitcoin Bug 25
+After analyzing both KSNETADSL.dll modules, our preliminary assessment is that neither of the modules are the correct
+target for RatankbaPOS. We can at least gain some insight into the purpose of KSNETADSL.dll, which appears to be the
+handling of encrypted and decrypted credit card numbers for a KSNET-related POS framework system (Fig. 45). Further
+analysis of RatankbaPOS focusing on the code used for C&C revealed the likely purpose of this implant
+Figure 45: Screenshot showing KSNET module interaction with CARD_NO registry key
+Figure 46: Hook handler creating new thread for C&C then hooking KSNETADSL.dll
+Our analysis of the C&C communication revealed a number of clues as to what was being exfiltrated. Initially, the implant
+uses strchr to find the first occurrence of “=” in the string data that is received from the hook of KSNETADSL.dll. Next,
+37-bytes beginning at 16-bytes before the position of the “=” are copied to a buffer. Finally, that buffer is compared to a
+substitution buffer that was created at the beginning of RatankbaPOS’ execution (Fig. 47). The substitution algorithm uses
+the values starting at offset 0x30-0x39 in the “E”-filled buffer to substitute the ASCII values of “0-9” for “ZCKOADBLNX” as
+well as at offset 0x3D for substitution of ASCII “=” to “Y”. Therefore, values “0-9” will be obfuscated to “ZCKOADBLNX”
+while “=” will be obfuscated to “Y” (Fig. 48).
+Figure 47: Obfuscation substitution buffer created in RatankbaPOS
+North Korea Bitten by Bitcoin Bug 26
+Figure 48: Obfuscation substitution buffer in memory
+To obfuscate the data, RatankbaPOS simply uses the hex value of the cleartext ASCII string to substitute itself for a value
+in the substitution buffer. For instance, a value of “0” would be substituted to “Z” while any equals signs (“=”) will be
+substituted for “Y”. This method is used to likely obfuscate the data so it is harder to detect by simply glancing at network
+traffic or through the use of heuristic-based detection of plaintext credit card data transmitted over the network. Once
+the stolen data has been obfuscated, it is sent in a POST HTTP request to the URL /list.jsp?action=up using the same
+hardcoded UA as the injector: “Nimo Software HTTP Retriever 1.0” (Fig. 49). So far we have observed the following C&C
+domains: www.energydonate[.]com and online-help.serveftp[.]com.
+Figure 49: DoC2 function that obfuscates stolen data and exfiltrates to a C&C
+North Korea Bitten by Bitcoin Bug 27
+Based on documentation we have found online,
+RatankbaPOS is possibly targeting plaintext track data in
+the first 16 bytes followed by a “=” and finally followed by
+encrypted POS-related data beginning with “99” (Fig. 50).
+According to the document, this is an encrypted form of
+the track data. Based on this, there is the possibility that
+this campaign may be targeting a SoftCamp POS-related
+software application, framework, or device. If we are correct
+and the values “99” always follow the “=” sign then one
+could potentially find exfiltrated data in network traffic by
+searching for the string “YXX” starting at offset 16 in the
+client body of an HTTP POST request. However, more logic
+will likely be necessary to reduce false positives but this
+opens up several options for detection.
+Figure 50: Documentation on South Korean POS
+software depicting POS data that matches the pattern
+RatankbaPOS is searching for (markings not ours)

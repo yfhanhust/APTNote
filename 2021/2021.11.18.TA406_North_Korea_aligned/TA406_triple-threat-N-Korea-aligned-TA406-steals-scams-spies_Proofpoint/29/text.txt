@@ -1,0 +1,42 @@
+YoreKey
+YoreKey is a simple Windows keylogger that stores its logs in a plain text file on the infected device. TA406 has used this
+malware since at least May 2020. The real name the developer(s) gave to this malware is unknown, so Proofpoint named it
+YoreKey after all C&C URLs have used the /history/ directory and the main purpose of the malware is to record keystrokes.
+The logs are stored using the following format: %TEMP%\Log.%USERNAME%.bin and prepended with the following two
+bytes: |FF FE|.
+Logs are sent to the C&C server via HTTP POST requests where the first variable (t) in the client body is used to send the
+base64 encoded %USERNAME%, while the second variable (c) is used to send the Base64 encoded content of the key log
+(Figure 42).
+Figure 42. YoreKey keylogger sending key logs to the C&C server
+Some versions of YoreKey install persistence using the following registry key: HKLM\SOFTWARE\ Microsoft\Windows_
+_CurrentVersion\Run[filename of exe] .
+Several different samples of YoreKey have appeared on VirusTotal. (See the IoC section on page 45.) However, it’s unclear
+how those samples were delivered or if they’ve been used in the wild.
+38
+TRIPLE THREAT: NORTH KOREA-ALIGNED TA406 STEALS, SCAMS, AND SPIES ** REPORT**
+YoreKey was also observed via a TA406 dropper made to look like a legitimate MetaTrader 4 (MT4) installer (see Figure 43).
+The MT4-themed YoreKey dropper was downloaded from a TA406 C&C server and staged in a similar way as other files
+delivered via URLs in phishing campaigns targeting Proofpoint customers.
+Figure 43. MT4 Setup window; YoreKey is executing silently in the background
+39
+TRIPLE THREAT: NORTH KOREA-ALIGNED TA406 STEALS, SCAMS, AND SPIES ** REPORT**
+The initial dropper, named mt4managre.exe, used a PDB path of: E:\Work_Spyware\VIRUS_2020\Release\Dropper_exe__
+_media.pdb .
+The dropper can have a variable number of embedded payloads, which is defined by the last four bytes (DWORD) of the file
+(Figure 44).
+Figure 44. YoreKey dropper encoded config and number of payloads
+This value is then multiplied by 76 to find the size of the config. The config precedes the last four bytes of the file. This
+particular dropper only had two embedded payloads, so the size of the config was 152 bytes. The config is then decoded via
+a NOT operation on all the bytes.
+Each segment of the config is 76 bytes and made up of the following data: [ID/item, DWORD][location, DWORD][size,
+DWORD][Unicode filename, 64-bytes] (Figure 45).
+Figure 45. YoreKey dropper decoded config
+The dropper parses the decoded config for the location of the embedded payload, the size and then, finally, the file name. In
+the case of at least the first embedded payload, which was the YoreKey keylogger, a hardcoded file name is used instead of
+the file name defined in the config: fontdrv.exe . The second embedded payload was a legitimate copy of the MT4 installer.
+Next, the payloads embedded in the dropper are decoded using a NOT operation on all bytes before writing them to disk.
+The extracted payloads are then exited with ShellExecuteW.
+Finally, the original dropper is deleted using the following cmd.exe command:
+/c del [file path to exe]\MT4MAN~1.EXE >> NUL .
+40
+TRIPLE THREAT: NORTH KOREA-ALIGNED TA406 STEALS, SCAMS, AND SPIES ** REPORT**

@@ -1,0 +1,59 @@
+
+
+
+Sentence : MagnetLoader
+The second loader we will look into is a 64-bit DLL that imitates a legitimate library.
+SHA256: 6c328aa7e0903702358de31a388026652e82920109e7d34bb25acdc88f07a5e0
+This MagnetLoader sample tries to look like the Windows file mscms.dll in a few ways, by
+using the following similar features:
+The same file description
+An export table with many of the same function names
+Almost identical resources
+https://unit42.paloaltonetworks.com/cobalt-strike-memory-analysis/ 5/19
+12/7/22, 9:10 AM Blowing Cobalt Strike Out of the Water With Memory Analysis
+A very similar mutex
+These features are also shown in Figure 2, where the malware file is contrasted with the
+valid mscml.dll.
+Figure 2. Comparison of file description, export table and resources of MagnetLoader (left) and
+mscml.dll (right) as seen with EXE Explorer.
+MagnetLoader not only tries to mimic the legitimate Windows library statically, but also
+at runtime.
+All of the exported functions of MagnetLoader internally call the same main malware
+routine. When one of them is called, the DLL entry point is run first. In the entry point,
+the malware loads the original mscms.dll and it resolves all the functions it fakes.
+The addresses of these original functions are stored and called after a fake method is
+executed. Thus, whenever an exported function of MagnetLoader is called, it runs the
+main malware routine and afterward calls the original function in mscms.dll.
+The main malware routine is relatively simple. It first creates a mutex named
+SM0:220:304:WilStaging_02_p1h that looks very similar to the original one created by
+mscms.dll.
+The Cobalt Strike beacon loader gets decrypted into a memory buffer and executed with
+the help of a known trick. Instead of calling the beacon loader directly, the loader uses the
+Windows API function EnumChildWindows to run it.
+This function contains three parameters, one of which is a callback function. This
+parameter can be abused by malware to indirectly call an address via the callback
+function and thus conceal the execution flow.
+https://unit42.paloaltonetworks.com/cobalt-strike-memory-analysis/ 6/19
+12/7/22, 9:10 AM Blowing Cobalt Strike Out of the Water With Memory Analysis
+You can also find the decrypted beacon configuration data in the Appendix section.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "MagnetLoader", "type" : "DOCF"},
+        {"id": 2, "description": "64-bit DLL", "type" : "APPS"},
+        {"id": 3, "description": "mscms.dll (legitimate Windows file)", "type" : "DOCF"},
+        {"id": 4, "description": "SHA256: 6c328aa7e0903702358de31a388026652e82920109e7d34bb25acdc88f07a5e0", "type" : "IOCS"},
+        {"id": 5, "description": "https://unit42.paloaltonetworks.com/cobalt-strike-memory-analysis/", "type" : "URLS"},
+        {"id": 6, "description": "mutex named SM0:220:304:WilStaging_02_p1h", "type" : "TAMP"},
+        {"id": 7, "description": "Cobalt Strike beacon loader", "type" : "DOCF"},
+        {"id": 8, "description": "EnumChildWindows (Windows API function)", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "is a"},
+        {"source": 1, "target": 3, "rel_name" : "imitates"},
+        {"source": 1, "target": 4, "rel_name" : "has hash"},
+        {"source": 1, "target": 6, "rel_name" : "creates mutex"},
+        {"source": 1, "target": 7, "rel_name" : "decrypts and executes"},
+        {"source": 8, "target": 7, "rel_name" : "uses to execute"}
+    ]
+}

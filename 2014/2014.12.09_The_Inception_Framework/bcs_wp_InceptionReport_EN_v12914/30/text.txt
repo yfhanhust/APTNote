@@ -1,0 +1,28 @@
+27
+Router malware
+Under the ramfs mounted partition we found a stripped and statically linked
+MIPS-el binary named tail- . Instances of this were also found under the running
+process list.
+tail- serves as a SOCKS proxy for the attackers. Each sample of the binary we
+were able to acquire was configured with a unique 32byte blowfish key and a
+small, encrypted section appended to the end of the binary.
+Upon execution the binary uses its hardcoded key to decrypt the configuration
+section and retrieve the listening port to use for incoming connections. This acts
+as a management interface. From here the attackers can request a specific port
+to be opened as one of the following types: SOCKET, SOCKSS, SOCKAT,
+SOCKS5, or STATUSPORT.
+To prevent anyone else from accessing this service all communication on the
+management interface is encrypted using the same blowfish key. This means
+that the attackers must maintain a list of where each of these implants are
+installed, as well as what port and key each is configured to use.
+This setup makes it difficult to identify embedded devices compromised with this
+malware by scanning open ports.
+In the wild we witnessed the attackers connect to the management port and
+request SOCKSS connections. This would open the specified port and wait for
+configuration data, which consists of a domain name (webdav.cloudme.com), the
+destination port, and a variable length RC4 key, all of which encrypted using the
+blowfish key.  Once received the malware would attempt to connect to the
+domain name on the specified port and would start tunneling all traffic received
+from the SOCKSS port to the destination and vise-versa. The communication
+between the attacker and the SOCKSS is encoded using the RC4 key. The
+graphic below illustrates a typical session.

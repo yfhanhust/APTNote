@@ -1,0 +1,73 @@
+
+
+
+Sentence : TMP files
+For every .tmp file found inside the project, the filename is first validated. It must be in the form ~WRxxxxx.tmp,
+where ‘xxxxx’ of hexadecimal digits whose sum module 16 is null. For instance, ~WR12346.tmp would qualify
+because 1+2+3+4+6 = 16 = 0 mod 16.
+The file content is then examined. The first eight bytes must contain the following “magic string”: ‘LRW~LRW~’.
+If so, the rest of the data is decrypted. It should be a Windows module, which is then mapped. Export #7 of this
+module is executed.
+Stuxnet can also harness infected projects to update itself. If a project is opened and it is already infected, Stux­
+net verifies if the version inside is newer than the current infection and executes it. This allows Stuxnet to update
+itself to newer versions when possible.
+Three possible forms of infected project files exist. A different export handles each form.
+Export 9 takes a Step7 project path as input, supposedly infected. It will then build paths to the following Stux­
+net files located inside the project:
+  - …\XUTILS\listen\XR000000.MDX
+
+  - …\XUTILS\links\S7P00001.DBF
+
+  - …\XUTILS\listen\S7000001.MDX
+
+These files are copied to temporary files (%Temp%\~dfXXXX.tmp) and Export 16, the main entry point within
+this potentially newer version of Stuxnet, is executed.
+Export 31 takes a Step7 project path as input and supposedly infected. It will then build paths to the following
+Stuxnet files located inside the project:
+  - …\GracS\cc_alg.sav
+
+  - …\GracS\db_log.sav
+
+  - …\GracS\cc_tag.sav
+
+These files are copied to temporary files (%Temp%\~dfXXXX.tmp). Export #16 within these files is then called to
+run this version of Stuxnet.
+Export 10 is similar to 9 and 31. It can process Step7 folders and extract Stuxnet files located in the Gracs\ or
+Xutils\ subfolders. It may also process Zip archives.
+Export #16 within the extracted files is then used to run the extracted copy of Stuxnet, and eventually update
+the configuration data block.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "~WRxxxxx.tmp", "type" : "DOCF"},
+        {"id": 2, "description": "LRW~LRW~", "type" : "TAMP"},
+        {"id": 3, "description": "Windows module", "type" : "EXEF"},
+        {"id": 4, "description": "Stuxnet", "type" : "APPS"},
+        {"id": 5, "description": "Step7 project path (infected)", "type" : "SYSP"},
+        {"id": 6, "description": "%Temp%\\~dfXXXX.tmp", "type" : "DOCF"},
+        {"id": 7, "description": "XUTILS\\listen\\XR000000.MDX", "type" : "DOCF"},
+        {"id": 8, "description": "XUTILS\\links\\S7P00001.DBF", "type" : "DOCF"},
+        {"id": 9, "description": "XUTILS\\listen\\S7000001.MDX", "type" : "DOCF"},
+        {"id": 10, "description": "GracS\\cc_alg.sav", "type" : "DOCF"},
+        {"id": 11, "description": "GracS\\db_log.sav", "type" : "DOCF"},
+        {"id": 12, "description": "GracS\\cc_tag.sav", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 3, "target": 4, "rel_name" : "executes"},
+        {"source": 5, "target": 4, "rel_name" : "updates"},
+        {"source": 5, "target": 7, "rel_name" : "builds path to"},
+        {"source": 5, "target": 8, "rel_name" : "builds path to"},
+        {"source": 5, "target": 9, "rel_name" : "builds path to"},
+        {"source": 7, "target": 6, "rel_name" : "copied to"},
+        {"source": 8, "target": 6, "rel_name" : "copied to"},
+        {"source": 9, "target": 6, "rel_name" : "copied to"},
+        {"source": 5, "target": 10, "rel_name" : "builds path to"},
+        {"source": 5, "target": 11, "rel_name" : "builds path to"},
+        {"source": 5, "target": 12, "rel_name" : "builds path to"},
+        {"source": 10, "target": 6, "rel_name" : "copied to"},
+        {"source": 11, "target": 6, "rel_name" : "copied to"},
+        {"source": 12, "target": 6, "rel_name" : "copied to"},
+        {"source": 6, "target": 4, "rel_name" : "executes export #16"}
+    ]
+}

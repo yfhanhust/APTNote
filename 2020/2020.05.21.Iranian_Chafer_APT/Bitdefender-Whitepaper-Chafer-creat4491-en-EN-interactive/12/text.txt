@@ -1,0 +1,73 @@
+Custom build tools
+PLINK Tool
+A slightly modified version of PLINK, part of the PuTTY suite, was also revealed by Bitdefender telemetry
+in late September 2018. It preserves the original functionality, with some key new features such as the
+possibility to run it as a Windows service or to uninstall the service. We believe this tool may have been used
+either to communicate with the CnC or to gain access to some internals machines, but found no conclusive
+evidence to support these scenarios. As filenames, we’ve seen only one name: “ wehsvc.exe ”.
+Proxy Tools
+Beside PLINK, we spotted a command line tool, written in C++, that implements a proxy. The architecture of this
+application is straightforward, imposing the following flow:
+
+
+it connects to the first available server from a given list
+
+
+sends the following HTTP header “GET /CNT HTTP/1.1\r\nHost: bing.com\r\nUser-Agent:
+Mozilla/5.0”, to indicate the beginning of the communication
+
+
+waits for the server for a limited time, which will send a byte, representing a command and the associated
+
+
+message.
+The exposed commands are for setting or viewing the proxy id, echoing, session resetting, starting a tunnel or exiting.
+Tunneling option (also denoted by debugging strings), which is the main functionality of this component,
+implements socks5 protocol. When this command is selected, the proxy starts a new tcp connection with the current
+server, sending the following http header “ GET /TNL HTTP/1.1\r\nHost: bing.com\r\nUser-Agent:
+Mozilla/5.0”. Then, it switches to the socks5 protocol on a new thread.
+7
+Bitdefender Whitepaper
+Iranian Chafer APT Targeted Air Transportation and Government in Kuwait and Saudi Arabia
+On some systems where we found this file, we noticed another proxy, different from the previous one. In terms of
+implementation, it uses a custom protocol, which implies using a table of available connections and their ids. Those
+ids are used in sending messages between hosts. Also, this one was packet by the UPX packer, version 3.03.The main
+purpose of this tool is to give the attacker access to the internal network of the victim.
+In our telemetry, those files were seen with the name of “ mini.exe ”, “ mfevtpse.exe ” or “ mfevtps.exe ”.
+RAT Tools
+During the attack, we also observed the use of a command line utility, which is a RAT, written in Python (probably
+version 3.4) and converted into a standalone executable. Interestingly, the user interacts with this tool in a similar way
+as with “mini.exe”, described in the Proxy Tools section. The same filename for default input, the common debugging
+strings, even the help page for the two are very similar, which suggests a possible connection between the two.
+This tool uses 2 types of communications (“D NS” and “HTTP”, as found in code), both over TCP, with the same
+functionality. They both marshal the message such that the packet will resemble a DNS, and HTTP, packet. Parts of the
+headers that are hardcoded can be seen below.
+Part of header that will be included in the request (dns communication)
+Part of header that will be included in the response (dns communication).
+Headers for http communications are “ GET /owa HTTP/1.1\r\nHost: live.com ” for request and “ HTTP/1.1 200 OK ” for
+response. Also, some parts of the code are specific to different operating systems, which means that this tool may be
+in the wild in other forms.
+Filenames for these tools found in our telemetry are “ snmp.exe ”, “ imjpuexa.exe ” and “ driver_x86.exe ”.
+Our telemetry for the same machines revealed two other files that implement RAT functionalities, besides “snmp.
+exe”and“imjpuexa.exe”.
+One of them is very similar to MechaFlounder, as described by previous security research, but packing a few new
+features. It implements a persistence mechanism (using a scheduled task, named “ Defender Update ”) and a custom
+communication protocol over DNS ( besides HTTP) with the CnC, where the response is found either in the IPv4 address
+or in the TXT record.
+The second file is also about persistence and features a similar mechanism for parsing commands as the previous
+file. However, it uses the “Service Update” scheduled task name, instead of “Defender Update”. The key difference
+between the two files is that the latter, in this case, communicates with the CnC through files uploaded to Dropbox,
+where each victim has a separate folder named with the same combination of username and machine name as used
+by MechaFlounder . The command, “service.html” is placed in the root of this directory, uploaded files from the victim
+8
+Bitdefender Whitepaper
+Iranian Chafer APT Targeted Air Transportation and Government in Kuwait and Saudi Arabia
+are placed into a folder named “/download”, and the files for download are placed into the “/upload” folder. Also, all
+feedback messages are simplified and uploaded in the same directory, under the name “results.txt”. It also implements
+a synchronization mechanism by using the folder “done”, placed in the root location for each victim.
+Filenames for the two RATs are: “ drivers.exe ” (“ drivers_x64.exe ” for the 64-bit version) and “ dbxservice.exe ”. In terms
+of persistence, both “ drivers_x64.exe ” and “ dbxservice.exe ” make a copy of themselves in the Temp folder, named
+“ MSCService.exe ”, or “ DBXService.exe ” and then create a scheduled task that will reference them in that location.
+Another interesting thing found in the decompiled code of the two files is the use of the special Unicode character
+“202e” (Right-to-Left Override character), in the persistence section. This character is expected to be found as the first
+command line argument.

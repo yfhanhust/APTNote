@@ -1,0 +1,49 @@
+
+
+
+Sentence : Detection
+Given the encrypted, and potentially compressed, nature of Derusbi server variant network
+traffic, detecting the traffic on a network can be problematic using traditional IDS signatures.
+Using a heuristic approach, it would be possible to detect the handshake of a possible Derusbi
+server variant session by looking for the following pattern:
+|Client Server|Col2|
+|---|---|
+|Exactly 64 bytes transmitted||
+||Exactly 64 bytes transmitted|
+|First 8 bytes taking the pattern of0x28 0x00 0x000x00 0x02 0x00 0x00 0x00||
+Detecting Derusbi server variants on disk is possible using the following YARA signature:
+```
+rule Derusbi_Server
+{
+strings:
+       $uuid = "{93144EB0-8E3E-4591-B307-8EEBFE7DB28F}" wide ascii
+       $infectionID1 = "-%s-%03d"
+   $infectionID2 = "-%03d"
+
+   $other = "ZwLoadDriver"
+
+condition:
+   $uuid or ($infectionID1 and $infectionID2 and $other)
+
+}
+```
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Derusbi server variant", "type" : "CCSH"},
+        {"id": 2, "description": "Network traffic of Derusbi server variant", "type" : "NETP"},
+        {"id": 3, "description": "IDS signatures", "type" : "TAMP"},
+        {"id": 4, "description": "64 bytes transmitted by client", "type" : "IOCS"},
+        {"id": 5, "description": "64 bytes transmitted by server", "type" : "IOCS"},
+        {"id": 6, "description": "First 8 bytes pattern (0x28 0x00 0x00 0x00 0x02 0x00 0x00 0x00)", "type" : "IOCS"},
+        {"id": 7, "description": "YARA signature for Derusbi server", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "generates"},
+        {"source": 3, "target": 2, "rel_name" : "detects"},
+        {"source": 4, "target": 2, "rel_name" : "part of"},
+        {"source": 5, "target": 2, "rel_name" : "part of"},
+        {"source": 6, "target": 2, "rel_name" : "part of"},
+        {"source": 7, "target": 1, "rel_name" : "detects"}
+    ]
+}

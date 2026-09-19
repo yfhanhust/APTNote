@@ -1,0 +1,42 @@
+
+
+
+Sentence : DEEP PANDA
+���������������������������������������������������������������������������������������������������������
+\REGISTRY\MACHINE\SYSTEM\ControlSet001\Services\. It then checks for the values of the
+“ServiceDll” and “Security” keys, in the latter case it applies an XOR on the data with the value 127. The
+user-mode component of this malware is a service called “msupdate”, this driver is attempting to hide the
+����������������������������������������������������������������������������������������������������������
+�������������������������������������������������������������������������������������������������������
+�����������������������������������������������������������������������������������������������������������
+��������������������������������������������������������������������������������������������������������
+key, due to the fact that these APIs provide almost identical functionality when it comes to reading registry
+values.
+In the registry hooking code of the driver, a call is made to ObReferenceObjectByHandle(). This allows the
+driver to receive the ‘CM_KEY_OBJECT’ which is then used with ObQueryNameString() to get the key/value
+path. However, no call to ObDereferenceObject() is ever made, which means that all registry objects being
+sent to these APIs are eventually leaked.
+In the registry hook, it was noticed that “CurrentControlSet001” was used as the target, if the target machine
+������������������������������������������������������������������������������������������������������
+function as intended. This is the reason the Microsoft implemented a symbolic link to \CurrentControlSet
+�������������������������������������������������������������������������������������������������������������
+CROWDSTRIKE S E N S I T I V E 17
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DEEP PANDA", "type" : "ACTO"},
+        {"id": 2, "description": "\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\Services\\", "type" : "REGI"},
+        {"id": 3, "description": "ServiceDll key", "type" : "REGI"},
+        {"id": 4, "description": "Security key", "type" : "REGI"},
+        {"id": 5, "description": "msupdate service", "type" : "APPS"},
+        {"id": 6, "description": "CM_KEY_OBJECT", "type" : "TAMP"},
+        {"id": 7, "description": "\\CurrentControlSet", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "accesses"},
+        {"source": 2, "target": 3, "rel_name" : "contains key"},
+        {"source": 2, "target": 4, "rel_name" : "contains key"},
+        {"source": 1, "target": 5, "rel_name" : "creates service"},
+        {"source": 6, "target": 7, "rel_name" : "accesses"}
+    ]
+}

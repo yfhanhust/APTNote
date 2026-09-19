@@ -1,0 +1,256 @@
+
+
+
+Sentence : Malware Analysis
+QuarterRig: March to June 2023
+QuarterRig initially delivers an ISO file containing a benign copy of a Microsoft Word executable that
+also contains an XML schema definition (XSD) and dynamic-link library (DLL). The DLL employs multiple
+anti-analysis techniques including encrypted strings, dynamic API resolution, and stack strings. After
+decrypting API strings, it spawns a new thread that uses an RC4 stream cipher with a hardcoded key to
+Recorded Future [®] | www.recordedfuture.com | Distribution: Public, from Insikt Group
+12
+CYBER THREAT ANALYSIS | RUSSIA
+decrypt the contents of the XSD. The decrypted contents contain shellcode that is then executed to
+extract and load an embedded DLL.
+In addition to the encryption routine, the DLL module engages in additional detection evasion
+techniques such as checking to ensure that it is not running in a sandbox or under a debugger. After
+engaging in these operations, the module establishes persistence by copying the contents of the ISO
+file to a directory and creating a registry run key to execute the EXE during system startup.
+Subsequently, it decrypts additional shellcode that is responsible for decrypting and decompressing
+the final payload. This final payload establishes communication with QuarterRig's C2 servers.
+QuarterRig utilizes the HTTPS protocol for C2 communication, which is encrypted using RC4
+encryption. The encrypted data is then Base64-encoded.
+Since April 2023, Insikt Group has identified 4 QuarterRig samples. The first 2 samples are delivered in
+ISO files named “Note.iso” and were created using different ISO burner applications (such as AnyBurn or
+IMGBURN). The third sample temporarily deviates from the trend of employing ISO files and is delivered
+in a ZIP file similarly named “Note.zip”. The fourth, most recent, sample in June 2023 returns to the
+original trend of focusing on the delivery of an ISO file, titled Specification.iso. Each of the samples use
+different registry run keys for persistence. They also use distinct QuarterRig C2 URLs and RC4 keys to
+encrypt their communications.
+GraphicalProton: May 2023
+Inside the ISO file obtained from resetlocations[.]com/bmw.htm, there is a hidden $Recycle.Bin
+directory along with 9 bmw[X].png.lnk files (where X represents a number ranging from 1 to 9). These
+files are designed to appear as PNG images to entice the victim into opening one of the shortcut files.
+The actual bmw[X].png files are found within the hidden $Recycle.Bin directory, along with additional
+files such as windoc.exe, AppvIsvSubsystems64.dll, MSVCP140.dll, Ms20Win32Client.DLL, and ojg2.px.
+Figure 7: Contents of the ISO file (Source: Recorded Future)
+Recorded Future [®] | www.recordedfuture.com | Distribution: Public, from Insikt Group
+13
+CYBER THREAT ANALYSIS | RUSSIA
+When a victim tries to open any of the LNK files, it triggers the execution of the command cmd /c
+start .$Recycle.Bin\windoc.exe && ".$Recycle.Bin\bmw[X].png" . This command is used
+to launch windoc.exe and open a PNG file corresponding to the number of the LNK file opened.
+Windoc.exe serves as the initial execution point for the malware, while the PNG file acts as a decoy to
+divert attention away from the malware as it begins its execution within the Windoc.exe process.
+Windoc.exe is a benign copy of the Microsoft Word application that is used to load
+AppIsvSubsystems64.dll via DLL search order hijacking. AppIsvSubsystems64.dll serves as a loader to
+execute GraphicalProton on the victim's machine, and employs several anti-analysis and
+anti-debugging techniques including:
+
+
+Verifying if the victim's system has more than 1 processor
+
+
+Checking if the system’s RAM is greater than 1,024 MB
+
+
+Timing-checks via sleep calls
+
+
+Checking for debuggers by calling ntQueryObject on the current process and looking for a
+“DebugObject” (similar to the technique shown here)
+
+
+Dynamically resolving syscalls and Windows API functions
+
+
+Obfuscating control flow by manipulating the RIP register value via direct syscalls to
+
+
+zwGetContextThread and zwSetContextThread
+
+Using custom exception handlers and generating exceptions to redirect control flow
+
+After passing anti-analysis checks, the loader reads encrypted shellcode from the file ojg2.px and
+decrypts its contents using an xor cipher with a rotating key. It then scans running processes to locate a
+suitable 64-bit process for injecting shellcode into. Once a suitable process is identified, the loader
+performs process injection in a similar manner as the NtCreateSection + NtMapViewOfSection
+described by ired.team. One deviation from the ired.team article is that the shellcode is executed via a
+new thread with the THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER flag set, which is used as an
+additional anti-analysis technique to prevent the thread from being visible to debuggers attached to its
+process.
+In the remote process, the shellcode resolves APIs and then unhooks several modules including
+kernel32, ntdll, shell32, oleaut32, mscoree, and combase. Afterwards, it utilizes the
+RtlDecompressBuffer Windows API function to decompress an embedded PE file that is compressed
+using LZNT1. This decompressed PE file is the GraphicalProton payload that is then loaded into the
+same process, and a new thread is started to execute its start routine.
+GraphicalProton unhooks all DLL modules loaded by the process. It then attempts to renew an access
+token for Microsoft OneDrive by sending an HTTP request to login.microsoftonline[.]com with the
+Microsoft Graph permissions files.readwrite.all and offline_access.
+Recorded Future [®] | www.recordedfuture.com | Distribution: Public, from Insikt Group
+14
+CYBER THREAT ANALYSIS | RUSSIA
+Figure 8 : Refresh token request made by GraphicalProton (Source: Recorded Future)
+After obtaining a new token, a wordlist is used to create a randomly named directory under the
+OneDrive account’s App\Teams_Test folder. Next, 2 randomly named subdirectories are created to
+contain C2 communications to and from the victim. GraphicalProton then gathers the victim’s system
+information — including their username, computer name, Windows version, network connections, and a
+list of running processes — by running the following commands:
+
+
+cmd.exe /C "chcp 65001 > NUL & whoami"
+
+
+cmd.exe /C "chcp 65001 > NUL & wmic datafile where
+
+
+```
+   Name="C:\Windows\System32\ntoskrnl.exe" get Version”
+```
+
+
+cmd.exe /C "chcp 65001 > NUL & netstat -a"
+
+
+cmd.exe /C "chcp 65001 > NUL & tasklist"
+
+
+The output of these commands are encrypted using a Chaskey cipher in CTR mode. Each byte of the
+ciphertext is encoded as binary represented by hex bytes corresponding to individual bits (0x00 and
+0x01) and stored within a BMP file that is subsequently uploaded to 1 of the victim’s previously created
+OneDrive subdirectories.
+Recorded Future [®] | www.recordedfuture.com | Distribution: Public, from Insikt Group
+15
+CYBER THREAT ANALYSIS | RUSSIA
+Figure 9: Chaskey encryption algorithm (Source: Recorded Future)
+Next, the malware periodically polls the OneDrive account for new files in the App\Teams_Test folder.
+When one is found, it is downloaded, decoded, and decrypted. The malware expects the file to be in a
+BMP file format using the same binary encoding and Chaskey cipher encryption as the initial C2
+check-in. The payload of the BMP file is capable of requesting the malware to read or write files, inject
+shellcode into remote processes, or run commands via cmd.exe. Results and log messages from the C2
+request are stored in a new encrypted and encoded BMP file that is uploaded back to the OneDrive
+account (to the same victim subdirectory into which the initial BMP was uploaded).
+The malware then continues communicating with its C2 by periodically polling the description data
+stored on the victim’s OneDrive folder. This field is updated throughout the malware’s execution using
+short codes to indicate what the malware is doing, and can also be updated by the malware operators
+Recorded Future [®] | www.recordedfuture.com | Distribution: Public, from Insikt Group
+16
+CYBER THREAT ANALYSIS | RUSSIA
+to request certain functionality. For example, if the value ''mw'' is added to the description, then
+GraphicalProton will look for a new BMP communication in the victim’s second subdirectory. If one is
+present, then GraphicalProton will download, decode, and decrypt it in the same manner as previously
+described and execute the BMP payload’s requested instructions.
+Aside from its support for OneDrive, GraphicalProton also contains code, an API key and secret, and a
+refresh token to integrate with DropBox as an alternative C2 backend. Many techniques from
+GraphicalProton coincide with a prior analysis report conducted by GitHub user Dump-GUY on an
+APT29 DropBox loader. Both samples share similarities in their utilization of dynamically resolved
+syscalls, employing online storage providers like DropBox for C2 communications, and camouflaging C2
+communications as benign files (MP3 in the earlier analysis and BMP in the more recent samples). This
+overlap suggests that GraphicalProton represents a continuation of the previously analyzed malware
+family, showcasing ongoing development efforts by BlueBravo operators.
+Insikt Group has created YARA rules to assist defenders in monitoring for GraphicalProton samples (see
+Appendix C ).
+Recorded Future [®] | www.recordedfuture.com | Distribution: Public, from Insikt Group
+17
+CYBER THREAT ANALYSIS | RUSSIA
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "QuarterRig", "type" : "ACTO"},
+        {"id": 2, "description": "ISO file containing a benign copy of Microsoft Word executable", "type" : "DOCF"},
+        {"id": 3, "description": "XML schema definition (XSD)", "type" : "DOCF"},
+        {"id": 4, "description": "Dynamic-link library (DLL)", "type" : "APPS"},
+        {"id": 5, "description": "Encrypted strings", "type" : "TAMP"},
+        {"id": 6, "description": "Dynamic API resolution", "type" : "TTPS"},
+        {"id": 7, "description": "Stack strings", "type" : "TTPS"},
+        {"id": 8, "description": "RC4 stream cipher with a hardcoded key", "type" : "TAMP"},
+        {"id": 9, "description": "Shellcode", "type" : "EXEF"},
+        {"id": 10, "description": "Embedded DLL", "type" : "APPS"},
+        {"id": 11, "description": "Sandbox or debugger detection techniques", "type" : "TTPS"},
+        {"id": 12, "description": "Persistence by copying ISO file to a directory and creating a registry run key", "type" : "TTPS"},
+        {"id": 13, "description": "Additional shellcode for decrypting and decompressing the final payload", "type" : "EXEF"},
+        {"id": 14, "description": "Final payload that establishes communication with QuarterRig's C2 servers", "type" : "EXEF"},
+        {"id": 15, "description": "HTTPS protocol for C2 communication", "type" : "NETP"},
+        {"id": 16, "description": "Base64 encoding of encrypted data", "type" : "TAMP"},
+        {"id": 17, "description": "Note.iso and Specification.iso ISO files", "type" : "DOCF"},
+        {"id": 18, "description": "AnyBurn or IMGBURN ISO burner applications", "type" : "APPS"},
+        {"id": 19, "description": "Note.zip ZIP file", "type" : "DOCF"},
+        {"id": 20, "description": "Distinct registry run keys for persistence", "type" : "REGI"},
+        {"id": 21, "description": "QuarterRig C2 URLs and RC4 keys", "type" : "CCSH"},
+        {"id": 22, "description": "GraphicalProton", "type" : "ACTO"},
+        {"id": 23, "description": "ISO file obtained from resetlocations[.]com/bmw.htm", "type" : "DOCF"},
+        {"id": 24, "description": "$Recycle.Bin directory", "type" : "TPTH"},
+        {"id": 25, "description": "9 bmw[X].png.lnk files", "type" : "DOCF"},
+        {"id": 26, "description": "windoc.exe", "type" : "EXEF"},
+        {"id": 27, "description": "AppvIsvSubsystems64.dll", "type" : "APPS"},
+        {"id": 28, "description": "MSVCP140.dll", "type" : "APPS"},
+        {"id": 29, "description": "Ms20Win32Client.DLL", "type" : "APPS"},
+        {"id": 30, "description": "ojg2.px file with encrypted shellcode", "type" : "DOCF"},
+        {"id": 31, "description": "Command cmd /c start .$Recycle.Bin\\windoc.exe && \".\$Recycle.Bin\\bmw[X].png\" ", "type" : "TTPS"},
+        {"id": 32, "description": "DLL search order hijacking", "type" : "TTPS"},
+        {"id": 33, "description": "Anti-analysis and anti-debugging techniques including verifying system configuration, timing checks, resolving syscalls and Windows API functions, obfuscating control flow, using custom exception handlers, and generating exceptions", "type" : "TTPS"},
+        {"id": 34, "description": "Xor cipher with a rotating key for decrypting shellcode", "type" : "TAMP"},
+        {"id": 35, "description": "Process injection using NtCreateSection + NtMapViewOfSection and THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER flag", "type" : "TTPS"},
+        {"id": 36, "description": "Unhooking several modules including kernel32, ntdll, user32, gdi32, advapi32, shell32, ws2_32, and msvcr120", "type" : "TTPS"},
+        {"id": 37, "description": "Microsoft OneDrive access token renewal by sending an HTTP request to login.microsoftonline[.]com with Microsoft Graph permissions files.readwrite.all and offline_access", "type" : "TTPS"},
+        {"id": 38, "description": "Randomly named directory under the OneDrive account’s App\\Teams_Test folder", "type" : "TPTH"},
+        {"id": 39, "description": "2 randomly named subdirectories for C2 communications to and from the victim", "type" : "TPTH"},
+        {"id": 40, "description": "System information gathering commands (whoami, wmic datafile, netstat, tasklist)", "type" : "TTPS"},
+        {"id": 41, "description": "Chaskey cipher in CTR mode for encrypting system information", "type" : "TAMP"},
+        {"id": 42, "description": "BMP file format for storing encrypted and encoded system information", "type" : "DOCF"},
+        {"id": 43, "description": "OneDrive subdirectory for C2 communication", "type" : "TPTH"},
+        {"id": 44, "description": "Periodic polling of OneDrive account for new files in the App\\Teams_Test folder", "type" : "TTPS"},
+        {"id": 45, "description": "Short codes to indicate malware actions and operator requests", "type" : "TAMP"},
+        {"id": 46, "description": "DropBox integration for C2 communications", "type" : "STORAGE"},
+        {"id": 47, "description": "APT29 DropBox loader", "type" : "ACTO"},
+        {"id": 48, "description": "YARA rules for GraphicalProton samples", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "label": "Uses"},
+        {"source": 2, "target": 3, "label": "Contains"},
+        {"source": 2, "target": 4, "label": "Contains"},
+        {"source": 4, "target": 5, "label": "Uses"},
+        {"source": 4, "target": 6, "label": "Uses"},
+        {"source": 4, "target": 7, "label": "Uses"},
+        {"source": 4, "target": 8, "label": "Uses"},
+        {"source": 4, "target": 9, "label": "Generates"},
+        {"source": 9, "target": 10, "label": "Decompresses and loads"},
+        {"source": 4, "target": 11, "label": "Uses"},
+        {"source": 1, "target": 12, "label": "Establishes"},
+        {"source": 1, "target": 13, "label": "Generates"},
+        {"source": 1, "target": 14, "label": "Loads and runs"},
+        {"source": 14, "target": 15, "label": "Uses"},
+        {"source": 14, "target": 16, "label": "Encodes"},
+        {"source": 1, "target": 17, "label": "Creates and uses"},
+        {"source": 1, "target": 18, "label": "Uses"},
+        {"source": 1, "target": 19, "label": "Creates and uses"},
+        {"source": 1, "target": 20, "label": "Creates and uses"},
+        {"source": 1, "target": 21, "label": "Uses"},
+        {"source": 22, "target": 23, "label": "Uses"},
+        {"source": 23, "target": 24, "label": "Contains"},
+        {"source": 23, "target": 25, "label": "Contains"},
+        {"source": 25, "target": 26, "label": "Executes"},
+        {"source": 25, "target": 27, "label": "Loads"},
+        {"source": 25, "target": 28, "label": "Loads"},
+        {"source": 25, "target": 29, "label": "Loads"},
+        {"source": 23, "target": 30, "label": "Contains"},
+        {"source": 26, "target": 31, "label": "Executes"},
+        {"source": 27, "target": 32, "label": "Uses"},
+        {"source": 27, "target": 33, "label": "Uses"},
+        {"source": 27, "target": 34, "label": "Uses"},
+        {"source": 27, "target": 35, "label": "Uses"},
+        {"source": 27, "target": 36, "label": "Uses"},
+        {"source": 27, "target": 37, "label": "Uses"},
+        {"source": 27, "target": 38, "label": "Creates"},
+        {"source": 27, "target": 39, "label": "Creates"},
+        {"source": 27, "target": 40, "label": "Executes"},
+        {"source": 27, "target": 41, "label": "Uses"},
+        {"source": 27, "target": 42, "label": "Stores in"},
+        {"source": 27, "target": 43, "label": "Communicates with"},
+        {"source": 27, "target": 44, "label": "Uses"},
+        {"source": 27, "target": 45, "label": "Uses"},
+        {"source": 27, "target": 46, "label": "Uses as alternative C2 backend"},
+        {"source": 22, "target": 47, "label": "Shares techniques with"},
+        {"source": 22, "target": 48, "label": "Monitored by"}
+    ]
+}

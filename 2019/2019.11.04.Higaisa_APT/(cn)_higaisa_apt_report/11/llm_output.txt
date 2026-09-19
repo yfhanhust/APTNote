@@ -1,0 +1,55 @@
+
+
+
+Sentence : 2.3 Downloader 分析
+图13：RC4 解密密钥代码
+释放的payload 文件carsrvdx.sed 实际为一个downloader：
+首先会构造url，从http://info.hangro.net/file/start?session=[8 位随机数字]&imsi=0
+获取要下载的文件名：
+腾讯安全御见威胁情报中心 11 / 73
+TLP：WHITE
+图14：构造获取文件url 代码
+C2 信息直接硬编码存储在局部数组中，为info.hangro.net：
+腾讯安全御见威胁情报中心 12 / 73
+TLP：WHITE
+图15：存储C2 信息代码
+URL 参数信息session=[8 位随机数字]&imsi=0：
+图16：URL 的参数信息
+腾讯安全御见威胁情报中心 13 / 73
+TLP：WHITE
+图17：C2 返回的数据（文件名）
+得到文件名avp.exe、avpif.exe 后再构造以下URL 进行下载后再构造以下URL 进行下载：
+http://info.hangro.net/file/start?session=[8 位随机数字]&imsi=avp.exe
+http://info.hangro.net/file/start?session=[8 位随机数字]&imsi=avpif.exe
+图18：拼接文件后的下载请求
+下载回来的文件同样需要经过简单的RC4 解密，密钥为Higaisakora.0：
+腾讯安全御见威胁情报中心 14 / 73
+TLP：WHITE
+图19：解密文件的RC4 密钥信息
+最后使用CreateProcessA 执行下载回来的文件：
+图20：执行下载后文件的代码细节
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "carsrvdx.sed", "type" : "DOCF"},
+        {"id": 2, "description": "http://info.hangro.net/file/start?session=[8 位随机数字]&imsi=0", "type" : "URLS"},
+        {"id": 3, "description": "info.hangro.net", "type" : "CCSH"},
+        {"id": 4, "description": "avp.exe", "type" : "EXEF"},
+        {"id": 5, "description": "avpif.exe", "type" : "EXEF"},
+        {"id": 6, "description": "http://info.hangro.net/file/start?session=[8 位随机数字]&imsi=avp.exe", "type" : "URLS"},
+        {"id": 7, "description": "http://info.hangro.net/file/start?session=[8 位随机数字]&imsi=avpif.exe", "type" : "URLS"},
+        {"id": 8, "description": "Higaisakora.0", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "constructs_url_to_download_payload"},
+        {"source": 2, "target": 3, "rel_name" : "hosted_by"},
+        {"source": 2, "target": 4, "rel_name" : "downloads"},
+        {"source": 2, "target": 5, "rel_name" : "downloads"},
+        {"source": 6, "target": 3, "rel_name" : "hosted_by"},
+        {"source": 7, "target": 3, "rel_name" : "hosted_by"},
+        {"source": 4, "target": 8, "rel_name" : "decrypted_with"},
+        {"source": 5, "target": 8, "rel_name" : "decrypted_with"},
+        {"source": 1, "target": 4, "rel_name" : "executes"},
+        {"source": 1, "target": 5, "rel_name" : "executes"}
+    ]
+}

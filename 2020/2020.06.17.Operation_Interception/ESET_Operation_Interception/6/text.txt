@@ -1,0 +1,172 @@
+2 THE ATTACKS
+Operation In(ter)ception attacks we investigated progressed through several phases, described below.
+2.1 Initial compromise
+The attackers used LinkedIn to target employees within the chosen companies. To initiate contact, they
+approached the targets with fictitious job offers using LinkedIn’s messaging feature. In order to appear
+credible, the attackers posed as representatives of well-known, existing companies in the aerospace and
+defense industry.
+For each of the targeted companies we investigated, the attackers had created a separate fake LinkedIn
+account: one impersonating an HR manager from Collins Aerospace (formerly Rockwell Collins), a major
+US supplier of aerospace and defense products; the other posing as an HR representative of General
+Dynamics, another large US-based corporation with a similar focus. (Note: These LinkedIn accounts no
+longer exist.)
+Figure 1 shows a fake job offer message sent under the Collins Aerospace ruse.
+3 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+Figure 1 // A fake job offer sent via LinkedIn to employees at one of the targeted companies
+Once the contact was established, the attackers snuck malicious files into the communication,
+disguising them as documents related to the advertised job offer. Figure 2 shows an example of such
+communication, in which the attackers impersonated General Dynamics.
+Figure 2 // Communication between the attackers and an employee of one of the targeted companies
+4 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+The files were sent directly via LinkedIn messaging, or via email containing a OneDrive link. For
+the latter option, the attackers created fake email accounts corresponding with their fake LinkedIn
+personas, as seen in Figure 3.
+The shared file was a password-protected RAR archive containing a LNK file. Upon opening the LNK file,
+the Command Prompt utility was executed, opening a remote PDF file in the target’s default browser.
+The PDF appeared to contain salary information for the reputed job positions, as seen in Figure 4.
+Figure 3 // Email linking to a malicious file sent to one of the targeted companies (partially redacted)
+Figure 4 // The contents of the decoy PDF file
+5 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+However, the PDF only served as a decoy. In the background, the Command Prompt created a new
+folder (e.g. ~~C:\NVIDIA~~ ), copied the WMI Commandline Utility ( ~~WMIC.exe~~ ~~)~~ to this folder while renaming
+the utility in the process (e.g. to ~~nvc.exe~~ ; more on the deceptive naming of files and folders in the
+section Masquerading ). Finally, it created a scheduled task, set to periodically execute a remote XSL script
+via the copied ~~WMIC.exe~~ ~~.~~ This enabled the attackers to get their initial foothold inside the targeted
+company and ensure persistence on the compromised computer.
+Afterwards, the attackers deleted the fake LinkedIn profiles.
+Figure 5 summarizes the steps of the initial compromise stage.
+Opens Contains Contains Executes Opens
+|Col1|Contains|
+|---|---|
+|||
+|RAR|Col2|
+|---|---|
+|RAR|Contains|
+|LNK|Col2|
+|---|---|
+|LNK|Executes|
+Target LinkedIn message or
+email with OneDrive link
+RAR archive job.offer.lnk
+|ffer.lnk cmd|Dec d.exe|
+|---|---|
+|CreatesCopi|Creates viaes to|
+|create|schtasks folder|
+Folder in C:\ WMIC Scheduled task
+Figure 5 // Attack scenario from initial contact to compromise
+2.2 Reconnaissance
+Having established their initial foothold, the attackers explored the environment using PowerShell
+commands.
+Since the logging of executed PowerShell commands is disabled by default, we couldn’t retrieve the
+commands used. However, we found that the attackers queried the AD (Active Directory) server to
+obtain the list of employees including administrator accounts, and subsequently performed password
+brute-force attacks on the administrator accounts.
+2.3 Attacker tools and techniques
+Apart from deploying their custom malware, the Operation In(ter)ception operators utilized a number
+of legitimate tools and OS functions as well. We describe the more interesting of these in this section.
+2.3.1 Delivered malware and tools
+After the initial compromise, the attackers employed a number of malicious tools, including custom,
+multistage malware, and modified versions of open-source tools. Namely, we have seen the following
+components:
+
+
+Custom downloader (Stage 1)
+
+
+Custom backdoor (Stage 2)
+
+
+Modified PowerShdll – a tool to run PowerShell code without the use of ~~powershell.exe~~
+
+
+Custom DLL loaders used for executing the custom malware
+
+
+Beacon DLL likely used for verifying connections to remote servers
+
+
+dbxcli – open-source command-line client for Dropbox
+
+
+One of the malware samples we found during the investigation was named ~~Inception.dll~~, which
+inspired our naming of the operation.
+Figure 6 depicts the malware’s execution flow, as observed during the investigation.
+6 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+Scheduled task
+WMIC Compromised or
+attacker’s server
+rundll32
+Stage 2
+PowerShell
+DLL
+Figure 6 // Malware execution flow
+2.3.2 Encryption methods
+Besides malware, the adversaries used “living off the land” tactics, abusing preinstalled Windows utilities
+to download, decode, and execute their tools, in an effort to hide malicious activity among legitimate
+processes. Our investigation revealed the following techniques:
+
+
+Use of ~~WMIC~~ to interpret remote XSL scripts
+
+
+Use of ~~certutil~~ to decode base64-encoded downloaded payloads
+
+
+Use of ~~rundll32~~ and ~~regsvr32~~ to run custom malware
+
+
+2.3.3 Masquerading
+Besides malware, the adversaries used “living off the land” tactics, abusing preinstalled Windows utilities
+to download, decode, and execute their tools, in an effort to hide malicious activity among legitimate
+process
+
+
+C:\ProgramData\DellTPad\DellTPadRepair.exe
+
+
+C:\Intel\IntelV.cgi
+
+
+Interestingly, as previously mentioned in the Initial compromise section, the attackers also used this
+technique for the misused Windows utilities. The utilities were copied to a folder created by the
+attackers (e.g. ~~C:\NVIDIA~~ ) and renamed (e.g. ~~regsvr32.exe~~ was renamed to ~~NvDaemon.exe~~ ~~)~~
+7 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+2.3.4 Code signing
+Later in the operation, the attackers digitally signed their malware (both observed stages) and the dbxcli
+utility, as seen in Figure 7. The certificate was issued in October 2019 – at the time of the attacks – to
+16:20 Software, LLC. According to our research, 16:20 Software, LLC is an existing company based in
+Pennsylvania, USA, incorporated in May 2010.
+Figure 7 // Certificate used to sign the malware and dbxcli tool used in this operation
+2.4 Data gathering and exfiltration
+Based on the job titles of the employees initially targeted via LinkedIn, it appears that Operation
+In(ter)ception targeted technical and business-related information. Neither the malware analysis nor
+the investigation allowed us to gain insight into what exact file types the attackers were aiming for.
+For exfiltration, the attackers archived the data into a RAR file and used a custom build of dbxcli, an
+open-source command-line client for Dropbox.
+On GitHub, the source code of dbxcli is provided along with pre-built binaries for 64-bit architecture.
+Interestingly, the version of dbxcli used in Operation In(ter)ception was built for 32-bit architecture,
+which suggests the attackers built the tool from the source code themselves, to ensure the client ran on
+both 32-bit and 64-bit systems. Another indication that the dbxcli utility was custom-built is that this
+tool was signed using the same 16:20 Software, LLC certificate as the custom malware.
+8 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+2.5 Lateral movement
+While we do not have much information about how the attackers moved through the victims’ networks,
+we assume that WMI commands were used. When moving on to another computer, the attackers
+removed all the previously delivered files from the compromised computer.
+2.6 Business email compromise
+In our investigation of one of the victims, we found evidence that the attackers attempted to use the
+compromised accounts to lure money from other companies.
+Among the victim’s emails, the attackers found communication between the victim and a customer
+regarding an unresolved invoice. They followed up the conversation and urged the customer to pay
+the invoice, however, to a different bank account than previously agreed (see Figure 8), to which the
+customer responded with some inquires.
+As part of this ruse, the attackers registered an identical domain name to that of the compromised
+company, but on a different top-level domain, and used an email associated with this fake domain for
+further communication with the targeted customer.
+The attackers did not respond to the customer’s inquiries and continued to urge them to pay. Instead
+of paying the invoice, however, the targeted customer reached out to the correct email address of the
+victim for assistance, thwarting the attackers’ attempt.
+The victim recognized something was amiss and reported the communication as an incident.
+Meanwhile, the attackers changed the DNS A record of the fake domain.
+Figure 8 // BEC email message sent from a victim’s compromised email account
+9 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE

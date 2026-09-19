@@ -1,0 +1,43 @@
+
+
+
+Sentence : Persistence Mechanism
+The attackers used the WMI event subscription mechanism to ensure persistence. Even though we couldn’t get
+the PowerShell scripts listed in this section, we gathered the traces that indicate that the “ powershell.exe -nop
+-ep bypass -c c:\windows\temp\m.ps1 f9eef8b27ff68f41a8eb0b8739370640” command line is responsible
+for persistence setup. As a result, it creates an event consumer named PerfData having the “powershell.exe -nop
+-c [System.Reflection.Assembly]::Load([System.Convert]::FromBase64String(([WmiClass] ‘root\cimv2:Win32_
+Base64Class’).Properties[‘Prop’].Value));[utYEb.a6Kxxs]::Ye5d(10)” command line associated with it. It also creates
+two event filters, named PerfOsOnce and PerfOs, which we believe should trigger the consumer command line.
+The specifics of the CommandLineEventConsumer suggests that the script that installs the persistence creates a
+WMI object names Win32_Base64Class that has a propriety name “ Prop ” that contains a base64 string representation
+of a .Net binary. From that command line, it is clear that the .Net binary uses the namespace utYEb, the public class
+a6Kxxs that has the Ye5d method. We encounter a few such command lines that will be presented in the IOC section.
+Although we couldn’t obtain the content of that WMI object, the behavioral telemetry suggests that it creates a
+svchost.exe process used for injecting code into it using APC mechanism .
+12
+Bitdefender Whitepaper
+FIN8 Returns with Improved BADHATCH Toolkit
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "WMI event subscription", "type" : "TTPS"},
+        {"id": 2, "description": "powershell.exe -nop -ep bypass -c c:\\windows\\temp\\m.ps1 f9eef8b27ff68f41a8eb0b8739370640", "type" : "EXEF"},
+        {"id": 3, "description": "PerfData (event consumer)", "type" : "TTPS"},
+        {"id": 4, "description": "powershell.exe -nop -c [System.Reflection.Assembly]::Load([System.Convert]::FromBase64String(([WmiClass] ‘root\\cimv2:Win32_Base64Class’).Properties[‘Prop’].Value));[utYEb.a6Kxxs]::Ye5d(10)", "type" : "EXEF"},
+        {"id": 5, "description": "PerfOsOnce (event filter)", "type" : "TTPS"},
+        {"id": 6, "description": "PerfOs (event filter)", "type" : "TTPS"},
+        {"id": 7, "description": "Win32_Base64Class", "type" : "EXEF"},
+        {"id": 8, "description": ".Net binary with namespace utYEb and class a6Kxxs", "type" : "EXEF"},
+        {"id": 9, "description": "svchost.exe process", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "creates"},
+        {"source": 4, "target": 3, "rel_name" : "command line for"},
+        {"source": 5, "target": 3, "rel_name" : "triggers"},
+        {"source": 6, "target": 3, "rel_name" : "triggers"},
+        {"source": 4, "target": 7, "rel_name" : "creates"},
+        {"source": 8, "target": 4, "rel_name" : "used in"},
+        {"source": 9, "target": 8, "rel_name" : "injects"}
+    ]
+}

@@ -1,0 +1,94 @@
+
+
+
+Sentence : Behavior Analysis
+The malware is delivered through spear-phishing email messages. The infection starts with a
+macro-armed Excel document. The Macro contains a base64 encoded executable payload,
+copied as “monitor.exe”, which will be deployed in a just created folder, named “.Monitor” under
+“C:\Users\Public”. Through the usage of Windows Task Scheduler, “monitor.exe” is added to a
+new task, named “ SystemErrorReporter ”, whose execution is scheduled every minute.
+Analyzing the resources embedded into “ monitor.exe ”, it is possible to discover some further
+information, such as the credentials used to access a Microsoft Exchange server hosted in
+Lebanon. For privacy reasons, the primary communication server will not be publicly released.
+hardcoded credentials of the implant
+We guess the attackers have compromised the account “ media@xxx.local ”, belonging to the
+local domain of the targeted institution, and used it to perform malicious operations. In this
+specific case, the access to the mail server is used by the malware to get a list of commands to
+be executed through the retrieving and parsing of a CMD list. So, it acts like a command-and
+control server.
+https://blog.telsy.com/apt34-aka-oilrig-attacks-lebanon-government-entities-with-maildropper-implant/ 2/6
+3/3/2020 Telsy TRT
+Retrieving and parsing CMDs
+If the mail server is down or deny the access, the malware uses a backup URL,
+“ hxxp://godoycrus.com ” to get the commands list, according to the evidences below:
+Switch between Command and Control servers
+The malware is capable to perform the following primary operations:
+[+] arbitrary commands execution
+[+] download and upload of files
+[+] data exfiltration
+The following is a extraction of the commands handling code snippet:
+https://blog.telsy.com/apt34-aka-oilrig-attacks-lebanon-government-entities-with-maildropper-implant/ 3/6
+3/3/2020 Telsy TRT
+Code handling code snippet
+Interesting the way through which the malware retrieves the commands from the mail server. It
+access to the Inbox folder and search for emails containing a specific subject:
+“ Resume7AKF1PMAVAHI7SYK ” . If one or more emails are found, the malware tries to extract
+the content of the attachment files, that corresponds to a Base64-encoded command that should
+be executed.
+Once the attachments are inspected, the current email is definitely deleted using the
+“ HardDelete ” flag. In this way the email message does not even appear in the trash folder.
+As shown above, the retrieved commands are executed using the “ ExecAllCmds ” method and
+the result is sent to the C2 through the “ SendResult ” method. If the malware is using the
+Exchange server as C2, the output of the commands execution is sent as email message. Once
+again, the malware uses a specific pattern to build the email: its subject is build starting from the
+https://blog.telsy.com/apt34-aka-oilrig-attacks-lebanon-government-entities-with-maildropper-implant/ 4/6
+3/3/2020 Telsy TRT
+string “ Great! 7AKF1PMAVAHI7SYK ”, appending the current date to it. The email body contains
+only the string “ This is our reusme! ” ( showing with a syntax error ) and the attachment is a “. txt ”
+file named “ resume.txt ”, which contains the encoded information returned by the commands
+execution. The following image is another evidence about what observed:
+All the data exchanged between the implant and the server is encrypted using an AES+RSA
+schema. The data is first ciphered using AES algorithm with an auto-generated key, then the key
+is encrypted using RSA and prepended to the data that will be sent to the server, as shown
+following:
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "spear-phishing email messages", "type" : "MAIL"},
+        {"id": 2, "description": "macro-armed Excel document", "type" : "DOCF"},
+        {"id": 3, "description": "base64 encoded executable payload (monitor.exe)", "type" : "EXEF"},
+        {"id": 4, "description": ".Monitor folder under C:\\Users\\Public", "type" : "SYSP"},
+        {"id": 5, "description": "Windows Task Scheduler", "type" : "APPS"},
+        {"id": 6, "description": "SystemErrorReporter task", "type" : "TPTH"},
+        {"id": 7, "description": "Microsoft Exchange server in Lebanon", "type" : "MAIL"},
+        {"id": 8, "description": "media@xxx.local account", "type" : "ACTO"},
+        {"id": 9, "description": "CMD list from email server", "type" : "DOCF"},
+        {"id": 10, "description": "hxxp://godoycrus.com", "type" : "URLS"},
+        {"id": 11, "description": "Resume7AKF1PMAVAHI7SYK email subject", "type" : "MAIL"},
+        {"id": 12, "description": "Base64-encoded command in attachment files", "type" : "DOCF"},
+        {"id": 13, "description": "HardDelete flag for emails", "type" : "TTPS"},
+        {"id": 14, "description": "ExecAllCmds method", "type" : "TTPS"},
+        {"id": 15, "description": "SendResult method", "type" : "TTPS"},
+        {"id": 16, "description": "Great! 7AKF1PMAVAHI7SYK email subject pattern", "type" : "MAIL"},
+        {"id": 17, "description": "resume.txt attachment file", "type" : "DOCF"},
+        {"id": 18, "description": "AES+RSA encryption schema", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "delivers"},
+        {"source": 2, "target": 3, "rel_name" : "contains"},
+        {"source": 3, "target": 4, "rel_name" : "deployed in"},
+        {"source": 5, "target": 6, "rel_name" : "creates"},
+        {"source": 6, "target": 3, "rel_name" : "schedules execution of"},
+        {"source": 8, "description": "compromised by attackers", "type" : "ACTO"},
+        {"source": 7, "target": 9, "rel_name" : "retrieves"},
+        {"source": 10, "target": 9, "rel_name" : "backup source for"},
+        {"source": 9, "target": 3, "rel_name" : "executed by"},
+        {"source": 11, "target": 12, "rel_name" : "contains"},
+        {"source": 3, "target": 12, "rel_name" : "extracts and executes"},
+        {"source": 3, "target": 13, "rel_name" : "uses to delete emails"},
+        {"source": 3, "target": 14, "rel_name" : "uses to execute commands"},
+        {"source": 3, "target": 15, "rel_name" : "uses to send results"},
+        {"source": 16, "target": 7, "rel_name" : "sends emails with subject pattern"},
+        {"source": 17, "target": 15, "rel_name" : "sends as attachment in result email"}
+    ]
+}

@@ -1,0 +1,86 @@
+
+
+
+Sentence : 6.4 Software signatures and keys
+No public key data was directly identified in BROM or HBOOT, suggesting this data was loaded before control
+was passed to BROM. So where was this key data stored? It was possible to make some educated guesses as to
+where the public key(s) might be stored:
+
+
+In the ROM code of SLIMpro
+
+
+In some other location related to SLIMpro
+
+
+Somewhere on the NOR Flash
+
+
+The easiest way to verify this was by browsing through the Flash images in the hope of stumbling upon the keys.
+During Flash analysis we already identified one possible candidate: the AMCC data blob at Flash offset
+0x7DA0800, with very conspicuous strings (file names?) like ppc.bin.key . This piece of data was the same in all
+extracted Flash images, suggesting this data to be global for at least any device within the family – as expected
+for software signing keys.
+F-Secure.com | © F-Secure LABS 36
+PUBLIC
+Following the AMCC container format description (appendix 6.3), the files inside could be extracted.
+This left us with the ppc.bin.key file (the ppc1.bin.key is identical) which might have contained software
+verification keys, but its format was not immediately obvious. However, one could note that there were
+repeating data pieces such as hex strings AB 12 34 CD and BE EF CA FE at the start and the end, and a text
+string C2960X in the middle; all repeated 4 times. This could mean there were 4 keys contained within this file.
+Figure 26. The beginning of ppc.bin.key and the BEEFCAFE marker.
+After spending several hours on decoding the format of these entries, we were able to provide the following
+summary: the format loosely followed a tag-length-value (TLV) structure with 7-byte fixed header AE 02 25 AB
+12 34 CD and 4-byte fixed trailer BE EF CA FE, tags were one byte, lengths were two bytes. Tag 04 was the RSA
+modulus, and tag 05 is the RSA public exponent (always 0x10001, a typical value).
+Two unique public key moduli were extracted from this file; they are reproduced below for reference. It is
+important to highlight the fact these keys can only be used to verify signatures.
+Investigating the signature format, we could conclude it followed the same TLV format albeit without headers
+and trailers. Tag 0B was identified to be the RSA signature.
+F-Secure.com | © F-Secure LABS 37
+PUBLIC
+Putting this knowledge to work, we could easily confirm whether our deductions were correct with Python:
+Judging by the well-formed decrypted data, we found the right software signature verification key; if the key
+was incorrect, the decrypted data would appear random. The format appeared to fit what was defined in PKCS#1
+v1.5 [13] and the data told us the hash function used was SHA-512.
+13 https://tools.ietf.org/html/rfc2313
+F-Secure.com | © F-Secure LABS 38
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BROM", "type" : "EXEF"},
+        {"id": 2, "description": "HBOOT", "type" : "EXEF"},
+        {"id": 3, "description": "SLIMpro ROM code", "type" : "DOCF"},
+        {"id": 4, "description": "NOR Flash", "type" : "STOR"},
+        {"id": 5, "description": "AMCC data blob at Flash offset 0x7DA0800", "type" : "DOCF"},
+        {"id": 6, "description": "ppc.bin.key file", "type" : "DOCF"},
+        {"id": 7, "description": "ppc1.bin.key file", "type" : "DOCF"},
+        {"id": 8, "description": "hex string AB 12 34 CD", "type" : "TAMP"},
+        {"id": 9, "description": "hex string BE EF CA FE", "type" : "TAMP"},
+        {"id": 10, "description": "text string C2960X", "type" : "TAMP"},
+        {"id": 11, "description": "tag-length-value (TLV) structure", "type" : "TTPS"},
+        {"id": 12, "description": "RSA modulus tag 04", "type" : "TTPS"},
+        {"id": 13, "description": "RSA public exponent tag 05", "type" : "TTPS"},
+        {"id": 14, "description": "two unique public key moduli", "type" : "TAMP"},
+        {"id": 15, "description": "RSA signature tag 0B", "type" : "TTPS"},
+        {"id": 16, "description": "PKCS#1 v1.5", "type" : "TTPS"},
+        {"id": 17, "description": "SHA-512 hash function", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "related to"},
+        {"source": 1, "target": 4, "rel_name" : "related to"},
+        {"source": 5, "target": 4, "rel_name" : "located in"},
+        {"source": 6, "target": 5, "rel_name" : "extracted from"},
+        {"source": 7, "target": 5, "rel_name" : "extracted from"},
+        {"source": 8, "target": 6, "rel_name" : "contained in"},
+        {"source": 9, "target": 6, "rel_name" : "contained in"},
+        {"source": 10, "target": 6, "rel_name" : "contained in"},
+        {"source": 11, "target": 6, "rel_name" : "structure of"},
+        {"source": 12, "target": 11, "rel_name" : "part of"},
+        {"source": 13, "target": 11, "rel_name" : "part of"},
+        {"source": 14, "target": 6, "rel_name" : "extracted from"},
+        {"source": 15, "target": 11, "rel_name" : "part of"},
+        {"source": 16, "target": 11, "rel_name" : "follows format defined in"},
+        {"source": 17, "target": 16, "rel_name" : "used in"}
+    ]
+}

@@ -1,0 +1,47 @@
+Additional RC4 Layer
+An additional RC4 layer has been identified in droppers used by APT41, which we internally track
+as DEADEYE. The layer has been previously detailed in a blog post by ESET. We wanted to
+provide some additional information on this, as it was used in some of the samples we managed
+to brute force.
+The additional layer is position independent shellcode containing a reflective DLL loader. The
+loader decrypts an RC4 encrypted payload and loads it in memory. The code itself is a straight
+forward loader with the exception of some interesting artifacts identified during analysis.
+https://www.fireeye.com/blog/threat-research/2019/10/lowkey-hunting-for-the-missing-volume-serial-id.html 7/17
+10/16/2019 LOWKEY: Hunting for the Missing Volume Serial ID | FireEye Inc
+As mentioned in the blog post by ESET, the encrypted payload is prepended with a header. It
+contains the RC4 encryption key and two fields of variable length, which have previously been
+identified as file names. These two fields are encrypted with the same RC4 encryption key that is
+also used to decrypt the payload. The header is shown in Table 3.
+|Header bytes|Meaning|
+|---|---|
+|0 – 15|RC4 key XOR encoded with 0x37|
+|16– 19|Size of loader stub before the header|
+|20– 23|RC4 key size|
+|24– 27|Command ASCII size (CAS)|
+|28– 31|Command UNICODE size (CUS)|
+|32– 35|Size of encrypted payload|
+|36– 39|Launch type|
+|40– (40 + CAS)|Command ASCII|
+|(40 + CAS)– (40 + CAS + CUS)|Command UNICODE|
+|(40 + CAS + CUS)– (40 + CAS + CUS + size of encrypted payload)|Encrypted payload|
+Table 3: RC4 header overview
+Looking at the payloads hidden behind the RC5 layer, we observed, that these fields are not
+limited to file names, instead they can also contain commands used by the reflective loader. If no
+command is specified, the default parameter is the file name of the loaded payload. In some
+instances, this revealed the full file path and file name in the development environment. Table 4
+shows some paths and file names. This is also how we found the command (x -c wcnapi.mui)
+used to launch the decrypted mui file from the first part of the blog post.
+|MD5 hash|Arguments found in the RC4 layer|
+|---|---|
+|7f05d410dc0d1b0e7a3fcc6cd‐da7a2ff|E:\code\PortReuse\3389-share\DeviceIOContrl-Hook\v1.3-53\Inner-Loader\x64\Release\Inner-Loader.dll|
+|7f05d410dc0d1b0e7a3fcc6cd‐da7a2ff|E:\code\PortReuse\3389-share\DeviceIOContrl-Hook\v1.3-53\NetAgent\x64\Release\NetAgent.exe|
+https://www.fireeye.com/blog/threat-research/2019/10/lowkey-hunting-for-the-missing-volume-serial-id.html 8/17
+10/16/2019 LOWKEY: Hunting for the Missing Volume Serial ID | FireEye Inc
+|7f05d410dc0d1b0e7a3fcc6cd‐da7a2ff|E:\code\PortReuse\3389-share\DeviceIOContrl-Hook\v1.3-53\SK3.x\x64\Release\SK3.x.exe|
+|---|---|
+|7f05d410dc0d1b0e7a3fcc6cd‐da7a2ff|UserFunction.dll|
+|7f05d410dc0d1b0e7a3fcc6cd‐da7a2ff|ProcTran.dll|
+|c11d‐d805de683822bf4922aecb9bfef5|E:\code\PortReuse\iis-share\2.5\IIS_Share\x64\Release\IIS_Share.dll|
+|c11d‐d805de683822bf4922aecb9bfef5|UserFunction.dll|
+|c11d‐d805de683822bf4922aecb9bfef5|ProcTran.dll|
+Table 4: Decrypted paths and file names

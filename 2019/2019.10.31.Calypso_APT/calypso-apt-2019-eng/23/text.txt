@@ -1,0 +1,38 @@
+Initialization
+To start, the malware parses the configuration provided to it by the loader.
+Figure 26. Configuration sample
+Configuration structure is as follows:
+Struct RawConfig{
+_ DWORD protocolId;
+_ BYTE c2Strings [0x100];
+};
+The protocolId field indicates the protocol to be used for communicating with C2. There are a
+total of three possibilities:
+�  If protocolId equals 1, a TCP-based protocol will be used.
+�  If protocolId equals 2, the protocol will be HTTP-based.
+�  If protocolId equals 3, it will be HTTPS-based.
+The time stamp is calculated from the registry from the key SOFTWARE\Microsoft\Windows\
+CurrentVersion\Telephony (Perf0 value). If reading the time stamp is impossible, "temp" is added
+to the computer identifier.
+
+
+
+Figure 27. Generating computer ID
+
+
+
+20
+Next Hussar creates a window it will use for processing incoming messages.
+Figure 28. Creating dispatcher window
+Then the malware adds itself to the list of authorized applications in Windows Firewall, using the
+INetFwMgr COM interface.
+To complete initialization, Hussar creates a thread which connects to C2 and periodically polls
+for commands. The function running in the thread uses the WSAAsyncSelect API to notify the
+window that actions can be performed with the created connection (socket is "ready for reading,"
+"connected," or "closed").
+Figure 29. Communication between the open socket and the window
+In general, for transmitting commands, the malware uses the window and Windows messaging
+mechanism. The window handle is passed to the modules, and the dispatcher has branches not
+used by the stager, so we can assume that the modules can use the window for communication
+with C2.
+21

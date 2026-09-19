@@ -1,0 +1,89 @@
+
+
+
+Sentence : 4.1 Infrastructure schema
+Our investigation allowed us to draw a network schema of the attackers’ infrastructure.
+Figure 2: Network schema
+The infected machines communicate with the proxy through the Internet. The proxy server will
+forward the network packets to the Poison Ivy server. The proxy feature is done by an executable
+called xport.exe. This executable can encode network traffic using a xor operation. This feature
+requires having the executable running on both machines: the proxy and the Poison Ivy server.
+The syntax on the proxy server is:
+```
+xport.exe Proxy_ip proxy_port Poison_Ivy_ip Poison_Ivy_port number
+```
+The argument number can either be set to 1 or 2 and represents the two different encoding keys.
+The syntax on the Poison Ivy server is:
+Ref. RAP002_APT1_Technical_backstage.1.0 Version 1.0 Page 12 of 48
+Type Public document
+Project APT1: technical backstage
+Title malware analysis
+Classification Public
+The Poison Ivy server is managed by the attackers through a VMWare remote desktop, so that we
+were not able to get the real IP address of the attacker. During our investigation, we identified an
+established Remote Desktop Protocol (RDP) connection between the Poison Ivy server and the
+proxy server. We decided to install a key-logger on the Poison Ivy server that allowed us to see
+credentials to remotely connect to the proxy server.
+Since the attackers use RDP to manage the proxy server and that we had access, we copied the
+Windows event logs. Those logs contained all IPs which established a successful RDP
+authentication. We identified more than 350 unique IPs:
+We suppose that this list also contains Poison Ivy servers IPs and maybe IPs of attackers who
+inadvertently connect directly to the proxy).
+Here is the screenshot of the proxy RDP authentication:
+Figure 3: Proxy server login window
+Here is the screenshot of the Poison Ivy interface:
+Figure 4: Poison Ivy interface with the list of connected machines
+Ref. RAP002_APT1_Technical_backstage.1.0 Version 1.0 Page 13 of 48
+Type Public document
+Project APT1: technical backstage
+Title malware analysis
+Classification Public
+Here is the screenshot of an attacker using a remote shell to an infected target:
+Figure 5: Poison Ivy interface with a shell
+Using those accesses, we managed to exfiltrate a massive amount of files, event logs, netstat
+outputs… The interesting information can be divided in two categories:
+
+
+Information about the tools used by the attackers;
+
+
+Information about the targets.
+
+
+Ref. RAP002_APT1_Technical_backstage.1.0 Version 1.0 Page 14 of 48
+Type Public document
+Project APT1: technical backstage
+Title malware analysis
+Classification Public
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Infected machines", "type" : "SYSP"},
+        {"id": 2, "description": "Proxy server", "type" : "CCSH"},
+        {"id": 3, "description": "Poison Ivy server", "type" : "CCSH"},
+        {"id": 4, "description": "xport.exe", "type" : "EXEF"},
+        {"id": 5, "description": "XOR operation encoding", "type" : "TTPS"},
+        {"id": 6, "description": "Remote Desktop Protocol (RDP)", "type" : "NETP"},
+        {"id": 7, "description": "VMWare remote desktop", "type" : "APPS"},
+        {"id": 8, "description": "Key-logger", "type" : "EXEF"},
+        {"id": 9, "description": "Windows event logs", "type" : "DOCF"},
+        {"id": 10, "description": "350 unique IPs", "type" : "CCSH"},
+        {"id": 11, "description": "Poison Ivy interface with the list of connected machines", "type" : "APPS"},
+        {"id": 12, "description": "Remote shell to an infected target", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "communicates through"},
+        {"source": 2, "target": 3, "rel_name" : "forwards packets to"},
+        {"source": 4, "target": 5, "rel_name" : "uses"},
+        {"source": 4, "target": 2, "rel_name" : "runs on"},
+        {"source": 4, "target": 3, "rel_name" : "runs on"},
+        {"source": 6, "target": 2, "rel_name" : "connection between"},
+        {"source": 6, "target": 3, "rel_name" : "manages through"},
+        {"source": 7, "target": 3, "rel_name" : "uses for management"},
+        {"source": 8, "target": 3, "rel_name" : "installed on"},
+        {"source": 9, "target": 2, "rel_name" : "collected from"},
+        {"source": 10, "target": 2, "rel_name" : "identified through"},
+        {"source": 11, "target": 3, "rel_name" : "displayed on"},
+        {"source": 12, "target": 3, "rel_name" : "uses to connect"}
+    ]
+}

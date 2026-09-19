@@ -1,0 +1,170 @@
+
+
+
+Sentence : GEFILTE PHISH—BEST SERVED COLD
+After learning of an active attack incident from the Rocket Kitten group on a customer network, Check Point researchers decided to
+actively join the investigation. While the recent paper from Trend Micro and ClearSky (‘The Spy Kittens Are Back: Rocket Kitten 2’)
+does extensively cover the campaign’s narrative, we aimed to seek confirmation that our analyzed attack was positively connected to
+the same campaign and set out to provide additional value and insight.
+Upon learning of the attack, we attempted to communicate with the phishing web server and gather primary reconnaissance.
+We learned the same IP address was used for multiple malicious domains. Noting the server on this IP address was alive and well,
+we decided to probe and question that particular server’s purpose.
+What we found took us all by surprise.
+We started our web probe by making scripted GET requests attempting to browse to well-known paths. A minute later, we were
+excited to find a 200 OK response for a few requests, including /xampp and none other than /phpmyadmin (!).
+Suspecting false positive results by our scripts, we typed in /xampp into our browser and watched with awe:
+Image 8—A default configuration of XAMPP—on a live attacker server!
+We curiously entered the direct path into our web browser and loaded the phpmyadmin interface.
+It wasn’t until we actually submitted a query on the server, when we understood that phpmyadmin had been configured to allow
+password-less root access to any browsing visitor.
+“Such a gaping hole must be a decoy” we immediately thought. There is no way nation-state attackers would err in such amateur
+fashion, leaving their phishing server database exposed… would they?
+©2015 Check Point Software Technologies Ltd. All rights reserved  |  11
+If only they had paid attention to the ‘XAMPP Security’ page:
+Image 9 –“The MySQL admin user root has NO password—UNSECURE”
+Happily browsing through the free-for-all exposed database, we quickly noted numerous schemas; most of them were completely
+empty (for testing purposes?), with one specific schema standing out: ‘phakeddb’ .
+Image 10—phakeddb schema – note utf8_persian_ci collation for several tables
+’phakeddb’ contained a set of very interesting tables and data sets; the kind of data sets that fuel the fantasies of malware campaign
+researchers. Browsing these tables, we found the phishing web application, likely to be a custom development by the Rocket Kitten
+attackers. The web application would, upon operator instruction, generate the target-specific personalized phishing page for the
+targeted service (Gmail, YouTube, Hotmail, etc…).
+As we later learn, this platform was named ‘Oyun Management System’ by the attackers.
+©2015 Check Point Software Technologies Ltd. All rights reserved  |  12
+Let us first look at the ‘users’ table:
+Image 11—the ‘users’ table
+The attackers log in to the application, just like any other web platform, in order to set up their phishing campaigns. This server
+seems to have been deployed August 2014, when all users were created.
+And the hash type of passwd fields used? You may not be surprised to learn they used unsalted MD5 hashes .
+That’s actually not the most oblivious malpractice in this system, however; the hash for the user named “super admin” (assigned with
+all possible permissions) is e10adc3949ba59abbe56e057f20f883e . Hobbyist cryptographers may recognize this string as the
+MD5 hash for “123456”.
+Looking at user names, we can spot some potentially Persian names or aliases such as merah, kaveh, ahzab or amirhosein. These
+were potentially the campaign ‘operators’—tasked with social engineering and tailoring a phishing page per target. (hint: “123456”
+was not the only trivially crackable password in this list)
+Moving on to the intriguing “conversation” table, this appears to be an experimental messaging feature between attackers.
+Unfortunately, it was rarely used.
+Image 12—the ‘conversation’ table
+©2015 Check Point Software Technologies Ltd. All rights reserved  |  13
+Most messages include links to various phishing domain pages, perfectly correlating to reported attack pages, proving this database
+is indeed in direct correlation to the attacks.
+Interestingly enough, we can see user id 55 (correlating with the ‘attache’ username in the users table) making a request:
+```
+  please 20 subject for me.
+tank you
+attache
+```
+Later on, user id 60 (‘john’) pleas:
+```
+  seyeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeedddddddddddddd
+ddddddddd
+please
+please
+please
+support me
+please
+I need make a new project
+please add 50 subject
+tank you so match
+fadaaaaaaaaaaaaaaaaaaaaat
+bos bos
+;0
+```
+As 'boos' is Farsi for 'kiss', 'bos bos' might be considered the Persian version of 'xoxo'.
+What does that mean? What projects and subjects are this system’s users referring to?
+A glimpse into ‘requiretypes’ lays out a much clearer description for this system’s purpose:
+Image 13—the ‘requiretypes’ table
+©2015 Check Point Software Technologies Ltd. All rights reserved  |  14
+We can see template codes for phishing pages, including the descriptive “Victim Full Name,” “Victim User Name” field values.
+It seems that this application generates the custom phishing templates using these custom fields. Even more telling, we have
+examples for each field, reintroducing us to our Wool3n.H4T friend (author of key-logger malware by the same group), repeatedly
+mentioned in this column. This introduces the reasonable possibility that Wool3n.H4T himself wrote this “phishing application”
+as a supporting tool for the campaign.
+There is an intriguing ‘supervisor@ybsoft.com’ reference, too, but ybsoft.com is currently registered to a Chinese electronics shop,
+so no luck in that direction.
+The real jackpot, however, is still ahead.
+When we opened the ‘projects’ table, we momentarily lost our breath. A ‘project’ is apparently a single victim (target e-mail address),
+assigned with a ‘proj_id’, a tasked operator, and the specific link that was generated to be sent to this victim. We just hit 1842 records
+including all victims attacked starting August 2014 and all the way to August 2015 (when this database was accessed).
+Image 14—the ‘projects’ table
+Not only do we have the e-mail addresses of all victims, we also have the template values for their respective phishing pages
+(in the ‘projectmailrequirevalues’ table)!. For example a ‘Google Sign-In’ page normally displays the full name of the victim,
+as well as a public avatar defined by the user. The attackers had to replicate this look and feel, and filled the database with full
+names, addresses and photos for every targeted victim.
+We verified and retrieved names and images of previously reported victims as expected.
+©2015 Check Point Software Technologies Ltd. All rights reserved  |  15
+Image 15 – the ‘projectmailrequirevalues’ table
+But what does ‘projectlogs’ contain?
+Is that what we think it is?
+Image 16 —log of every access to any phishing page on that server
+This table contained a log entry for every access to any phishing page, including the credentials provided by the victims, if successfully
+fooled. We can now use this data to gather insightful analytics on spear phishing activity over one year spanning August 2014 to August
+2015. Please see the attack log analysis section in this report.
+Continuing our server probe, we discovered a similarly exposed ‘Webalizer’ interface, providing useful analytics including counters
+and frequently accessed links.
+©2015 Check Point Software Technologies Ltd. All rights reserved  |  16
+Image 17—Webalizer statistics for August 2015
+The Webalizer interface neatly presented us with a lot of useful metadata, including “Top 40 visitor IPs”—clearly identifying attacker
+access to the site, and providing us with many leads for the remainder of the investigation. Interestingly enough, we also found some
+referrer headers, leading to a path on the same server:
+Image 18—login screen
+©2015 Check Point Software Technologies Ltd. All rights reserved  |  17
+In what can be described as a ‘hacker secret access’ portal—we seem to have reached the web interface of the phishing platform.
+Testing the ‘admin’ credentials we previously “cracked”—we get:
+Image 19—the “Oyun Mangement System (OMS)” [sic]
+We now learn the attackers name this system “Oyun” and actually used Larry Page’s public profile picture as admin’s avatar.
+The remainder of the interface simply allows access to the phakeddb database, including insertion, editing of “projects” (/targets)
+and even the internal chat platform as evident in “conversations.”
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Rocket Kitten group", "type": "ACTO"},
+        {"id": 2, "description": "Check Point researchers", "type": "ACTO"},
+        {"id": 3, "description": "Phishing web server", "type": "CCSH"},
+        {"id": 4, "description": "/xampp", "type": "TPTH"},
+        {"id": 5, "description": "/phpmyadmin", "type": "TPTH"},
+        {"id": 6, "description": "XAMPP", "type": "APPS"},
+        {"id": 7, "description": "MySQL admin user root", "type": "APPS"},
+        {"id": 8, "description": "phakeddb schema", "type": "TAMP"},
+        {"id": 9, "description": "Oyun Management System", "type": "APPS"},
+        {"id": 10, "description": "users table", "type": "TAMP"},
+        {"id": 11, "description": "conversation table", "type": "TAMP"},
+        {"id": 12, "description": "requiretypes table", "type": "TAMP"},
+        {"id": 13, "description": "projects table", "type": "TAMP"},
+        {"id": 14, "description": "projectmailrequirevalues table", "type": "TAMP"},
+        {"id": 15, "description": "projectlogs table", "type": "TAMP"},
+        {"id": 16, "description": "Webalizer interface", "type": "APPS"},
+        {"id": 17, "description": "Top 40 visitor IPs", "type": "IOCS"},
+        {"id": 18, "description": "login screen", "type": "TPTH"},
+        {"id": 19, "description": "Oyun Management System (OMS)", "type": "APPS"},
+        {"id": 20, "description": "Larry Page’s public profile picture", "type": "TAMP"},
+        {"id": 21, "description": "MD5 hash e10adc3949ba59abbe56e057f20f883e", "type": "IOCS"},
+        {"id": 22, "description": "supervisor@ybsoft.com", "type": "MAIL"},
+        {"id": 23, "description": "ybsoft.com", "type": "CCSH"},
+        {"id": 24, "description": "Wool3n.H4T", "type": "ACTO"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name": "operates"},
+        {"source": 2, "target": 3, "rel_name": "investigates"},
+        {"source": 3, "target": 4, "rel_name": "hosts"},
+        {"source": 3, "target": 5, "rel_name": "hosts"},
+        {"source": 3, "target": 6, "rel_name": "runs"},
+        {"source": 3, "target": 7, "rel_name": "uses"},
+        {"source": 3, "target": 8, "rel_name": "contains"},
+        {"source": 3, "target": 9, "rel_name": "hosts"},
+        {"source": 9, "target": 10, "rel_name": "includes"},
+        {"source": 9, "target": 11, "rel_name": "includes"},
+        {"source": 9, "target": 12, "rel_name": "includes"},
+        {"source": 9, "target": 13, "rel_name": "includes"},
+        {"source": 9, "target": 14, "rel_name": "includes"},
+        {"source": 9, "target": 15, "rel_name": "includes"},
+        {"source": 3, "target": 16, "rel_name": "hosts"},
+        {"source": 16, "target": 17, "rel_name": "displays"},
+        {"source": 3, "target": 18, "rel_name": "hosts"},
+        {"source": 18, "target": 19, "rel_name": "leads_to"},
+        {"source": 19, "target": 20, "rel_name": "uses"},
+        {"source": 1, "target": 21, "rel_name": "uses"},
+        {"source": 22, "target": 23, "rel_name": "registered_to"},
+        {"source": 24, "target": 9, "rel_name": "develops"}
+    ]
+}

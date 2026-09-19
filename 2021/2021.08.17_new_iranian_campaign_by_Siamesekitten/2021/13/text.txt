@@ -1,0 +1,151 @@
+Shark Backdoor
+Malware Analysis
+In July 2021, indicators associated with this attack were shared with us by colleague researchers.
+Through cross-referencing findings from the campaign, we identified this malware as a substitute for
+DanBot. According to one of the files’ PDB path, the malware is named “Shark”, a name we adopted
+(like in Milan’s case):
+C:\Projects\Shark\Shark\obj\Debug\Shark.pdb
+In addition, we were able to detect other PDB paths containing the name” Shark”, but the file name
+was changed to appear more legitimate. Here are the two additional paths:
+D:\source\repos\Shark\Shark\obj\Release\audioddg.pdb
+C:\Users\David\Desktop\sharkkkkkk\Shark\obj\Release\Winlangdb.pdb
+Unlike the Milan malware, these files were written in .NET instead of C ++. The malware requires the
+use of a parameter that contains part of the executed file’s name. The malware will generate a Mutex
+with the file’s name as its value to make sure that the malware does not run on the infected machine
+more than once. Executing the malware is also conditioned by the screen width being more than 600
+pixels.
+
+© All rights reserved to ClearSky Cyber Security ltd. 2021
+info@clearskysec.com www.clearskysec.com
+TLP:WHITE
+18 | P a g e
+Next, the malware will activate a function called ‘redus’ . This function produces an encrypted G-ZIP file
+with a preset configuration which is encoded within the malware. This configuration file contains two
+C&C servers and various malware functions, which will be detailed below.
+The following is the relevant code snippet:
+The configuration file will be encoded using a 0x2a XOR key. The malware will generate four folders
+according to the relevant functions named ‘D1’, ‘U1’, ‘D2’ and ‘U2’ - like the folders created when the
+Milan backdoor is installed. Random numbers between 0 and 1,000,000 will be added before and after
+the predefined folder names.
+
+© All rights reserved to ClearSky Cyber Security ltd. 2021
+info@clearskysec.com www.clearskysec.com
+TLP:WHITE
+19 | P a g e
+The following is an analysis of the parameters we detected in the configuration:
+|Field|Purpose|
+|---|---|
+|S1|C&C server 1|
+|S2|C&C server 2|
+|T1|DNS traffic pause intervals|
+|T2|HTTP traffic pause intervals|
+|D1|Determines the path that will store files downloaded through DNScommunication|
+|D2|Determines the path that will store files downloaded throughHTTP communication|
+|U1|Determines the path that will store files to be uploaded to the C&Cthrough DNS communication|
+|U2|Determines the path that will store files to be uploaded to the C&Cthrough HTTP communication|
+|ID|Defines a unique identifier for the infected machine|
+|SH|If empty - receive information via DNS queriesIf not empty - send information through HTTP requests|
+|HS|If 0 - send information through DNS queriesIf 1 - receive information via HTTP requests|
+|Di / Hi|Unknown (apparently, these are communication parameters)|
+To establish a foothold on the machine, the malware will save the infected machine’s GUID and paste
+it into the configuration ID. In addition, the machine creates four main functions that indicate
+communications with the C&C server (over HTTP and DNS). DNS communications are sent using a
+unique Domain Generation Algorithm. Alongside another function called ‘E’, the functions run as an
+infinite thread, allowing the malware to continue running as long as the machine is turned on.
+The five distinct functions are ‘HT’, ‘HT_SEND’, ‘DN’, ‘DN_SEND’, and ‘E’.
+The E function is responsible for managing files in the D1 and D2 folders. These folders contain data
+downloaded to the infected machine from the C&C server. The malware initially searches for ZIP files,
+saving their content to the memory and deleting the files.
+If the file’s suffix is TMP.ZIP, it is assumed to contain commands and is extracted and decrypted using
+the Reject function, like the configuration file. The results of executing the commands will be stored in
+the folders U1 or U2 to be uploaded to the C&C, matching the D1 or D2 folders in which they originated.
+Notably, some of the commands require CMD to activate. The malware constructs CMD commands
+from the file downloaded from the C&C and transfers them to a file named dmp.bat. The malware
+then searches for dmp.bat and attempts to execute it through CMD.
+The following is a processing of the ‘Reject’ function:
+
+© All rights reserved to ClearSky Cyber Security ltd. 2021
+info@clearskysec.com www.clearskysec.com
+TLP:WHITE
+20 | P a g e
+|Command|Purpose|
+|---|---|
+|s1:|Update the configuration of the new C&C server S1|
+|s2:|Update the configuration of the new C&C server S1|
+|t1:|Update DNS traffic pause intervals|
+|t2:|Update HTTP traffic pause intervals|
+|D1|Export path D1 as an encoded text file to folder U1 or U2|
+|D2|Export path D2 as an encoded text file to folder U1 or U2|
+|U1|Export path U1 as an encoded text file to folder U1 or U2|
+|U2|Export path U2 as an encoded text file to folder U1 or U2|
+|sh|Export the flag Sh as an encoded text file to folder U1 or U2|
+|vr|Export the flag Vr as an encoded text file to folder U1 or U2|
+|id|Export the ID identifier as an encoded text file to folder U1 or U2|
+|exe|Export the name of the file from which the malware is executed as an encodedtext file to folder U1 or U2|
+|proc|Export the malware’s process number to folder U1 or U2|
+|kl|Halt activity and delete the malware and its containing folder’s contents|
+|hs|Update the Hs field and signal success or failure by writing to the U1 or U2folders|
+|up|Update the malware|
+If the file extension is changed, the file will be decoded and extracted to a folder that appears in the file
+name.
+Communication with the Server
+DN function : this function is responsible for downloading information from the C&C using DNS
+Tunneling. The function generates unique subdomains and resolves them to send or receive
+information. The function responsible for generating the domains is the d-gen function, which receives
+four different parameters:
+
+
+D (data) - the requested information.
+
+
+Id - the message’s identifier.
+
+
+Op - the type of information.
+
+
+D2 - the information meant to be sent.
+
+
+The following is the relevant code snippet:
+
+© All rights reserved to ClearSky Cyber Security ltd. 2021
+info@clearskysec.com www.clearskysec.com
+TLP:WHITE
+21 | P a g e
+The DN function can process several different types of information which will be sent to the server or
+downloaded from it. The following is a list of the various OP IDs:
+|OP ID|Purpose|
+|---|---|
+|I|Detects the current C&C’s address using the subdomain unique to the machineand saves it to the Sh field|
+|O|Checks whether the C&C’s IP address has changed. If it was, the Sh field is reset|
+|k|Requests a file from the C&C server|
+|t|As long as this file is received, the malware has not finished downloading the filefrom the C&C server|
+|s|Receiving this flag indicates that the file download has finished|
+|x|Delete the original downloaded file in case the download failed|
+The DN_SEND function is activated once the DN function concludes its activity. Like the DN function,
+DN_SEND is responsible for sending information through DNS using d_gen.
+This function has 2 additional OP identifiers:
+|OP ID|Meaning|
+|---|---|
+|j|Prepares the C&C server to receive information|
+|n|This flag is sent while sending information to the C&C. The replies received fromthe server determine whether to continue sending information or to delete thesent file (in case it was successfully sent or was failed to be sent)|
+The sub-domain created for communications with the C&C server contains the following parameters
+which will be encoded to hex accordingly:
+< ID - < OP - < Time in Seconds - < Data - < Random - .c2.tld
+HT function : like the DN function, the various HT functions are also responsible for communications
+with the C&C server over the HTTPS protocol. The ‘HT’ function in the malware is responsible for
+downloading information from the C&C server. Like the ‘DN’ function, various OP parameters will be
+collected information such as: the GUID, ID of the infected machine (computer or server), the machine’s
+name, version, and HTTP time out.
+The following are the various parameters sent to the server during initial communications:
+http://maliciousdomain.com/?q= GUID &q1= MachineId &q2= MachineName &q3= vr &q4= HttpTimeOut ( t
+2 )
+
+© All rights reserved to ClearSky Cyber Security ltd. 2021
+info@clearskysec.com www.clearskysec.com
+TLP:WHITE
+22 | P a g e
+The ‘HT_Send’ function is responsible for sending information to the command-and-control server.
+The information will be stored in the ‘U2’ folder which will contain encoded ZIP files. The file and its
+information will be sent to the C&C using a POST request. After it is sent, the file is deleted.

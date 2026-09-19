@@ -1,0 +1,70 @@
+
+
+
+Sentence : A Packed ELF
+1/17
+During the analysis we noticed that this ELF was very far from being readable, we
+extracted a series of elements confirming us that:
+High file dimension (more than 4MB);
+Obfuscated strings;
+Absence of Dynamic and ( .dynsym ) and Static Symbol Tables (. symtab );
+Absence of section-headers as Anti-reverse engineering Technique;
+High value of entropy > 7.9
+Runtime linking mechanism with dlopen and dlsym
+As the first step, we focused on the static analysis of the sample in order to reconstruct the
+high level of sophistication and complexity of the packing. At first impact, strings are
+obfuscated, the binary is dynamically linked but the dynamic symbols table is empty.
+Also, the absence of section-headers is an anti-reverse engineering technique adopted in
+this packer. Another indicator that the binary is packed is the high value of entropy 7.99,
+as it is possible to observe in the following picture, on the right we have the whole portion
+of the ELF binary with compressed data.
+Figure. High entropy section
+At this point, we aren’t able to retrieve any other information about the packer, so we have
+to analyze the malicious routines aimed at unpack the sample. During the code
+inspection, a very long and complex subroutine emerges and it looks like the following
+screen:
+2/17
+Figure. Part of the decoding routines
+It is a particular decoding routine instructed to decrypt some other protected code and
+strings. The code is a complex succession of logic instructions, like xor, shift, or etc. In the
+end of the decoding routine, the sample performs a check on the environment variables,
+looking for a custom one installed by the TH-239 operators.
+In fact, the environment variable “MCARCH_” contains the decryption key of the
+protector wrapper. When the malware retrieves the desidered environment variable, it
+starts the unpacking routine using the key stored in it and then starts the execution of the
+real payload.
+This approach is a great evasion technique because it avoids the execution of the sample
+in any environments except the ones where TH-239 operators decide to get in.
+Figure. Environment variable lookup
+3/17
+Figure. Environment variable match (redacted)
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Packed ELF", "type" : "EXEF"},
+        {"id": 2, "description": "4MB file size", "type" : "TAMP"},
+        {"id": 3, "description": "Obfuscated strings", "type" : "TAMP"},
+        {"id": 4, "description": ".dynsym (Dynamic Symbol Table)", "type" : "SYSP"},
+        {"id": 5, "description": ".symtab (Static Symbol Table)", "type" : "SYSP"},
+        {"id": 6, "description": "Anti-reverse engineering Technique", "type" : "TTPS"},
+        {"id": 7, "description": "High value of entropy > 7.9", "type" : "TAMP"},
+        {"id": 8, "description": "dlopen and dlsym (Runtime linking mechanism)", "type" : "OPPS"},
+        {"id": 9, "description": "Environment variable 'MCARCH_'", "type" : "REGI"},
+        {"id": 10, "description": "TH-239 operators", "type" : "ACTO"},
+        {"id": 11, "description": "Decryption key of the protector wrapper", "type" : "TAMP"},
+        {"id": 12, "description": "Unpacking routine", "type" : "EXEF"},
+        {"id": 13, "description": "Real payload execution", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has size"},
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 1, "target": 4, "rel_name" : "lacks"},
+        {"source": 1, "target": 5, "rel_name" : "lacks"},
+        {"source": 1, "target": 6, "rel_name" : "employs"},
+        {"source": 1, "target": 7, "rel_name" : "has"},
+        {"source": 1, "target": 8, "rel_name" : "uses"},
+        {"source": 9, "target": 10, "rel_name" : "installed by"},
+        {"source": 9, "target": 11, "rel_name" : "contains"},
+        {"source": 12, "target": 13, "rel_name" : "starts"}
+    ]
+}

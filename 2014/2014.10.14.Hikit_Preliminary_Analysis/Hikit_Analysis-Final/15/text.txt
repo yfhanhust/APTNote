@@ -1,0 +1,118 @@
+Gen 1 Analysis
+As noted previously in this report, the Gen 1 sub-family has several sub-generations but overall the
+functionality of the Gen 1 sub-family has remained constant. With the exception of Gen 1.0, the
+functionality of Gen 1 comes from the DLL component (Gen 1.0 uses a stand-alone executable to
+achieve the same results). The DLL operates as a service, requiring an attacker is install the DLL as a
+service at some point prior to activation. The DLL contains only two exports: DllEntryPoint and
+DllRegisterServer . 
+ Ultimately, both exports generate a new thread of the same function
+(“ mainThread ”). The difference between the two exports is that DllRegisterServer can take an
+optional command line argument of the letter “u” which will instruct the main thread to uninstall the Gen
+1 system from a victim’s computer. If the uninstall argument exists, mainThread will simply remove the
+Driver from the victim’s machine and terminate. The authors of Gen 1 used freely available source code
+found online for their removal function. [4]
+4 PCAUSA. 
+ “Programmatically 
+ Installing 
+ NDIS 
+ Protocol 
+ Drivers” 
+ http://www.ndis.com/ndis-­‐
+general/ndisinstall/programinstall.htm. 
+ 2 
+ December 
+ 2013.
+When the DLL activates, either by a call to DllEntryPoint or by calling DllRegisterServer
+without the u parameter, mainThread begins by verifying the version of the Driver installed on the
+victim’s machine. This requires sending OID 0x12C850 to the Driver and comparing the resulting 32-bit
+value with the required driver version. If the version is incorrect (i.e. it doesn’t match the specified
+version), the DLL installs the version of the Driver found within the DLL’s resource section (under the
+BIN resource tree).
+With the Driver version verified (or forcibly corrected by installing the appropriate Driver), the DLL will
+instruct the Driver to use a specified string (for Gen 1.0 and Gen 1.1 samples) or a DWORD (for Gen
+1.2 samples) as the acknowledgment value to send to a connecting client who requests the appropriate
+URL. The DLL again checks the version of the Driver and, in some versions of the DLL, will print a
+message indicating the version of the Driver installed and report the “Transate version” (the word
+translate is misspelled within the binary). It appears that the Driver and the communication protocol
+version do not necessarily have to match exactly, allowing the possibility that the Driver and the DLL
+could be compiled at separate times. If the Driver version is less than the “Transate” version (indicating
+that the Driver is a version too old to support the necessary communication protocols), the DLL will, in
+some version of the DLL, print out a line to the screen indicating the DRIVER_MIN_VERSION required
+along with the current Driver version. Following this, the DLL will then attempt to install the correct
+version of the Driver prior to terminating. It is unclear why this code exists given that the DLL will check
+the Driver version and correct the Driver if necessary prior to reaching the portion of the code that
+reports the DRIVER_MIN_VERSION . 
+ It is possible that the second Driver version check is a last ditch
+effort to ensure the correct Driver is installed.
+The DLL enters an infinite loop where the DLL waits for the Driver to report a new channel exists. A
+channel represents an established connection between the Driver and an external party that has
+provided the proper initial request and, for Gen 1.2 variants, provided the proper authentication value.
+When the Driver establishes a new channel, the DLL generates a runtime data structure before
+generating a new thread (“ HikitThreadFunc ”) which will service any request coming from the new
+channel. This allows the DLL to service multiple channels at one time.
+The HikitThreadFunc function is, at its core, a simple wait and respond loop. The function begins by
+transmitting a Hikit command prompt to the client ( Hikit> ) before settling into an infinite loop of
+
+
+Read data from channel (wait until data is available)
+
+
+[For Gen 1.2] Decrypt the packet header
+
+
+Verify the packet header to ensure the communication version is correct and the payload data
+size is non-zero
+
+
+Read the remainder of the packet (e.g. the payload portion)
+
+
+If the packet type field (dwPacketType) is zero, send the payload section to the command
+
+
+processor.
+
+Send the Hikit prompt
+
+The communication scheme between the DLL and the client consists of a 20 to 24 byte header (for Gen
+1.0 and Gen 1.1) or a 28 byte header (for Gen 1.2) followed by an optional payload. The format of the
+Gen 1.0 and Gen 1.1 header is as follows:
+```
+struct PacketHeader
+{
+   char magic[5];
+   char zeros[3];
+DWORD dwHikitVersion;
+DWORD dwCmdType;
+   DWORD dwLocale; // omitted in some Gen 1.0 variants
+   DWORD dwPayloadSize;
+};
+```
+While the Gen 1.2 header is:
+```
+struct PacketHeader
+{
+   DWORD key;
+   DWORD dwHikitVersion;
+DWORD dwPacketType;
+   DWORD dwLocale;
+DWORD dwCodePage;
+   DWORD dwPayloadSize;
+};
+```
+”
+For Gen 1.0 and Gen 1.1 samples, the magic field contains the string “ .. .. (two dots followed by a
+space then two more dots). Whereas the key field in Gen 1.2 samples contains a 32-bit value that
+represents the XOR key for the remainder of the PacketHeader and any additional payload data. The
+XOR scheme works on 32-bit chunks of data where each 32-bit chunk of data is XOR’d against the key
+value.
+Version checking is important in all Gen 1 variants. The dwHikitVersion field allows the client and
+the DLL to ensure that they have a compatible communication scheme in place prior to executing
+commands.
+Gen 1 samples have a particular interest in the victim’s locale language preferences. While it is typical
+for most RATs that provide remote shells to simply pass data unfiltered from client to server and server
+to client without regard to code pages, Gen 1 samples take special care to record the code page and
+locale information in each and every packet header that traverses the divide between client and server
+and server and client. This could indicate that the authors of Gen 1 understood from an early stage in
+the development of Gen 1 that they would be attacking computer systems with different locales and
+code pages.

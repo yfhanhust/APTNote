@@ -1,0 +1,171 @@
+Analyzing OSX.WindTail
+Earlier today, Phil Stokes, uncovered an interesting application on VirusTotal. He noted
+that in Karim’s talk, one of the slides contained a file name: Meeting_Agenda.zip …
+which was identified as by Karim as malware:
+On VirusTotal, if we search for files with this name, we find what appears to be a match!
+The sample (SHA-1: 4613f5b1e172cb08d6a2e7f2186e2fdd875b24e5 ) is currently only
+detected by two anti-virus engines:
+https://objective-see.com/blog/blog_0x3B.html 3/13
+3/5/2019 Objective-See's Blog
+Using the similar-to: search modifier, I uncovered three other samples, that are not
+flagged as malicious by any anti-virus engine!
+NPC_Agenda_230617.zip1
+SHA-1: df2a83dc0ae09c970e7318b93d95041395976da7
+Scandal_Report_2017.zip
+SHA-1: 6d1614617732f106d5ab01125cb8e57119f29d91
+Final_Presentation.zip
+SHA-1: da342c4ca1b2ab31483c6f2d43cdcc195dfe481b
+If we download and extract these applications, the uses Microsoft Office icons, likely to
+avoid raising suspicion:
+https://objective-see.com/blog/blog_0x3B.html 4/13
+3/5/2019 Objective-See's Blog
+In his talk, Karim notes, “[the WindShift] attackers gave a backdoor a realistic look by
+mimicking an Excel sheet icon”.
+…the fact that our samples all similarly utilize Microsoft Office icons, is the first (of many)
+characteristics that lead us to confidently tie these samples to the WindShift APT group.
+Via the WhatsYourSign utility, we can confirm that indeed they are applications (not
+documents):
+https://objective-see.com/blog/blog_0x3B.html 5/13
+3/5/2019 Objective-See's Blog
+Moreover the utility indicates that the application (i.e. Final_Presentation.app ) is
+neither fully signed and that its signing certificate has been revoked. We can confirm this
+with the codesign and spctl utilities:
+$ codesign -dvvv Final_Presentation.app
+Executable=Final_Presentation.app/Contents/MacOS/usrnode
+Identifier=com.alis.tre
+Format=app bundle with Mach-O thin (x86_64)
+...
+Authority=(unavailable)
+Info.plist=not bound
+TeamIdentifier=95RKE2AA8F
+Sealed Resources version=2 rules=12 files=4
+Internal requirements count=1 size=204
+$ spctl --assess Final_Presentation.app
+Final_Presentation.app: CSSMERR_TP_CERT_REVOKED
+The fact that the signing certificate(s) of all the samples are revoked
+( CSSMERR_TP_CERT_REVOKED ) means that Apple knows about about this certificate…and
+thus surely this malware as well. …yet the majority of the samples (3, of 4) are detected
+by zero anti-virus engines on VirusTotal.
+Does this mean Apple isn’t sharing valuable malware/threat-intel with AV-community,
+preventing the creation of widespread AV signatures that can protect end-users?! �
+Narrator: yes    
+ - of course sometimes they may not have permission (if the information was sourced from
+
+elsewhere).
+Before diving into reversing/debugging these samples, let’s take quick peak at their
+application bundles:
+First, note the main executable is named usrnode . This is also specified in the
+application’s Info.plist file ( CFBundleExecutable is set to usrnode ):
+https://objective-see.com/blog/blog_0x3B.html 6/13
+3/5/2019 Objective-See's Blog
+$ cat /Users/patrick/Downloads/WindShift/Final_Presentation.app/Contents/Info.plist
+
+
+
+...
+CFBundleExecutable
+usrnode
+...
+CFBundleIdentifier
+com.alis.tre
+...
+CFBundleURLTypes
+
+
+CFBundleURLName
+Local File
+CFBundleURLSchemes
+
+openurl2622007
+
+
+
+...
+LSMinimumSystemVersion
+10.7
+...
+NSUIElement
+1
+
+
+Other interesting keys include LSMinimumSystemVersion which indicates the (malicious)
+application is compatible with OSX 10.7 (Lion), and NSUIElement key which tells the OS
+to execute the application without a dock icon nor menu (i.e. hidden).
+However the most interesting key is the CFBundleURLSchemes (within the
+CFBundleURLTypes ). This key holds an array of custom URL schemes that the
+application implements (here: openurl2622007 ). In the aforementioned blog post
+“Remote Mac Exploitation Via Custom URL Schemes”, we described how WindShift
+(ab)used custom URL schemes to infect macOS systems…in exactly this manner! Yet
+another data point tying our samples to WindShift.
+The OSX.WindTail.A sample described by Karim used a similarly named custom URL
+scheme: openurl2622015
+Ok, let’s dive in to look at some disassembly!
+Loading the main binary usrnode into a disassembler (I used Hopper), we start at the
+main() function:
+https://objective-see.com/blog/blog_0x3B.html 7/13
+3/5/2019 Objective-See's Blog
+int main(int arg0, int arg1, int arg2, int arg3, int arg4, int arg5) {
+r12 = [NSURL fileURLWithPath:[[NSBundle mainBundle] bundlePath]];
+rbx = LSSharedFileListCreate(0x0, _kLSSharedFileListSessionLoginItems, 0x0);
+LSSharedFileListInsertItemURL(rbx, _kLSSharedFileListItemLast, 0x0, 0x0, r12,
+0x0, 0x0);
+...
+rax = NSApplicationMain(r15, r14);
+return rax;
+}
+The LSSharedFileListInsertItemURL API is documented by Apple. Just kidding: “No
+overview available”:
+So what does the LSSharedFileListInsertItemURL API do? It adds a login item,
+which is mechanism to gain persistence and ensure that the (malicious) application will be
+automatically (re)started everytime the user logs in. This is visible via System
+Preferences application:
+…not the stealthiest persistence mechanism, but meh, gets the job done!
+The main() function invokes the NSApplicationMain method, which in turn invokes
+the applicationDidFinishLaunching method:
+https://objective-see.com/blog/blog_0x3B.html 8/13
+3/5/2019 Objective-See's Blog
+-(void)applicationDidFinishLaunching:(void *)arg2 {
+r15 = self;
+r14 = [[NSDate alloc] init];
+rbx = [[NSDateFormatter alloc] init];
+[rbx setDateFormat:@"dd-MM-YYYYHH:mm:ss"];
+r14 = [[[[rbx stringFromDate:r14] componentsSeparatedByCharactersInSet:
+[NSCharacterSet characterSetWithCharactersInString:cfstring____]]
+componentsJoinedByString:@""] stringByReplacingOccurrencesOfString:@" "
+withString:@""];
+rcx = [[NSBundle mainBundle] resourcePath];
+rbx = [NSString stringWithFormat:@"%@/date.txt", rcx];
+rax = [NSFileManager defaultManager];
+rdx = rbx;
+if ([rax fileExistsAtPath:rdx] == 0x0) {
+rax = arc4random();
+rax = [NSString stringWithFormat:@"%@%@", r14,
+[[NSNumber numberWithInt:rax - (rax * 0x51eb851f >> 0x25) * 0x64,
+(rax * 0x51eb851f >> 0x25) * 0x64] stringValue]];
+rcx = 0x1;
+r8 = 0x4;
+rdx = rbx;
+rax = [rax writeToFile:rdx atomically:rcx encoding:r8 error:&var_28];
+if (rax == 0x0) {
+r8 = 0x4;
+rax = [NSUserDefaults standardUserDefaults];
+rcx = @"GenrateDeviceName";
+rdx = 0x1;
+[rax setBool:rdx forKey:rcx, r8];
+[[NSUserDefaults standardUserDefaults] synchronize];
+}
+}
+[r15 read];
+[r15 tuffel];
+[NSThread detachNewThreadSelector:@selector(mydel) toTarget:r15
+withObject:0x0];
+return;
+}
+Pulling apart the above code, we can see: 1. The (malicious) application generates the
+current date/time, and formats it. 2. Builds a path to date.txt in it’s application bundle
+( Contents/Resources/date.txt ) 3. If this file doesn’t exist, write out the (formatted)
+date and a random number 4. If this fails, set the GenrateDeviceName (sic) user default
+key to true 5. Read in the data from the date.txt file 6. invoke the tuffel method 7.
+Spawn a thread to execute the mydel method
+Clearly steps 1-5 are executed to generate, then load, a unique identifier for the implant.
+Let’s observe this happening (via the fs_usage utility):

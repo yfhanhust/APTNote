@@ -1,0 +1,52 @@
+
+
+
+Sentence : Digging Deeper into A Recent Campaign
+At first, I will look into a recent LOLSnif campaign started on 2020-04-07 in order to get an idea of
+the actors TTPs. Later, I will zoom out and review recent activity of other campaigns of the
+associated actor.
+Each campaign begins with a cascade of several layers of obfuscation. It all starts with a spam
+email that contains an encrypted ZIP archive. The mail mentions the password for decryption and
+encourages the recipient to open it.
+The next layer is a 1.34 MB sized, heavily obfuscated JavaScript file called
+“my_presentation_v8s.js”
+(4d98790aa67fb14f6bedef97f5f27ea8a60277dda9e2dcb8f1c0142d9619ef52). Its first submission
+to VirusTotal was on 2020-04-07 and its initial detection rate was very low. This JavaScript file
+ultimately drops a PE executable with file name “UtBuefba.txt“ as well as a text file to
+“AppData\Local\Temp”. The text file contains what appears to be an eight character long ASCII
+key that the PE executable requires to unpack properly. This might be a way to thwart analysis if
+only the PE executable is shared.
+The DLL is first launched via “regsvr32.exe -s [redacted]\AppData\Local\Temp\UtBuefba.txt”. The
+option “-s” stands for silent registration, which does not show a dialog box. Even though DLLs to
+be loaded with regsvr32 are required to comprise the exports “DllRegisterServer” and
+“DllUnregisterServer”, this DLL does not export them. It has just a regular DLL entry point.
+However, this file unpacks an APlib-compressed Ursnif DLL. This DLL
+(e3d89b564e57e6f1abba05830d93fa83004ceda1dbc32b3e5fb97f25426fbda2) is not known on
+VirusTotal as of 2020-04-17.
+Before I continue with the analysis of the DLL, let me note that the techniques that the actor
+utilizes in their cascade of obfuscated layers ensure very low detection rates of their tools within
+the first days.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "LOLSnif campaign", "type" : "TTPS"},
+        {"id": 2, "description": "Spam email with encrypted ZIP archive", "type" : "MAIL"},
+        {"id": 3, "description": "Password for decryption", "type" : "TAMP"},
+        {"id": 4, "description": "1.34 MB sized obfuscated JavaScript file 'my_presentation_v8s.js'", "type" : "EXEF"},
+        {"id": 5, "description": "SHA256 hash: 4d98790aa67fb14f6bedef97f5f27ea8a60277dda9e2dcb8f1c0142d9619ef52", "type" : "IOCS"},
+        {"id": 6, "description": "PE executable 'UtBuefba.txt'", "type" : "EXEF"},
+        {"id": 7, "description": "Text file in 'AppData\\Local\\Temp' containing ASCII key", "type" : "DOCF"},
+        {"id": 8, "description": "regsvr32.exe -s [redacted]\\AppData\\Local\\Temp\\UtBuefba.txt", "type" : "EXEF"},
+        {"id": 9, "description": "APlib-compressed Ursnif DLL", "type" : "EXEF"},
+        {"id": 10, "description": "SHA256 hash: e3d89b564e57e6f1abba05830d93fa83004ceda1dbc32b3e5fb97f25426fbda2", "type" : "IOCS"},
+        {"id": 11, "description": "AppData\\Local\\Temp", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 4, "rel_name" : "contains"},
+        {"source": 4, "target": 5, "rel_name" : "has hash"},
+        {"source": 4, "target": 6, "rel_name" : "drops"},
+        {"source": 4, "target": 7, "rel_name" : "drops"},
+        {"source": 8, "target": 6, "rel_name" : "launches"},
+        {"source": 9, "target": 10, "rel_name" : "has hash"}
+    ]
+}

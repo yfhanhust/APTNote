@@ -1,0 +1,61 @@
+The art and science of detecting Cobalt Strike
+(MYKEY.SF) and RSA certificate (MYKEY.RSA) used to sign
+the binary. Figure 29 shows us jusing jadx to decompile the
+source code.
+The base code called “Java.class” isn’t complicated — it’s
+an extension of “Applet” designed to spawn a thread. And
+the Base64.dll class isn’t malicious, it handles base64 as
+expected.
+“Main.class” is fairly basic but shows us that a temporary
+file is created, named “main.dll” and writes data to that
+file from either the main64.dll or main.dll file contained in
+the JAR file based on the system architecture. The system
+property “sun.arch.data.model” is a simple method to return
+the system’s word size, easily determining the architecture.
+Following this, the new DLL file path is fed to System.
+load().
+Cobalt Strike uses the Java Native Interface (JNI) to perform
+injection. This is essentially the same as creating bindings
+to another program. It allows users to load a library into the
+Java Virtual Machine (JVM) and interact with it.
+Main.dll
+Since inject() is called from the JNI with the shellcode blob,
+we can load this into IDA and see an exposed function —
+Java_Main_inject().
+The handoff to Java_Main_inject isn’t as straightforward as
+it would be passing a byte/character array in C/C++. In this
+case the exported function looks a little like Figure 30:
+The data is extracted from the JNI objects and then passed
+to the real inject() function that spawns a new thread and
+resumes execution in the shellcode passed in from the “id”
+parameter.
+Detection
+We need to isolate the things we want to cover and
+separate them from each other when evaluating multiple
+Figure 30
+Figure 29
+levels of execution. Here, we can identify a few things.
+1. The landing page that spawns the malicious applet
+2. The JAR file
+3. main.dll/main64.dll
+The landing page was fairly simple, as we already identified
+that the parameter is simply the raw payload from earlier.
+The JAR files contain the same DLL 32/64 bit and code
+every time but have a different name. This simplifies things
+as we target what we know is malicious in there.
+The last thing was the extracted DLL, and our prior work
+paid off. We had prior coverage available from various x32/
+x64 download rules we created researching the staged/
+stageless beacons.
+TARGET MODULE: SMART JAVA APPLET ATTACK
+The Smart Java Applet Attack is very similar to Signed Applets
+in execution. Instead of just running raw shell code, though, it
+attempts to gain execution through various Java exploits. It is
+deemed “Smart” as it determines what exploit to use based
+on the version of Java the victim host is running.
+Landing Page
+The landing page is for the most part the same as Signed
+Applet Attacks. It spawns a malicious page on the default
+URI, “/SiteLoader.”
+Once again, there’s a base64 blob containing the “id”
+© 2020 Cisco. All rights reserved. talos-external@cisco.com | talosintelligence.com page 18 of 29

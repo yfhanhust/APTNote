@@ -1,0 +1,165 @@
+
+
+
+Sentence : MysterySnail RAT
+Our deep dive into the MysterySnail RAT family started with an analysis of a previously
+unknown remote shell-type Trojan that was intended to be executed by an elevation of
+privilege exploit. The sample which we analyzed was also uploaded to VT on August 10,
+2021. The sample is very big – 8.29MB. One of the reasons for the file size is that it’s
+statically compiled with the OpenSSL library and contains unused code and data
+belonging to that library. But the main reason for its size is the presence of two very large
+functions that do nothing but waste processor clock cycles. These functions also “use”
+randomly generated strings that are also present in a binary.
+Random strings used by anti-analysis functions
+We assume these two functions are used as an AV-evasion technique for the purpose of
+anti-emulation. This theory is supported by the presence of other redundant logics and
+the presence of a relatively large number of exported functions while the real work is
+performed by only one of them.
+https://securelist.com/mysterysnail-attacks-with-windows-zero-day/104509/ 3/7
+10/13/21, 10:04 AM MysterySnail attacks with Windows zero-day | Securelist
+Names of exported functions; the actual business logic is executed from
+function “GetInfo”
+The sample has two hardcoded URLs present in plain text – “www[.]disktest[.]com” and
+“www[.]runblerx[.]com”. They are put into class variables for intended use, but remain
+unused; the real C2 address is decoded by a single byte xor – “http[.]ddspadus[.]com”.
+The malware enumerates the values under the
+“Software\Microsoft\Windows\CurrentVersion\Internet Settings\ProxyServer” registry
+key and uses them to request tunneling through a proxy server in case it fails to connect
+to the C2 directly.
+The malware itself is not very sophisticated and has functionality similar to many other
+remote shells. But it still somehow stands out, with a relatively large number of
+implemented commands and extra capabilities like monitoring for inserted disk drives
+and the ability to act as a proxy.
+Inbound and outbound commands have the same binary-based format that is provided
+below. All communication is encrypted with SSL.
+Offset Description
+0 Size of additional data
+4 Session ID
+8 Command ID
+0xC Additional data
+Format of communication commands
+Before receiving any commands, the malware gathers and sends general information
+about the victim machine. This information includes:
+https://securelist.com/mysterysnail-attacks-with-windows-zero-day/104509/ 4/7
+10/13/21, 10:04 AM MysterySnail attacks with Windows zero-day | Securelist
+Computer name
+Current OEM code-page/default identifier
+Windows product name
+Local IP address
+Logged-in user name
+Campaign name
+One interesting fact is that “Campaign name” by default is set to “windows”. This name
+gets overwritten, but it might indicate there are versions of the same RAT compiled for
+other platforms.
+In total, the RAT implements 20 commands. Their description and command IDs are
+provided in the table below.
+Command
+ID
+Description
+1F4h Launch interactive cmd.exe shell. Before launch cmd.exe is copied to the
+temp folder with a different name
+1F5h Spawn new process
+1F6h Spawn new process (console)
+1F7h Get existing disk drives and their type. This function also works in the
+background, checking for new drives
+1F8h Create (upload) new file. If a file exists, append data to it
+1FAh Get directory list
+1FBh Kill arbitrary process
+1FFh Delete file
+202h Read file. If the file is too big, async read operation can be stopped with
+cmd 20Ch.
+205h Re-connect
+208h Set sleep time (in ms)
+209h Shutdown network and exit
+20Ah Exit
+20Bh Kill interactive shell (created with cmd 1F4h)
+20Ch Terminate file reading operation (started with cmd 202h)
+217h No operation
+https://securelist.com/mysterysnail-attacks-with-windows-zero-day/104509/ 5/7
+10/13/21, 10:04 AM MysterySnail attacks with Windows zero-day | Securelist
+21Bh Open proxy’ed connection to provided host. Up to 50 simultaneous
+connections are supported.
+21Ch Send data to proxy’ed connection
+21Eh Close all proxy connections
+21Fh Close requested proxy connection
+List of commands supported by the RAT
+The analysis of the MysterySnail RAT helped us discover campaigns using other variants
+of the analyzed malware as well as study and document the code changes made to this
+tool over a six-month period. We provide more info about these variants and campaigns
+in our private report.
+With the help of Kaspersky Threat Attribution Engine (KTAE) and the discovery of early
+variants of MysterySnail RAT we were able to find direct code and functionality overlap
+with the malware attributed to the IronHusky actor. We were also able to discover the reuse of C2 addresses used in attacks by the Chinese-speaking APT as far back as 2012. This
+discovery links IronHusky to some of the older known activities.
+Kaspersky products detect the CVE-2021-40449 exploit and related malware with the
+verdicts:
+PDM:Exploit.Win32.Generic
+PDM:Trojan.Win32.Generic
+Trojan.Win64.Agent*
+Kaspersky products detected these attacks with the help of the Behavioral Detection
+Engine and the Exploit Prevention component. CVE-2021-40449 is the latest addition to
+the long list of zero-days discovered in the wild with the help of our technologies. We will
+continue to improve defenses for our users by enhancing technologies and working with
+third-party vendors to patch vulnerabilities, making the internet more secure for
+everyone.
+More information about these attacks and the actor behind them is available to customers
+of the Kaspersky Intelligence Reporting service. Contact: intelreports@kaspersky.com.
+Kaspersky would like to thank Microsoft for their prompt analysis of the report and
+patches.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "MysterySnail RAT", "type" : "APPS"},
+        {"id": 2, "description": "PowerShell command", "type" : "EXEF"},
+        {"id": 3, "description": "8.29MB sample", "type" : "DOCF"},
+        {"id": 4, "description": "OpenSSL library", "type" : "APPS"},
+        {"id": 5, "description": "Two large functions for wasting CPU cycles", "type" : "EXEF"},
+        {"id": 6, "description": "Random strings", "type" : "TAMP"},
+        {"id": 7, "description": "www[.]disktest[.]com", "type" : "URLS"},
+        {"id": 8, "description": "www[.]runblerx[.]com", "type" : "URLS"},
+        {"id": 9, "description": "http[.]ddspadus[.]com", "type" : "CCSH"},
+        {"id": 10, "description": "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ProxyServer", "type" : "REGI"},
+        {"id": 11, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 12, "description": "Temporary folder", "type" : "SYSP"},
+        {"id": 13, "description": "SSL encryption", "type" : "NETP"},
+        {"id": 14, "description": "Computer name", "type" : "TAMP"},
+        {"id": 15, "description": "OEM code-page/default identifier", "type" : "TAMP"},
+        {"id": 16, "description": "Windows product name", "type" : "APPS"},
+        {"id": 17, "description": "Local IP address", "type" : "NETP"},
+        {"id": 18, "description": "Logged-in user name", "type" : "TAMP"},
+        {"id": 19, "description": "Campaign name", "type" : "TAMP"},
+        {"id": 20, "description": "IronHusky actor", "type" : "ACTO"},
+        {"id": 21, "description": "Chinese-speaking APT", "type" : "ACTO"},
+        {"id": 22, "description": "CVE-2021-40449 exploit", "type" : "CVES"},
+        {"id": 23, "description": "Kaspersky Threat Attribution Engine (KTAE)", "type" : "APPS"},
+        {"id": 24, "description": "PDM:Exploit.Win32.Generic", "type" : "TAMP"},
+        {"id": 25, "description": "PDM:Trojan.Win32.Generic", "type" : "TAMP"},
+        {"id": 26, "description": "Trojan.Win64.Agent*", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 1, "target": 4, "rel_name" : "compiled with"},
+        {"source": 1, "target": 5, "rel_name" : "includes"},
+        {"source": 1, "target": 6, "rel_name" : "uses"},
+        {"source": 1, "target": 7, "rel_name" : "hardcoded URL"},
+        {"source": 1, "target": 8, "rel_name" : "hardcoded URL"},
+        {"source": 1, "target": 9, "rel_name" : "C2 address"},
+        {"source": 1, "target": 10, "rel_name" : "enumerates values from"},
+        {"source": 1, "target": 11, "rel_name" : "launches"},
+        {"source": 1, "target": 12, "rel_name" : "copies to"},
+        {"source": 1, "target": 13, "rel_name" : "encrypts communication with"},
+        {"source": 1, "target": 14, "rel_name" : "collects information about"},
+        {"source": 1, "target": 15, "rel_name" : "collects information about"},
+        {"source": 1, "target": 16, "rel_name" : "collects information about"},
+        {"source": 1, "target": 17, "rel_name" : "collects information about"},
+        {"source": 1, "target": 18, "rel_name" : "collects information about"},
+        {"source": 1, "target": 19, "rel_name" : "sets by default"},
+        {"source": 20, "target": 1, "rel_name" : "uses in campaigns"},
+        {"source": 21, "target": 20, "rel_name" : "links to"},
+        {"source": 22, "target": 1, "rel_name" : "exploited by"},
+        {"source": 23, "target": 1, "rel_name" : "analyzed with"},
+        {"source": 24, "target": 1, "rel_name" : "detected as"},
+        {"source": 25, "target": 1, "rel_name" : "detected as"},
+        {"source": 26, "target": 1, "rel_name" : "detected as"}
+    ]
+}

@@ -1,0 +1,61 @@
+
+
+
+Sentence : Malicious lure: ‘your right to compensation’
+On September 17, we found a new attack starting from a zip file containing a malicious
+document most likely distributed through spear phishing attacks.
+The document “Compensation manual.doc” pretends to include information about
+compensation rights for workers:
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 1/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+Figure 1: Malicious Document
+The file contains an image tag (“ INCLDEPICTURE “) that connects to
+“yourrighttocompensation[.]com” and downloads an image that will be the document
+template.
+Figure 2: Imagetag embedded within the document
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 2/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+Figure 3: yourrighttocompensation website
+This domain was registered on 2020-06-05 while the document creation time is 202006-12, which likely indicates that they are part of the same attack.
+Inside, we see a malicious macro that uses a modified version of CactusTorch VBA
+module to execute its shellcode. CactusTorch is leveraging the DotNetToJscript technique
+to load a .Net compiled binary into memory and execute it from vbscript.
+The following figure shows the macro content used by this threat actor. It has both
+AutoOpen and AutoClose functions. AutoOpen just shows an error message while
+AutoClose is the function that performs the main activity.
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 3/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+Figure 4: Macro
+As you can see in Figure 4, a serialized object in hex format has been defined which
+contains a .Net payload that is being loaded into memory. Then, the macro defined an
+entry class with “Kraken.Kraken” as value. This value has two parts that have been
+separated with a dot: the name of the .Net Loader and its target class name.
+In the next step, it creates a serialization BinaryFormatter object and uses the deseralize
+function of BinaryFormatter to deserialize the object. Finally, by calling DynamicInvoke
+the .Net payload will be loaded and executed from memory.
+Unlike CactusTorch VBA that specifies the target process to inject the payload into it
+within the macro, this actor changed the macro and specified the target process within the
+.Net payload.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Compensation manual.doc", "type" : "DOCF"},
+        {"id": 2, "description": "yourrighttocompensation[.]com", "type" : "CCSH"},
+        {"id": 3, "description": "Malicious macro", "type" : "EXEF"},
+        {"id": 4, "description": "CactusTorch VBA module", "type" : "APPS"},
+        {"id": 5, "description": "DotNetToJscript technique", "type" : "TTPS"},
+        {"id": 6, "description": ".Net compiled binary", "type" : "EXEF"},
+        {"id": 7, "description": "Kraken.Kraken (entry class value)", "type" : "EXEF"},
+        {"id": 8, "description": "BinaryFormatter object", "type" : "APPS"},
+        {"id": 9, "description": ".Net payload", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "downloads from"},
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 3, "target": 4, "rel_name" : "uses"},
+        {"source": 3, "target": 5, "rel_name" : "uses"},
+        {"source": 3, "target": 6, "rel_name" : "loads into memory and executes"},
+        {"source": 7, "target": 8, "rel_name" : "creates using"},
+        {"source": 8, "target": 9, "rel_name" : "deserializes"}
+    ]
+}

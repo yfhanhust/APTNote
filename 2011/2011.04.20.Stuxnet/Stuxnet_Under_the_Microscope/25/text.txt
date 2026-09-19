@@ -1,0 +1,154 @@
+4.2 Kernel-mode functionality
+The worm has some rootkit functionality, as during infection of the system it drops and installs two
+kernel-mode drivers that allow it to hide files and inject code into process in the system: 
+MrxCls.sys; 
+MrxNet.sys.
+These modules are not packed or protected with any packer or protector. Moreover these drivers are
+digitally signed. Here are the digital certificates of the public keys corresponding to the private keys used
+to sign the drivers (we received samples signed with two different private keys).
+www.eset.com
+59
+Figure 4.10 – Digital certificates Used to Verify Driver's Signatures
+After it was ascertained that the certificates were compromised, both were revoked by Verisign. Variant
+drivers and compromised certificates have, however, been noted since.
+Figure 4.11 – Digital Certificates Revoked
+www.eset.com
+60
+4.2.1 MRXCLS.sys
+4.2.1.1 Encrypted data
+This driver is designated to inject code into the address space of the processes in the system. It is
+registered in OS as a boot start service. Thus it is loaded as early as possible in the OS boot process.
+Some of its data are encrypted with a custom encryption algorithm. If we decrypt them, we get the
+following string constants with the following meanings:
+Table 4.2.1 – Decrypted String Constants Found in the Driver
+|REGISTRY\MACHINE\SYSTEM\CurentControlSet\Services\MrxCls|Name of the registry key thatcorresponds to the driver|
+|---|---|
+|Data|Name of the value of the registrykey related to the driver|
+|\Device\MrxClsDvx|Name of the device object that iscreated by the driver|
+To be able to inject code it registers a special routine that is called each time a module is loaded in
+address space of a process by calling API function PsSetLoadImageNotifyRoutine .
+4.2.1.2 Configuration data
+The driver holds configuration data that specify in which processes the code is to be injected. The data
+are stored in driver's registry key with the value name presented in Table 4.2.1. The data can also be
+stored in a file on disk: if the driver failed for some reason to read the configuration data from registry, it
+reads it from the file, if any exists. Here is configuration data found on an infected machine:
+Figure 4.12 – The configuration data of the driver
+As we can see from the figure, these data specify what modules should be injected by the driver into the
+address spaces of certain processes. For instance, here we see that in processes in which executables
+www.eset.com
+61
+have the names services.exe, S7tgtopx.exe and CCProjectMgr.exe, the driver injects a module stored in
+a file with the name \SystemRoot\inf\oem7A.PNF . The configuration data also specify the name or
+ordinal number of the export of the injected module to be called. For instance in this case, when
+oem7A.PNF will be loaded into the address spaces of the CCProjectMgr.exe or S7togtopx.exe, the
+exported function number 2 should be called. In the case of services.exe the exported function with the
+ordinal 1 should be called. If a process is debugged the driver doesn't perform an injection, and it
+determines whether the process is debugged by reading BeingDebugged field of the PEB structure
+related to the process.
+4.2.1.3 Injector
+Here we briefly describe the injector. It is not only capable of injecting modules into the address space
+of a process but is also able to stealthily call an exported function from the already injected modules.
+The injection of a module is performed in three stages:
+
+Allocating memory in the address space of the target process and copying module and
+
+supplemental code into the newly allocated buffer;
+
+Initializing supplemental data and code with import from kernel32.dll library, and
+
+overwriting the first bytes of the entry point of the process image;
+
+Mapping the module to inject into the address space of the process, initializing import
+
+address table, fixing relocations, calling its entry point and restoring the original bytes of the
+image entry point.
+Figure 4.13 – Injecting a Module into Process Address Space
+Stage 1
+When the process image is loaded into the address space of the process, the notification routine is
+called and the driver determines whether the process is debugged. If it isn’t, it looks in its configuration
+data to get the name of the module to inject. Once it obtains the name of the module it allocates two
+buffers in the process, one for the module and another for supplemental code. Then it sets memory
+www.eset.com
+62
+protection of the entry point region to PAGE_EXECUTE_WRITECOPY, a value which makes it writable. In
+the following figure we can see a layout of the modules in the user-mode address space of the process:
+Figure 4.14 – Layout of Modules and Buffers in User-Mode Address Space of a Process Prior to Loading kernel32.dll Library
+Stage 2
+At the second stage, when the driver receives notification that kernel32.dll has been mapped into the
+address space of the process, it initializes import of the supplemental code from the loaded library and
+overwrites the first seven bytes of the entry point of the process image with the following commands:
+Figure 4.15 – Patched entry point
+APIs exported by kernel32.dll and used by supplemental code are: VirtualAlloc, VirtualFree,
+GetProcAddress, GetModuleHandle, LoadLibraryA, LoadLibraryW, lstrcmp, lstrcmpi, GetVersionEx,
+DeviceIoControl . The layout of the modules at this stage is presented on the following figure:
+Figure 4.16 – Layout of Modules and Buffers in User-Mode Address Space of a Process after Loading kernel32.dll
+www.eset.com
+63
+Stage 3
+At this stage, when the entry point of the application receives control it transfers to the entry point of
+the supplemental code, the purpose of which is to map the module and call its entry point. When the
+work is finished it restores the original entry point and sets the memory protection value of the entry
+point region to its initial value. Then it transfers control to the original entry point.
+Figure 4.17 – Layout of Modules and Buffers in User-Mode Address Space of a Process after Application's Entry Point is Called
+DeviceIoControl
+The driver creates a device object with the name specified in Table 4.2.1 and registers handlers for the
+following requests: 
+IRP_MJ_CREATE; 
+IRP_MJ_CLOSE; 
+IRP_MJ_DEVICE_CONTROL.
+The first two handlers do nothing but successfully complete IRP packet, while the third handler is used
+to dispatch control requests from an application. When the created device object receives an
+IRP_MJ_DEVICE_CONTROL request with IOCTL equal to 0x223800 it changes memory protection of the
+region specified in the request parameters:
+www.eset.com
+64
+```
+struct IOCTL_PARAMS
+{
+DWORD Signature; // Signature always set to 0xAFABF00D
+
+DWORD Reserved1;
+
+HANDLE hProcess; // Handle of the process
+
+DWORD Reserved2;
+
+void *BaseAddress;  // Base address of memory region
+
+DWORD Reserved3;
+
+DWORD RegionSize;  // Size of the memory region
+
+DWORD Reserved4;
+
+DWORD NewProtection; // New protection memory constant
+
+DWORD Reserved5;
+
+};
+```
+When supplemental code changes memory protection of the entry point it initializes this structure and
+passes it as a parameter to DeviceIoControl API.
+4.2.2 MRXNET.sys
+The purpose of this driver is to hide files that are used to propagate the malware through USB drives. It
+acts as a file system driver filter. In the very beginning of its initialization it registers the
+FileSystemRegistrationChange routine enables it to attach to file systems available in the system, but it
+is interested only in ntfs, fat and cdfs file systems. When a new file system is mounted the driver
+receives a notification, creates a device object and attaches it to the top of the device stack. From then
+on the driver is able to monitor all the requests that are addressed to the file system. It waits for an
+IRP_MJ_MOUNT_VOLUME request to arrive and attaches itself to the mounted volume to intercept
+requests related to operations with files and directories. It creates DeviceObjects and attaches it to
+those device objects created by and corresponding to the specified file system drivers. The driver hooks
+IRP_MJ_DIRECTORY_CONTROL requests addressed to the file systems it is attached to, enabling it to
+filter results from querying information about files and subdirectories. This request is used to get
+information related to the directory, and in particular what files are located in the directory.
+It hides the same files as ~WTR4141.tmp does: 
+files with " .LNK " extension with a file length of 1471 (0x104b) bytes; 
+files with " .TMP " extension where the name consists of 12 characters (including extension) in
+the following format: "~ WTRabcd.TMP ", where a,b,c,d are digits from 0 to 9 which sum modulo 10
+equals 0 (" ~WTR4411.TMP " for example).
+On receiving an IRP_MJ_DIRECTORY_CONTROL request it sets an IO completion routine that filters
+results of the request. Depending on the control operation that is requested, the driver goes through
+the corresponding structure and deletes all entries matching the search criteria.
+www.eset.com
+65

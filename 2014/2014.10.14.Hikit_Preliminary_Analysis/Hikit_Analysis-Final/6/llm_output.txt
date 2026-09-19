@@ -1,0 +1,150 @@
+
+
+
+Sentence : Gen 2 Driver
+The Gen 2 sub-family, beginning with Gen 2.0 Beta, employs a Windows device driver (“the Driver”) to
+hide aspects of the DLL’s functionality from normal system processes. The Driver is a relatively
+straightforward piece of software. It does not attempt to obfuscate its functionality from static analysis
+and it hooks a minimum number of kernel API functions in order to hide different pieces of information.
+The Driver is based primarily on the open source Agony rootkit [2] and it has evidence of some portions of
+the code coming directly from a Chinese blog [3] .
+The Driver expose an IOCTL interface that supports the following OIDs:
+|OID Function|Col2|
+|---|---|
+|0x22C000|Add driver (system module) to hide.|
+|0x22C004|Reveal all hidden items.|
+|0x22C008|Add IP:Port endpoint to hide.|
+|0x22E000|No-Op|
+|0x22FFD0|Remove PID from hidden list.|
+|0x22FFD4|Add PID to list of PIDs to hide.|
+|0x22FFD8|Add service to list of services to hide.|
+|0x22FFE0|Add local port to list of ports to hide.|
+|0x22FFE4|Currently unused. Evidence suggest this was previously a port hiding function, but itis no longer functional.|
+|0x22FFE8|Currently unused. It is unclear the purpose of this function. It takes a string as itsargument.|
+|0x22FFEC|Add directory to list of directories to hide.|
+|0x22FFF0|Add registry key to list of registry keys to hide.|
+|0x22FFF4|Add registry key value to list of registry values to hide.|
+|0x22FFFC|Purge all hooks and hidden items ("unhook")|
+The Driver is capable of hiding processes (by PID, not name), system modules, services, network
+connections, listening ports, directories (and by extension, files), as well as registry keys and values. In
+order to hide these items, the Driver hooks various Windows Kernel API calls. The following table maps
+the items the Driver can hide to the API function that the Driver hooks:
+|Item API Function Hooked|Col2|
+|---|---|
+|Process ID(PID)|ZwDeviceIoControlFile|
+|Registry Key|ZwEnumerateKey|
+|Registry Value|ZwEnumerateValueKey|
+|Directory|QueryDirectoryFile|
+1 James 
+ Antognini 
+ and 
+ Thomas 
+ F. 
+ Divine. 
+ “Extending 
+ the 
+ Microsoft 
+ PassThru 
+ NDIS 
+ Intermediate 
+ Driver—Parts: 
+ Two 
+ IP
+Address 
+ Blocking 
+ NDIS 
+ IM 
+ Drivers”. 
+ December 
+ 15, 
+ 2003
+2 pudn. 
+ “Agony 
+ Rootkit 
+ code, 
+ the 
+ stability 
+ and 
+ can 
+ be 
+ useful 
+ Driver 
+ Develop”.
+http://en.pudn.com/downloads74/sourcecode/windows/vxd/detail265112_en.html. 
+ 8 
+ April 
+ 2007.
+3 CardMagic. 
+ “[Reserved] 
+ NSI 
+ Module 
+ Hook: 
+ Hiding 
+ Port 
+ Under 
+ Windows 
+ Vista”. http://forum.eviloctal.com/archiver/tid-­‐
+29604.html. 
+ 8 
+ July 
+ 2007.
+|Item API Function Hooked|Col2|
+|---|---|
+|Local ListeningPort|ZwDeviceIoControlFile|
+|RemoteEndpoint|ZwDeviceIoControlFile|
+|Loaded Drivers|ZwQuerySystemInformation|
+In order to hide services, the Driver will access the memory of the services.exe process, locate the
+linked list of services and remove the service entry that the Driver wishes to hide. This is a surprisingly
+invasive method to obfuscate a process.
+Upon activation, the Driver will expose its interface by calling IoCreateDevice with the name
+\Device\agony (for Gen 2.0 Beta samples), \Device\HTTPS (for Gen 2.1 samples),
+\Device\advcachemgr (for Gen 2.2 samples) or \Device\diskdump (for Gen 2.3 samples). The
+Driver also creates a symbolic link to the device using the same name but under the \DosDevices\
+tree.
+For reasons unknown, the authors of the Driver used code from a Chinese blog that details how to hide
+network connections on Windows Vista and later decided to keep the example IP address within the
+code.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Gen 2 sub-family", "type" : "TTPS"},
+        {"id": 2, "description": "Windows device driver (the Driver)", "type" : "FIRW"},
+        {"id": 3, "description": "DLL’s functionality", "type" : "EXEF"},
+        {"id": 4, "description": "Agony rootkit", "type" : "TTPS"},
+        {"id": 5, "description": "Chinese blog", "type" : "URLS"},
+        {"id": 6, "description": "\\Device\\agony (Gen 2.0 Beta)", "type" : "SYSP"},
+        {"id": 7, "description": "\\Device\\HTTPS (Gen 2.1)", "type" : "SYSP"},
+        {"id": 8, "description": "\\Device\\advcachemgr (Gen 2.2)", "type" : "SYSP"},
+        {"id": 9, "description": "\\Device\\diskdump (Gen 2.3)", "type" : "SYSP"},
+        {"id": 10, "description": "\\DosDevices\\agony", "type" : "TPTH"},
+        {"id": 11, "description": "\\DosDevices\\HTTPS", "type" : "TPTH"},
+        {"id": 12, "description": "\\DosDevices\\advcachemgr", "type" : "TPTH"},
+        {"id": 13, "description": "\\DosDevices\\diskdump", "type" : "TPTH"},
+        {"id": 14, "description": "ZwDeviceIoControlFile", "type" : "APPS"},
+        {"id": 15, "description": "ZwEnumerateKey", "type" : "APPS"},
+        {"id": 16, "description": "ZwEnumerateValueKey", "type" : "APPS"},
+        {"id": 17, "description": "QueryDirectoryFile", "type" : "APPS"},
+        {"id": 18, "description": "ZwQuerySystemInformation", "type" : "APPS"},
+        {"id": 19, "description": "services.exe process", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "employs"},
+        {"source": 2, "target": 3, "rel_name" : "hides functionality of"},
+        {"source": 2, "target": 4, "rel_name" : "based on"},
+        {"source": 4, "description": "Chinese blog", "type" : "referenced in"},
+        {"source": 2, "target": 6, "rel_name" : "exposes interface by calling IoCreateDevice with name"},
+        {"source": 2, "target": 7, "rel_name" : "exposes interface by calling IoCreateDevice with name"},
+        {"source": 2, "target": 8, "rel_name" : "exposes interface by calling IoCreateDevice with name"},
+        {"source": 2, "target": 9, "rel_name" : "exposes interface by calling IoCreateDevice with name"},
+        {"source": 6, "target": 10, "rel_name" : "creates symbolic link to the device under \\DosDevices\\ tree"},
+        {"source": 7, "target": 11, "rel_name" : "creates symbolic link to the device under \\DosDevices\\ tree"},
+        {"source": 8, "target": 12, "rel_name" : "creates symbolic link to the device under \\DosDevices\\ tree"},
+        {"source": 9, "target": 13, "rel_name" : "creates symbolic link to the device under \\DosDevices\\ tree"},
+        {"source": 2, "target": 14, "rel_name" : "hooks for hiding process ID and local listening port"},
+        {"source": 2, "target": 15, "rel_name" : "hooks for hiding registry key"},
+        {"source": 2, "target": 16, "rel_name" : "hooks for hiding registry value"},
+        {"source": 2, "target": 17, "rel_name" : "hooks for hiding directory"},
+        {"source": 2, "target": 18, "rel_name" : "hooks for hiding loaded drivers"},
+        {"source": 2, "target": 19, "rel_name" : "accesses memory of to hide services"}
+    ]
+}

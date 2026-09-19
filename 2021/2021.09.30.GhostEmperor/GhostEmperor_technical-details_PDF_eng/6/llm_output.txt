@@ -1,0 +1,107 @@
+
+
+
+Sentence : Stage 3: In-Memory Implant
+The service loader aids the execution of a user mode payload in the memory of an svchost.exe process. This serves
+several purposes. Its main objective is to facilitate a communication channel with a C2 server and act as a client capable
+of retrieving and staging a payload for further execution. Written in C++, the client can be formed as an instance of one
+of multiple classes, each presenting a different feature or set of traits that constitute the nature of the communication
+channel. For example, the client is capable of operating over either HTTP or TLS protocols, supporting various
+authentication mechanisms like basic access authentication or Microsoft’s Negotiate scheme.
+The key capability of the client, though, is to mask traffic based on logic constituted by a Malleable C2 profile embedded
+within its configuration. Such profiles are a set of statements written in a custom language that is originally intended for
+consumption by servers and clients of the Cobalt Strike framework. Their purpose is to shape the exchanged requests and
+responses between the Cobalt Strike Beacon client and its server so that they appear as benign traffic and blend with the
+bulk of packets in the network, or otherwise appear as specific malware, in the case of a red team engagement or pen
+testing scenario.
+In the case of the user mode clients described here, a subset of the Cobalt Strike profile syntax that allows the creation of
+a specially crafted set of HTTP packets is supported. This makes it possible to parse a profile that resides within the HKLM\
+Software\Microsoft\midihelp registry key, formerly written there by the initial PowerShell dropper, using it in turn to mask
+the packets issued to and from the C2 as Amazon browsing traffic. This profile is publicly available on GitHub, and the
+malware supports [1] the following keywords and statements that allow its interpretation and processing:
+• set uri, set useragent: specifies the URI and User-Agent fields used as part of an HTTP transaction between the client
+and server.
+• http-get, http-post: types of HTTP transactions that can be customized. In other words, it is possible to shape the
+structure of HTTP GET and POST requests and responses in this malware.
+• client, server: keywords that specify which side of the transaction to profile. For example, under a given http-post
+transaction it is possible to profile both packets sent from the client and those sent in response from the server. This
+indicates that such a profile can be consumed by both a client and a server component of the malware.
+• base64, prepend, append: directive keywords that instruct how to form a data field passed in a transaction. As an
+example, for HTTP requests, a given string will be used as data that can then be encoded with Base64, prepended
+and appended with other strings as the arguments of the corresponding ‘prepend’ and ‘append’ keywords define. The
+resulting string can be then placed as either a header or a URI parameter.
+• metadata, query, cookie: strings that can be shaped with the above directives.
+• parameter, header: for each transaction, these keywords specify where to store their arguments – URI parameters or
+HTTP headers.
+As is evident from the C2 profile syntax keywords specified above, the malware may process server mode configuration,
+thus possibly operating as one under a given configuration. This can be reinforced with additional communication logic
+found in the code that suggests the operators can configure the malware to run as a server. For example, one of the classes
+that handles communication over the TLS protocol contains a function that calls the AcceptSecurityContext API typically
+used on the server end of a TLS session. Additionally, the same class contains a function that allows the issuing of a selfsigned certificate with the CertCreateSelfSignCertificate API, using the common name and organization as DigiCert.
+1 See full documentation on the syntax used by Cobalt Strike for Malleable C2 profiles:
+https://www.cobaltstrike.com/help-malleable-c2
+6
+GhostEmperor’s infection chain and post-exploitation toolset: technical details
+Functionality used to create a self-signed certificate
+Another interesting attribute of the communication is that data passed in the body of HTTP POST requests is embedded
+within one of three fake file formats, RIFF, JPEG or PNG, causing the packets to appear as images or audio files sent to the
+server. The format is chosen at random when building the packet, and its body is later appended to it. Due to the fact that
+we could not obtain a full communication flow with the server, we can only attest to some of the fields in the structure
+appended to these formats, as outlined below:
+Offset Field Size Description
+0x0 16 bytes Random data inserted to the packet after it is encoded with the key in
+the next field
+7
+GhostEmperor’s infection chain and post-exploitation toolset: technical details
+Code used to generate a fake JPEG header and the resulting packet
+It should be noted that other than the client logic, there is a lot of code at this stage that is intended to provide the malware
+with stealth or support the client’s operation. For the former, this component decrypts and loads an embedded rootkit
+driver that is intended to hide malicious artefacts, as will be described in later sections of the report. For the latter, the
+malware initiates a thread to detect if the system runs through a proxy, its type and address using various means, namely by
+issuing a call to the InternetGetProxyInfo API from the jsproxy.dll library which retrieves the address of a proxy used while
+accessing a given URL. The URL specified for this resolution in the malware is hxxp://update.microsoft[.]com.
+In addition, the malware contains functionality to manually load a PE image and invoke execution from its entry point.
+Though we could not obtain an actual payload from the C2 server, we assess that this functionality is used later on to stage
+an additional payload for execution, as described in the next section.
+8
+GhostEmperor’s infection chain and post-exploitation toolset: technical details
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "svchost.exe process", "type" : "EXEF"},
+        {"id": 2, "description": "C2 server", "type" : "CCSH"},
+        {"id": 3, "description": "C++ client", "type" : "APPS"},
+        {"id": 4, "description": "HTTP protocol", "type" : "NETP"},
+        {"id": 5, "description": "TLS protocol", "type" : "NETP"},
+        {"id": 6, "description": "Malleable C2 profile", "type" : "TTPS"},
+        {"id": 7, "description": "HKLM\\Software\\Microsoft\\midihelp registry key", "type" : "REGI"},
+        {"id": 8, "description": "PowerShell dropper", "type" : "EXEF"},
+        {"id": 9, "description": "GitHub repository", "type" : "URLS"},
+        {"id": 10, "description": "Amazon browsing traffic", "type" : "TTPS"},
+        {"id": 11, "description": "RIFF format", "type" : "DOCF"},
+        {"id": 12, "description": "JPEG format", "type" : "DOCF"},
+        {"id": 13, "description": "PNG format", "type" : "DOCF"},
+        {"id": 14, "description": "DigiCert", "type" : "COUN"},
+        {"id": 15, "description": "rootkit driver", "type" : "EXEF"},
+        {"id": 16, "description": "jsproxy.dll library", "type" : "APPS"},
+        {"id": 17, "description": "hxxp://update.microsoft[.]com URL", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "executes"},
+        {"source": 3, "target": 2, "rel_name" : "communicates with"},
+        {"source": 3, "target": 4, "rel_name" : "uses"},
+        {"source": 3, "target": 5, "rel_name" : "uses"},
+        {"source": 6, "target": 7, "rel_name" : "resides in"},
+        {"source": 8, "target": 7, "rel_name" : "writes to"},
+        {"source": 3, "target": 10, "rel_name" : "masks as"},
+        {"source": 2, "target": 10, "rel_name" : "masks as"},
+        {"source": 6, "target": 9, "rel_name" : "available on"},
+        {"source": 3, "target": 11, "rel_name" : "embeds in packet"},
+        {"source": 3, "target": 12, "rel_name" : "embeds in packet"},
+        {"source": 3, "target": 13, "rel_name" : "embeds in packet"},
+        {"source": 3, "target": 14, "rel_name" : "uses as certificate"},
+        {"source": 3, "target": 15, "rel_name" : "decrypts and loads"},
+        {"source": 3, "target": 16, "rel_name" : "calls API from"},
+        {"source": 3, "target": 17, "rel_name" : "uses for proxy detection"}
+    ]
+}

@@ -1,0 +1,27 @@
+ScreenCap
+The ScreenCap component, as the name suggests, has the capability of taking screenshots and was discovered during
+the analyzing of the DLL_Deploy binaries from our collection.
+The DLL_Deploy binary (e.g. e2d5565c2d5b5621b2272ea01e3a18d6 ) for this component has a specific pdb path set “ E:\Works\self2\screencap\builder\builder_mul\Release\Dll_deploy.pdb ”.
+Its responsibility is to extract the template binary and to customize it by writing a config buffer next to the “ prettygirl ”
+string. The config looks like:
+Fig. 10 – ScreenCapconfig
+After the customization, the ScreenCap is dropped to “ C:\ProgramData\winscr\winscr.dll ” and it is set to persist by
+creating the “ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run\winscru ” registry key and
+assigning it the rundll32”C:\ProgramData\winscr\winscr.dll”,Start string value (it creates the “ winscr ” key value under
+HKLMRun if the process has the corresponding privileges).
+The dropped ScreenCap uses the well-known chain of WINAPI function exported by Gdiplus.dll ( GdiplusStartup,
+CreateDCW, CreateDIBSection, BitBlt, GdipSaveImageToFile, etc. ) for screen capturing. The obtained jpeg image
+is temporarily saved as “ ws.tmp ” file in the same folder where the ScreenCap is dropped. Then, the ws.tmp file is
+transformed into a binary blob (having the same format as that used by FilePak ) and is appended to an archive file. It is
+important to note that the file name used in the corresponding blob is obtained in the following manner:
+Fig. 11 – File name template corresponding to a screenshot
+The archive name where all blobs with screenshots are stored is obtained in a similar way:
+Fig. 12 – Archive name template
+16
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+The samples we found are using the following config: (5, 30, 8, “ qwerasdf ”, 21, “ C:\users\public\winsf ”) which
+means that each archive will contain 30 blobs of images taken with a delay of 5 seconds. As key for obfuscation
+the “ qwerasdf ” string will be used and all the archives will be written to “ C:\users\public\winsf ” folder. An important
+observation is that all of that happens in an infinite loop meaning that the computer screen will be monitored all the
+time.

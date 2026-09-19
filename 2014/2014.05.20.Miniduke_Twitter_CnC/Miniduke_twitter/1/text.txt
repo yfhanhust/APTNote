@@ -1,0 +1,31 @@
+Miniduke still duking it out
+At the end of April Microsoft announced that a vulnerability in Word was actively being exploited. This
+vulnerability occurred in parsing RTF files and was assigned CVE-2014-1761, a thorough analysis of which
+can be found on the HP Security Research blog. We have since seen multiple cases where this exploit is
+used to deliver malware and one was particularly interesting as it contained a new variant of MiniDuke
+(also known as Win32/SandyEva).
+MiniDuke was first discussed by Kaspersky in March 2013 in their paper The MiniDuke Mystery: PDF 0-
+day Government Spy Assembler 0x29A Micro Backdoor and shortly after in a paper by Bitdefender. Some
+of the characteristics of MiniDuke — such as its small size (20 KB), its crafty use of assembly
+programming, and the use of zero-day exploits for distribution — made it an intriguing threat. Although
+the backdoor is still quite similar to its previous versions, some important changes were made since last
+year, the most notable being the introduction of a secondary component written in JScript to contact a
+C&C server via Twitter.
+The RTF exploit document
+The exploit document was named Proposal-Cover-Sheet-English.rtf and is quite bland when compared to
+the documents that were used in 2013, which were of a political nature. We received the document on
+April 8th, only three days after the compilation of the MiniDuke payload, dated April 5th in the PE header.
+The payload remains quite small at only 24 KB.
+The functionality of the shellcode which is executed by triggering the vulnerability is rather simple and
+straightforward. After decrypting itself and obtaining the addresses of some functions exported by
+kernel32.dll, it decrypts and drops the payload in the %TEMP% directory in a file named “a.l” which is
+subsequently loaded by calling kernel32!LoadLibraryA.
+An interesting thing about the shellcode is that before transferring control to any API function it checks
+the first bytes of the function in order to detect hooks and debugger breakpoints which may be set by
+security software and monitoring tools. If any of these are found the shellcode skips the first 5 bytes of the
+function being called by manually executing prologue instructions (mov edi, edi; push ebp; mov ebp, esp)
+and then jumping to the function code as illustrated below.
+The next graph presents the execution flow of this malware when the exploitation is successful. As
+mentioned previously this version of the MiniDuke payload comes with two modules which we refer to as
+the main module and the TwitterJS module.
+Execution flow of MiniDuke

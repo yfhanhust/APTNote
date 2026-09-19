@@ -1,0 +1,66 @@
+
+
+
+Sentence : Infecting WinCC computers
+This class is responsible for connecting to a remote server running the WinCC database software. When it finds
+a system running this software it connects to the database server using a password that is hardcoded within the
+WinCC software. Once it has connected it performs two actions. First, Stuxnet sends malicious SQL code to the
+database that allows a version of Stuxnet to be transferred to the computer running the WinCC software and
+executes it, thereby infecting the computer that is running the WinCC database. Second, Stuxnet modifies an
+existing view adding code that is executed each time the view is accessed.
+After sending an SQL configuration query, Stuxnet sends an SQL statement that creates a table and inserts a
+binary value into the table. The binary value is a hex string representation of the main Stuxnet DLL as an execut­
+able file (formed using resource 210) and an updated configuration data block.
+CREATE TABLE sysbinlog ( abin image ) INSERT INTO sysbinlog VALUES(0x…)
+If successful, Stuxnet uses OLE Automation Stored Procedures to write itself from the database to disk as
+%UserProfile%\sql[RANDOM VALUE].dbi.
+The file is then added as a stored procedure and executed.
+```
+    SET @ainf = @aind + ‘\sql%05x.dbi’
+    EXEC sp _ addextendedproc sp _ dumpdbilog, @ainf
+    EXEC sp _ dumpdbilog
+```
+The stored procedure is then deleted and the main DLL file is also deleted.
+Once running locally on a computer with WinCC installed, Stuxnet will also save a .cab file derived from resource
+203 on the computer as GracS\cc_tlg7.sav. The .cab file contains a bootstrap DLL meant to load the main Stux­
+net DLL, located in GracS\cc_alg.sav. Next, Stuxnet will then modify a view to reload itself. Stuxnet modifies the
+MCPVREADVARPERCON view to parse the syscomments.text field for additional SQL code to execute. The SQL
+code stored in syscomments.text is placed between the markers –CC-SP and --*.
+In particular, Stuxnet will store and execute SQL code that will extract and execute Stuxnet from the saved CAB
+file using xp_cmdshell.
+```
+    set @t=left(@t,len(@t)-charindex(‘\’,reverse(@t)))+’\GraCS\cc _ tlg7.sav’;
+    set @s = ‘master..xp _ cmdshell ‘’extrac32 /y “’+@t+’” “’+@t+’x”’’’;
+    exec(@s);
+```
+Then, the extracted DLL will be added as a stored procedure, executed, and deleted. This allows Stuxnet to ex­
+ecute itself and ensure it remains resident.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "WinCC database software", "type" : "APPS"},
+        {"id": 2, "description": "Stuxnet", "type" : "ACTO"},
+        {"id": 3, "description": "Malicious SQL code", "type" : "EXEF"},
+        {"id": 4, "description": "sysbinlog table", "type" : "REGI"},
+        {"id": 5, "description": "Main Stuxnet DLL as an executable file", "type" : "EXEF"},
+        {"id": 6, "description": "%UserProfile%\\sql[RANDOM VALUE].dbi", "type" : "DOCF"},
+        {"id": 7, "description": "GracS\\cc_tlg7.sav", "type" : "DOCF"},
+        {"id": 8, "description": "Bootstrap DLL", "type" : "EXEF"},
+        {"id": 9, "description": "Main Stuxnet DLL (GracS\\cc_alg.sav)", "type" : "EXEF"},
+        {"id": 10, "description": "MCPVREADVARPERCON view", "type" : "REGI"},
+        {"id": 11, "description": "syscomments.text field", "type" : "REGI"},
+        {"id": 12, "description": "xp_cmdshell", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "connects to"},
+        {"source": 2, "target": 3, "rel_name" : "sends"},
+        {"source": 2, "target": 4, "rel_name" : "creates table and inserts binary value into"},
+        {"source": 5, "target": 6, "rel_name" : "writes to disk as"},
+        {"source": 6, "target": 5, "rel_name" : "added as stored procedure and executed"},
+        {"source": 2, "target": 7, "rel_name" : "saves .cab file as"},
+        {"source": 8, "target": 9, "rel_name" : "loads main Stuxnet DLL from"},
+        {"source": 10, "target": 2, "rel_name" : "modified to reload itself"},
+        {"source": 11, "target": 3, "rel_name" : "stores additional SQL code in"},
+        {"source": 12, "target": 7, "rel_name" : "used to extract and execute Stuxnet from .cab file"}
+    ]
+}

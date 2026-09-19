@@ -1,0 +1,32 @@
+Kraken Loader
+The loaded payload is a .Net DLL with “Kraken.dll” as its internal name, compiled on
+2020-06-12.
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 4/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+This DLL is a loader that injects an embedded shellcode into WerFault.exe . To be clear,
+this is not the first case of such a technique. It was observed before with the NetWire RAT
+and even the Cerber ransomware.
+The loader has two main classes: “ Kraken ” and “ Loader “.
+Figure 5: Kraken.dll
+The Kraken class contains the shellcode that will be injected into the target process
+defined in this class as “ WerFault.exe “. It only has one function that calls the Load
+function of Load er class with shellcode and target process as parameters.
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 5/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+Figure 6: Kraken class
+The Loader class is responsible for injecting shellcode into the target process by making
+Windows API calls.
+https://blog.malwarebytes.com/malwarebytes-news/2020/10/kraken-attack-abuses-wer-service/ 6/17
+10/8/2020 Release the Kraken: Fileless APT attack abuses Windows Error Reporting service - Malwarebytes Labs | Malwarebytes Labs
+Figure 7: Load function
+These are the steps it uses to perform its process injection:
+StartProcess function calls CreateProcess Windows API with 800000C as
+dwCreateFlags.
+FindEntry calls ZwQueryInformationProcess to locate the base address of the
+target process.
+CreateSection invokes the ZwCreateSection API to create a section within the target
+process.
+ZwMapViewOfSection is called to bind the section to the target process in order to
+copy the shellcode in by invoking CopyShellcode .
+MapAndStart finishes the process injection by calling WriteProcessMemory and
+ResumeThread .

@@ -1,0 +1,99 @@
+Detection opportunities
+Detection opportunity 1
+Special characters in ~~rundll32~~ command line
+ATT&CK technique(s): T1218.011 Signed Binary Proxy Execution: Rundll32
+ATT&CK tactic(s): Defense Evasion, Execution
+Details: The main detection analytic that helped us catch so much Gamarue
+was based on what we noticed about how Gamarue executed ~~rundll32.exe~~ ~~.~~
+As we examined multiple Gamarue detections over time, we noticed that their
+~~rundll32.exe~~ command lines consistently used the same number of characters
+in a repeatable pattern—25 characters followed by a period followed by 25
+additional characters, then a comma and 16 more characters. For example:
+We translated this into a regular expression, simplified as: ~~[25 ASCII~~
+~~characters].[25 ASCII characters],[16 ASCII characters]~~
+Detecting a process of ~~rundll32.exe~~ combined with this regular expression
+looking for multiple special characters in the process command line helped us
+catch Gamarue. This detection analytic is a good example of how intelligence
+analysts can use observations about commonalities in threats over time to
+create useful analytics:
+
+Hey, we see that same pattern with a whole bunch of underscores a lot…
+
+what is that?
+
+
+Oh cool, that looks like Gamarue.
+
+
+It keeps doing the same thing. Let’s make an analytic for that!
+
+
+116
+l [Gamarue]
+2021 Threat Detection Report
+Detection opportunity 2
+Windows Installer ~~(~~ ~~msiexec.exe~~ ~~)~~ external network connections
+ATT&CK technique(s): T1218.007 Signed Binary Proxy Execution: Msiexec,
+T1055.012 Process Injection: Process Hollowing
+ATT&CK tactic(s): Defense Evasion, Command and Control
+Details: We observed Gamarue injecting into the signed Windows Installer
+~~msiexec.exe~~, which subsequently connected to C2 domains. Adversaries
+commonly use ~~msiexec.exe~~ to proxy the execution of malicious code through
+a trusted process. We detected Gamarue by looking for ~~msiexec.exe~~ without a
+command line making external network connections. Though many Gamarue C2
+servers were disrupted in 2017, we found that some domains were active in 2020,
+like the one in the following example ~~(~~ ~~4nbizac8[.]ru~~ ):
+We could just detect the domain, but as we know, adversaries like to change
+those up ( Pyramid of Pain, anyone?), so we found this analytic to be more
+durable. You’ll have to tune out any legitimate network connections that
+~~msiexec.exe~~ makes from your network, since every environment is different. If
+you aren’t excited about detecting Gamarue, don’t worry—this same detection
+analytic also helped us catch other threats such as Zloader throughout 2020.
+Bonus forensic analysis opportunity
+ROT13 registry modifications
+ATT&CK technique(s): T1112 Modify Registry
+ATT&CK tactic(s): Defense Evasion/Execution
+Details: While this isn’t a detection opportunity, we wanted to share a tip
+for how we identify the source LNK that executed Gamarue in many of our
+detections. We observed that the parent process of ~~rundll32.exe~~ (often
+~~explorer.exe~~ ~~)~~ usually creates a registry value in the UserAssist subkey.
+~~UserAssist~~ tracks applications that were executed by a user and encodes data
+117
+l [Gamarue]
+2021 Threat Detection Report
+using the ROT13 cipher. Because Gamarue is often installed by a user clicking
+an LNK file, if you’re trying to figure out the source of Gamarue, check out the
+registry key ~~HKEY_USERS{SID}\Sof~~ t ~~ware\​Microsof~~ t ~~\Windows\CurrentVersion~~
+~~\Explorer\UserAssist~~ for any registry modifications ending in ~~.yax~~ ~~—~~ ~~.yax~~ is the
+ROT13 encoded value of ~~.lnk~~ ~~.~~ While this won’t be a good detection opportunity
+on its own, it could be helpful to look for this registry value if you’re responding
+to a Gamarue incident to figure out where it came from and clean the USB drive.
+t t
+t t
+t t
+Katie Nickels
+D I R E C T O R O F
+I N T E L L I G E N C E
+Katie has worked in Security
+Operations Centers and cyber threat
+intelligence for nearly a decade,
+hailing from a liberal arts background
+with degrees from Smith College and
+Georgetown University. Prior to joining
+Red Canary, Katie was the ATT&CK
+Threat Intelligence Lead at The MITRE
+Corporation, where she focused on
+applying cyber threat intelligence
+to ATT&CK and sharing why that’s
+useful. She is also a SANS instructor
+and has shared her CTI and ATT&CK
+expertise with presentations at many
+conferences as well as through Twitter,
+blog posts, and podcasts.
+t t
+118
+t t
+l [Gamarue]
+t t
+t t
+OVERALL RANK

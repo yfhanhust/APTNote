@@ -1,0 +1,87 @@
+• [USA] • [Canada] • [Netherlands] • [Germany] • [England] • [Mexico] • [France] • [Italy] • [Spain] • [Australia] • [Portugal] • [Austria] • [Denmark]
+The list of proxy domains used for bouncing victim traffic before reaching the C&C server are
+listed in the IOC section 6.2 of this report.
+20 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+Figure 17. TDS - Injection code
+During its investigation, the PTI Team witnessed the SilverFish group switching the TDS proxy
+domains multiple times in a day.
+3.3 Post Exploitation Analysis
+After analyzing the executed victim tasks inside the command and control server, the PTI
+Team obtained lots of details about the SilverFish group’s post-exploitation TTP. We were
+also be able to link our fingerprint which was extracted from one of the SolarWinds IOCs
+with an IP listed as a second-stager within the C&C panel (See Figure 20). The executed
+tasks paint a clear picture of the motive, targets and priorities of these sophisticated
+attackers. After gaining initial foothold over the system, the SilverFish group uses publicly
+available red teaming tools such as Empire, cobalt strike, koadic loaders, and, in several
+cases PowerSploit and Mimikatz post exploitation Powershell scripts. Additionally, there are
+lots of specially crafted Powershell, BAT, CSPROJ, JavaScript and HTA files that are mainly
+used for enumeration and data exfiltration. After analyzing the command and control servers
+of the SilverFish group, the PTI Team collected all the commands executed on victim devices.
+Results of the analysis made on the collected commands indicate a strong behavioral
+pattern. The following table contains the most frequently used six commands executed by
+the SilverFish group along with brief explanations of each.
+21 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+|Occurance|Command|Explanation|
+|---|---|---|
+|~~2880~~|~~nltest /dclist :~~|~~Lists all domain controllers in the domain.~~|
+|~~2283~~|~~nltest /domain_trusts~~|~~Returns a list of trusted domains.~~|
+|~~1547~~|~~cmdkey /list~~|~~Displays the list of stored user names and~~credentials.|
+|~~670~~|~~net group ”domain admins”~~/domain|~~Lists domain admin users.~~|
+|~~537~~|~~dir c:\programdata~~|~~Prints the contents of ”programdata” directory~~(used for enumerating the installed software)|
+|~~206~~|~~powershell~~~~-nop~~~~-enc~~%Trimmed...%|~~Executes the BASE64 encoded powershell~~command/script.|
+As seen in the above table, the first course of action is to enumerate the victim domain. After
+listing the domain controllers and the trust relationship between the domains, the SilverFish
+group usually focuses on enumerating the infected device itself.
+Figure 18. Frequently used commands for enumeration
+Among the executed commands there are multiple occurrences of external script execution
+using the WebClient.DownloadString method. Some of the executed scripts are well-known
+post-exploitation scripts such as PowerShellEmpire, Powertools [4], Invoke-SocksProxy [15],
+and Mimikatz [7]. Unfortunately the PTI Team could not obtain the rest of the files downloaded
+with this method.
+Figure 19. Frequently used commands for enumeration
+All the addresses of external scripts downloaded via the WebClient.DownloadString method
+can be accessed from the Section 6.10.
+22 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+During the investigation of executed commands, the PTI Team noticed that the IP addresses
+used for downloading post-exploitation scripts also matched the characteristics of the initial
+databasegalore.com domain used for fingerprinting the SilverFish infrastructure. The IP was
+serving the same bootstrap theme on port 80 and PowerMTA service on port 9897 (see in
+Figure 20).
+Figure 20. IP within C&C linking back to another server with the same fingerprint
+3.3.1 Koadic Agents
+One of the other post-exploitation tools used by the SilverFish group is the publicly known
+Koadic project [24].
+Analyst Note : According to Koadic author ”Koadic, or COM Command & Control, is
+a Windows post-exploitation rootkit similar to other penetration testing tools such as
+Meterpreter and Powershell Empire. The major difference is that Koadic does most of
+its operations using Windows Script Host (a.k.a. JScript/VBScript), with compatibility in
+the core to support a default installation of Windows 2000 with no service packs (and
+potentially even versions of NT4) through Windows 10.”
+23 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+During the analysis of executed commands the PTI team discovered multiple uses of mshta
+utility for executing external HTA scripts. The following list contains every external IP address
+that is used for executing HTA code.

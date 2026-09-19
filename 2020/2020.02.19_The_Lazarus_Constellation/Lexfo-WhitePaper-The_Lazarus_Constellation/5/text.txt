@@ -1,0 +1,323 @@
+LAZARUS ATTACKS
+LAZARUS TTP
+— Attack scheme
+Considering the vast amount of attacks carried out by Lazarus throughout the years, it is possible to
+notice some recurring patterns in the way the group operates. These patterns have not changed much
+since their first attacks.
+J Intrusion through spear phishing, watering hole, bruteforce or web vulnerabilities Network
+discovery using custom or publicly-available tools
+J Gathering credentials through Mimikatz-like tools and keyloggers Lateral movements using
+custom or publicly-available tools Fulfilling the attack goal: stealing money and/or information
+J Covering tracks by wiping systems or infecting the victims with crimeware malware or
+ransomware
+Lazarus attack pattern
+013
+— Intrusion
+Lazarus operators use a wide range of tricks to try and infect their victims. Their main vector is spear
+phishing, sometimes using 0day or known vulnerabilities. They also perform watering hole attacks and
+RDP password bruteforce [25] .
+Furthermore, they often exploit bad network isolation by hacking into webservers in order to try and
+access the internal network of a targeted organization. In this way,they were able to reach the server
+connected to the SWIFT network in the case of the Bangladesh Central Bank attack.
+In an attempt at attacking a Chilean bank, the Lazarus operators targeted an employee with a fake job
+offer. They set up an interview via a Skype call where the targeted employee was tricked into downloading
+and executing a payload. This shows that the attackers are becoming more and more aggressive [26] .
+—
+Attempts to confuse attribution
+Lazarus malware developers have been trying to fool researchers by introducing some “false flag” Russian
+strings as command names. The attempt was not convincing as it was obvious for native speakers that
+names were lazily translated to Russian. The Russian command names are still used to this day and can
+be used as a signature [27 28] .
+Here are some of them that LEXFO found in a very recent sample:
+~~Poluchit~~
+~~Nachalo~~
+~~ssylka~~
+~~ustanavlivat~~
+~~kliyent2podklyuchit~~
+These strings were used in combination with commercial Russian packers to try and fool researchers and
+journalists, at a time where they are often too quick to attribute attacks to Russian groups.
+—
+Malware design
+Lazarus malware usually have the following patterns:
+J Multistaged
+J Command-line malware and tools
+J Designed to be run as Svchost services (for persistence) API are loaded dynamically
+Lazarus developers usually forget to strip the PDB path from compiled binaries, even when they disclose
+valuable information such as what the malware does, its goal, or even the developer’s name.
+— Communications
+Lazarus malware often use a communication protocol that has been named “Fake TLS” [29 30] for
+communications. This protocol makes malicious packets look like legitimate TLS handshakes and
+communications might stay under the radar due to heavy TLS traffic on port 443.
+This protocol can be found in most Lazarus malware. It is however hard to detect with Snort and Suricata
+rules considering the huge stream of TLS/SSL packets to monitor, which explains why it has been
+consistently used for years by the attackers.
+Example of a Lazarus Fake-TLS packet:
+0000 17 03 01 00 30 5d 15 3d a2 40 ef d2 01 25 ca 54 ....0].=.@...%.T
+0010 26 5f 5d b0 d2 2f 2f 6d 2d ec 56 85 b0 4c a9 bf &_]..//m-.V..L..
+0020 eb 97 be 31 ad cd de 3a b4 71 1e c8 53 96 0b 2d ...1...:.q..S..
+0030 c3 91 3d a2 15 ..=..
+014
+A legitimate TLS packet would be structured this way:
+Bytes Meaning
+17 ApplicationData protocol type
+03 01 SSL version (TLS 1.0)
+00 30 Message length (48 bytes)
+5d ... 15 Encrypted application data
+In case of a Lazarus fake-TLS packet, the structure is:
+Bytes Meaning
+17 03 01 Fake TLS header
+00 10 Size of next packet < 0x4000
+The first packet is a fake-TLS handshake sent to the C&C server:
+~~0000 17 03 01 00 04 .....~~
+Data are then encrypted using algorithms and/or keys different for each malware, usually relying on XOR
+operations or standard algorithms such as RC4.
+Different and more standard communication protocols have been used by Lazarus. Simple HTTP
+requests with hardcoded URLs were implemented in some cases where attackers didn’t care too much
+about detection.
+Here is an example of a Lazarus HTTP request:
+~~GET /sub/lib/lib.asp?id=dn678 HTTP/1.1 Accept: /~~
+~~Accept-Encoding: gzip, deflate~~
+~~User-Agent: Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/4.0;~~
+~~SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center~~
+~~PC 6.0)~~
+~~Host: www.secuvision.co.kr Connection: Keep-Alive~~
+— Filenames
+For payloads and modules, filenames are generally inspired by legitimate Windows services and end with
+“xxxsvc(.dll|.exe)”:
+~~swpsvc.dll~~
+~~sppsvc.dll~~
+~~sqcsvc.dll~~
+~~gpsvc.exe~~
+~~uploadmgrsvc.dll~~
+~~wmisecsvc.dll~~
+~~...~~
+Lazarus has been using ~~[filename].tmp~~ and ~~[filename].dat~~ filenames for configurations or to store
+data to be sent to the C&C. Recently, they started using configuration files named ~~[filename].dll.mui~~ ~~.~~
+— Persistence
+Persistence is usually achieved by setting the main payload as an ~~AUTO_START~~ svchost service, which
+means the malware will be loaded each time the user session starts through the command ~~svchost -k~~
+~~[service]~~ .
+015
+— Packers
+As Lazarus reuse a lot of code in their malware, they manage to evade detection by signature using free
+and commercial packers. Here is a list of the main packers encountered:
+J UPX
+J VMProtect
+J Themida
+J Armadillo
+J ASPack
+J Enigma
+J Protector
+—
+Third-party libraries
+Lazarus uses statically linked third party libraries in their malware for communications and TLS/SSL
+implementation. The following libraries were seen:
+J Libcurl (version 7.49.1)
+J mbedTLS / PolarSSL
+J wolfSSL
+The Libcurl library with the same exact version is still being used in the most recent Lazarus samples. To
+compress data, Lazarus developers usually use inflate/deflate lib versions 1.1.3 and 1.1.4 as well as Zlib
+version 1.0.1 and 1.2.7.
+—
+Third-party tools
+Lazarus has its own toolbox, but operators will also use third-party legitimate tools when necessary. They
+mostly include credential-gathering tools and software allowing lateral movements. Attackers will pack
+tools that are widely flagged by anti-virus, such as Mimikatz, to evade signature-based detection.
+The list of third-party tools includes:
+J PsExec
+J Mimikatz
+J FreeRDP
+J SC.exe
+J Net.exe
+J ...
+—
+Encryption
+The Lazarus group uses standard and custom encryption algorithms. Custom algorithms are usually
+based on several XOR operations with constant values, while standard ones are common such as RC4,
+AES and DES.
+They will sometimes use exotic ciphers like Spritz, an RC4-like algorithm they implemented in a set of
+malware described by Kaspersky. They have the bad habit of reusing encryption algorithms and keys in
+different malware, which helps detection and attribution.
+Lazarus uses encryption for communications, hiding dynamically-imported API names to avoid heuristics
+and to encrypt their payloads. For the latter, they also use less sophisticated ways of hiding strings, such
+as Base64 encoding and alphabet substitution.
+We will review some encryption algorithms found in samples below.
+016
+—
+XOR-based algorithms
+Most custom algorithms implemented by Lazarus are based on XOR operations with hardcoded keys.
+While most of them are pretty straightforward to understand, some are quite imaginative. Here are some
+algorithms and keys found in multiple Lazarus samples:
+Algorithm Key Campaign / Malware
+XOR 0xA7 Blockbuster
+XOR 0x9E Lazarus downloader
+XOR 0x23 FASTCash
+XOR QzEc, wPof Attack on Taiwanese banks + LEXFO incident response
+XOR-based 0xF4F29E1B Lazarus under the hood
+XOR-based 0xCBF9A345 Lazarus under the hood
+XOR-based 0x4F833D5B Lazarus under the hood
+XOR-S^ / Phandoor (Troy)
+XOR-1FE / Phandoor
+XOR-7F8 / asdfdoor, FBIRat, Passive backdoor
+XOR-FFFFFFF0 / Rifle
+Below is an example of a custom XOR-based encryption algorithm using hardcoded keys and constants
+found in several Andariel samples.
+~~lpBuffer = buff;~~
+~~LOBYTE(key4) = 0x82u;~~
+~~v13 = buff;~~
+~~key3 = 5;~~
+~~key1 = 0x556F9482;~~
+~~key2 = 0xAFC12058;~~
+~~if ( (signed int)dwSize > 0 ) {~~
+~~offset = encryptedBuffer - (char *)lpBuffer; i = dwSize;~~
+~~do {~~
+~~*lpBuffer = key3 ^ key2 ^ key4 ^ lpBuffer[offset]; key3~~
+~~= key3 & key2 ^ key4 & (key3 ^ key2);~~
+~~key4 = ((((unsigned~~ ~~int16)key1 ^ (unsigned~~ ~~int16)(8 * key1)) & 0x7F8) << 20) | (key1 >> 8); key2~~
+~~= (((key2 << 7) ^ (key2 ^ 16 * (key2 ^ 2 * key2)) & 0xFFFFFF80) << 17) | (key2 >>~~ ~~8);~~
+~~++lpBuffer; nbBytesLeft~~
+~~= i-- == 1;~~
+~~key1 = ((((unsigned~~ ~~int16)key1 ^ (unsigned~~ ~~int16)(8 * key1)) & 0x7F8) << 20) | (key1 >> 8);~~
+~~}~~
+~~while ( !nbBytesLeft );~~
+~~lpBuffer = v13;~~
+~~size = dwSize;~~
+~~}~~
+A good example of code reuse is the “S^” algorithm (S-hat) recently seen in many Andariel malware
+compiled  in 2016/2017. We found traces of the same algorithm in samples used in Operation Troy,
+compiled in 2010 and 2011 in a payload named bs.dll [31] .
+— RC4
+The RC4 algorithm is found in a number of malware, as it is easy and quick to implement. Lazarus
+developers will sometimes modify it lightly and double the PRGA part of the algorithm to confuse analysts.
+Below are some of the hardcoded keys found in samples [32] .
+017
+Hardcoded key
+4E 38 1F A7 7F 08 CC AA 0D 56 EF F9 ED 08 EF
+E2 A4 85 92
+f9 65 8b c9 ec 12 f9 ae 50 e6 26 d7 70 77 ac 1e
+53 87 F2 11 30 3D B5 52 AD C8 28 09 E0 52 60 D0 6C C5 68 E2 70 77 3C 8F 12 C0 7B 13 D7 B3 9F 15
+— AES
+The AES algorithm was found in many Lazarus samples: Electricfish, backdoors involved in India attacks,
+Joanap, various Bluenoroff samples...
+—
+Spritz
+The Spirtz encryption algorithm is not as common as the others but was used by Lazarus by one of their
+loaders to decrypt payloads. The key found was:
+Hardcoded key
+6B EA F5 11 DF 18 6D 74 AF F2 D9 30 8D 17 72 E4 BD A1 45 2D 3F 91 EB DE DC F6 FA 4C 9E 3A 8F 98
+— C&C Architecture
+Lazarus uses a standard C&C architecture with several layers of proxy servers. These proxies will relay
+packets from the operators to the implants or the other way around through fake TLS packets.
+According to a Group-IB investigation [33], operators set up a three-layer architecture using non standard
+ports.
+Domains and servers are usually leased in Asian countries and paid with bitcoins or other cryptocurrencies
+for anonymity. Lazarus used to leverage hacked servers for their C&C infrastructure but recent attacks
+show that they have moved away from it.
+From a geographic point of view, most C&C appear to be hosted in the US and in Asian countries. The
+diagram below shows locations of more than 50 C&C that have been used by Lazarus in different attacks
+the past two years.
+Lazarus C&C by country
+018
+MITRE ATT&CK MATRIX
+—
+Techniques used
+The ATT&CK matrix [34] related to Lazarus clearly shows how active and diverse the group is.
+Initial Privilege Defense Credential
+Execution Persistence
+Access Escalation Evasion Access
+Drive-by Command-Line Account Access Token Access Token Account
+Compromise Interface Manipulation Manipulation Manipulation Manipulation
+Spearphishing Compiled HTML
+Compiled HTML File Bootkit New Service Brute Force
+Attachment File
+Exploitation for Hidden Files and Process Credential
+Connection Proxy
+Client Execution Directories Injection Dumping
+Disabling Input
+Scripting New Service
+Security Tools Capture
+Registry Run Keys
+User Execution File Deletion
+/ Startup Folder
+Windows
+Management
+Instrumentation
+Shortcut Hidden Files and
+Modification Directories
+Obfuscated Files
+or Information
+Process Injection
+Scripting
+Timestomp
+Lateral Command
+Discovery Collection Exfiltration Impact
+Movement And Control
+Application
+Window Discovery
+Remote
+Desktop
+Protocol
+Data from Local Data
+Commonly Used Port Data Compressed
+System Destruction
+Disk
+File and Directory Remote File
+Data Staged Connection Proxy Data Encrypted Content
+Discovery Copy
+Wipe
+Custom
+Windows
+Input Capture Cryptographic
+Process Discovery Admin Shares
+Protocol
+Query Registry Data Encoding
+Exfiltration Over
+Alternative Protocol
+Exfiltration Over
+Command and Control
+Channel
+Disk
+Structure
+Wipe
+Resource
+Hijacking
+System Information
+Fallback Channels Service Stop
+Discovery
+System Network
+Configuration
+Discovery
+Multiband
+Communication
+System Owner/
+Remote File Copy
+User Discovery
+System Time Standard Application
+Discovery Layer Protocol
+Standard
+Cryptographic
+Protocol
+Uncommonly Used Port
+System
+Shutdown/
+Reboot
+019
+— Software
+Similary, they have been using the set of software below (list is not exhaustive) [35] :
+ID Name
+S0347 AuditCred
+S0245 BADCALL
+S0239 Bankshot
+S0181 FALLCHILL
+S0246 HARDRAIN
+S0376 HOPLIGHT
+S0271 KEYMARBLE
+S0002 Mimikatz
+S0108 netsh
+S0238 Proxysvc
+S0241 RATANKBA
+S0364 RawDisk
+S0263 TYPEFRAME
+S0180 Volgmer
+S0366 WannaCry
+020

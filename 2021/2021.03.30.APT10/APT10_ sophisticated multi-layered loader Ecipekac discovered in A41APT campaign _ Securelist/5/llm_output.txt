@@ -1,0 +1,94 @@
+
+
+
+Sentence : Ecipekac: Layer I loader
+Layer I of Ecipekac infection flow
+The Ecipekac Layer I loader abuses policytool.exe, a legitimate application that is
+normally packaged in the IBM Development Package for Eclipse, to load a malicious DLL
+named ‘jli.dll’ in the current directory via the DLL side-loading technique. The ‘jli.dll’ file
+acts as the first layer of the Ecipekac loader. This DLL file has a number of export
+functions; however, all of them refer to a similar function that carries the main loading
+feature. The loader reads 0x40408 bytes of data from the end of another DLL – ‘vac.dll’
+(where the data section starts at the offset of 0x66240). The data size of 0x40408 is
+derived from a hardcoded value, 0x40405, incremented until it’s divisible by eight.
+MD5 f60f7a1736840a6149d478b23611d561
+SHA1 5eb69114b2405a6ea0780b627cd68b86954a596b
+SHA256 3b8ce709fc2cee5e7c037a242ac8c84e2e00bd597711093d7c0e85ec68e14a4c
+Link time 2033-11-13 08:50:03
+File type PE32+ executable (DLL) (GUI) x86-64, for MS Windows
+Compiler Linker Version: 14.13, OS Version: 10.0
+File size 681544 (666KB)
+File name vac.dll
+https://securelist.com/apt10-sophisticated-multi-layered-loader-ecipekac-discovered-in-a41apt-campaign/101519/ 4/21
+4/1/2021 APT10: sophisticated multi-layered loader Ecipekac discovered in A41APT campaign | Securelist
+Embedded
+data at
+0x66240
+(size:0x40405)
+00066240: febe d990 66de 1bc9 75b7 dc2c 3e1f 3ef2
+00066250: 78d0 0005 5c27 a511 c122 bdf4 15e7 052c
+00066260: af72 7e08 064c f7b9 70f0 57bf 250a 3b4d
+[..skipped..]
+000a6630: ee4b b1f2 294d eea1 290e aba2 6954 130f
+000a6640: 1267 9ab3 f800 0000
+The ‘vac.dll’ DLL file is signed with a valid, legitimate digital signature, although the file
+has been tampered with. At first glance, the fact that its digital signature is valid would
+suggest the file has not been manipulated after being digitally signed.
+The signed digital certificate of vac.dll
+However, what happened was that the actor resized the Certificate Table in the digitally
+signed ‘vac.dll’ and inserted their own data in the Certificate Table so it doesn’t affect the
+digital signature. This technique was published at BlackHat 2016 as MS13-098.
+The layer I loader decrypts the layer II loader shellcode from the embedded data in
+‘vac.dll’. Several crypto algorithms are used, such as XOR, AES and DES. The order and
+combination of algorithms, as well as the decryption keys, are different from one sample
+to another.
+https://securelist.com/apt10-sophisticated-multi-layered-loader-ecipekac-discovered-in-a41apt-campaign/101519/ 5/21
+4/1/2021 APT10: sophisticated multi-layered loader Ecipekac discovered in A41APT campaign | Securelist
+Decryption flow in first loader
+For example, in the sample shown above, the order of crypto algorithms was a one-byte
+XOR using the hardcoded key of ‘0x9F’, followed by an AES CBC mode decryption with
+the AES key ’83H4uREKfFClDH8ziYTH8xsBYa32p3wl’ and the IV key
+’83H4uREKfFClDH8z’.
+One interesting characteristic of Ecipekac is that the attackers implemented these
+cryptographic algorithms in their own code instead of using the Windows API. The
+attackers have also made slight modifications compared to the original implementation.
+For instance, in the function related to the AES algorithm, they intentionally referenced
+the third byte of the AES key as shown in the following code.
+A small modification in the AES function
+Apart from the AES algorithm mentioned, the attackers have also modified the DES
+algorithm.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "policytool.exe", "type" : "APPS"},
+        {"id": 2, "description": "jli.dll", "type" : "DOCF"},
+        {"id": 3, "description": "vac.dll", "type" : "DOCF"},
+        {"id": 4, "description": "Ecipekac Layer I loader", "type" : "TTPS"},
+        {"id": 5, "description": "DLL side-loading technique", "type" : "TTPS"},
+        {"id": 6, "description": "MD5 f60f7a1736840a6149d478b23611d561", "type" : "IOCS"},
+        {"id": 7, "description": "SHA1 5eb69114b2405a6ea0780b627cd68b86954a596b", "type" : "IOCS"},
+        {"id": 8, "description": "SHA256 3b8ce709fc2cee5e7c037a242ac8c84e2e00bd597711093d7c0e85ec68e14a4c", "type" : "IOCS"},
+        {"id": 9, "description": "https://securelist.com/apt10-sophisticated-multi-layered-loader-ecipekac-discovered-in-a41apt-campaign/101519/", "type" : "URLS"},
+        {"id": 10, "description": "XOR", "type" : "TTPS"},
+        {"id": 11, "description": "AES", "type" : "TTPS"},
+        {"id": 12, "description": "DES", "type" : "TTPS"},
+        {"id": 13, "description": "0x9F", "type" : "TAMP"},
+        {"id": 14, "description": "83H4uREKfFClDH8ziYTH8xsBYa32p3wl", "type" : "TAMP"},
+        {"id": 15, "description": "83H4uREKfFClDH8z", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loads"},
+        {"source": 2, "target": 4, "rel_name" : "acts as"},
+        {"source": 3, "target": 4, "rel_name" : "contains data for"},
+        {"source": 6, "target": 3, "rel_name" : "hash of"},
+        {"source": 7, "target": 3, "rel_name" : "hash of"},
+        {"source": 8, "target": 3, "rel_name" : "hash of"},
+        {"source": 4, "target": 5, "rel_name" : "uses"},
+        {"source": 10, "target": 4, "rel_name" : "used by"},
+        {"source": 11, "target": 4, "rel_name" : "used by"},
+        {"source": 12, "target": 4, "rel_name" : "used by"},
+        {"source": 13, "target": 10, "rel_name" : "key for"},
+        {"source": 14, "target": 11, "rel_name" : "key for"},
+        {"source": 15, "target": 11, "rel_name" : "IV key for"}
+    ]
+}

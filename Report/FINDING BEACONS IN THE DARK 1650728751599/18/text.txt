@@ -1,0 +1,829 @@
+BEACON OF HOPE
+intelligence correlation
+We took a largely automated approach to performing intelligence correlation with OSINT, hunting for
+many indicators from our Cobalt Strike dataset in our TIP. This was successful in linking clusters with
+publicly documented threat actor infrastructure and uncovering further clusters for closer manual inspection.
+We also spent (and continue to spend) many hours manually correlating OSINT with our dataset (e.g.,
+searching IOCs on Twitter!) and pivoting on those findings to yield further indicators and intelligence.
+In the end, we found correlations with dozens of major threat actors and campaigns, including some
+familiar faces:
+- DarkSide
+
+- REvil/Sodin
+
+
+
+APT41
+
+
+CostaRicto/SombRAT
+
+
+KEGTAP & SINGLEMALT
+
+
+IcedID
+
+
+Ursnif
+
+
+WizardSpider
+
+
+
+
+Ryuk
+
+
+Conti
+
+
+TrickBot
+
+
+Nempty/Netfilim/Nephilim
+
+
+
+
+FIN7
+
+
+Maze
+
+
+DoppelPaymer
+
+
+MAN1/Moskal/TA505
+
+
+Nobelium/APT29
+
+
+Pyxie
+
+
+StrongPity
+
+
+
+
+MountLocker
+
+
+Phobos
+
+
+92
+Based on OSINT correlation, the following threat groups have been particularly prevalent in our dataset
+over the past year or so:
+Figure 76 – Correlation with known threat groups and research
+Each Beacon tagged above is related to existing intelligence (whether private or OSINT) and offers us
+the potential to perform further clustering on our dataset to uncover more intelligence insights and
+correlations.
+Given a wealth of superb OSINT, a vast dataset of Beacons, and strong clustering capabilities around all
+the information harvested thus far, we aim to show the ease with which you can now unravel campaigns
+from known threat actors.
+The intelligence presented is by no means exhaustive. Several follow-up blogs and papers have been
+published, or are already planned, based around some of the more intricate and elaborate discoveries.
+It is worth mentioning how important an altruistic approach is, taken by many companies and individuals, in openly and freely sharing intelligence with the cybersecurity community. It would not have been
+possible to compile such a comprehensive chapter on intelligence correlation without that, let alone
+with so little effort.
+Kudos to all the vendors and individuals mentioned herein. Your research has been invaluable and greatly appreciated!
+93
+apt41
+APT41 (aka WINNTI, aka Barium) is a prolifi c Chinese state-sponsored cybercrime group. Active since
+2012, and initially performing espionage and fi nancially motivated attacks against prominent targets in
+the computer game industry, they now reportedly focus on more state-aligned targets.
+Where once the infamous PlugX malware was the remote access Trojan (RAT) of choice for APT41
+operatives, Cobalt Strike is starting to gain in popularity in several recent campaigns, and we’ll explore
+manual correlation techniques that you can use to elaborate on APT41’s Team Server infrastructure.
+A blog post published by FireEye in March of 2020 explored APT41’s tactics, including their use of malicious documents, exploits, and Cobalt Strike. The report indicated that the group was using a bespoke
+Malleable C2 profi le with at least one of its Cobalt Strike Beacons.
+FireEye
+This Is Not a Test: APT41 Initiates Global Intrusion Campaign Using Multiple Exploits
+https://www.mandiant.com/resources/apt41-initiates-global-intrusion-campaign-using-multipleexploits
+We uncovered a Malleable C2 profi le on GitHub that is very similar to that of the one mentioned in the
+FireEye blog. This one seems to have been authored by a Chinese security researcher with the pseudonym “1135.”
+These profi les had several similarities: both used jQuery Malleable C2 profi les, and portions of the HTTP
+GET profi le block are almost identical. HTTP header fi elds such as accept, user-agent, host, and referrer,
+as well as the set-uri fi eld, were all exact matches to the profi le data listed in the FireEye blog.
+Figure 77 - jQuery Malleable C2 from the “1135” GitHub
+GitHub
+Bootcss Malleable C2 Profi le
+https://github.com/1135/1135-CobaltStrike-ToolKit/blob/master/Malleable%20C2%20Files/jquery.
+xxx.js_CN_cdn.bootcss.com_for_cs3.14_.txt
+94
+By extracting and correlating the HTTP headers used in the GET and POST requests defi ned in the
+Beacon confi gs, we can generate revealing connections between previously disparate Cobalt Strike
+infrastructure.
+Figure 78 – Clustering on cdn.bootcss.com POST Request Meta
+While we identifi ed a relatively small number of Beacons using the bootcss[.]com domain as part of their
+Malleable C2 confi guration, there were also a few clusters with a unique SSL public key ( b3e6b9dd84dae-
+6be68cb40cda4366b77 ) that enabled us to identify additional beacons related to APT41.
+Figure 79 - Pivoting to a new cluster based on SSL public key
+95
+The Beacons served by these new nodes are using different domain names to those from the original
+cluster that attempt to make the Beacon traffic look like legitimate Microsoft traffic.
+|IP|Domain|
+|---|---|
+|144.202.98[.]198|zaloflescdn[.]com|
+|107.182.24[.]70|isbigfsh[.]xyz|
+|185.14.29[.]72|www[.]microsoftbooks.dns-dns[.]com|
+|193.42.114[.]73|www[.]microsoftbooks.dns-dns[.]com|
+|149.28.78[.]89|www[.]mlcrosoft[.]site|
+|23.67.95[.]153|ns.mircosoftdoc[.]com|
+|104.27.132[.]211|cdn.microsoftdocs.workers[.]devccdn.microsoftdocs.workers[.]dev|
+Table 12 - APT41 phishing domains
+The domains we found share similarities in their naming convention, which masquerade as a legitimate
+Microsoft phishing domain www[.]mlcrosoft[.]site, both appear within a blog from Positive Technologies. Further hunting for the IP address 149.28.78[.]89 reveals links to a campaign referenced in a
+Prevailion blog, “ The Gh0st Remains the Same .”
+apt41 continued - gh0st in the machine
+In the Prevailion blog, we can find two IOCs that appear in the cluster above; the IP 149.28.78[.]89, and
+the domain mlcrosoft[.]site . That blog associated those IOCs with the Higaisa APT group, which operates out of North Korea.
+The domain mlcrosoft[.]site also appears in a blog from Positive Technologies. That article has additional overlapping IOCs and talks about the same campaign as mentioned in the Prevailion blog. However,
+it makes a strong argument that the activity is from APT41, rather than Higaisa APT.
+Prevalion
+The Gh0st Remains the Same
+https://www.prevailion.com/the-gh0st-remains-the-same-2/
+Positive Technologies
+Higaisa or Winnti? APT41 backdoors, old and new
+https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/higaisa-or-winnti-apt-41backdoors-old-and-new/
+96
+When we do a side-by-side comparison of the domains from the Positive Technologies blog and our
+datasets, there is a strong similarity between naming conventions used:
+|BlackBerry IOCs|Positive Technologies IOCs|
+|---|---|
+|www[.]microsoftbooks.dns-dns[.]com|microsoftbooks.dynamic-dns[.]net|
+|cdn.microsoftdocs.workers[.]dev|microsoftdocs.dns05[.]com|
+|ccdn.microsoftdocs.workers[.]dev|ns.microsoftdocs.dns05[.]com|
+|ns.mircosoftdoc[.]com|ns1.microsoftsonline[.]net|
+Table 13 – Domain similarities
+We also discovered that mlcrosoft[.]site and mircosoftdoc[.]com both appear in the Azure-Sentinel detection rule for known Barium phishing domains. The IP 144.202.98[.]198 has also been previously
+associated with APT41/Barium by a Microsoft researcher.
+GitHub
+Azure-Sentinel – Detections – MultipleDataSources
+https://github.com/Azure/Azure-Sentinel/blob/master/Detections/MultipleDataSources/
+BariumDomainIOC112020.yaml
+Ajeet Prakash
+Hunting for Barium using Azure Sentinel
+https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/hunting-for-barium-using-azuresentinel/ba-p/1875913
+Another IP from this cluster, 185.14.29[.]72, was recently providing virtual hosting for several domain
+names such as:
+- chaindefend[.]bid
+
+- defendchain[.]xyz
+
+- assistcustody[.]xyz
+
+- www[.]microsoftonlineupdate.dynamic-dns[.]net
+
+Previously, this IP has been associated with DNS resolutions for schememicrosoft[.]com and www[.]
+microsoftbooks.dns-dns[.]com . Several of the domains also have links to 209.99.40[.]222, an IP known
+to perform malicious DNS/bulletproof hosting. As of Sept. 14, 2021, this IP resolved to a new domain
+very briefly: Microsoftonlineupdate.dynamic-dns[.]net . This domain also conforms to a similar naming
+convention to those we have seen previously in Table 13.
+BlackBerry ThreatVector Blog
+For more a more in-depth look at this threat actor and our subsequent findings - make sure to check
+out our blog:
+https://blogs.blackberry.com/en/2021/10/drawing-a-dragon-connecting-the-dots-to-find-apt41
+97
+apac red teams
+Aside from APT41, a handful of other threat groups and red teams from the APAC region are also using
+the bootcss[.]com Malleable C2 profile, yielding further notable clusters.
+The most popular SSL public key is shared by four IP addresses that are serving up 10 Beacons between
+them:
+|IP|Country|
+|---|---|
+|119.28.93[.]67|HK|
+|119.28.42[.]138|HK|
+|39.96.0[.]85|CN|
+|172.93.43[.]32|US|
+Table 14 – IPs based on SSL public key hash (defb5d95ce99e1ebbf421a1a38d9cb64)
+Another cluster of two IPs and six Beacons is also significant; here the profile was subtly modified to
+replace bootcss[.]com for the GET request metadata, but not for the POST request. For the GET request
+metadata, the Beacon was instead configured to use static.aliyun[.]com (Alibaba Cloud Computing)
+rather than bootcss[.]com as the domain, while the C2 server URI was changed from /jquery-3.3.1.min.
+js to /require-jquery-v1.js.
+Further pivoting on the C2 server configuration revealed four additional beacons from two new IPs
+sharing the same domain.
+|IP|Domain|
+|---|---|
+|40.73.6[.]221|www[.]aliyun.com[.]co|
+|139.217.99[.]29|www[.]microport.com[.]cn|
+|47.92.121[.]151|www[.]microport.com[.]cn|
+|39.98.84[.]58|www[.]microport.com[.]cn|
+Table 15 – APT41 IPs/domains from POST request metadata clustering
+These beacons all appear to have been deployed against Chinese targets, possibly by red teams in
+China.
+Overall, 35 Beacons share a remarkably similar config (for one that is not widely in the public domain),
+and they use 74.125.196[.]113 for the DNS_IDLE value, but without the default mojo.5688.8052 . 1838949
+39787088877## named pipe. Watermark values vary between 305419896, 0 and 1873433027:
+98
+|IP|Count|Country|
+|---|---|---|
+|45.77.13[.]213|7|JP|
+|119.28.42[.]138|4|HK|
+|93.115.21[.]242|4|NL|
+|45.137.151[.]106|3|GB|
+|119.28.93[.]67|2|HK|
+|39.96.0[.]85|2|CN|
+|47.101.177[.]45|2|CN|
+|121.196.59[.]237|2|CN|
+|96.45.182[.]23|2|US|
+|157.245.169[.]236|2|US|
+|118.25.108[.]240|2|CN|
+|172.93.43[.]32|2|US|
+|139.180.218[.]213|2|SG|
+Table 16 – Further IPs using the Chinese jQuery profile
+Several of the above IPs have previously been associated with campaigns from Kinsing/SysupdataMiner, as well as being loosely affiliated with red teams based in China.
+One of the Team Servers, 45.77.13[.]213, was unique in that it served up five different Beacons, all configured with a user-agent string that is subtly modified from the base profile:
+Mozilla/5.0 (Macintosh; Intel Mac OS X ~~10_15_1~~ ) AppleWebKit/537.36 (KHTML, like Gecko)
+Chrome/83.0.4103.106 Safari/537.36
+Compared to:
+Mozilla/5.0 (Macintosh; Intel Mac OS X ~~10_15_7~~ ) AppleWebKit/537.36 (KHTML, like Gecko)
+Chrome/88.0.4324.192 Safari/537.36
+Finally, four of the Beacons specify null or 8.8.4.4 for the DNS_IDLE option, all of which are hosted on
+39.101.199[.]31 (Alibaba).
+Across all the Beacons using the bootcss jQuery profile, only four unique user-agent strings were observed. Several of these should not be particularly common in recently updated Windows-based environments, seeing as they normally originate from Mac® based browsers. These types of oddities can
+be good indicators for defenders when crafting rules for hunting and alerting.
+99
+|User-agent|Browser/OS|
+|---|---|
+|Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_1)AppleWebKit/537.36 (KHTML, like Gecko)Chrome/83.0.4103.106 Safari/537.36|Chrome/MacOS 10|
+|Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)AppleWebKit/537.36 (KHTML, like Gecko)Chrome/88.0.4324.192 Safari/537.36|Chrome/MacOS 10|
+|Mozilla/5.0 (Windows NT 6.3; Trident/7.0; rv:11.0) likeGecko|IE11/Windows 6.3|
+|Mozilla/5.0 (Windows NT 6.1; rv:24.0) Gecko/20100101Firefox/24.0|Mozilla Firefox 24.0/Windows 7 6.1|
+Table 17 – User-agents employed by Chinese jQuery Beacons
+darkside
+DarkSide is a ransomware-as-a-service (RaaS) that fi rst appeared in the wild in August 2020. With frequent updates, version 2 surfaced around March 2021. The DarkSide threat group offers their malware
+for download on the dark web, and like many other RaaS vendors, they allow their customers to download malware and target victims to extort money, exfi ltrate fi les, and then share in the proceeds with the
+malware creators.
+BlackBerry
+BlackBerry Prevents DarkSide Ransomware — Years Before It Ever Existed
+https://blogs.blackberry.com/en/2021/05/blackberry-prevents-darkside-ransomware-years-before-itever-existed
+When correlating intelligence against our TIP, we uncovered a report by Cybersecurity and Infrastructure
+Security Agency (CISA) from July 2021 that attributes the IP 99.83.154[.]118 to DarkSide.
+CISA
+10337802.r1.v1
+https://us-cert.cisa.gov/sites/default/fi les/publications/MAR-10337802-1.v1.WHITE.pdf
+One of the most recent domains associated with that IP, tgbyhnedc[.]com, has historical resolutions for
+103.140.186[.]35. This IP is present in our dataset, and is used by a pair of Beacons that are confi gured
+to perform domain fronting via Google videos™:
+Figure 80 - DarkSide domain fronting via Google videos™
+100
+Furthermore, fi ve other Beacons also share the same PROCINJ_STUB hash, and all but one of these are
+loosely based on the youtube_video.profi le.
+Figure 81 - Darkside infrastructure clustered on PROCINJ_STUB hash
+Overall, these overlaps reveal three new IPs and two new domains likely associated with attacks deploying DarkSide ransomware.
+|IP|C2SERVER|First Seen|Last Seen|
+|---|---|---|---|
+|99.83.154[.]118|N/A|N/A|N/A|
+|103.140.186[.]35|abc.tgbyhnedc[.]com|2021-04-12|2021-04-12|
+|195.123.221[.]182|login.eyetomsky[.]com|2021-03-29|2021-08-11|
+|91.235.128[.]97|cafebizup[.]com|2021-04-02|2021-07-06|
+Table 18 – Darkside IPs
+The IP 195.123.221[.]182 is hosted in the Netherlands, and it appears to be providing DNS for several
+Russian top-level domains.
+Interestingly, several DarkSide-related Beacons contain a unique PROCINJ_STUB value (the hash of the
+Team Server JAR archive), which can be used to monitor for new Team Servers and Beacons deployed
+by this particular DarkSide affi liate.
+101
+fin7
+FIN7 is a Russian, fi nancially motivated cybercrime group, notorious for deploying point-of-sale (PoS)
+malware against U.S. retail and hospitality targets in the since 2015.
+In late March of 2021, the ThreatConnect Research Team published a threat intelligence update that
+identifi ed possible FIN7 infrastructure. The hosting ISP, registrar, SSL certifi cate and naming convention
+had strong consistencies with infrastructure that was previously attributed to FIN7. IPs and domains associated with their fi ndings were correlated with our dataset and found to be serving Beacons between
+July 2020 and July 2021.
+ThreatConnect
+ThreatConnect Research Roundup: Threat Intel Update 3/25/21
+https://threatconnect.com/blog/threatconnect-research-roundup-threat-intel-update-3-25-21/
+The correlations revealed fi ve IP addresses associated with FIN7 that were doubling as Cobalt Strike
+infrastructure, using three unique SSL certifi cates, and serving up over 20 Beacons between them. Four
+out of those fi ve IP addresses were using a modifi ed version of the Gmail™ Malleable C2 profi le.
+The original, unmodifi ed POST request metadata is as follows:
+ui=d3244c4707, hop=6928632, start=0, Content-Type: application/x-www-form-ur-
+lencoded;charset=utf-8, OSID=, Cookie`
+FIN7, however, appear to be using a subtle modifi cation to the ui and hop parameters:
+ui=d3221c1438, hop=3938730, start=0, Content-Type: application/x-www-form-ur-
+lencoded;charset=utf-8, OSID=, Cookie
+Using this modifi ed POST request as a clustering point reveals some additional infrastructure with links
+to FIN7.
+Figure 82 - Clustering FIN7 infrastructure using POST Request Meta setting
+102
+A total of four additional IPs and two additional domains were uncovered and are listed below as a
+supplement to ThreatConnect’s original findings.
+|IP|C2SERVER|First Seen|Last Seen|
+|---|---|---|---|
+|85.217.171[.]12|85.217.171[.]12|2021-02-05|2021-04-29|
+|195.2.93[.]160|195.2.93[.]160|2020-07-14|2020-09-05|
+|185.206.145[.]227|coincidencious[.]com|2021-03-19|2021-07-22|
+|92.63.105[.]58|wisecrackism[.]com|2021-02-17|2021-03-13|
+|89.163.214[.]57|89.163.214[.]57|2021-02-01|2021-02-04|
+|185.203.116[.]7|cdnoid[.]com|2021-02-11|2021-03-02|
+|95.142.40[.]121|techniquesaholic[.]com|2020-07-20|2020-09-04|
+|213.202.211[.]246|213.202.211[.]246|2021-01-01|2021-05-18|
+|188.120.248[.]114|188.120.248[.]114|2020-09-07|2020-11-20|
+Table 19 – FIN7 C2
+Occasionally, the FIN7 operators have been observed nulling out the PROCINJ_STUB hash in the Beacon
+config. This is almost certainly good OPSEC, but about half of the Beacon configurations allude to a
+leaked copy of Cobalt Strike 4.2 (20201106) being deployed.
+wizardspider
+WizardSpider (aka UNC1878) is a Russian cybercrime group. Since 2018, they have deployed a variety
+of malware, including TrickBot, Ryuk and Conti, primarily attacking targets for financial gain.
+Intelligence correlation has revealed several overlaps with WizardSpider campaigns in our dataset, allowing us to shine a light on some of this group’s activities, and better monitor their future operations.
+ryuk
+In the latter half of October 2020, the ThreatConnect Research Team detected some newly registered
+infrastructure that is potentially linked to the Threat Group WizardSpider and their Ryuk ransomware
+family.
+GitHub
+ThreatConnect - IOCs
+https://github.com/ThreatConnect-Inc/research-team/blob/master/IOCs/WizardSpider-UNC1878Ryuk.csv
+103
+The C2 domains from their report were registered via Openprovider. The domains use SSL certifi cates
+containing similar string criteria compared to prior Ryuk infrastructure. Several IPs and domains associated with their fi ndings were also present in our dataset. These IPs and domains served Cobalt Strike
+Beacons between July 2020 and July of 2021. One additional IP address, 108.62.141[.]5, was discovered in our dataset, which shared C2 domains with an IP reported by ThreatConnect.
+|IP|C2SERVER|First Seen|Last Seen|
+|---|---|---|---|
+|74.118.138[.]139|touchroof[.]comfocuslex[.]com|2021-02-07|2021-07-15|
+|108.62.141[.]5|touchroof[.]comfocuslex[.]com|2021-05-19|2021-05-19|
+|45.153.241[.]16|45.153.241[.]16|2020-07-10|2021-02-18|
+|172.106.86[.]22|45.176.188[.]137|2021-03-11|2021-03-15|
+|162.252.172[.]41|172.106.86[.]2251.81.142[.]72|2021-03-03|2021-03-16|
+Table 20 – WizardSpider/Ryuk C2
+Again, using the PROCINJ_STUB hash, it is possible to ascertain the version of Team Server deployed
+on the server. In this instance, the hash belongs to the fourth most leaked build, 4.2 (from 2020-11-06).
+bazarloader
+An AlienVault Pulse from January 26, 2021 lists 88.119.171[.]105 as a possible IP associated with WizardSpider/UNC1878:
+Figure 83 – AlientVault Pulse for 88.119.171[.]105
+AlienVault
+Possible UNC1878 / Wizard Spider Domain servicessilverroomhotspot[.]com
+https://otx.alienvault.io/pulse/600fe8f0617db5e51ad89f5b
+104
+A tweet from Joe Slowik a couple of days later hints at a further link to BazarLoader based on the servicessilverroomhotspot[.]com domain:
+Figure 84 – Joe Slowik tweet with BazarLoader details
+Delving into our dataset, the IP address from the AlienVault Pulse is present, but specifi ed as the
+C2SERVER setting in the Beacon confi g. The actual Team Server hosting the Beacon is on another IP
+entirely:
+|IP|C2SERVER|First Seen|Last Seen|
+|---|---|---|---|
+|217.12.202[.]115|88.119.171[.]105|2021-01-25|2021-02-08|
+Table 21 – WizardSpider/BazarLoader C2
+A Beacon payload (SHA256 of 5351…) was observed communicating with the above IP since 2021-0128. The Beacon is signed using a possibly stolen code signing certifi cate issued to “JJ ELECTRICAL
+SERVICES LIMITED,” with a serial of bbd4dc3768a51aa2b3059c1bad569276. This certifi cate was used
+to sign a further Cobalt Strike Beacon with a timestamp of 2021-02-02 17:25:31 (SHA256 of d67ba…),
+which is attributed to TrickBot in a report from Intel 471 published in May 2021.
+Intel 471
+Look how many cybercriminals love Cobalt Strike
+https://intel471.com/blog/Cobalt-strike-cybercriminals-trickbot-qbot-hancitor
+105
+The full hashes for both of the above samples are:
+
+
+5351984d7eaf9464f27c202f94b6475ffb73904191c973d7c737a0f3cdfbde0e
+
+
+d67baca49193bd23451cca76ff7a08f79262bf17fb1d8eb7adaf7296dca77ad6
+
+
+The Malleable C2 profi le used by the WizardSpider/BazarLoader Beacons in our dataset differs from the
+jQuery profi le observed by Intel 471. The latest samples appear to be based on an Amazon® Malleable
+C2 profi le (using 0.0.0.0 for DNS idle), while another sample, signed with the stolen certifi cate, was using
+a DNS idle value of 114.114.114.114 (China Telecom).
+Beacons served from both IPs share the same PROCINJ_STUB hash, indicating they are both running a
+leaked copy of Cobalt Strike 4.0.
+trickbot
+TrickBot was initially a banking Trojan, uncovered in 2016 and leveraged by its operators to facilitate
+fi nancial gain. Since its inception, TrickBot has grown in complexity. It is now a modular, multi-stage,
+jack-of-all-trades, offering credential harvesting, crypto mining, exfi ltration, reconnaissance and more.
+BlackBerry
+Threat Spotlight: TrickBot Infostealer Malware
+https://blogs.blackberry.com/en/2019/09/blackberry-cylance-vs-trickbot-infostealer-malware
+A blog published by The DFIR report in May 2021 identifi es a TrickBot campaign that was used to fi rst
+deploy Cobalt Strike Beacon and then a credential-stealing tool called LaZagne.
+Figure 85 – LaZagne GitHub repository (https://github.com/AlessandroZ/LaZagne)
+106
+The blog provides the following network IOCs for Cobalt Strike:
+- 147.135.78[.]200:80
+
+- 23.108.57[.]39:443
+
+- wideri[.]com
+
+- http[:]//172.82.179[.]170/w.dll
+
+The DFIR Report
+Trickbot Brief: Creds and Beacons
+https://thedfirreport.com/2021/05/02/trickbot-brief-creds-and-beacons/
+Further intelligence from RiskIQ published during September 2021 provides some additional context,
+linking the IP 23.108.57[.]39 with a further ~650 IPs and attributing the overall campaign to WizardSpider. RiskIQ also disclosed details of a new zero-day vulnerability in Microsoft® Word (CVE-2021-40444)
+that was likely being exploited to deliver the Beacon payloads through malicious documents.
+In this instance, clustering on SSL public keys associated with Team Server IPs revealed little further in
+the way of additional infrastructure. This indicated that the operators of this particular botnet are employing some good OPSEC, installing Team Server afresh for each deployment. However, despite being
+cautious, WizardSpider left a breadcrumb trail we could follow to correlate intelligence and uncover
+further infrastructure.
+The first part of the trail related to module names. Most of the module names employed by this threat
+actor were manually specified and non-default:
+- internsystem.dll
+
+- commnicationsdebug.dll
+
+
+
+debugcomm.dll
+
+
+networkinternals.dll
+
+
+encryptfull.dll
+
+
+systemintern.dll
+
+
+networkcomm.dll
+
+
+cableplatform.dll
+
+
+debugcommunications.dll
+
+
+
+
+In addition, many of the Beacons also used non-default process names for injection (SPAWNTO), such
+as:
+- %windir%\sysnative\wusa.exe
+
+- %windir%\sysnative\mstsc.exe
+
+- %windir%\system32\calc.exe
+
+The final interesting portion of the breadcrumb trail concerns the use of a domain generation algorithm
+(DGA), which is used to generate domains names for the beacon C2SERVER setting. In this instance,
+the generated domain names tend to follow a simple nomenclature (6-12 characters, no prefix and a
+.com suffix). For example:
+107
+- cloudstomes[.]com
+
+- touchroof[.]com
+
+- newiro[.]com
+
+- derotin[.]com
+
+- pipipub[.]com
+
+- wideri[.]com
+
+- hireja[.]com
+
+- slicemia[.]com
+
+
+
+mebonux[.]com
+
+
+tucosu[.]com
+
+
+wuluxo[.]com
+
+
+
+
+dimuyum[.]com
+
+
+buremih[.]com
+
+
+nokuje[.]com
+
+
+
+
+Armed with this knowledge, we can now produce a simple tool to label these samples in our dataset, as
+well as to label incoming samples. This makes it easy to correlate emerging intelligence with WizardSpider’s activities.
+conti
+In May 2021, WizardSpider deployed the Conti ransomware in an attack against the Health Service
+Executive (HSE), the public health service of Ireland. As a result of the attack, the HSE was forced to
+shut down its IT systems to regain control of the situation, resulting in appointment cancellations and
+loss of services.
+Security researcher Michael Koczwara revealed a further Conti ransomware campaign from July 2021
+that employed a Beacon to deliver further payloads and stagers.
+Michael Koczwara
+Conti Ransomware Group Cobalt Strike C2 Analysis & Persistence (Anydesk, Atera, Splash)
+https://michaelkoczwara.medium.com/conti-ransomware-group-cobalt-strike-c2-analysis-rdppersistence-cc535d35eaba
+As noted by Koczwara in his report, the threat actors devoted little time and attention to protecting their
+servers. Further clustering against our dataset using the user-agent string, submit URI, and the existence of azureedge[.]net in the HTTP host headers, reveals a further web of Conti-related Team Server
+IPs, and over 65 Beacon payloads.
+108
+Figure 86 - Clustering of Conti infrastructure on user-agent, submit URI and Malleable C2 profi le
+All the Beacon’s payloads are confi gured using the jquery-c2.4.3.profi le. And 16 of the samples are set
+to perform domain fronting via Microsoft Azure, using either azureedge[.]net or workhub.microsoft[.]
+com for the C2 server.
+Figure 87 – Location of TrickBot Team Servers
+109
+Most of the Beacons contain a PROCINJ_STUB value that corresponds to the MD5 hash value of Cobalt
+Strike Team Server 4.3.
+man1
+MAN1 (aka Moskal, aka TA511) is another financially motivated cybercrime group, active since 2018.
+They are renowned for deploying malware called Hancitor via malspam campaigns. Since late 2019,
+Hancitor has been used to deploy Beacon, amongst other malware, such as Ursnif and EvilPony.
+BlackBerry
+Threat Spotlight: Dissecting the MAN1 Group’s Macro
+https://blogs.blackberry.com/en/2017/03/threat-spotlight-dissecting-the-man1-groups-macro
+Threat Spotlight - MAN1 Malware: Temple of Doom
+https://blogs.blackberry.com/en/2017/08/threat-spotlight-man1-malware-group-resurfaces
+We found evidence of MAN1 in our dataset in the form of two IPs, 31.44.184[.]47 and 192.99.250[.]2.
+Both IPs were mentioned in a Unit 42 blog post from April 2021 examining traffic from Hancitor infections.
+Unit 42
+Wireshark Tutorial: Examining Traffic from Hancitor Infections
+https://unit42.paloaltonetworks.com/wireshark-tutorial-hancitor-followup-malware/
+The second IP, 192.99.250[.]2, was helpful for pivot searches. It resulted in the discovery of several further Beacons in our dataset that were configured to use the IP as part of the C2SERVER configuration
+value:
+|IP|C2SERVER|First Seen|Last Seen|
+|---|---|---|---|
+|173.199.115[.]116|173.199.115[.]116173.234.25[.]78192.99.250[.]2|2021-02-10|2021-02-10|
+|173.234.25[.]78|173.199.115[.]116173.234.25[.]78192.99.250[.]2|2020-11-12|2021-02-20|
+|192.99.250[.]2|173.234.25[.]78192.99.250[.]2|2021-02-11|2021-02-11|
+|31.44.184[.]47|31.44.184[.]4|2020-09-06|2020-11-19|
+Table 22 – Hancitor C2
+The 192.99.250[.]2 address tends to be the preferred IP/host in the C2SERVER setting when serving up
+Beacons over port 8080, whereas the Team Server IP will be used in the C2SERVER value for Beacons
+served over port 80. Aside from these distinctions, the Beacons all appear to employ a default configuration with a watermark value of 0, leaving limited opportunity for further clustering. Nevertheless, we
+now have more intelligence on MAN1’s Beacons, and the first/last seen datetimes help to broaden our
+understanding of campaign timelines.
+110
+ursnif - saigon fork
+Ursnif (aka Gozi) is a multifaceted malware family with an emphasis on information stealing that has
+been leveraged to exfi ltrate sensitive data from targets. It has been particularly pervasive from 2016
+onwards. Since 2007, variants of the malware have been detected in Europe, Japan, and Australia, with
+more recent outbreaks in the U.S. and U.K.
+BlackBerry
+Threat Spotlight: URSNIF Infostealer Malware
+https://blogs.blackberry.com/en/2018/02/threat-spotlight-ursnif-infostealer-malware
+Since 2020, Ursnif has often been distributed via malspam and used to facilitate deployment of multiple
+malware payloads, including Cobalt Strike Beacon.
+In January 2020 researchers at FireEye published a report on a malware dubbed Saigon, in which they
+indicated what appeared to be a fork of the Ursnif aka Gozi banking malware.
+FireEye
+SAIGON, the Mysterious Ursnif Fork
+https://www.mandiant.com/resources/saigon-mysterious-ursnif-fork
+During that period, an IP (146.0.72[.]76) that was part of the Saigon C2 infrastructure was also present in
+our dataset. The IP was seen to be serving a pair of Cobalt Strike Beacons based on the Stack Overfl ow
+Malleable C2 profi le between November 2020 and January of 2021.
+|IP|C2SERVER|First Seen|Last Seen|
+|---|---|---|---|
+|146.0.72[.]76|146.0.72[.]76|2020-11-06|2021-01-17|
+|146.0.72[.]84|146.0.72[.]84|2019-03-27|2021-02-05|
+Table 23 – Ursnif C2
+The SSL certifi cate used by the server listed in the FireEye report has also been linked to a second IP
+on the same CIDR, 146.0.72[.]76/24. This IP was also historically associated with Team Server deployments on an array of ports.
+Figure 88 - SSL certifi cate used across Ursnif related IPs
+111
+icedid
+The IcedID malware family first appeared in the wild in September of 2017 and began life as a banking
+Trojan. Since then, it has evolved through numerous functionality upgrades to have the means to carry
+out wide array of malicious capabilities. After one recent campaign from early 2021, documented by
+researchers at Checkpoint, it was discovered that some of their findings regarding the IcedID C2 infrastructure were also present in our dataset. Their infrastructure was seen to be serving Cobalt Strike
+Beacons between September 2020 until as recently as May of 2021.
+Check Point Research
+Melting Ice – Tracking IcedID Servers with a few simple steps
+https://research.checkpoint.com/2021/melting-ice-tracking-icedid-servers-with-a-few-simple-steps/
+Further research from FireEye into IcedID reveals additional infrastructure and overlapping IOCs with
+our dataset in the form of several C2 server IPs. FireEye specified that these were involved in an IcedID-related infection chain that was part of a campaign from the threat actor UNC2198 in the latter half
+of 2020.
+FireEye
+So Unchill: Melting UNC2198 ICEDID to Ransomware Operations
+https://www.fireeye.com/blog/threat-research/2021/02/melting-unc2198-icedid-to-ransomwareoperations.html
+When correlated with our dataset, we can start to unveil further IcedID connections, helping us further
+map and monitor their infrastructure.
+|IP|C2SERVER|First Seen|Last Seen|
+|---|---|---|---|
+|139.60.161[.]50|149.28.45[.]7074.121.191[.]2|2021-03-31|2021-04-03|
+|74.121.191[.]2|139.60.161[.]50149.28.45[.]70159.65.36[.]16162.247.154[.]106185.172.129[.]132192.95.16[.]24545.176.188[.]13745.63.69[.]9351.81.142[.]7274.121.191[.]2|2021-02-26|2021-05-04|
+|74.50.60[.]96|139.60.161[.]50149.28.45[.]7074.121.191[.]2|2021-03-26|2021-04-03|
+|193.34.167[.]34|193.34.167[.]34|2020-09-23|2020-10-12|
+|195.123.240[.]219|195.123.240[.]219|2020-09-23|2020-09-23|
+|5.149.253[.]199|5.149.253[.]199|2020-06-29|2021-01-01|
+Table 24 – IcedID C2
+112
+salfram phishing campaign
+Salfram is a malware packer/crypter that has primarily been used in the obfuscation and delivery of fi rst
+stage payloads during malspam campaigns. Such payloads include the ZLoader, AveMaria, SmokeLoader and Gozi malware families, as described in research published by Cisco Talos in September of
+2020.
+Cisco Talos
+Salfram: Robbing the place without removing your name tag
+https://blog.talosintelligence.com/2020/09/salfram-robbing-place-without-removing.html
+It is notable that several of the IPs that were being used at that time for those campaigns are also present in our dataset. They served Cobalt Strike Beacons between October and November of 2020.
+|IP|C2SERVER|First Seen|Last Seen|Version|
+|---|---|---|---|---|
+|185.153.196[.]209|185.153.196[.]209|2020-07-25|2020-10-01|4.0|
+|31.44.184[.]125|31.44.184[.]125|2020-08-22|2020-11-19|3.14|
+|31.44.184[.]50|31.44.184[.]50|2020-07-19|2020-11-15|4.1|
+Table 25 – C2s associated with Salfram delivery and post-compromise
+While this information is not recent, it may be of benefi t in historical investigations, and may yet help to
+yield further intelligence correlations.
+dridex
+TA505
+TA505 is a long-running, fi nancially motivated threat actor that has been active since at least 2014.
+TA505, named by Proofpoint, is best known for deploying banking Trojans such as Dridex and TrickBot
+as well as ransomware such as Locky and Clop. Based on prior research from Intel471, a solitary IP
+address mentioned in their report (176.121.14[.]175) was found to have shared a self-signed certifi cate
+with two more IP addresses in our dataset.
+Figure 89 - Excerpt from Intel471 blog on TA505
+Intel471
+Flowspec – TA505’s bulletproof hoster of choice
+https://intel471.com/blog/bulletproof-hoster-of-choice
+113
+These overlaps potentially reveal further historic TA505 related infrastructure:
+|IP|C2SERVER|First Seen|Last Seen|
+|---|---|---|---|
+|176.121.14[.]175|176.121.14[.]175|2020-08-24|2021-02-14|
+|91.214.124[.]54|91.214.124[.]54|2019-12-25|2020-02-10|
+|45.67.229[.]188|45.67.229[.]188|2020-07-28|2020-09-02|
+Table 26 - TA505 C2
+The 91.214.124[.]54 was loosely attributed to TA505 in a report by the French CERT published in February 2021. The new IP, 45.67.229[.]188, is running a leaked copy of Cobalt Strike 4.0, according to the
+PROCINJ_STUB hash.
+Figure 90 - Excerpt from the French CERT report
+French CERT
+INFRASTRUCTURE D'ATTAQUE DU GROUPE CYBERCRIMINEL TA505
+https://www.cert.ssi.gouv.fr/uploads/CERTFR-2021-CTI-002.pdf
+ta575
+TA575, another group identifi ed by Proofpoint, is a notorious Russian cybercrime actor that is also responsible for deploying and operating the infamous Dridex banking Trojan.
+Since February 2021, TA575 has deployed over 50 Cobalt Strike Team Servers, after shunning the
+now-defunct PowerShell Empire post-exploitation framework.
+BlackBerry
+Threat Thursday: TA575/Dridex
+https://blogs.blackberry.com/en/2021/08/threat-thursday-ta575-dridex
+114
+We’ve been tracking TA575’s Team Server deployments using the SSL public keys in their Beacon’s
+confi gurations.
+Despite being hosted on over 50 servers, the SSL public key in question ( 0ce7b-
+6482c1f24e42f2935f5026d338d ) remains constant across all payloads. This means that the operators
+of this Cobalt Strike infrastructure have clearly used a single server to build all Beacons, before deploying them from multiple Team Servers. The Team Servers are all using a leaked build of version 4.3,
+according to the PROCINJ_STUB value.
+Further tracking of the SSL public key across Beacon confi gurations has allowed us to collate infrastructure belonging to the TA575 threat actor that had previously been disparate and unattributed.
+Figure 91 - Clustering TA575/Dridex infrastructure using SSL public key Hash
+Largely fl ying under the radar, portions of the infrastructure have been used by thousands of Beacons
+and malicious document stagers across several distinct malspam campaigns. In more recent offensives, such as the Fake Kaseya VSA phishing campaign fi rst reported by Trustwave in early July, the
+Team Server infrastructure was used for staging further Dridex payloads.
+115
+Figure 92 - TA575 Cobalt Strike Team Server deployments by country since February 2021
+GitHub
+BlackBerry IOCs
+https://github.com/blackberry/threat-research-and-intelligence
+an initial access broker - zebra2104
+When looking for domains relating to another campaign, we stumbled upon an interesting domain. It
+had a similar naming convention, but it proved to be unrelated to the previous hunt.
+A single domain led us down a path where we would uncover multiple ransomware attacks plus an
+APT C2, and subsequently revealed what we believe to be the infrastructure of an Initial Access Broker
+(IAB) that we have dubbed Zebra2104. IABs typically gain entry into a high-value victim network, then
+sell access to the highest bidder on underground forums. Later, the winning bidders will typically deploy
+ransomware and other fi nancially motivated malware within the victim’s organization.
+This presents a great opportunity to examine how performing attribution of IABs can often be a complex
+undertaking, and how further intelligence correlation can help us to better observe constellations on a
+cloudy night, so to speak.
+Let’s explore what we found!
+116
+enter mountlocker
+We identified Cobalt Strike beacons being served from the domain trashborting[.]com in April of 2021.
+We had identified multiple beacons with different configuration data that were reaching out to the domain during April and August of the same year.
+A Beacon served from the IP 87.120.37[.]120 had trashborting[.]com as the specified C2SERVER in its
+configuration:
+|IP|Country|ASN|ASN Number|
+|---|---|---|---|
+|87.120.37[.]120|Bulgaria|Neterra Ltd|AS34224|
+Table 27 – Details for 87.120.37[.]120
+The trashborting[.]com domain was registered with a ProtonMail email address (ivan.odencov1985[@]
+protonmail[.]com) and contained Russian WHOIS registrant information:
+|Type|ROC|
+|---|---|
+|Registrar|PDR Ltd. d/b/a PublicDomainRegistry.com|
+|Domain Status|client delete prohibitedclient update prohibitedclient delete prohibitedclient hold|
+|Email|ivan.odencov1985[@]protonmail[.]com (regis-trant, admin, tech)|
+|Name|Ivan (registrant, admin, tech)|
+|Organization|-|
+|Street|-|
+|City|Moscow (registrant, admin, tech)|
+|State|Moscow (registrant, admin, tech)|
+|Postal Code|123066 (registrant, admin, tech)|
+|Country|RU (registrant, admin, tech)|
+|Phone|+7.993216690 (registrant, admin, tech)|
+|Name Servers|ns1.entrydns.netns2.entrydns.netns3.entrydns.netns4.entrydns.net|
+Table 28 – WHOIS registrant information for trashborting[.]com
+117
+This email address was used to register two other sister domains on the same date - 2020-07-17:
+- supercombinating[.]com
+
+- ideanotsure[.]com
+
+At this point, we performed some further OSINT correlation and discovered that Sophos had attributed the domain supercombinating[.]com to a MountLocker intrusion, based on IOCs they published on
+GitHub:
+Figure 93 – Sophos GitHub IOCs for supercombinating[.]com
+(https://github.com/sophoslabs/IoCs/blob/master/Ransomware-MountLocker.csv)
+We then discovered that all three of these domains had been observed serving Beacons.
+enter strongpity
+After investigating the supercombinating[.]com domain further, we noticed something peculiar; it had
+previously resolved to the IP 91.92.109[.]174. This IP had another resolution within a similar timeframe:
+mentiononecommon[.]com
+The name mentiononecommon[.]com is of particular interest to us, as Cisco Talos intelligence reported
+that the APT group “StrongPity,” also known as “Promethium,” used this domain to serve its namesake
+malware.
+Cisco Talos
+PROMETHIUM extends global reach with StrongPity3 APT
+https://blog.talosintelligence.com/2020/06/promethium-extends-with-strongpity3.html
+Three fi les attributed to StrongPity were served from this domain in 2020, according to VirusTotal.
+118
+|SHA256|Filename|
+|---|---|
+|c936e01333e3260547a8c319d9cfc1811ba5793e182d0688db679ec2b30644c5|Installer.exe|
+|e843af007ac3f58e26d5427e537cdbddf33d118c79dfed831eee1ffcce474569|SecurityHost.exe|
+|8844d234d9e18e29f01ff8f64db70274c02953276a2cd1a1a05d07e7e1feb55c|SecurityHost.exe|
+Table 29 – mentiononecommon[.]com StrongPity samples
+Both supercombinating[.]com and mentiononecommon[.]com resolved to the following IP, which alternated resolutions between the two domains at different overlapping time periods.
+|Domain|First Seen|Last Seen|
+|---|---|---|
+|mentiononecommon[.]com|2020-03-14|2021-03-05|
+|supercombinating[.]com|2020-07-20|2020-09-27|
+Table 30 - First/last seen timestamps for mentiononecommon[.]com and supercombinating[.]com
+This is more evident when we look at VirusTotal’s display of Passive DNS Replication, where the resolution of 91.92.109[.]174 alternates between the two domains of interest.
+Figure 94 - Alternating Resolutions of 91.92.109[.]174 according to VirusTotal
+Not only this, but the domain mentiononecommon was registered to a ProtonMail address with a similar
+naming convention, which also has WHOIS registrant information pointing to Russia. The domain registrant email address associated with the WHOIS record is timofei66[@]protonmail[.]com.
+119
+enter phobos
+Initially we thought we had found a link between StrongPity and MountLocker through the entanglement
+of supercombinating and mentiononecommon . Our working theory changed when we saw Phobos ransomware being deployed from the same C2 server as MountLocker, as shown in the following fi gure
+and confi rmed by the Any.Run sandbox report mentioned by The DFIR Report.
+Figure 95 – The Phobos link
+This presented a bit of a conundrum. Are these ransomware operators actually in cahoots?
+If MountLocker owned the infrastructure, then the chance would be slim that another ransomware operator was also working from it. Additionally, in several instances a delay was observed between initial
+compromise using Cobalt Strike and further ransomware being deployed. Based on these factors, we
+can infer that the infrastructure is not that of StrongPity, MountLocker, or Phobos, but of a fourth group;
+one we believe is an IAB that we named and continue to track as Zebra2104.
+This further demonstrates the power of intelligence correlation. From just one lead derived from the
+Cobalt Strike scanner, combined with OSINT, we now have valuable intelligence on the actions of four
+different threat actors. Not only this, but we can also provide a level of context into their operations to
+SOC analysis and incident responders during related incidents.
+BlackBerry ThreatVector Blog
+For more a more in-depth look at this threat actor and our subsequent fi ndings - make sure to check
+out our blog:
+https://blogs.blackberry.com/en/2021/11/zebra2104
+120
+hidden dragon
+For clusters where there are no existing intelligence overlaps with available OSINT, there can be many
+benefi ts in taking the time to dig more closely into IOC relationships. This can lead to the uncovering of
+additional intelligence, even if it doesn’t always immediately lead to attribution.
+Let’s explore one such cluster that we shall dub “Hidden Dragon” (awesome logo to follow!).
+Delving into one of the larger C2SERVER clusters in our dataset, we can clearly spot several dubious
+correlations after exploring the history behind the network operator.
+Figure 96 - Large cluster of Cobalt Strike Team Servers
+The central node in this cluster is the 168.206.191[.]222 IP address. This IP appears to be connected to
+240 unique Team Servers based on the C2SERVER values correlated from recovered Beacons.
+The IP block 168.206.0[.]0/16, within which 99% of this Cobalt Strike network resides, is operated by
+the Internet Service Provider (ISP) Clayer Limited (ASN 137951). It is based out of Hong Kong and is
+currently assigned to the organization The Atomic Energy Board . The only other ISP owning infrastructure that forms a part of this network, IP 45.88.6[.]84, is ASLINE Limited (ASN 18013), also based out
+of Hong Kong.
+121
+As reported by the South African news outlet, mybroadband.co.za, the IP block 168.206.0[.]0/16 – containing a total of 65,536 individual addresses – was part of a large chunk of IP address space that
+was stolen from AFRINIC, the regional Internet Registry for Africa. This theft was carried out by a malicious insider, who subsequently sold the netblock on the grey market for somewhere in the region of
+R20,512,768 (African Rands), which equates to approximately $1.4 million USD. The confirmed owner
+of this IP block is “NECSA,” Nuclear Energy Corporation of South Africa, a name that is similar to the IP
+block’s currently assigned organization: The Atomic Energy Board.
+mybroadband.co.za
+The Great African IP Address Heist – South African Internet resources worth R558 million usurped with
+shady domains
+https://mybroadband.co.za/news/security/367188-the-great-african-ip-address-heist-south-africaninternet-resources-worth-r558-million-usurped-with-shady-domains.html
+At the time of publishing (November 2020), the MyBroadband blog reports that the very same IP block
+was under active route squatting. Route squatting is where an unauthorized operator “squats” on a
+block of IP addresses that do not belong to it. The ISPs Clayer and ASLINE are the reported route squatters for this IP block. The latest report from AFRINIC still marks this IP block as “under dispute” as of
+January 2021.
+African Network Information Centre
+AFRINIC WHOIS DATABASE ACCURACY REPORT
+https://afrinic.net/ast/pdf/afrinic-whois-audit-report-full-20210121.pdf
+All the servers within this cluster are running the most popular leaked version of Cobalt Strike 4.0 and
+they are configured to serve Beacon payloads on ports 9999 and 9998 (the WebSphere Application
+Server Liberty Profile port).
+All Beacons pillaged from the Team Servers are reverse HTTP payloads, each employing the default
+Malleable C2 profile. They leave very little in the way of unique configuration values to distinguish them
+from most other payloads. However, the SSL public key ( 81a3eeb8ceb74cf508f6bcfc408e0305 ) relates
+to 2053 Beacon payloads across 240 Team Servers in our dataset, allowing us to group these IPs together with a high degree of confidence.
+While we may not currently be able to attribute the “Hidden Dragon” infrastructure to a known threat
+group, it will be only a matter of time before at least one IP is attributed by threat intelligence analysts.
+At that point, the dominos will tumble. But in the meantime, we can at least provide limited intelligence
+if these IPs are observed during incidents.
+recap
+Let's quickly recap all we’ve done so far. We've followed our CTI lifecycle, built an automation system
+for hunting Team Servers, pillaged Beacons, and parsed configuration data. We've explored the configuration settings in-depth to uncover insights and trends, and we’ve discovered further clustering techniques. Leveraging OSINT and the new clustering capabilities, we’ve correlated intelligence. This allows
+us to differentiate the many APT groups, campaigns, access brokers and other nefarious cybercriminals, from the intended customer for Cobalt Strike, which is red teams and pentesters.
+Now it's time to disseminate our findings and revaluate key stages of the lifecycle in a debrief.
+122

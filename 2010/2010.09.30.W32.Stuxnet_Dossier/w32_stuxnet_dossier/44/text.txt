@@ -1,0 +1,42 @@
+The rootkit
+The Stuxnet PLC rootkit code is contained entirely in the fake s7otbxdx.dll. In order to achieve the aim of continu­
+ing to exist undetected on the PLC it needs to account for at least the following situations:
+  - Read requests for its own malicious code blocks.
+
+  - Read requests for infected blocks (OB1, OB35, DP_RECV).
+
+  - Write requests that could overwrite Stuxnet’s own code.
+
+Stuxnet contains code to monitor and intercept these types of request. The threat modifies these requests so
+that Stuxnet’s PLC code is not discovered or damaged. The following list gives some examples of how Stuxnet
+uses the hooked exports to handle these situations:
+• s7blk_read
+Used to read a block, is monitored so that Stuxnet returns:
+   - The original DP_RECV (kept as FC1869) if DP_RECV is requested.
+
+   - An error if the request regards one of its own malicious blocks.
+
+   - A cleaned version (disinfected on the fly) copy of OB1 or OB35 if such a block is requested.
+
+• s7blk_write
+Used to write a block, is also monitored:
+   - Requests to OB1/OB35 are modified so that the new version of the block is infected before it’s written.
+
+   - Requests to write DP_RECV are also monitored. The first time such a request is issued, the block will be writ­
+
+ten to FC1869 instead of DP_RECV. Next time an error will be raised (since these system blocks are usually
+written only once).
+   - Also note that the injection of sequence C takes place through a s7blk_write operation. Exact conditions are
+
+not determined.
+• s7blk_findfirst and s7blk_findnext
+Used to enumerate blocks of a PLC. Stuxnet will hide its own blocks by skipping them voluntarily during an
+enumeration. Note that Stuxnet recognizes its own blocks by checking a specific value it sets in a block header.
+• s7blk_delete
+Used to delete blocks, is monitored carefully:
+   - Requests to delete a SDB may result in PLC disinfection.
+
+   - Requests to delete OB are also monitored. It seems the blocks are not necessarily deleted. They could be in­
+
+fected. For instance, deletion of OB80 (used to handle asynchronous error interrupts) can result in an empty
+OB80 being written.

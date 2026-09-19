@@ -1,0 +1,66 @@
+Malware Analysis
+The malicious binaries combined obfuscated, packed executables, and custom shellcode with an additional step of using
+compromised servers to host the malicious payload. We identify the final payload as NetWire, a commodity remote access trojan
+that is not commonly observed in Asia and typically seen used in cybercrime activities.
+The four executables we found in the “Adobe update” directory are named to appear as an update for Adobe Flash followed by a
+date stamp (e.g., AdobeUpdate20160703.exe).
+Each malware file was digitally signed:
+|File|Certificate Details|
+|---|---|
+|AdobeUpdate20160703.exe|无锡凯扬电子科技有限公司Serial: 57 be 1a 00 d2 e5 9b db d1 95 24 aa a1 7e d9 3bValid From: Thursday, November 19, 2015 5:45:01 PMValid To: Saturday, November 19, 2016 5:45:01 PM|
+|AdobeUpdate20160812.exe|深圳市乐途儿科技有限公司Serial: 68 be c5 c0 26 4c c9 09 6d 2f b2 0a 98 86 e9 4dValid From: Monday, June 15, 2015 4:00:00 PMValid To: Thursday, June 15, 2017 3:59:59 PM|
+|AdobeUpdate20161201.exeAdobeUpdate20170312.exe|Elex do Brasil Participações LtdaSerial: 06 71 ee 52 6a cb 6f 9b e2 01 f5 a8 e2 03 c4 1cValid From: Sunday, April 12, 2015 4:00:00 PM|
+Valid To: Wednesday, July 12, 2017 3:59:59 PM
+All four samples are packed with VMProtect, software used to obfuscate source code to make anaylsis and reverse engineering
+more difficult. When executed the samples unpack and drop a second VMProtect-packed DLL to the following location:
+C:\Program Files\Common Files\Microsoft Shared\VGX\Stub.dll
+Before executing the dropped DLL via rundll32 as shown:
+rundll32.exe C:\Program Files\Common Files\Microsoft Shared\VGX\Stub.dll,Install
+This stub DLL unpacks itself and then gains persistence by creating a new autorun service: COM+ Event Log. The DLL edits the
+following registry keys to create this new service:
+HKLM\Software\Microsoft\Windows NT\CurrentVersion\SvcHost\EventSystemLog
+HKLM\System\CurrentControlSet\Services\EventSystemLog
+HKLM\System\CurrentControlSet002\Services\EventSystemLog
+HKLM\System\CurrentControlSet003\Services\EventSystemLog
+Once the DLL has gained persistence it starts the newly created service. When run as part of a service, the DLL unpacks itself and
+attempts to download what appears to be a jpg file hosted on one of three websites: a Chinese-language news organization, a
+University, and a software company.
+Each of the 4 samples uses a different URL. Each of these files begins with a 631 byte jpg header followed by encrypted
+shellcode. The malware first decrypts the payload immediately after the jpg header using the following algorithm:
+for i = 0; i < len(payload); i++ payload[i] = (16 * ~((((payload[i] ^ 0x50) >> 4) ^ i) &
+0xf) & 0xef) ^ payload[i]
+The decrypted payload begins with a short header consisting of an unsigned 32 bit integer that is the size of the stage 2 payload, an
+unsigned 32 bit integer used as a checksum, and 64 bytes of padding. This header is followed by a block of shellcode and a second
+encrypted payload (see Figure 12 ). The shellcode decrypts the stage 2 payload using RC4 with different 256-bit keys for each
+sample.
+Figure 12: Hex code showing jpg header followed by encrypted shellcode
+This decrypted data contains additional shellcode followed by a PE file. We identify the PE file as the Netwire RAT. The final stage
+shellcode acts as a loader and maps the RAT into memory and resolves the RAT’s imports before jumping to the RAT’s entrypoint.
+Netwire RAT is a multi-platform RAT (Remote Access Tool) that first appeared in 2012. Since its appearance, Netwire RAT has
+been used in a variety of attacks ranging from stealing credit card data to targeted campaigns against health care and banking
+sectors. The Netwire samples we analyzed are capable of a wide-range of behavior including:
+Reading stored usernames and passwords from common apps including:
+Web Browsers
+Email Clients
+Instant Messaging Clients
+Keylogging
+Taking Screenshots
+Audio capture
+Screen recording
+Process listing, creation, killing, etc.
+Uploading and downloading files
+Each of the 4 fake jpg files contains a Netwire sample containing different configuration settings. After analyzing the samples we
+recovered the configuration settings for each sample (see Appendix A ). The use of multiple layers of packed or obfuscated
+payloads is likely an attempt to evade detection and analysis. Downloading the RAT each time the malware runs could be an
+attempt to hide the final payload, as the Netwire samples are never written to disk. This process makes direct analysis difficult
+without memory images or an understanding of the payload decryption and shellcode routines to decrypt the RAT manually. Using
+different configurations for each sample could be an attempt to use specific domains tailored to each target, or to allow for the use
+of multiple domains as fallbacks in case previously used domains are discovered and blocked.
+Each of the four binary samples we analyzed downloaded a copy of the Netwire RAT as a different “jpg” file. The three hosts used
+are all legitimate servers with active web pages. In each case, the jpg downloaded by the malware is noticeably larger than other
+files in the same directory on the server and was last modified more recently. We believe that each of the three servers used to host
+the “jpg” files have been compromised and that the operator is using these legitimate servers to host their payload in an effort to
+hide their activities.
+Like the phishing operation, the malware setup shows a significant level of effort. We observe custom shellcode paired with an
+additional step of using likely-compromised servers to host the payload. While Netwire has been seen in some targeted intrusions, it
+has primarily been used in cybercrime activities and is not common in Asia.

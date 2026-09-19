@@ -1,0 +1,106 @@
+
+
+
+Sentence : GPRS eDNS Servers
+LightBasin initially accessed the first eDNS server via SSH from one of the other
+compromised telecommunications companies, with evidence uncovered indicative of
+password-spraying attempts using both extremely weak and third-party-focused
+passwords (e.g., huawei ), potentially helping to facilitate the initial compromise.
+Subsequently, LightBasin deployed their SLAPSTICK PAM backdoor on the system to
+siphon credentials to an obfuscated text file. As part of early lateral movement
+operations to further their access across the network, LightBasin then pivoted to
+additional systems to set up more SLAPSTICK backdoors.
+Later, LightBasin returned to access several eDNS servers from one of the
+compromised telecommunications companies while deploying an ICMP traffic
+signalling implant tracked by CrowdStrike as PingPong under the filename
+/usr/bin/pingg, with persistence established through the modified SysVinit script
+/etc/rc.d/init.d/sshd through the following additional line:
+https://www.crowdstrike.com/blog/an-analysis-of-lightbasin-telecommunications-attacks/ 2/13
+10/21/2021 A Roaming Threat to Telecommunications Companies | CrowdStrike
+```
+ cd /usr/bin && nohup ./pingg >/dev/null 2>&1 &
+```
+This implant waits for a magic ICMP echo request, which, when sent to the system,
+established a TCP reverse shell to an IP address and port specified within the magic
+packet. The /bin/bash process spawned by PingPong masquerades under the
+process name httpd .
+eDNS servers are usually protected from general external internet access by
+firewalls; the magic packet that PingPong listens for would most likely have to be
+sent from other compromised GPRS network infrastructure. CrowdStrike Services
+observed reverse shells that had been spawned from this implant, which
+communicated with a server owned by a different compromised telecommunications
+company in another part of the world — typically connecting to the remote system
+on TCP port 53, which is the port primarily used for DNS. These efforts further
+indicate the actor’s continued attempts to disguise their activity as legitimate
+traffic.
+Alongside the deployment of the PingPong implant, LightBasin added iptables
+rules to the eDNS server that ensured SSH access to the server from five of the
+compromised telecommunications companies. The actor also replaced the
+legitimate iptables binary with a trojanized version (SHA256:
+97d4c9b5750d614face73d11ba8532e53594332af53f4c07c1543195225b76eb ) that
+would filter out output from iptables that included the first two octets of the IP
+addresses belonging to the compromised telecommunications companies. These
+actions make it more difficult for administrators and analysts to identify the firewall
+rules through review of iptables output alone. Indicators relating to this utility are
+highlighted in Table 1.
+File Path Description
+/usr/local/sbin/iptables Trojanized iptables binary that rep
+```
+  /usr/sbin/iptablesDir/iptables
+/usr/sbin/iptablesDir/iptables-apply
+/usr/sbin/iptablesDir/iptables-batch
+```
+Legitimate iptables binaries in a n
+```
+  /usr/sbin/iptablesDir/iptables-multi
+/usr/sbin/iptablesDir/iptables-restore
+/usr/sbin/iptablesDir/iptables-save
+```
+Table 1. Trojanized and legitimate iptables file details
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "LightBasin", "type": "ACTO"},
+        {"id": 2, "description": "eDNS server", "type": "DNSS"},
+        {"id": 3, "description": "SLAPSTICK PAM backdoor", "type": "EXEF"},
+        {"id": 4, "description": "obfuscated text file", "type": "DOCF"},
+        {"id": 5, "description": "compromised telecommunications companies", "type": "COUN"},
+        {"id": 6, "description": "PingPong implant", "type": "EXEF"},
+        {"id": 7, "description": "/usr/bin/pingg", "type": "SYSP"},
+        {"id": 8, "description": "modified SysVinit script /etc/rc.d/init.d/sshd", "type": "TPTH"},
+        {"id": 9, "description": "magic ICMP echo request", "type": "NETP"},
+        {"id": 10, "description": "TCP reverse shell", "type": "EXEF"},
+        {"id": 11, "description": "/bin/bash process", "type": "APPS"},
+        {"id": 12, "description": "httpd process name", "type": "TAMP"},
+        {"id": 13, "description": "compromised GPRS network infrastructure", "type": "NETP"},
+        {"id": 14, "description": "server owned by a different compromised telecommunications company", "type": "CCSH"},
+        {"id": 15, "description": "TCP port 53", "type": "NETP"},
+        {"id": 16, "description": "iptables rules", "type": "REGI"},
+        {"id": 17, "description": "trojanized iptables binary (SHA256: 97d4c9b5750d614face73d11ba8532e53594332af53f4c07c1543195225b76eb)", "type": "IOCS"},
+        {"id": 18, "description": "/usr/local/sbin/iptables", "type": "SYSP"},
+        {"id": 19, "description": "/usr/sbin/iptablesDir/iptables", "type": "SYSP"},
+        {"id": 20, "description": "/usr/sbin/iptablesDir/iptables-apply", "type": "SYSP"},
+        {"id": 21, "description": "/usr/sbin/iptablesDir/iptables-batch", "type": "SYSP"},
+        {"id": 22, "description": "/usr/sbin/iptablesDir/iptables-multi", "type": "SYSP"},
+        {"id": 23, "description": "/usr/sbin/iptablesDir/iptables-restore", "type": "SYSP"},
+        {"id": 24, "description": "/usr/sbin/iptablesDir/iptables-save", "type": "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "accessed via SSH"},
+        {"source": 5, "target": 1, "rel_name": "compromised by"},
+        {"source": 3, "target": 2, "rel_name": "deployed on"},
+        {"source": 3, "target": 4, "rel_name": "siphon credentials to"},
+        {"source": 1, "target": 6, "rel_name": "deployed"},
+        {"source": 6, "target": 7, "rel_name": "tracked as"},
+        {"source": 8, "target": 6, "rel_name": "persistence established through"},
+        {"source": 9, "target": 10, "rel_name": "triggers"},
+        {"source": 10, "target": 14, "rel_name": "communicates with"},
+        {"source": 11, "target": 12, "rel_name": "masquerades as"},
+        {"source": 13, "target": 9, "rel_name": "likely source of"},
+        {"source": 14, "target": 5, "rel_name": "owned by a different compromised company"},
+        {"source": 10, "target": 15, "rel_name": "connects to port"},
+        {"source": 16, "target": 2, "rel_name": "added to"},
+        {"source": 17, "target": 18, "rel_name": "SHA256 hash of"},
+        {"source": 18, "target": 2, "rel_name": "replaced on"}
+    ]
+}

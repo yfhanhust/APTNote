@@ -1,0 +1,62 @@
+Server setup
+The first sign of activity from the attackers on the first server was May 18, 2012. At 11:26 (UTC) the first
+scheduled job was run and a little over two hours later the server was fully operational. A malicious package was
+uploaded to the server at 13:53. The first recorded interaction with a W32.Flamer compromised client was at
+16:15, when stolen data was uploaded to the server.
+In comparison, the second server saw initial activity on March 25, 2012, and was fully operational on the same
+day.
+During the server set up, the attackers installed various applications and tested connections to the MySQL
+database which supported their custom Web application. The end goal was to install a command-and-control
+application called Newsforyou which interacted with compromised W32.Flamer clients.
+An important step taken by the attackers was to hide traces of their activity on the server. They did this by
+disabling logging and securely removing existing log files. The attackers, however, did not clear out the history
+of commands issued through the console by the administrator (root) account. This data was visible and was
+retrieved from the /root/.bash_history file, which revealed these activities. The following table lists and
+describes, in brief, a subset of commands that are most relevant to the server set up:
+|Table 2|Col2|
+|---|---|
+|Command Executednetstat –an|DescriptionChecks open network connections|
+|telnet localhost 3306|Tests MySQL server is accepting connections|
+|nano apache2.conf|Configures Web server|
+|adduser [USERNAME]|Adds user [USERNAME]|
+|crontab /etc/cron.newsforyou|Cronjob executes scripts at regular intervals|
+|openssl req -newkey rsa:1024 -nodes -x509 -days|Creates SSL key|
+|python main.py 0 2 1 "127.0.0.1" 100 100|Simulator test to add entry (stolen data)|
+|python main.py 2 1-2 1 "127.0.0.1" 100|Simulator test to retrieve news entry (payload)|
+|nano /etc/apache2/ports.conf|Configures Web server to listen on TCP port 443|
+|cp /home/[USERNAME]/LogWiper_fixed.txt /LogWiper.sh|Prepares log wiper file as BASH script|
+|sh /LogWiper.sh|Wipes logs and disables logging services|
+|mkdir /var/www/common/|Creates folders to be used in redirection|
+|mkdir /var/www/wp-content/|Creates folders to be used in redirection|
+|mkdir /var/www/pages/|Creates folders to be used in redirection|
+|mkdir /var/www/services/|Creates folders to be used in redirection|
+|nano /etc/apache2/sites-enabled/default-ssl|Sets up URL redirects|
+|mkdir -p /var/www/cgi-bin|Creates folders to be used in redirection|
+|mkdir -p /var/www/htdocs/newsforyou|Create Web appplication folder|
+|php5 ../DB_creation_script.php|Creates database|
+|/etc/init.d/apache2 restart|Restarts Web server|
+|iptables -A INPUT -p tcp --dport 22 -j ACCEPT|Accepts connections on TCP port 22(SSH)|
+|iptables -A INPUT -p tcp --dport 443 -j ACCEPT|Accepts connections on TCP port 443(HTTPS)|
+Following these commands, the Apache server was configured to listen on TCP ports 443 and 8080. The firewall
+was also reconfigured to allow connections over SSH and HTTPS. Logging activities were disabled and existing
+log files were securely deleted where necessary. The server is now ready to interact with compromised Flamer
+clients through the Newsforyou application.
+The attackers also set up some URL redirections to disguise the true nature of the requests to an inexperienced
+eye. They would appear to look like legitimate requests for regular looking folder names. An example of one of
+the redirect rules is shown below:
+/etc/apache2/sites-available/default-ssl
+```
+ScriptAlias /cgi-bin/ /var/www/cgi-bin/
+
+AllowOverride None
+
+Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
+Order allow,deny
+
+Allow from all
+
+RewriteEngine on
+RewriteRule ^counter\.cgi$ /newsforyou/index.php
+
+
+```

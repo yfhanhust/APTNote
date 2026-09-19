@@ -1,0 +1,85 @@
+Downloaded payload
+According to data from Kaspersky Security Network, the threat actor delivered the malicious payload using
+one of the shadowy updaters described above. We found a malicious file created at the same host:
+MD5: 0a15a33844c9df11f12a4889ae7b7e4b
+File Size: 104,898,560 bytes
+File Type: PE32+ executable (GUI) x86-64, for MS Windows
+Known file name: C:\Recovery\msn.exe
+Link time: 2018-04-19 13:30:19
+Note the unusually large size for an executable file. We believe that it was inflated with junk data on
+purpose to prevent easy download or transfer over the internet.
+https://securelist.com/operation-applejeus/87553/ 10/30
+8/23/2018 Operation AppleJeus: Lazarus hits cryptocurrency exchange with fake installer and macOS malware - Securelist
+Searching for the reason for the malware’s appearance on the system revealed that there was an additional
+process responsible for producing several files before this malware was launched, suggesting a trojan
+dropper in action. The main function of this malware is to implant the Fallchill backdoor loader linked to
+several files. Upon launch, the malware checks one of the command-line arguments passed to it. The
+malware chooses one of the service names located in the following registry value as a disguise:
+HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Svchost\netsvcs
+This value includes a list of several dozen standard system service names.
+The randomly chosen service name is used to name the dropped file and newly registered Windows service.
+Let’s refer to this randomly chosen service name as [service] . The malware contains references to several
+files inside:
+The file passed as argument: contains a 16-byte key
+msncf.dat: Encrypted configuration data
+msndll.tmp: Encrypted Fallchill loader
+msndll.dat: Encrypted Fallchill backdoor (payload for the loader)
+[service] svc.dll: Fallchill backdoor loader
+[service] .dat: Copy of msndll.dat
+A mix of the above-mentioned files produces the final backdoor known as Fallchill. A more detailed
+procedure for technical specialists is as follows:
+
+
+Check whether the command-line argument points to a file of 16 byte size.
+
+
+Read the file passed via the command-line argument. The contents of this file contains a crypto key,
+
+
+which we will call the main key.
+
+
+Open the msncf.dat file (configuration file). If the file size equals 192 bytes, read the content of the file.
+
+
+Open msndll.tmp file and decrypt it using the main key.
+
+
+Create the [service] svc.dll file and fill it with pseudo-random data.
+
+
+https://securelist.com/operation-applejeus/87553/ 11/30
+8/23/2018 Operation AppleJeus: Lazarus hits cryptocurrency exchange with fake installer and macOS malware - Securelist
+p
+
+The malware fills the file with 10,240 bytes of pseudo-random data, and iterates (rand() % 10 +
+
+10240) times. This is why it produces files which are at least 104,851,000 bytes.
+
+
+Copy the 16-byte main key at the end of the [service] svc.dll file.
+
+
+Encrypt the [service] .dat file name with the main key and append it at the end of [service] svc.dll.
+
+
+Overwrite the beginning of [service] svc.dll with data decrypted from msndll.tmp.
+
+
+Move msndll.dat file to [service] .dat.
+
+
+Delete temporary files: msndll.tmp, msncf.dat, msndll.log.
+
+
+Timestamp [service] svc.dll and [service] .dat files.
+
+
+Register [service] svc.dll as a Windows service.
+
+
+Save a copy of data from msncf.dat file in the following registry value
+
+
+HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\TaskConfigs\Description.
+Infection process diagram

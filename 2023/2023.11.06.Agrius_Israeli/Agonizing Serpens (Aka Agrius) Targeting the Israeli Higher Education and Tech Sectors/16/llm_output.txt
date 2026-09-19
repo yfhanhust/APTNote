@@ -1,0 +1,52 @@
+
+
+
+Sentence : Second Vulnerable Driver Attempt (Rentdrv2 Driver)
+As the attempt to exploit the GMER driver failed, the attackers tried arming their drvIX
+tool. They did so using a different vulnerable driver from a new publicly available PoC tool
+called BadRentdrv2, first published in the beginning of October 2023.
+The attacker used the same project and compiled a modified version of the tool a day
+later, on Oct. 8 as shown in Figure 44. This time, the binary’s original name drvIX.exe was
+not changed.
+Figure 44. PDB path and compilation for drvIX.exe.
+The loading code of the driver looks almost identical to the aforementioned drvIX version.
+Similarly, drvIX.exe accepts the PID of the target process the attacker wishes to terminate
+via the command line.
+DrvIX retrieves a device handle to its device object and communicates with the Rentdrv2
+driver via DeviceIoControl. DrvIX then sends the target PID by specifying it in a structure
+sent as the Input_Buffer and specifies the control code as 0x22E010 (shown in Figure
+45).
+Figure 45. DrvIX communicates with Rentdrv2.
+https://unit42.paloaltonetworks.com/agonizing-serpens-targets-israeli-tech-higher-ed-sectors/ 24/29
+1/16/24, 1:00 PM Agonizing Serpens (Aka Agrius) Targeting the Israeli Higher Education and Tech Sectors
+Similarly to the GMER driver, the 0x220E010 control code terminates the target process
+provided by its PID, as shown in Figure 46.
+Figure 46. Rentdrv2 0x22E010 control code
+functionality.
+The function opens a handle to the target process PID using ZwOpenProcess and
+terminates it by calling ZwTerminateProcess.
+Figure 47 shows this attempt was blocked and prevented by the Cortex XDR platform.
+Figure 47. Prevention of an attempt to terminate the Cortex XDR service.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "GMER driver", "type" : "EXEF"},
+        {"id": 2, "description": "drvIX tool", "type" : "EXEF"},
+        {"id": 3, "description": "BadRentdrv2 PoC tool", "type" : "EXEF"},
+        {"id": 4, "description": "drvIX.exe", "type" : "EXEF"},
+        {"id": 5, "description": "Rentdrv2 driver", "type" : "EXEF"},
+        {"id": 6, "description": "Cortex XDR platform", "type" : "APPS"},
+        {"id": 7, "description": "ZwOpenProcess function", "type" : "TTPS"},
+        {"id": 8, "description": "ZwTerminateProcess function", "type" : "TTPS"},
+        {"id": 9, "description": "DeviceIoControl function", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "uses"},
+        {"source": 3, "target": 4, "rel_name" : "compiled as"},
+        {"source": 4, "target": 5, "rel_name" : "communicates with"},
+        {"source": 5, "target": 4, "rel_name" : "controlled by"},
+        {"source": 4, "target": 6, "rel_name" : "blocked by"},
+        {"source": 7, "target": 8, "rel_name" : "calls"},
+        {"source": 5, "target": 9, "rel_name" : "uses"}
+    ]
+}

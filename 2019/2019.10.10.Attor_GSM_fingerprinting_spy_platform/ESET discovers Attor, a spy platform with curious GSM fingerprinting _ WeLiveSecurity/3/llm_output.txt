@@ -1,0 +1,54 @@
+
+
+
+Sentence : Platform architecture
+Attor consists of a dispatcher and loadable plugins, all of which are implemented as dynamic-link
+libraries (DLLs). The first step of a compromise comprises dropping all these components on disk
+and loading the dispatcher DLL.
+https://www.welivesecurity.com/2019/10/10/eset-discovers-attor-spy-platform/ 3/14
+10/11/2019 ESET discovers Attor, a spy platform with curious GSM fingerprinting | WeLiveSecurity
+The dispatcher is the core of the whole platform – it serves as a management and
+synchronization unit for the additional plugins. On each system start, it injects itself into almost all
+running processes and loads all available plugins within each of these processes. As an
+exception, Attor avoids injection into some system and security‑product‑related processes.
+All plugins rely on the dispatcher for implementing basic functionalities. Rather than calling
+Windows API functions directly, the plugins use a reference to a helper function (a function
+dispatcher) implemented by the dispatcher DLL. A reference to the function dispatcher is passed
+to the plugins when they are loaded. Because the plugins are injected in the same process as the
+dispatcher itself, they share the same address space and are thus able to call this function
+directly.
+Calls to the function dispatcher take as their arguments the function type and its numerical
+identifier. This design makes it harder to analyze individual components of Attor without having
+access to the dispatcher, as it translates the specified identifier to a meaningful function that is
+then executed.
+Figure 3 illustrates a part of one plugin, calling the function dispatcher on several occasions. In
+the disassembly on the right, we have replaced the numeric identifiers (that we recovered by
+reverse-engineering the dispatcher) with descriptive names. Refer to our white paper for a full
+analysis of the dispatcher’s interface.
+https://www.welivesecurity.com/2019/10/10/eset-discovers-attor-spy-platform/ 4/14
+10/11/2019 ESET discovers Attor, a spy platform with curious GSM fingerprinting | WeLiveSecurity
+Figure 3. Additional plugins use functions implemented in the main module, by calling the function dispatcher (dubbed
+helperFnc here)
+Furthermore, the dispatcher is the only component of the platform that has access to the
+configuration data. Attor’s plugins retrieve their configuration data from the dispatcher via the
+interface, as described above.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Attor", "type" : "APPS"},
+        {"id": 2, "description": "dispatcher DLL", "type" : "EXEF"},
+        {"id": 3, "description": "loadable plugins (DLLs)", "type" : "EXEF"},
+        {"id": 4, "description": "https://www.welivesecurity.com/2019/10/10/eset-discovers-attor-spy-platform/", "type" : "URLS"},
+        {"id": 5, "description": "Windows API functions", "type" : "APPS"},
+        {"id": 6, "description": "helper function (function dispatcher)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "consists of"},
+        {"source": 1, "target": 3, "rel_name" : "consists of"},
+        {"source": 1, "target": 4, "rel_name" : "documented at"},
+        {"source": 2, "target": 5, "rel_name" : "interacts with via"},
+        {"source": 2, "target": 6, "rel_name" : "implements"},
+        {"source": 3, "target": 2, "rel_name" : "loads from and depends on"},
+        {"source": 3, "target": 6, "rel_name" : "calls through"}
+    ]
+}

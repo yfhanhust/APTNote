@@ -1,0 +1,91 @@
+
+
+
+Sentence : Infected Mikrotik Device - chmhlpr.dll
+Mikrotik is a Latvian network hardware provider. For managing their routers, this company provides
+to customers with software called WinBox that downloads a number of DLLs from the router’s file
+system and loads them directly into the computer memory. This is its normal behavior by design.
+A library called ip4.dll was added onto the router by the attacker. After it was added, the Winbox
+software started to download and run it – we are not sure why.
+During our research, we found several victims whose Mikrotik routers were hacked, resulting in it
+returning a suspicious ip4.dll file with the internal name chmhlpr.dll. Indeed, this DLL is a TrojanDownloader related to Slingshot.
+That makes us believe that Slingshot is able to target victims by directly infecting Mikrotik routers in
+order to abuse this mechanism used by WinBox. We do not know how these routers were
+compromised, however Wikileaks´ Vault7 describes the use of the ChimayRed exploit to compromise
+such devices. The exploit is now available on GitHub.
+Mikrotik´s official forum declares that this exploit only works until RouterOS v.6.38.4, however this
+particular victim was running version 6.38.5 of the firmware, making it unclear whether this version
+is still vulnerable or if attackers used a different one. We contacted Mikrotik and reported this attack
+procedure. According to Mikrotik, latest versions of WinBox no longer download the ipv4.dll file
+from the router, closing the attack vector.
+The following table summarizes malicious ipv4.dll files abusing this method:
+|MD5|Size|File location|
+|---|---|---|
+|042CC382ACB5B2B70C78BAA77BB7C5F9|43520|%AppData%\Roaming\mikrotik\winbox\5.20-3610090039\ipv4.dll|
+|AFAFF3310D8C094774DA6BA856C1A30E|43520|%AppData%\Roaming\Mikrotik\Winbox\5.20-3610090039\ipv4.dll|
+|01C85EE057B6B529891C0A4275A642DA|43520|%AppData%\Roaming\Mikrotik\Winbox\6.33.1-1338332867\ipv4.dll|
+|87A28A99697452A37FC229B3AA3AFE97|43520|%AppData%\Roaming\mikrotik\winbox*6.38.5*-3172206015\ipv4.dll|
+chmhlpr.dll downloads a malicious packed MZPE to execute. This library has four hardcoded
+parameters:
+
+
+IP for downloading the payload. In the sample that we found, the payload was located in the
+same compromised Mikrotik router (192.168.88.1).
+
+
+Port to connect to (4443 in our sample).
+
+
+Number of connection attempts (3 in our sample).
+
+
+Delay between attempts, in seconds (90 seconds in our sample).
+
+
+If no IP is hardcoded, it waits for an incoming connection on the specified port.
+Once it gets connection it sends the magic value 0x43237FB2 and waits for the packed module. It
+checks for a constant at 0x84 offset, looking for 0xDEADFOOD in order to unpack and load this code.
+Then it shares the socket of the established connection to the new module and runs it.
+The downloader can also use a proxy information detailed in:
+UserSID\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ProxyServer
+It searches for proxy credentials in:
+
+
+Windows protected storage, where ItemName parameter contains proxy domain
+
+
+Credentials from IE as documented here
+
+
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Mikrotik", "type" : "ROUT"},
+        {"id": 2, "description": "WinBox software", "type" : "APPS"},
+        {"id": 3, "description": "ip4.dll (malicious)", "type" : "EXEF"},
+        {"id": 4, "description": "chmhlpr.dll (TrojanDownloader)", "type" : "EXEF"},
+        {"id": 5, "description": "Slingshot", "type" : "ACTO"},
+        {"id": 6, "description": "ChimayRed exploit", "type" : "CVES"},
+        {"id": 7, "description": "GitHub", "type" : "STOR"},
+        {"id": 8, "description": "RouterOS v.6.38.4", "type" : "OPPS"},
+        {"id": 9, "description": "RouterOS v.6.38.5", "type" : "OPPS"},
+        {"id": 10, "description": "Malicious MZPE payload", "type" : "EXEF"},
+        {"id": 11, "description": "192.168.88.1", "type" : "CCSH"},
+        {"id": 12, "description": "Port 4443", "type" : "NETP"},
+        {"id": 13, "description": "%AppData%\\Roaming\\mikrotik\\winbox*6.38.5*-3172206015\\ipv4.dll", "type" : "SYSP"},
+        {"id": 14, "description": "UserSID\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ProxyServer", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "downloads and runs"},
+        {"source": 4, "target": 10, "rel_name" : "downloads"},
+        {"source": 10, "target": 11, "rel_name" : "located on"},
+        {"source": 10, "target": 12, "rel_name" : "connects to port"},
+        {"source": 4, "target": 13, "rel_name" : "resides in"},
+        {"source": 5, "target": 1, "rel_name" : "compromises"},
+        {"source": 6, "target": 1, "rel_name" : "used to compromise"},
+        {"source": 7, "target": 6, "rel_name" : "hosts"},
+        {"source": 8, "target": 6, "rel_name" : "vulnerable to"},
+        {"source": 9, "target": 3, "rel_name" : "used with"},
+        {"source": 4, "target": 14, "rel_name" : "uses for proxy information"}
+    ]
+}

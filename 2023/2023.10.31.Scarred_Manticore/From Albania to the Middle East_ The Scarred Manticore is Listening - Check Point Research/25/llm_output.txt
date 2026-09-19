@@ -1,0 +1,90 @@
+
+
+
+Sentence : Standalone backdoor based on IIS ServerManager and HTTPListener
+Since mid-2020, in addition to the FOXSHELL as a means to proxy the traffic, we also
+observed a rather sophisticated standalone passive backdoor, written in .NET and meant
+to be deployed on IIS servers. It is obfuscated with similar techniques as FOXSHELL and
+masquerades as System.Drawing.Design.dll . The SDD backdoor was
+previously analyzed by a Saudi researcher but was never attributed to a specific threat
+actor or campaign.
+C&C Communication
+The SSD backdoor sets up C&C communication through an HTTP listener on the infected
+machine. It is achieved using two classes:
+ServerManager – A part of the System.Web.Administration namespace in .NET
+used for managing and configuring Internet Information Services (IIS) on a Windows
+server, such as get configuration, create, modify, or delete IIS sites, applications,
+and application pools.
+HTTPListener – A class in the .NET Framework used for creating custom HTTP
+servers, independent of IIS and based on HTTP API.
+ServerManager is used to extract the sites hosted by the IIS server and build the HashSet
+of URL prefixes to listen on:
+Figure 22 – Obfuscated code of angleoppose_river function that builds HashSet of URL prefixes
+based on sites and bindings configured on the IIS server ( Illdefy array provides the relative URls).
+In this specific case, the only relative URI configured in the malware sample is
+Temporary_Listen_Addresses . The malware then uses the HttpListener class to start
+listening on the specified URL prefixes:
+Figure 23 – The HttpListener start code.
+C&C command execution
+The backdoor has several capabilities: execute commands using cmd.exe, upload and
+download files, execute processes with specified arguments, and run additional .NET
+assemblies.
+Figure 24 – Request handler of the SDD backdoor.
+https://research.checkpoint.com/2023/from-albania-to-the-middle-east-the-scarred-manticore-is-listening/ 17/21
+1/16/24, 1:06 PM From Albania to the Middle East: The Scarred Manticore is Listening - Check Point Research
+First, if the POST request body contains data, the malware parses it and handles the
+message as one of the 4 commands it supports. Otherwise, if the request contains a
+parameter Vet, the malware simply decodes its value from base64 and executes it
+with cmd /c . If none of these is true, then the malware handles the heartbeat mechanism:
+if the request URL contains the string wOxhuoSBgpGcnLQZxipa in lowercase, then the
+malware sends back UsEPTIkCRUwarKZfRnyjcG13DFA along with a 200 OK response.
+The data from the POST request is encrypted using Base64 and simple XOR-based
+encryption:
+Figure 25 – Command decryption algorithm.
+After decrypting the data of the message, the malware parses it according to the following
+order:
+DWORD command_type
+DWORD command_name_length
+STRING command_name
+STRING data
+Figure 26 – Switch that handles possible SDD backdoor command types.
+The possible commands, as named by the threat actors, include:
+“Command” – Executes a process with a specified argument. In this case, the data is
+parsed to extract the process name and its argument.
+“Upload” – Uploads a file to the specified path in the infected system.
+“Download” – Sends a specified file to the threat actors.
+“Rundll” – Loads assembly and runs it with specified parameter (if exists).
+The response data is built the same way as the request (returns command type,
+command name, and output) and then encrypted with the same XOR-based algorithm as
+the request.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "IIS ServerManager", "type" : "OPPS"},
+        {"id": 2, "description": "HTTPListener", "type" : "OPPS"},
+        {"id": 3, "description": "System.Drawing.Design.dll", "type" : "DOCF"},
+        {"id": 4, "description": "C&C server", "type" : "CCSH"},
+        {"id": 5, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 6, "description": "Temporary_Listen_Addresses", "type" : "URLS"},
+        {"id": 7, "description": "Vet parameter in POST request", "type" : "TAMP"},
+        {"id": 8, "description": "wOxhuoSBgpGcnLQZxipa string in URL", "type" : "TAMP"},
+        {"id": 9, "description": "UsEPTIkCRUwarKZfRnyjcG13DFA response", "type" : "TAMP"},
+        {"id": 10, "description": "Base64 and XOR-based encryption", "type" : "TAMP"},
+        {"id": 11, "description": "Command execution capability", "type" : "TTPS"},
+        {"id": 12, "description": "Upload file capability", "type" : "TTPS"},
+        {"id": 13, "description": "Download file capability", "type" : "TTPS"},
+        {"id": 14, "description": "Rundll capability", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 6, "rel_name" : "extracts URL prefixes from"},
+        {"source": 2, "target": 4, "rel_name" : "communicates with"},
+        {"source": 3, "target": 1, "rel_name" : "masquerades as"},
+        {"source": 5, "target": 7, "rel_name" : "executes decoded value of"},
+        {"source": 8, "target": 9, "rel_name" : "triggers response"},
+        {"source": 10, "target": 4, "rel_name" : "uses for communication encryption"},
+        {"source": 11, "target": 5, "rel_name" : "executes using"},
+        {"source": 12, "target": 6, "rel_name" : "uploads to path in system"},
+        {"source": 13, "target": 4, "rel_name" : "sends file to threat actors"},
+        {"source": 14, "target": 3, "rel_name" : "loads and runs assembly with parameter"}
+    ]
+}

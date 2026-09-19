@@ -1,0 +1,51 @@
+Operation Blockbuster: Loaders, Installers and Uninstallers Report 44
+The principal installer for the RomeoWhiskey malware, IndiaWhiskey is a simple installer that, over the course of its
+lifespan, has used three different scaffolding codes to execute the same core installation process, resulting in three
+distinguishable variants (IndiaWhiskey-One, IndiaWhiskey-Two, and IndiaWhiskey-Three). It is unclear the developer(s)’s
+motivation for the scaffolding code changes for IndiaWhiskey, but regardless the core set of tasks remains the same:
+
+
+Dynamically load API functions
+
+
+Establish service information (filename, name, and display name)
+
+
+Drop the payload file(s) to the victim’s hard drive
+
+
+Install the Windows service that loads the RomeoWhiskey malware
+
+
+Activate the Windows service
+
+
+Generate and execute a suicide script
+
+
+Terminate
+
+
+IndiaWhiskey uses the Lazarus Group’s standard Space-Dot encoding scheme to obfuscate the names of the API functions
+that it dynamically loads. In the same subroutine that loads the kernel32.dll API functions, IndiaWhiskey establishes
+the name, display name, DLL filename, and configuration filename. The generation of service and file names do not
+use Space-Dot encoding but rather are constructed using stack strings (the method by which a string is generated one
+character at a time in a function’s stack) in order to prevent the strings from being visible. The default values for the
+generated names is provided in Table 13-1.
+|ITEM|DEFAULT VALUE|
+|---|---|
+|Service Name|Windows Security|
+|Service Display Name|Windows Security|
+|Service DLL’s Filename|winsec.dll, rdmgr.dll or winauc.dll|
+|Configuration File’s Filename|dayipmr.tbl|
+Table 13-1: IndiaWhiskey’s Default Service and File Names
+IndiaWhiskey stores its payload files within the resource section of its binary. Stored in either the resource section
+RT_BITMAP\1033 (IndiaWhiskey-One and IndiaWhiskey-Three) or IMG\159 (IndiaWhiskey-Two), the payload data blob
+is encrypted using the DNSCALC-style encoding. The payload data blob is a collection of one or more files, each with their
+own header providing the desired filename for the file. Before parsing the payload data blob, IndiaWhiskey first verifies
+that the decryption of the data blob was successful by determining if the decrypted data blob’s first four bytes are BMZA
+(IndiaWhiskey-One, IndiaWhiskey-Three) or the first two bytes are BM (IndiaWhiskey-Two). If the magic value does not
+match the expected value, the installer will skip to Task 6.
+There is one notable deviation from the above described payload file storage method. A single version of IndiaWhiskey-One
+embeds its payload data blob within its .data segment, not within a resource. The BMZA magic bytes are not present in this
+variant, and instead XADD is used to determine if the DNSCALC-style encoding was successfully removed.

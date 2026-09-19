@@ -1,0 +1,80 @@
+
+
+
+Sentence : StealthVector
+In October 2020, we discovered StealthVector, an evasive shellcode loader written in C/C++. This malware
+implements various evasion techniques and is still actively being developed. We have observed that its
+payload is either the Cobalt Strike beacon or the malware ScrambleCross. (The Japanese security service
+company LAC previously published a blog post discussing the Cobalt Strike beacon. [12] )
+StealthVector is designed to execute the second stage of the payload in stealth mode. This means that its
+evasive techniques can be enabled and disabled by its embedded configuration. Because of this, malicious
+actors can easily customize this loader for their targets. The configuration of StealthVector (Figure 19) is
+embedded in its data section with ChaCha20 encryption, which is decrypted upon initialization (Figure
+20). This ChaCha20 routine notably uses a fixed custom value of 0x13 for the initial counter (Figure 21).
+Figure 19. The configuration of StealthVector
+16 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+|ChaCha20 noncefor config|Col2|
+|---|---|
+|||
+|CRC-32 ofencrypted config|Col2|
+|---|---|
+|||
+|Size of encrypted config|Col2|
+|---|---|
+|Size of encrypted conﬁg||
+|Encrypted config|Col2|
+|---|---|
+|Encrypted conﬁg||
+|Key for ChaCha20|Col2|
+|---|---|
+|Key for ChaCha20||
+Figure 20. The locations of StealthVector’s encrypted configuration and ChaCha20 key information
+Figure 21. The fixed custom value used in the ChaCha20 routine
+17 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+According to RFC7539, the Internet Engineering Task Force (IETF) specification for the ChaCha20 stream
+cipher and the Poly1305 authenticator, [13] the ChaCha20 algorithm uses a 32-bit initial counter. This counter
+can be any number but is usually 0 or 1. As far as we have observed, StealthVector always uses 0x13
+for its initial counter, which is an uncommon practice. This makes it difficult to decrypt the malware’s
+configuration using common methods such as the Python library pycryptodome, which does not support
+custom initial counters.
+The decrypted configuration data is copied onto a newly allocated buffer, which determines its behavior.
+There are two types of configurations found in the wild. One is for a local shellcode runner, which has a
+size of 0x38. This type of configuration has fields for checksum, flags for context awareness, flags for
+evasive features, and information for the payload (Figure 22 and Figure 23).
+Figure 22. The configuration that loads the encrypted payload from StealthVector’s own binary
+Figure 23. The configuration that loads the encrypted payload from a defined file path
+The other is for a remote shellcode injector, which has a size of 0x44. This type of configuration has
+fields for checksum, flags for context awareness, flags for evasive features, information for injection, and
+information for the payload (Figure 24 and Figure 25).
+18 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Figure 24. The configuration that loads the encrypted payload from a defined file path but no injection
+Figure 25. The configuration that loads the encrypted payload from a defined file path and performs
+process injection
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "StealthVector", "type" : "EXEF"},
+        {"id": 2, "description": "Cobalt Strike beacon", "type" : "APPS"},
+        {"id": 3, "description": "ScrambleCross malware", "type" : "APPS"},
+        {"id": 4, "description": "LAC (Japanese security service company)", "type" : "ACTO"},
+        {"id": 5, "description": "ChaCha20 encryption algorithm", "type" : "TTPS"},
+        {"id": 6, "description": "encrypted configuration data", "type" : "DOCF"},
+        {"id": 7, "description": "Key for ChaCha20", "type" : "IOCS"},
+        {"id": 8, "description": "RFC7539 (IETF specification)", "type" : "DOCF"},
+        {"id": 9, "description": "Python library pycryptodome", "type" : "APPS"},
+        {"id": 10, "description": "local shellcode runner configuration", "type" : "DOCF"},
+        {"id": 11, "description": "remote shellcode injector configuration", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "can execute"},
+        {"source": 1, "target": 3, "rel_name" : "can execute"},
+        {"source": 4, "target": 2, "rel_name" : "discussed in blog post"},
+        {"source": 5, "target": 6, "rel_name" : "used for encryption"},
+        {"source": 7, "target": 6, "rel_name" : "decrypts with key"},
+        {"source": 8, "target": 5, "rel_name" : "defines specification for"},
+        {"source": 9, "target": 6, "rel_name" : "cannot decrypt"},
+        {"source": 1, "target": 6, "rel_name" : "embeds and uses"},
+        {"source": 10, "target": 6, "rel_name" : "is a type of"},
+        {"source": 11, "target": 6, "rel_name" : "is a type of"}
+    ]
+}

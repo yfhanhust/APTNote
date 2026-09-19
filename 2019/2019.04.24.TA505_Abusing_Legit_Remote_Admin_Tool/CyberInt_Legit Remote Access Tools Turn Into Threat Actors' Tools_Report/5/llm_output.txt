@@ -1,0 +1,129 @@
+
+
+
+Sentence : US RETAIL ATTACKS
+In mid-December 2018 a spear-phishing campaign was detected as targeting large US-based retailers along
+with organizations in the food and beverage industry. Masquerading as a legitimate communication sent
+from a Ricoh printer, the initial email lured victims into opening an attached malicious Microsoft Word
+document.
+Lure Document/Downloader
+Once opened, the lure document (Figure 1) encourages the victim to disable Microsoft Office’s security
+features as well as including the target organization logo to appear authentic.
+6
+Figure 1 – Lure document
+Once editing has been enabled within the document, a Visual Basic for Applications (VBA) macro
+is executed that will download an additional payload from the threat actor’s command and control
+(C2) infrastructure, using the Microsoft Windows Installer (Figure 2).
+The remote payload to install is specified by passing the URL to the ‘/i’ command line option whilst the
+quiet ‘/q’ option ensures that the installation is performed in the background without displaying user
+interface (UI) elements to the victim. Additionally, three variables are provided, ‘step’, ‘done’ and ‘change’
+that, along with their corresponding values, would be passed to the installation package to influence or
+modify the installation.
+Presumably to thwart detection or casual analysis, the VBA macro code has some code obfuscation with
+class and module attributes being used to store values (Figure 3) that are later referenced (Figure 4).
+CyberInt Copyright © All Rights Reserved 2019
+LEGIT REMOTE ADMIN TOOLS TURN INTO THREAT ACTORS’ TOOLS
+Figure 3 – Form ‘Tag’ attribute value holding the MSIExec parameters (download URL)
+Figure 4 – Referencing the ‘Tag’ attribute
+Potentially remaining from previous versions of this VBA macro, artefacts include code comments that
+appear to be variable assignments referencing ‘Temp\scype0’, a potential file path and misspelling of ‘Skype’
+(Figure 5), as well as a seemingly unreferenced IP logging service ‘hxxps://iplogger.org/6vfgP’ that provides
+logs detail of any IP address accessing the URL (Figure 6).
+Figure 5 – Code artefacts
+The use of this IP logging service provides a
+useful insight into those that have executed the
+weaponised document with details of the visitor’s,
+or more aptly victim’s, IP address, operating system,
+browser and geolocation being available to the
+threat actor through a statistics page accessible via
+a specific link combined with their ‘IPLogger ID’.
+Figure 6 – ‘IPLogger.org’ statistics
+7
+CyberInt Copyright © All Rights Reserved 2019
+LEGIT REMOTE ADMIN TOOLS TURN INTO THREAT ACTORS’ TOOLS
+INSTALLATION
+Having downloaded the MSI installation package, the MSIExec installation process executes without user
+interaction (Figure 7) and extracts the payload components.
+which in turn executes the ‘i.cmd’ shell script (Figure 8).
+Figure 8 – First-stage shell script
+The use of the ping command (lines 2 and 4) sends
+three echo requests to the legitimate domain
+‘cloudflare.com’, with the timeout value set to
+3,000 milliseconds, and potentially acts as both
+a connectivity test and a pause between steps.
+Assuming the ping process exits without error,
+indicated by the ‘%ERRORLEVEL%’ not being equal
+to one, the dropped self-extracting archive file ‘syst.
+dll’ is first renamed as ‘7zinstall.exe’ (line 3) and then
+executed (line 5).
+The self-extracting archive is extracted, as specified
+by the ‘x’ option, using the password provided after
+the ‘-p’ switch whilst the ‘-y’ switch suppresses any
+potential user interaction by assuming ‘yes’ to any
+query or prompt.
+Having extracted the contents of the self
+extracting archive to ‘%PROGRAMDATA%\
+Microtik’, a second copy of the ‘exit.exe’ file is
+present along with a legitimate signed Remote
+Manipulator System (RMS) executable ‘winserv.
+exe’, RMS configuration file ‘settings.dat’ and a
+different ‘i.cmd’ shell script.
+The final stage of the self-extraction process
+launches ‘exit.exe’ (Figure 9) which in turn spawns
+another command-line interpreter ‘cmd.exe’ to
+execute the new ‘i.cmd’ shell script (Figure 10).
+CyberInt Copyright © All Rights Reserved 2019
+8
+LEGIT REMOTE ADMIN TOOLS TURN INTO THREAT ACTORS’ TOOLS
+Figure 10 – Second-stage shell script
+For persistence, the second-stage shell script (line 2) adds a ‘Microtik’ string value to the ‘HKEY_
+CURRENT_USERS’ hive, ‘Windows\CurrentVersion’Run’ key (Figure 11) to launch the RMS executable
+whenever the user logs on.
+Figure 11 – Persistence registry key
+Additionally, the RMS executable is launched (line 3) before the script tries to forcefully kill the
+‘rundll32.exe’ process, causing the script to go into a loop.
+Finally, the RMS executable attempts to ‘call home’ with connection attempts being observed, at
+the time, to ‘89.144.25.32’ on port ‘5655’, a C2 server located in Germany.
+Pivoting on the indicators observed in this campaign identify additional malicious samples and
+associated C2 domains/IP addresses that, in addition to identifying a pattern of activity, link this
+observed activity to TA505 operations utilising the ‘ServHelper’ backdoor.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "US-based retailers and organizations in the food and beverage industry", "type" : "COUN"},
+        {"id": 2, "description": "Ricoh printer", "type" : "TAMP"},
+        {"id": 3, "description": "Initial email (spear-phishing)", "type" : "MAIL"},
+        {"id": 4, "description": "Malicious Microsoft Word document", "type" : "DOCF"},
+        {"id": 5, "description": "VBA macro in the Word document", "type" : "EXEF"},
+        {"id": 6, "description": "Threat actor’s command and control (C2) infrastructure", "type" : "CCSH"},
+        {"id": 7, "description": "MSIExec installation package URL", "type" : "URLS"},
+        {"id": 8, "description": "Microsoft Windows Installer", "type" : "APPS"},
+        {"id": 9, "description": "First-stage shell script 'i.cmd'", "type" : "EXEF"},
+        {"id": 10, "description": "Self-extracting archive file 'syst.dll' (renamed to '7zinstall.exe')", "type" : "DOCF"},
+        {"id": 11, "description": "Second-stage shell script 'i.cmd'", "type" : "EXEF"},
+        {"id": 12, "description": "Legitimate signed Remote Manipulator System (RMS) executable 'winserv.exe'", "type" : "APPS"},
+        {"id": 13, "description": "'exit.exe' file", "type" : "EXEF"},
+        {"id": 14, "description": "Persistence registry key 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'", "type" : "REGI"},
+        {"id": 15, "description": "'rundll32.exe' process", "type" : "EXEF"},
+        {"id": 16, "description": "C2 server '89.144.25.32'", "type" : "CCSH"},
+        {"id": 17, "description": "IP logging service 'hxxps://iplogger.org/6vfgP'", "type" : "URLS"},
+        {"id": 18, "description": "'Temp\\scype0' (potential file path)", "type" : "SYSP"},
+        {"id": 19, "description": "TA505 operations", "type" : "ACTO"},
+        {"id": 20, "description": "ServHelper backdoor", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "contains"},
+        {"source": 4, "target": 5, "rel_name" : "executes"},
+        {"source": 5, "target": 6, "rel_name" : "downloads from"},
+        {"source": 7, "target": 8, "rel_name" : "uses"},
+        {"source": 9, "target": 10, "rel_name" : "executes"},
+        {"source": 10, "target": 11, "rel_name" : "renames as and executes"},
+        {"source": 11, "target": 12, "rel_name" : "launches"},
+        {"source": 11, "target": 13, "rel_name" : "executes"},
+        {"source": 11, "target": 14, "rel_name" : "sets persistence in"},
+        {"source": 11, "target": 15, "rel_name" : "kills"},
+        {"source": 12, "target": 16, "rel_name" : "calls home to"},
+        {"source": 3, "target": 17, "rel_name" : "uses for IP logging"},
+        {"source": 5, "target": 18, "rel_name" : "references"}
+    ]
+}

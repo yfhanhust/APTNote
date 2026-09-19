@@ -1,0 +1,137 @@
+
+
+
+Sentence : BugSleep Technical Analysis
+BugSleep is a new tailor-made malware used in MuddyWater phishing lures since May 2024, partially replacing their use
+of legitimate RMM tools. We discovered several versions of the malware being distributed, with differences between
+each version showing improvements and bug fixes (and sometimes creating new bugs). These updates, occurring within
+short intervals between samples, suggest a trial-and-error approach.
+BugSleep main logic is similar in all versions, starting with many calls to the Sleep API to evade sandboxes and then
+it loads the APIs it needs to run properly. It then creates a mutex (we
+observed “PackageManager” and “DocumentUpdater” in our samples) and decrypts its configuration which
+includes the C&C IP address and port. All the configurations and strings are encrypted in the same way, where every byte
+is subtracted with the same hardcoded value.
+In most BugSleep samples, the malware then creates a scheduled task with the same name as the mutex and adds the
+comment "sample comment” to it. The scheduled task, which ensures persistence for BugSleep, runs the malware
+and is triggered every 30 minutes on a daily basis.
+Figure 7 – Scheduled task method of setting up persistence used by BugSleep.
+The malware communication is also encrypted the same way as its strings, adding 3 to every byte modulo 256. Every
+message exchanged between BugSleep and its C&C domain follows this format: [size_of_data][data] .
+BugSleep starts by sending the ID of the victim, consisting of the computer name followed by the username, formatted
+as [computer_name][username] .
+The malware has several commands it can perform based on the data sent from the C&C:
+Run commands throu
+the command ‘termin
+Update ‘receive timeo
+new timeout value.
+|# Of Command|Arguments|
+|---|---|
+|1|File name|
+|2|File name|
+|3|Command|
+|4|Timeout value|
+|6|–|
+|9|–|
+Update sleep time (nofi
+version).
+Update the receive tim
+in the first version).
+Sends the same value
+ping).
+|# Of Command|Arguments|
+|---|---|
+|10|–|
+|11|–|
+|97|Sleep time|
+|98|Timeout value|
+|99|–|
+Evasions
+In one of the malware versions, the developers implemented a couple of evasion methods from EDR solutions. First, the
+malware enables the MicrosoftSignedOnly flag of the ProcessSignaturePolicy structure to prevent the
+process from loading images that are not signed by Microsoft. This prevents other processes from injecting DLLs into
+the process.
+Next, it enables the ProhibitDynamicCode flag of the ProcessDynamicCodePolicy structure to prevent
+the process from generating dynamic code or modifying existing executable code.
+Enabling ProcessDynamicCodePolicy may be useful for protecting it from EDR solutions that hook userland
+API functions to inspect programs’ intents.
+Figure 8 – Evasions method.
+BugSleep Loader
+One of the samples we analyzed came with a custom loader. The loader injects a shellcode that loads BugSleep in
+memory into one of the following processes, based on whether they are already running:
+msedge.exe
+opera.exe
+chrome.exe
+anydesk.exe
+Ondedrive.exe
+powershell.exe
+The shellcode in this case is also encrypted with the same algorithm as the strings in BugSleep but with a different shift:
+every byte is subtracted with a hardcoded value of 6. After the decryption, the loader writes the shellcode inside the
+process with the WriteProcessMemory API and invokes the shellcode with the CreateRemoteThread API.
+Bugs and Unused Code
+Some of the samples contained several bugs, and parts of the code appear poorly written, with questionable omissions or
+additions that seem to be mistakes.
+One of the samples checks if the file “C:\users\public\a.txt” exists and if it doesn’t, it creates the file
+which it later deletes. The purpose of this code is not entirely clear and may be unfinished code inserted by the
+authors or borrowed from other places without fully understanding what the code does.
+In one sample, some of the API names were not encrypted like the others, probably due to lack of attention.
+In some samples, instead of properly encrypting (adding 3 to each byte), the malware runs the decryption
+algorithm (subtracting each byte by 3), which is probably by mistake. In a newer sample, the malware authors
+fixed that bug but did not do the same for all of the commands. Another questionable action is that the malware
+decrypts the data after it’s sent. We assume that their intent was to encrypt the strings again so they would not be
+seen in memory, but in this case, it does the opposite.
+Figure 9 – Encryption/Decryption confusion in the send method.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BugSleep", "type" : "APPS"},
+        {"id": 2, "description": "MuddyWater", "type" : "ACTO"},
+        {"id": 3, "description": "RMM tools", "type" : "APPS"},
+        {"id": 4, "description": "Sleep API", "type" : "APPS"},
+        {"id": 5, "description": "PackageManager mutex", "type" : "REGI"},
+        {"id": 6, "description": "DocumentUpdater mutex", "type" : "REGI"},
+        {"id": 7, "description": "C&C IP address and port", "type" : "CCSH"},
+        {"id": 8, "description": "Scheduled task with the same name as the mutex", "type" : "TPTH"},
+        {"id": 9, "description": "sample comment", "type" : "REGI"},
+        {"id": 10, "description": "30 minutes on a daily basis", "type" : "TTPS"},
+        {"id": 11, "description": "Victim ID (computer name + username)", "type" : "TTPS"},
+        {"id": 12, "description": "Command and control communication format [size_of_data][data]", "type" : "TTPS"},
+        {"id": 13, "description": "MicrosoftSignedOnly flag of the ProcessSignaturePolicy structure", "type" : "REGI"},
+        {"id": 14, "description": "ProhibitDynamicCode flag of the ProcessDynamicCodePolicy structure", "type" : "REGI"},
+        {"id": 15, "description": "msedge.exe", "type" : "EXEF"},
+        {"id": 16, "description": "opera.exe", "type" : "EXEF"},
+        {"id": 17, "description": "chrome.exe", "type" : "EXEF"},
+        {"id": 18, "description": "anydesk.exe", "type" : "EXEF"},
+        {"id": 19, "description": "onedrive.exe", "type" : "EXEF"},
+        {"id": 20, "description": "powershell.exe", "type" : "EXEF"},
+        {"id": 21, "description": "Shellcode injection", "type" : "TTPS"},
+        {"id": 22, "description": "WriteProcessMemory API", "type" : "APPS"},
+        {"id": 23, "description": "CreateRemoteThread API", "type" : "APPS"},
+        {"id": 24, "description": "C:\\users\\public\\a.txt", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "used by"},
+        {"source": 1, "target": 3, "rel_name" : "replaces part of"},
+        {"source": 1, "target": 4, "rel_name" : "calls"},
+        {"source": 1, "target": 5, "rel_name" : "creates mutex"},
+        {"source": 1, "target": 6, "rel_name" : "creates mutex"},
+        {"source": 1, "target": 7, "rel_name" : "decrypts C&C information from"},
+        {"source": 1, "target": 8, "rel_name" : "creates scheduled task"},
+        {"source": 8, "target": 9, "rel_name" : "adds comment"},
+        {"source": 8, "target": 10, "rel_name" : "runs with frequency"},
+        {"source": 1, "target": 11, "rel_name" : "sends victim ID as"},
+        {"source": 1, "target": 7, "rel_name" : "communicates with C&C using format from"},
+        {"source": 1, "target": 12, "rel_name" : "uses communication format"},
+        {"source": 1, "target": 13, "rel_name" : "sets flag"},
+        {"source": 1, "target": 14, "rel_name" : "sets flag"},
+        {"source": 1, "target": 15, "rel_name" : "injects shellcode into"},
+        {"source": 1, "target": 16, "rel_name" : "injects shellcode into"},
+        {"source": 1, "target": 17, "rel_name" : "injects shellcode into"},
+        {"source": 1, "target": 18, "rel_name" : "injects shellcode into"},
+        {"source": 1, "target": 19, "rel_name" : "injects shellcode into"},
+        {"source": 1, "target": 20, "rel_name" : "injects shellcode into"},
+        {"source": 1, "target": 21, "rel_name" : "uses technique"},
+        {"source": 21, "target": 22, "rel_name" : "writes using API"},
+        {"source": 21, "target": 23, "rel_name" : "invokes shellcode with API"},
+        {"source": 1, "target": 24, "rel_name" : "checks and creates file"}
+    ]
+}

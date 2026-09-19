@@ -1,0 +1,521 @@
+
+
+
+Sentence : Technical analysis
+The whole process of installation and execution relies heavily on multiple layers of obfuscation
+such as decryption of payloads, PE reconstruction and loading shellcode, and side-loading techniques.
+The last technique was previously described in a previous ESET research article about Korplug.
+Execution flow overview
+The attack is split in two parts: the dropper and backdoor launcher. Each step of each part
+of the process will be explained in detail in its respective section. The following two diagrams briefly
+summarize the general flow of execution of the malware.
+The dropper part has the following flow of execution:
+RobototFontUpdate.exe
+|Col1|C:\Program Files\Symantec\Symantec EndpointProtection\12.1.671.4971.104a\DeviceAssociationService\SyLog.binDrops4Fake rastls.dllDrops and executes5RasTlsc.exe|
+|---|---|
+|RealDropper|RealDropper|
+Figure 1 Dropper execution flow
+The backdoor part has the following execution flow:
+Decrypts
+Decrypts
+&
+BACKDOOR Loads HTTPProv
+C&C
+Decrypts
+shellcode
+RasTlsc.exe
+6
+|Col1|Loads|
+|---|---|
+|||
+Figure 2 Backdoor execution flow
+A quick word on control flow obfuscation
+Almost all of these components are obfuscated. The obfuscation is based on pairs of complementary
+conditional jump instructions. Every form is used: ~~JZ/JNZ, JP/JNP, JO/JNO~~, etc, each pair jumping
+to the same target. The sequence is interleaved with junk code, which makes use of the stack pointer,
+but does not change the conditional flag’s value. This means it will always end up in the same branch.
+This causes problems during decompilation due to the use of positive stack pointer values.
+Figure 3 Complementary conditional jump
+7
+Moreover, some basic blocks push one address on the stack, then end with a ~~JMP/CALL~~ while other
+basic blocks push two addresses then end with a ~~RET~~ instruction. The second push is the function
+to call and the first one is the address of the next basic block to jump to. This creates basic blocks
+with no parents.
+Figure 4 PUSH/JMP technique
+8
+The resulting combination of these two obfuscation techniques creates “beautiful” graphs:
+Figure 5 Control flow obfuscation
+The junk code is pretty easy to spot and once the scheme is known, it can be ignored when analysing
+the samples.
+The Dropper
+Stage 1 The decoy document
+Over the past few months, a number of decoy documents have been used. One of them was a fake
+TrueType font updater for the ~~Roboto Slab regular~~ font. This choice of font seems a bit odd since
+it does not support a lot of East-Asian languages.
+Figure 6 RobototFontUpdate icon
+When executed, this binary decrypts its resource (XOR with a 128-byte, hardcoded key)
+and decompresses the decrypted data (LZMA). The legitimate RobotoSlab-Regular.ttf
+(SHA1 ~~:~~ ~~912895e6bb9e05af3a1e58a1da417e992a71a324~~ ~~)~~ file is written into the ~~%temp%~~ folder
+and run via Win32 API function ~~ShellExecute~~ .
+9
+The shellcode decrypted from the resource is executed. After its execution, the fake font updater
+drops another application whose sole purpose is to delete the dropper. This “eraser” application
+is dropped as ~~%temp%\[0-9].tmp.exe~~ ~~.~~
+Stage 2 The shellcode
+The shellcode used is the same for every stage that uses shellcode
+The shellcode is a custom PE loader. It recreates an executable in memory: it decrypts all the sections
+and computes the necessary relocations and other offsets. The shellcode retrieves three Windows
+API functions: ~~VirtualAlloc~~, ~~RtlMoveMemory~~ and ~~RtlZeroMemory~~ .
+The ~~RtlZeroMemory~~ function is heavily used to zero-out fields in the PE header. Relying
+on automatic memory dumping will not work since the MZ/PE headers are broken.
+The shellcode calls the entry-point function of the decrypted PE and then the ~~DLLEntry~~
+export function.
+Stage 3 Real Dropper, ~~{103004A5-829C-418E-ACE9-A7615D30E125}.dll~~
+This executable decrypts its resource using the AES algorithm with CBC mode via the Windows
+API. The size of the hardcoded key is 256 bits. After decryption, the data are decompressed (LZMA
+algorithm).
+If the process is running with administrator privileges, then the malware achieves persistence by
+creating a service, else the classic Windows “Run” registry key is used ~~(~~ ~~HKCU\SOFTWARE\Microsoft\~~
+~~Windows\CurrentVersion\Run;DeviceAssociationService;rastlsc.exe~~ ~~)~~ .
+If the dropper is executed with administrator privileges, then it tries to write the following files in
+the ~~C:\Program Files\Symantec\Symantec Endpoint Protection\12.1.671.4971.104a\~~
+~~DeviceAssociationService\~~ folder else it writes them in the ~~%APPDATA%\Symantec\Symantec~~
+~~Endpoint Protection\12.1.671.4971.104a\DeviceAssociationService\~~ folder:
+
+~~rastlsc.exe~~ (SHA1 ~~:~~ ~~2616da1697f7c764ee7fb558887a6a3279861fac~~ ~~,~~ copy of legitimate
+
+Symantec Network Access Control application, dot1xtra.exe)
+
+
+~~SyLog.bin~~ (SHA1 ~~:~~ ~~5689448b4b6260ec9c35f129df8b8f2622c66a45~~ ~~,~~ encrypted backdoor)
+
+
+~~rastls.dll~~ (SHA1 ~~:~~ ~~82e579bd49d69845133c9aa8585f8bd26736437b~~ ~~,~~ malicious DLL side
+loaded by ~~rastlsc.exe~~ ~~)~~
+
+
+The path changes from sample to sample but the pattern is similar. Depending on its privileges, the
+malware drops the files in ~~%ProgramFiles%~~ or ~~%appdata%~~ ~~.~~ We’ve also seen:
+
+
+~~\Symantec\CNG Key Isolation\~~
+
+
+~~\Symantec\Connected User Experiences and Telemetry\~~
+
+
+~~\Symantec\DevQuery Background Discovery Broker Tasks\~~
+
+
+These paths are used by various Symantec products.
+After achieving persistence and dropping the executable, the legitimate Symantec executable,
+~~rastlsc.exe,~~ is executed using ~~CreateProcessW~~ .
+We’ve also seen another version ~~(~~ ~~{BB7BDEC9-B59D-492E-A4AF-4C7B1C9E646B}.dll~~ ~~)~~,
+which executes ~~rastlsc.exe~~ with the parameter ~~krv~~ . Its meaning is discussed below.
+10
+Backdoor component: ~~rastlsc.exe~~ side-loading
+The OceanLotus group uses an old and publicly known technique on one of the Symantec product’s
+executable files. The trick, here, is to take advantage of the library loading process of a legitimate
+and signed executable by writing a malicious library inside the same folder. This way it will make
+malicious behaviors look legitimate because these actions are made by the trusted executable process.
+As mentioned earlier, the legitimate executable ~~rastlsc.exe~~ is dropped and executed.
+This executable imports the ~~rastls.dll~~ file, which in this case contains the malicious payload.
+Figure 7 Symantec rastlsc.exe digital signature
+Side loading was also observed using other legitimate, signed executables including ~~mcoemcpy.exe~~
+from McAfee, which loads ~~McUtil.dll~~ ~~.~~ This technique has also been used by PlugX before. This also
+got the attention of the Vietnam CERT (Vietnamese language).
+Stage 1 Library side-loading, ~~rastls.dll~~
+The internal name of this dll is ~~{7032F494-0562-4422-9C39-14230E095C52}.dll~~ but we’ve seen
+other versions like ~~{5248F13C-85F0-42DF-860D-1723EEAA4F90}.dll~~ ~~.~~ All exported functions lead
+to the execution of the same function.
+11
+Figure 8 All rasltls.dll exports lead to the same function
+This export tries to read the ~~SyLog.bin~~ file located inside the same folder. Other versions tried
+to open the file ~~OUTLFLTR.DAT~~ . If that file exists, it is decrypted using AES in CBC mode with
+a hardcoded, 256-bit key and then decompressed (LZMA compression).
+The ~~McUtil.dll~~ variant uses a different technique. At first glance, it looks as if like the main function
+does nothing malicious, but in fact it replaces the ~~.text~~ section of the legitimate ~~mcoemcpy.exe~~,
+a side-loaded binary. It generates shellcode whose purpose is to call the function reading the encrypted
+stage-two shellcode in the ~~mcscentr.adf~~ file.
+12
+The following pseudocode is used to create the shellcode:
+```
+        x = False
+    i = 0
+
+    buff = genRando m ()
+    opc1 = [0x58,0x59,0x5a,0x5b]
+    opc2 = [0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57]
+    opc3 = [0x90,0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,
+        0x49,0x4a,0x4b]
+    while i < le n ( buf f ) :
+        currentChar = buf f [ i ]
+
+        if currentChar < 0xc8:
+
+            buf f [ i ] = opc 1 [ currentChar % le n ( opc 1 )]
+
+        else :
+
+            if x :
+
+                buf f [ i ] = opc 2 [ currentChar % le n ( opc 2 )]
+
+            else:
+
+                buf f [ i ] = opc 3 [ currentChar % le n ( opc 3 )]
+
+            x = x == False
+
+        i += 1
+
+```
+The result is the following assembly listing:
+Figure 9 Generated shellcode
+Stage 2 to Stage 4 Shellcode, Launcher and Shellcode again
+The shellcode decrypts and loads the library ~~{E1E4CBED-5690-4749-819D-24FB660DF55F}.dll~~ ~~.~~
+The library retrieves its resource and tries to start the service “DeviceAssociationService”.
+The decrypted data also contains shellcode. The latter decrypts the final layer: the backdoor.
+13
+The variant ~~{92BA1818-0119-4F79-874E-E3BF79C355B8}.dll~~ checks whether ~~rastlsc.exe~~
+was executed with ~~krv~~ as the first parameter. If so, then a job is created and ~~rastlsc.exe~~
+is executed again, but without the parameter.
+Stage 5 The backdoor, ~~{A96B020F-0000-466F-A96D-A91BBF8EAC96}.dll~~
+The malware first tries to retrieve its resource and decrypt it using RC4. The decrypted resource
+contains an interesting piece of information, used to configure the backdoor. The format of this
+configuration is straightforward to reverse. Using Kaitai struct and its structure dumper,
+the following representation can be displayed:
+Figure 10 Configuration structure
+NOTES: except for the string domain_encoding_str and the httpprov library, all these data
+change from one sample to another. The registry keys are almost the same but they follow a similar pattern:
+~~\HKCU\SOFTWARE\Classes\AppX[a-f0-9]{32}~~ ~~,~~ which is quite generic.
+The malware retrieves the first 10 bytes of the username (UTF-16), XORs it with the 3-letter
+UTF-16 ~~mutex_encoding_str~~ string, and encodes it in hex. The result is used as a mutex name.
+For instance, for a user whose name starts with ~~abc~~ and the key being ~~vwx~~, the following mutex
+will be created: ~~\Sessions\1\BaseNamedObjects\170015001b~~ ~~.~~
+The backdoor includes a PE loader that loads the library ~~HTTPProv.dll~~ in memory, calls its entrypoint and then calls the export function named ~~CreateInstance~~ .
+14
+Communication
+The backdoor uses a classic TCP communication protocol over port ~~25123~~ . In order to retrieve
+the server IP address, the backdoor first creates a particular DNS query.
+The malware chooses between one of the three domains from the configuration and adds a custom
+sub-domain generated using two values. The first value is the computer name up to a length
+of 16 bytes. The second value is the 4-byte version ID. The following Python 2 code implements
+the encoding algorithm :
+```
+        letters=domain_encoding_str # “ghijklmnop”
+        hex_pc_nam e = pc_name.encod e (“UTF-16LE”) . encod e (“hex”)
+    s = ’’
+
+    for c in hex_pc_nam e :
+    if 0x2f < or d ( c ) < 0x3a:
+        s += l etter s [ or d ( c ) - 0x30]
+
+    else :
+
+        s +=c
+
+```
+For instance, if the computer name is ~~random-pc~~ and the version ID is 0x0a841523 then the following
+domain could be created:
+```
+niggmhggmeggmkggmfggmdggidggngggmjgg.ijhlokga.dwarduong[.]com
+```
+The following regular expression could be used to flag a C&C server for this backdoor:
+```
+[ghijklmnopabcdef]{4-60}.[ghijklmnopabcdef]{8}.[a-z]+.[a-z]+
+```
+If an IP address is resolved for this particular domain, then the malware tries to establish a
+connection on TCP port ~~25123~~ . Each sample has three different domain names it can use to find its
+C&C server.
+All communication is encrypted using RC4 and compressed with LZMA. It is possible to decrypt the
+traffic because the key is prepended to the packets. The format is:
+```
+[RC4 key (4 bytes)][encrypted data]
+```
+Each byte of the key is generated using the ~~rand~~ function. Once the packet is decrypted and
+decompressed, the data follow the format:
+```
+[dw:unknown][dw:unknown][dw:command number][dw:size of data][dw:unknown]
+[dw:data]
+```
+The first time the client connects to the server, a UUID is returned and used as a session
+ID. The latter is stored in the registry key as binary data: ~~HKCU\SOFTWARE\Classes\~~
+```
+AppXc52346ec40fb4061ad96be0e6cb7d16a\DefaultIcon
+```
+As mentioned earlier, the backdoor also contains a library called ~~HTTPprov~~ ~~.~~ This library is an
+alternative way, as a backup, to communicate with the server as a backup. This DLL sends a POST
+request over the HTTP protocol to communicate. It also supports HTTPS and the usage of a SOCKS5,
+SOCKS4a or SOCKS4 proxy. The library is statically linked with ~~libcurl~~ ~~.~~
+Once its initialization is done, the following registry key is created to instruct the backdoor
+to use HTTP in future communication with the C&C server: ~~HKCU\SOFTWARE\Classes\~~
+~~CLSID{E3517E26-8E93-458D-A6DF-8030BC80528B}~~ ~~.~~
+A generic user agent is used: ~~Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.0;~~
+~~Trident/4.0)~~ .
+15
+The most distinctive characteristic of this library is the custom URI encoding algorithm. The resource
+part of the URI is created using the following pseudocode:
+```
+        buffEnd = (( D WOR D ) genRan d (4) % 20) + 10 + buff;
+        while ( buff < buffEn d ){
+            b = genRan d (16);
+            if ( b [0] - 0x50 > 0x50)
+            t =0;
+
+        else
+
+           * bu f ++= UPPE R ( vowel s [ b [1] % 5]);
+        v=consonant s [ b [1]%21 ] );
+        if (! t )
+            v = UPPE R ( v );
+
+       * buf f ++= v ;
+        if ( v ! = ’h’ && b [2] - 0x50 < 0x50)
+
+           * buf f ++= ‘h ’ ;
+       * buf f ++= v owel s [ b [4] % 5];
+        if ( b [5] < 0x60)
+           * buf f ++= vowel s [ b [6] % 5];
+       * buf f ++= consonant s [ b [7] % 21];
+        if ( b [8] < 0x50)
+           * buf f ++= vowel s [ b [9] % 5];
+
+       * buf f ++= ‘-’;
+    };
+    * buf f =’\0’;
+
+```
+NOTE: For clarity, the length-checking part has been removed from the snippet.
+From this generated string, two numbers are computed based on the custom checksum to obtain a URI:
+```
+        checksum=crc3 2 ( buf f )
+        num2 = ( checksum >> 16) + ( checksum & 0xffff) * 2
+        num1 = ( num2 ^ 1) & 0xf
+        URL=GENERATED_DOMAIN+ “/” + num1 + “/” + num2 + “-” + buff
+```
+By adding the URI generator of the ~~HTTPprov~~ library, the following URL could be generated:
+```
+hXXp://niggmhggmeggmkggmfggmdggidggngggmjgg.ijhlokga.aisicoin[.]com/
+13/139756-Ses-Ufali-L
+```
+16
+Commands
+After receiving its SESSIONID, the backdoor does a fingerprint of the system. The packet is built
+in this fashion:
+Offset in the
+packet
+Description
+0x000 byte: value varies in each version
+0x001 0x01: hardcoded byte
+0x002 bool: is elevation token present
+0x003 dword: version ID
+0x007 string (UTF-16), computer name (0x20 bytes max)
+0x027 string (UTF-16), user name
+0x079 registry query result of the ~~HKLM\SOFTWARE\Microsoft\Windows NT\~~
+~~CurrentVersion~~ values ~~:~~ ~~ProductName, CSDVersion, CurrentVersion,~~
+~~ReleaseId, CurrentBuildNumber~~ ~~a~~ nd the result of the call to
+```
+            IsWow64Process (x86|x64)
+```
+0x179 Following format string “%s(%s);” replaced with
+( ~~GetVolumeInformationW:VolumeNameBuffer~~ ) ~~,~~ ~~VolumePathNames~~
+0x279 PhysicalDrive deviceIOControl 0x2D1400 (IOCTL_STORAGE_QUERY_
+PROPERTY) (VolSerialNumber)
+0x379 wmi ~~SELECT SerialNumber FROM Win32_BaseBoard~~
+0x3f9 GetSystemTimeAsFileTime
+0x400 bool: unknown
+0x401 dword: obtained from the decryption of the resource
+Here’s an example of a fingerprint of a system:
+Figure 11 System fingerprint
+17
+This is a full-featured backdoor that offers its operators many capabilities, such as file, registry
+and process manipulation, loading additional components, and performing a system fingerprint.
+Here’s the list of supported commands:
+Command
+number
+Description
+0 Fingerprint
+1 Sets the session ID
+2 Creates a process and gets the output (using pipes)
+3 Sets the connection retry counter
+4 Delays polling time
+5 Reads a file or registry key and computes the MD5
+6 Creates a process
+7 Creates a file, a registry entry or a stream in memory
+8 Writes to the registry
+9 Queries the registry
+10 Searches for files on the system
+11 Moves files to another directory
+12 Deletes files from the disk
+13 List the drives mapped on the system using the
+~~GetLogicalDriveStringW~~ function
+14 Creates directory
+15 Deletes directory
+16 Reads a file from an offset
+17 Calls the PE Loader (switch to ~~HTTPprov~~ communication)
+18 [Unknown]
+19 0: Query a value from the registry, 1:Drop and execute a
+program
+20 Sets an environment variable
+21 Runs shellcode in a new thread
+22 Retrieves an environment variable
++23 in new
+version
+Output : 
+### Overview of the OceanLotus (APT-C-07) Backdoor
+
+The backdoor, often attributed to the OceanLotus (also known as APT-C-07) group, is a sophisticated piece of malware designed for persistent and stealthy communication with a command-and-control (C&C) server. This document provides an in-depth analysis of the backdoor's components, behavior, and communication mechanisms.
+
+### Components
+
+#### 1. **Initial Infection Vector**
+   - The initial infection vector can vary, but common methods include phishing emails, malicious attachments, or exploits targeting vulnerabilities in software.
+
+#### 2. **Shellcode Execution**
+   - Once the malware is executed, it typically starts with a shellcode that performs the necessary setup and persistence mechanisms.
+
+#### 3. **Persistence Mechanisms**
+   - The backdoor can use various techniques to ensure it runs on every system startup, such as:
+     - Registry keys (e.g., `Run` or `RunOnce`).
+     - Scheduled tasks.
+     - Fileless persistence via registry or memory injection.
+
+### Shellcode and Initial Execution
+
+#### 1. **Shellcode**
+   - The shellcode is responsible for loading the main payload and establishing initial communication with the C&C server.
+   - It often includes a PE loader to load additional components into memory.
+
+#### 2. **PE Loader**
+   - The PE loader is used to load and execute the backdoor's main module in memory, ensuring that it remains undetected by traditional file-based scans.
+
+### Communication
+
+#### 1. **DNS Query for C&C Server IP**
+   - The backdoor generates a custom subdomain using the computer name and version ID.
+   - It then queries a DNS server to resolve this subdomain to an IP address.
+   - Example domain generation:
+     ```python
+     letters = "ghijklmnop"  # domain_encoding_str
+     hex_pc_name = pc_name.encode("UTF-16LE").encode("hex")
+     s = ''
+
+     for c in hex_pc_name:
+         if 0x2f < ord(c) < 0x3a:
+             s += letters[ord(c) - 0x30]
+         else:
+             s += c
+     ```
+   - Example domain: `niggmhggmeggmkggmfggmdggidggngggmjgg.ijhlokga.dwarduong[.]com`
+
+#### 2. **TCP Communication**
+   - The backdoor uses a classic TCP communication protocol over port 25123.
+   - All data is encrypted using RC4 and compressed with LZMA.
+   - Packet format: `[RC4 key (4 bytes)][encrypted data]`
+   - Decrypted and decompressed data format:
+     ```
+     [dw:unknown][dw:unknown][dw:command number][dw:size of data][dw:unknown][dw:data]
+     ```
+
+#### 3. **HTTP/HTTPS Communication**
+   - The `HTTPprov` library is used as a backup communication method.
+   - It supports HTTP, HTTPS, and various proxy types (SOCKS5, SOCKS4a, SOCKS4).
+   - URI generation algorithm:
+     ```python
+     buffEnd = ((DWORD) genRand(4) % 20) + 10 + buff
+     while (buff < buffEnd):
+         b = genRand(16)
+         if (b[0] - 0x50 > 0x50):
+             t = 0
+         else:
+             *buf++ = UPPER(vowels[b[1] % 5])
+         v = consonants[b[1] % 21]
+         if (!t):
+             v = UPPER(v)
+         *buf++ = v
+         if (v != 'h' and b[2] - 0x50 < 0x50):
+             *buf++ = 'h'
+         *buf++ = vowels[b[4] % 5]
+         if (b[5] < 0x60):
+             *buf++ = vowels[b[6] % 5]
+         *buf++ = consonants[b[7] % 21]
+         if (b[8] < 0x50):
+             *buf++ = vowels[b[9] % 5]
+         *buf++ = '-'
+     *buf = '\0'
+
+     checksum = crc32(buff)
+     num2 = (checksum >> 16) + (checksum & 0xffff) * 2
+     num1 = (num2 ^ 1) & 0xf
+     URL = GENERATED_DOMAIN + "/" + num1 + "/" + num2 + "-" + buff
+     ```
+   - Example URL: `hXXp://niggmhggmeggmkggmfggmdggidggngggmjgg.ijhlokga.aisicoin[.]com/13/139756-Ses-Ufali-L`
+
+### Commands and Capabilities
+
+#### 1. **Fingerprinting**
+   - The backdoor collects system information such as:
+     - Computer name, user name.
+     - OS version, architecture (x86/x64).
+     - Volume information, serial numbers.
+     - System time.
+     - Example packet format for fingerprint data:
+       ```
+       0x000 byte: value varies in each version
+       0x001 0x01: hardcoded byte
+       0x002 bool: is elevation token present
+       0x003 dword: version ID
+       0x007 string (UTF-16), computer name (0x20 bytes max)
+       0x027 string (UTF-16), user name
+       0x079 registry query result of the HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion values: ProductName, CSDVersion, CurrentVersion, ReleaseId, CurrentBuildNumber and the result of the call to IsWow64Process (x86|x64)
+       0x179 Following format string “%s(%s);” replaced with (GetVolumeInformationW:VolumeNameBuffer), VolumePathNames
+       0x279 PhysicalDrive deviceIOControl 0x2D1400 (IOCTL_STORAGE_QUERY_PROPERTY) (VolSerialNumber)
+       0x379 wmi SELECT SerialNumber FROM Win32_BaseBoard
+       0x3f9 GetSystemTimeAsFileTime
+       0x400 bool: unknown
+       0x401 dword: obtained from the decryption of the resource
+       ```
+
+#### 2. **Command Set**
+   - The backdoor supports a wide range of commands for system manipulation:
+     | Command Number | Description |
+     |----------------|-------------|
+     | 0              | Fingerprint |
+     | 1              | Sets the session ID |
+     | 2              | Creates a process and gets the output (using pipes) |
+     | 3              | Sets the connection retry counter |
+     | 4              | Delays polling time |
+     | 5              | Reads a file or registry key and computes the MD5 |
+     | 6              | Creates a process |
+     | 7              | Creates a file, a registry entry, or a stream in memory |
+     | 8              | Writes to the registry |
+     | 9              | Queries the registry |
+     | 10             | Searches for files on the system |
+     | 11             | Moves files to another directory |
+     | 12             | Deletes files from the disk |
+     | 13             | Lists the drives mapped on the system using the GetLogicalDriveStringW function |
+     | 14             | Creates a directory |
+     | 15             | Deletes a directory |
+     | 16             | Reads a file from an offset |
+     | 17             | Calls the PE Loader (switch to HTTPprov communication) |
+     | 18             | [Unknown] |
+     | 19             | 0: Query a value from the registry, 1: Drop and execute a program |
+     | 20             | Sets an environment variable |
+     | 21             | Runs shellcode in a new thread |
+     | 22             | Retrieves an environment variable |
+
+### Detection and Mitigation
+
+#### 1. **Network Monitoring**
+   - Monitor for DNS queries to unusual subdomains.
+   - Look for TCP traffic on port 25123 or HTTP/HTTPS requests with the custom URI format.
+
+#### 2. **Endpoint Protection**
+   - Use advanced endpoint protection solutions that can detect and block shellcode execution and memory injection techniques.
+   - Regularly update and patch systems to mitigate known vulnerabilities.
+
+#### 3. **Behavioral Analysis**
+   - Implement behavioral analysis tools to detect anomalous activities, such as unexpected registry modifications or process creations.
+
+By understanding the inner workings of this backdoor, organizations can better defend against and respond to potential threats from the OceanLotus group.

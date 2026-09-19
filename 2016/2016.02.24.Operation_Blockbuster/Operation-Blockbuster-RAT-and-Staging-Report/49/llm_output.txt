@@ -1,0 +1,85 @@
+
+
+
+Sentence : Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 46
+int Handshake(SOCKET s)
+```
+  {
+struct
+{
+```
+char r1[3];
+unsigned __int32 seed;
+char r2[2];
+unsigned __int32 challenge;
+char r3[3]
+} pkt;
+srand(GetTickCount());
+seed = rand() * rand();
+unsigned char p = (unsigned char)&pkt
+```
+  i = 0;
+do
+```
+p[i] = rand() % 256;
+while ( i < 16 );
+pkt.seed = seed;
+pkt.challenge = (((seed ^ 0x1A1E1C40u) >> 1) + 0x2E3E56E0) ^ 0xAF313230;
+if ( SendData(s, &pkt, sizeof(pkt), 1) )
+```
+       return 1;
+```
+if ( WaitForSocketRecv(s, 10) )
+```
+       return 1;
+```
+if ( RecvData(s, &pkt, sizeof(pkt), 1) )
+```
+  return 1;
+```
+return ((((pkt.seed ^ 0x1A1E1C40u) >> 1) + 0x2E3E56E0) ^ 0xAF313230) != pkt.challenge;
+```
+  }
+```
+Figure 13-3:RomeoWhiskey-Two’s Authentication Handshake Function
+If the handshake fails, RomeoWhiskey-Two shuts down the connection with the client using the socket disconnection
+function found in many of the Lazarus Group’s families. If the handshake is successful, however, RomeoWhiskey-Two
+expects the client to transmit two bytes (WORD). The WORD that the client sends specifies the particular channel the
+client is requesting. RomeoWhiskey-Two supports two channels: RAT (identified by 0xC8C8 ) and Proxy (identified by
+0x5A5A ). Each channel dictates a different form of traffic and supported commands. For instance, the RAT channel
+passes data in the previously mentioned datagram form, while the Proxy channel uses a different format entirely. This use
+of channels essentially allows RomeoWhiskey-Two to operate as two loosely coupled malware families at once.
+If the client activates the RAT channel, RomeoWhiskey-Two sends a datagram of type 0x1E11 to the client before
+entering into another authentication phase. The RAT channel authentication phase is independent of the handshake
+authentication process prior to entering the RAT channel and is based on the model of the handshake authentication
+from RomeoWhiskey-One. The RAT channel authentication, while similar to that of Figure 13-1, now involves asymmetric
+encryption using RSA public and private keys, specifically the public key found in SierraJuliett-MikeOne (see Section 17).
+After generating the challenge value through a series of bitwise shifts, XOR, and addition, RomeoWhiskey-Two encrypts
+the 4-byte (DWORD) value using the same RSA transform function found in other Lazarus Group families, again most
+notably SierraJuliett-MikeOne. After transmitting the encrypted value to the client, RomeoWhiskey-Two waits up to
+10 seconds for the client to respond. The client responds with a 4-byte (DWORD) value that must match the original
+challenge value for the authentication to succeed. The implications of this is that only a client who possesses the private
+key to decrypt the challenge value can access the RAT channel and its functionality.
+After the authentication phase is complete, RomeoWhiskey-Two’s RAT channel settles into the same pattern of receiving
+a datagram and dispatching the appropriate handle for the command found within the datagram. RomeoWhiskey-Two
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Operation Blockbuster", "type" : "TTPS"},
+        {"id": 2, "description": "RomeoWhiskey-Two", "type" : "EXEF"},
+        {"id": 3, "description": "Lazarus Group", "type" : "ACTO"},
+        {"id": 4, "description": "RAT (Remote Administration Tool) channel", "type" : "TTPS"},
+        {"id": 5, "description": "Proxy channel", "type" : "TTPS"},
+        {"id": 6, "description": "RSA public key", "type" : "EXEF"},
+        {"id": 7, "description": "SierraJuliett-MikeOne", "type" : "EXEF"},
+        {"id": 8, "description": "4-byte (DWORD) challenge value", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "used by"},
+        {"source": 2, "target": 4, "rel_name" : "supports"},
+        {"source": 2, "target": 5, "rel_name" : "supports"},
+        {"source": 6, "target": 7, "rel_name" : "found in"},
+        {"source": 2, "target": 6, "rel_name" : "uses for encryption"},
+        {"source": 2, "target": 8, "rel_name" : "generates and encrypts"}
+    ]
+}

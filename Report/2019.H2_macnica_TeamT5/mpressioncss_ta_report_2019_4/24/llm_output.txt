@@ -1,0 +1,108 @@
+
+
+
+Sentence : LODEINFO
+2019 年 12 月下旬に、国内複数企業に対して標的型攻撃メールが配送されました。添付されていた doc ファイル
+のマクロを有効にすると LODEINFO と呼ばれているマルウェアに感染します。
+図 19. LODEINFO を使った攻撃の流れ
+doc ファイルに含まれるマクロは、主に base64 を使い難読化しています。難読化を解くと別のマクロに含まれた
+base64 エンコードされたデータを取得し、デコードしたデータを .txt の拡張子で保存します。.txt 拡張子で保存しま
+すが、形式は DLL で rundll32.exe を使い起動されます。機器再起動後も自動起動されるように Run レジストリキー
+に値を追加します。
+LODEINFO は複数存在していますが、確認したレジストリに追加される値は以下の 2 つです。
+HKCU\SOFTWARE\Microsoft\Windows\CurentVersion\Run\"BIG_POOH" = cmd /c cd
+%ProgramData%&start rundll32.exe Windows.SecurityMitigationsBroker.txt main
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\"MsiWrapper" = cmd /c cd
+%ProgramData%&start rundll32.exe euwPvlGQN.Ikbn main
+LODEINFO の特徴
+ドロップされる DLL(LODEINFO) には、pdb ファイルのパスが残されていました。
+E:\Production\Tool-Developing\png_info\Release\png_info.pdb
+LODEINFO は、GitHub で公開されている PNG ファイルのエンコーダ / デコーダ”LodePNG”のソースコード [17] をベー
+スに開発されています。このように正規のソースコードに悪意のあるコードを入れ込み分析を逃れようとするテクニッ
+クは、中国語圏を拠点とする攻撃者グループでよく使われています。
+LODEINFO は、svchost.exe に PE 形式の RAT コードをインジェクションするタイプと、ロードした rundll32.exe
+のメモリ上に RAT コードを展開するタイプの 2 つが存在します。
+コードインジェクションするタイプでは、攻撃者のコードは main 関数の最後に１つの関数として追加されています。
+図 20. インジェクションタイプ : ペイロードの復号とコードインジェクション処理部
+17 https://github.com/lvandeve/lodepng/blob/master/examples/example_png_info.cpp
+関数の中では、ペイロードの復号と正規の svchost.exe を起動し PE 形式のコードをインジェクションします。
+ペイロードはデータセクションに含まれており、128bit 値で XOR して復号します。
+rundll32.exe メモリ上にコードを展開するタイプでは、main 関数内に直接復号する処理と復号したコードをメモリ上
+に展開して実行する処理が実装されています。
+図 21. メモリ展開タイプ : ペイロードの復号と復号コードの呼び出し
+LODEINFO RAT
+最終的に svchost.exe または、rundll32.exe のメモリ上で動くコードが RAT 機能を有しています。
+定期的に HTTP POST 通信を C＆C サーバに行い、レスポンスに含まれている命令コードに応じて処理を行います。
+命令コードは、”send”、”recv”、”kill”等 UNIX 系 OS 環境を示唆するものが使われています。
+攻撃者が RAT を休止状態にする時には、命令コマンド文字列の条件にない”stay calm!”というコードを送信してい
+ました。ユーザエージェントは、固定の文字列 “Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36”が使われています。
+図 22. C&C コマンド処理部
+図 23. 攻撃者が使った休止状態コマンド
+通信データは、AES+base64 で暗号化されています。特徴的な点としては、AES S-BOX 等の定数がデータ領域に埋
+め込まれているのでなく、スタック領域に値を積み上げて使用する処理になっている事です。これは、暗号処理部の検
+出を困難にし、分析を阻害する事が目的と見られます。
+図 24. AES 処理部
+APT10 ANEL とのコードレベルの類似点
+APT10 の攻撃ツールの１つである RAT に、“ANEL” [18] があります。今回観測した RAT と ANEL との間には、い
+くつかの類似点が見られました。しかし、それ以上の裏付けとなり得る情報が入手できていないため本書執筆時点では、
+このマルウェアを使う攻撃者グループを特定できていません。
+ANEL との類似点
+
+
+Main 処理の最初で、1 つの文字列変数に複数の C＆C を用意し、パースして利用する
+
+
+通信データ ( 暗号 +Base64)
+
+
+暗号でバイトデータとなった値を Base64 するため、CryptBinaryToString() を使う
+
+
+固定のユーザエージェントを使い、HTTP POST 通信
+
+
+実装量の多い暗号アルゴリズムをライブラリの使用をせずにコーディングしている
+
+
+C2 命令を InternetReadFile() で拾い、命令処理だけ別スレッドで開始する
+
+
+RAT にバージョン情報が埋め込まれている
+
+
+18 https://jsac.jpcert.or.jp/archive/2019/pdf/JSAC2019_6_tamada_jp.pdf
+図 25. C＆C 文字列設定部 ( 上 :LODEINFO RAT 下 : ANEL 5.1.1)
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "LODEINFO", "type" : "EXEF"},
+        {"id": 2, "description": "doc ファイル (with macro)", "type" : "DOCF"},
+        {"id": 3, "description": ".txt 拡張子の DLL", "type" : "DOCF"},
+        {"id": 4, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 5, "description": "Run レジストリキー", "type" : "REGI"},
+        {"id": 6, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 7, "description": "C&C サーバ", "type" : "CCSH"},
+        {"id": 8, "description": "PNG ファイルのエンコーダ / デコーダ (LodePNG)", "type" : "APPS"},
+        {"id": 9, "description": "GitHub", "type" : "URLS"},
+        {"id": 10, "description": "中国語圏を拠点とする攻撃者グループ", "type" : "ACTO"},
+        {"id": 11, "description": "ANEL (APT10 の RAT)", "type" : "EXEF"},
+        {"id": 12, "description": "CryptBinaryToString()", "type" : "TTPS"},
+        {"id": 13, "description": "InternetReadFile()", "type" : "TTPS"},
+        {"id": 14, "description": "HTTP POST 通信", "type" : "NETP"},
+        {"id": 15, "description": "AES+base64 暗号化", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "delivers"},
+        {"source": 3, "target": 4, "rel_name" : "executed by"},
+        {"source": 5, "target": 4, "rel_name" : "configured to run at startup with"},
+        {"source": 6, "target": 1, "rel_name" : "used by"},
+        {"source": 1, "target": 7, "rel_name" : "communicates with"},
+        {"source": 8, "description": "based on", "rel_name" : "LODEINFO developed from"},
+        {"source": 9, "target": 8, "rel_name" : "hosted on"},
+        {"source": 10, "target": 1, "rel_name" : "used by"},
+        {"source": 11, "target": 1, "rel_name" : "similar to"},
+        {"source": 12, "target": 15, "rel_name" : "used in encryption"},
+        {"source": 13, "target": 14, "rel_name" : "used for communication"}
+    ]
+}

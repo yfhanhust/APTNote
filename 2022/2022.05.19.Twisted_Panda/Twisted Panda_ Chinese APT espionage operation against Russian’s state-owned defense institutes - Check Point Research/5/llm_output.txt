@@ -1,0 +1,101 @@
+
+
+
+Sentence : The Loader
+The loader is a 32-bit DLL utilizing dynamic API resolving with name hashing for evasion and
+anti-analysis. The loader is not only able to hide its main functionality, but also avoid static
+detection of suspicious API calls by dynamically resolving them instead of using static imports.
+The purpose of cmpbk32.dll is to load specific shellcode from the INIT file, depending on the
+infection stage, and run it. The INIT file contains two shellcodes: the first-stage shellcode runs
+the persistence and cleanup script, and the second-stage shellcode is a multi-layer loader. The goal
+is to consecutively decrypt the other three fileless loader layers and eventually load the main
+payload in memory. To distinguish between the stages, the DLL entry point DllMain performs
+different actions based on the call reason.
+Setup Stage
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 4/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+When the malicious document is closed, a PROCESS_DETACH event is triggered. The DLL
+executes a portion of the INIT file in charge of cleaning up the files created by the malicious
+document and creates a scheduled task for persistence:
+Figure 4: DLLMain PROCESS_DETACH event executes shellcode responsible for persistence and
+cleanup from INIT
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 5/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+Figure 5: Persistence and cleanup function
+Loader stage
+The main loading process begins with the scheduled task running cmdl32.exe which loads the
+malicious DLL cmpbk32.dll . DLL sideloading by a legitimate process is a technique
+commonly used by threat actors; coupling it with a robust loading process can help evade modern
+anti-virus solutions as, in this case, the actual running process is valid and signed by Microsoft.
+Note that the cmpbk64.dll is not copied into the %TEMP%\\OfficeInit folder. The 64-bit
+version of the DLL is only used in the initial infection stage by the 64-bit MS Word process, as the
+32-bit cmdl32.exe can only load 32-bit cmpbk32.dll .
+When the DLL is loaded, the PROCESS_ATTACH event is triggered and starts a sequence of
+operations. The sequence peels off multiple encrypted layers from the INIT file and eventually
+reveals and executes the final payload. It first reads an XOR-encrypted blob from the INIT file
+and decrypts it in memory using a simple XOR with the key 0x9229 . The decrypted blob is a
+position-independent code and the first of the encrypted layers that “protects” the main payload.
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 6/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+Figure 6: Layers of decryption performed by the loader to uncover the final payload.
+This first layer is rather simple. It dynamically loads from Kernel32.dll the WinAPI functions that
+are essential for its work. Next, it begins a sequence of operations to uncover the second layer. It
+uses RC4 with the following hardcoded key: 0x1C, 0x2C, 0x66, 0x7C, 0x11, 0xCF,
+0xE9, 0x7A, 0x99, 0x8B, 0xA3, 0x48, 0xC2, 0x03, 0x07, 0x55 . It then
+decompresses the decrypted buffer using RtlDecompressBuffer and reveals the second layer.
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 7/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+Figure 7: Injection to msiexec.exe
+The injected code begins by dynamically loading a PE file embedded inside and executing it from
+its entry point.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "32-bit DLL (loader)", "type" : "EXEF"},
+        {"id": 2, "description": "dynamic API resolving", "type" : "TTPS"},
+        {"id": 3, "description": "name hashing for evasion and anti-analysis", "type" : "TTPS"},
+        {"id": 4, "description": "cmpbk32.dll", "type" : "EXEF"},
+        {"id": 5, "description": "INIT file", "type" : "DOCF"},
+        {"id": 6, "description": "first-stage shellcode (persistence and cleanup)", "type" : "EXEF"},
+        {"id": 7, "description": "second-stage shellcode (multi-layer loader)", "type" : "EXEF"},
+        {"id": 8, "description": "fileless loader layers", "type" : "DOCF"},
+        {"id": 9, "description": "DllMain function in DLL entry point", "type" : "EXEF"},
+        {"id": 10, "description": "PROCESS_DETACH event", "type" : "TTPS"},
+        {"id": 11, "description": "malicious document", "type" : "DOCF"},
+        {"id": 12, "description": "scheduled task for persistence", "type" : "TTPS"},
+        {"id": 13, "description": "cmdl32.exe (legitimate process)", "type" : "EXEF"},
+        {"id": 14, "description": "DLL sideloading technique", "type" : "TTPS"},
+        {"id": 15, "description": "PROCESS_ATTACH event", "type" : "TTPS"},
+        {"id": 16, "description": "XOR-encrypted blob from INIT file", "type" : "DOCF"},
+        {"id": 17, "description": "XOR key (0x9229)", "type" : "IOCS"},
+        {"id": 18, "description": "position-independent code", "type" : "EXEF"},
+        {"id": 19, "description": "%TEMP%\\OfficeInit folder", "type" : "SYSP"},
+        {"id": 20, "description": "cmpbk64.dll (64-bit version)", "type" : "EXEF"},
+        {"id": 21, "description": "32-bit MS Word process", "type" : "APPS"},
+        {"id": 22, "description": "Kernel32.dll", "type" : "EXEF"},
+        {"id": 23, "description": "WinAPI functions (essential for work)", "type" : "OPPS"},
+        {"id": 24, "description": "second layer decryption using RC4 with hardcoded key", "type" : "TTPS"},
+        {"id": 25, "description": "RC4 hardcoded key: 0x1C, 0x2C, 0x66, 0x7C, 0x11, 0xCF, 0xE9, 0x7A, 0x99, 0x8B, 0xA3, 0x48, 0xC2, 0x03, 0x07, 0x55", "type" : "IOCS"},
+        {"id": 26, "description": "RtlDecompressBuffer function for decompression", "type" : "OPPS"},
+        {"id": 27, "description": "injection into msiexec.exe", "type" : "TTPS"},
+        {"id": 28, "description": "embedded PE file", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "is a"},
+        {"source": 4, "target": 5, "rel_name" : "loads and executes shellcode from"},
+        {"source": 5, "target": 6, "rel_name" : "contains and runs"},
+        {"source": 5, "target": 7, "rel_name" : "contains and runs"},
+        {"source": 8, "target": 16, "rel_name" : "first layer is an"},
+        {"source": 16, "target": 17, "rel_name" : "encrypted with key"},
+        {"source": 16, "target": 18, "rel_name" : "decrypts to"},
+        {"source": 9, "target": 10, "rel_name" : "triggers when"},
+        {"source": 9, "target": 15, "rel_name" : "triggers when"},
+        {"source": 10, "target": 12, "rel_name" : "creates"},
+        {"source": 13, "target": 4, "rel_name" : "loads"},
+        {"source": 19, "target": 20, "rel_name" : "folder does not contain"},
+        {"source": 22, "target": 23, "rel_name" : "dynamically loads"},
+        {"source": 24, "target": 25, "rel_name" : "uses key for RC4 decryption"},
+        {"source": 26, "target": 8, "rel_name" : "decompresses to reveal second layer of"},
+        {"source": 27, "target": 28, "rel_name" : "injects and executes"}
+    ]
+}

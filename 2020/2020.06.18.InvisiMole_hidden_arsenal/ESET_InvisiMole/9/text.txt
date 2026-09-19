@@ -1,0 +1,56 @@
+“
+All infection vectors are possible, including installation facilitated by
+physical access to the machine.
+However, there were hints the attackers had already obtained administrative privileges before InvisiMole
+was installed on the system—InvisiMole’s loader was placed in the Windows directory. Similarly, most of the
+execution methods used in the recent campaign require elevated privileges, as documented in the Execution
+chains section.
+We solved the mystery in 2020 when we observed InvisiMole being delivered by network
+infrastructure used by the Gamaredon threat group —specifically by Gamaredon’s .NET downloader [2] that
+ESET detects as MSIL/Pterodo.
+This Gamaredon .NET downloader delivers a 7-Zip SFX package [3], which unpacks to a legitimate tool
+winapiexec [4] —a small tool that enables running Windows API functions through command line parameters.
+The attackers execute the tool using a batch script shown in Figure 7, with shellcode in the command line.
+Figure 7 // Batch script that passes InvisiMole’s shellcode to the legitimate winapiexec tool
+Winapiexec interprets the command line arguments as Windows API calls, and so it allocates new memory,
+copies the supplied shellcode into that memory and creates a new thread to execute it. The shellcode is
+the InvisiMole TCP downloader, connecting to 80.255.3[.]66:443 to download and then execute a 64-bit
+InvisiMole blob (with ~~64 DA CE 11~~ magic).
+2 SHA-1 : 857EEB37DB2B666981779005DD5E55CEA7A53233
+3 SHA-1 : 303A63CE12AD42900DA257428E2FD4DE4F9829DC
+4 ESET classifies this tool as a potentially unsafe application, with detection names Win{32,64}/Winapiexec.A potentially unsafe application
+TLP: WHITE
+17 InvisiMole: The hidden part of the story
+The components used in InvisiMole’s delivery chain are illustrated in Figure 8.
+Figure 8 // Overview of InvisiMole’s delivery chain
+Later, we observed a variation of this delivery method, where the Gamaredon .NET downloader delivered
+InvisiMole’s TCP downloader [5] with added support for user-configured proxies. The downloader was probably
+updated after an unsuccessful attempt to use a direct internet connection without using the proxy.
+Table 4 // InvisiMole’s components delivered by Gamaredon’s .NET downloader
+SHA-1 Filename Comment
+303A63CE12AD42900DA257428E2FD4DE4F9829DC
+droppers
+4B8E11E0734D3109627FF8871EF7DB14C0DE9C41
+4A6DC6A32A777DC5DD47221BF79604BC0258A987 intel_log64.exe winapiexec tool
+6F98B12C98DA1FCFF078256970E9B8EF12139640 api64.cmd
+batch scripts
+```
+      76FC2E29524C6AD58B0AF05251C419BB942CCED0 intel_log64.cmd
+```
+Note that the Gamaredon group typically uses spearphishing emails as the initial vector, attaching documents
+with malicious macros—which is likely how the network was first compromised in this case as well.
+As previously reported, this group is known for using simple tools, with the main objective to infiltrate the
+target organization and spread as far as possible in the target’s network. Now we know they are paving
+the way for the more sophisticated InvisiMole toolset.
+This tactic of using a simpler backdoor to infiltrate the target network, and only then deliver the more
+sophisticated tool, has several benefits for the attackers. In this case, the Gamaredon toolset is used for
+reconnaissance—to confirm the target is of special interest, to collect information about security products
+or security policies and to use this information to customize the next steps—for example, to choose which of
+InvisiMole’s execution chains should be used.
+This all minimizes the risk that the more advanced infiltration—InvisiMole’s toolset—will be discovered.
+Note that we were able to trace the cooperation between Gamaredon and InvisiMole groups back to 2018,
+but only after the publication of our first blogpost about InvisiMole. This discovery is thus only relevant for
+the recent campaign, and does not invalidate our earlier hypothesis about possible physical access.
+5 SHA-1: 4B8E11E0734D3109627FF8871EF7DB14C0DE9C41
+TLP: WHITE
+18 InvisiMole: The hidden part of the story

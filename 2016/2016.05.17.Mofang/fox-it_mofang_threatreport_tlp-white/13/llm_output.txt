@@ -1,0 +1,355 @@
+
+
+
+Sentence : 7 Preferred tools
+7.1 ShimRat
+ShimRat is a custom developed piece of malware known as a ‘RAT’, Remote
+Administration Tool. It has among others standard capabilities for filesystem interaction.
+The malware was originally built in 2012 and its features were expanded over the years.
+The artifacts left in the first samples, are a good indicator that the project has been
+started in 2012. Multiple PDB paths were seen in the early versions of ShimRat. These
+PDB paths are not visible in the latest versions of ShimRat, due to how the samples are
+prepared. The PDB paths are either stripped or filled with different paths.
+```
+      z:\project2012\remotecontrol\winhttpnet\amcy\app\win7\installscript\objfre_wxp_x86\i386\InstallScript.pdb
+  z:\project2012\remotecontrol\winhttpnet\amcy\app\win7\serviceapp\objfre_wxp_x86\i386\ServiceApp.pdb
+
+  z:\project2012\remotecontrol\winhttpnet\cqgaen\app\installscript\objfre_wxp_x86\i386\InstallScript.pdb
+
+  z:\project2012\remotecontrol\winhttpnet\cqgaen\app\serviceapp\objfre_wxp_x86\i386\ServiceApp.pdb
+
+```
+The terms InstallScript and ServiceApp in the PDB paths are the two parts that malware
+consists of. InstallScript is the first stage of ShimRat which takes care of persistence,
+while ServiceApp is the second stage of the malware which performs C2 communication
+and exposes the infected machine to the operator.
+Over the years the developers of ShimRat have extended the malware with additional
+functionality, such as:
+• Persistence: originally ShimRat only supported registry startup keys and service
+creation in order to become persistent. Additionally, the authors developed the
+capability of installing a shim database for persistence in 2015.
+• Privilege elevation: a method to bypass Windows UAC to gain higher privileges
+was implemented. The technique relied on the Migwiz Windows component.
+Migwiz is an application used in Windows which automatically runs in high
+integrity mode [10] . The hijacked DLL will also run in this mode allowing a UAC
+bypass, one of many methods that exists [11] . This method was not developed
+by the ShimRat authors, but was public and the changes are even they simply
+copied it into their malware.
+One interesting technique they’ve been using is dll hijacking of antivirus components.
+ShimRat samples delivered from around end 2013/start 2014 on, abused legitimate
+10 http://blog.cobaltstrike.
+com/2014/03/20/user-ac-
+count-control-what-penetra-
+tion-testers-should-know/
+11 http://www.labofapenetra-
+tiontester.com/2015/09/
+bypassing-uac-with-power-
+shell.html
+antivirus applications to hijack. The reason for this is to hide itself even more. When
+a user would check the running process list, a legitimate Antivirus process would
+appear to be running. The exact list of applications is available in paragraph 9.4.
+The Mofang group has a preference for Antivirus products only. Fox-IT has not observed
+any other vulnerable application except for antivirus products being used.
+26 | fox-it | Mofang | A politically motivated information stealing adversary | May 2016
+Mofang packages the anti-virus components with 2 files in order to run ShimRat. One
+is the dll to hijack. The second file is a compressed ShimRat core dll with shellcode
+in a .dat file. When the antivirus component is started the dll is loaded which in turn
+maps the .dat file in memory. The shellcode subsequently decompresses the core of
+ShimRat which comes in the form of a dll and executes it. Usually the .dat file has the
+same name as the dll file.
+Figure 12 Shimrat and anti-virus components
+The way samples arrive at targets is usually in a packed form containing a lure document.
+The initial payload a target receives, will extract a lure document, present the user
+with this, but also extracts and runs a 2 [nd] stage loader which will drop ShimRat on the
+target system. This 2 [nd] stage loader in the current version of ShimRat and contains the
+antivirus component and as well as the two auxiliary files containing the ShimRat core.
+7.1.1 Installation & Persistence
+One of the first things ShimRat does while active is making sure it becomes persistent
+on the system. Before actually activating any methods of persistence it will try to elevate
+privileges if needed it is not running with administrative privileges.
+ShimRat elevates its privileges by performing a dll hijacking attack on vulnerable
+Windows components. Specifically, it abuses the migwiz.exe program by hijacking
+cryptbase.dll . ShimRat will try to gain higher privileges, but will continue to execute
+whether the elevation was successful or not. This elevation would make sure no uac
+popups would be shown to the victim. Would the user get uac popups they would
+appear to be coming from the antivirus product ShimRat hijacked, as mentioned before.
+ShimRat has three methods of becoming persistent on a system:
+1 Installing a registry startup key
+2 Installing a service
+3 Install a shim
+fox-it | Mofang | A politically motivated information stealing adversary | May 2016 | 27
+Internally ShimRat uses an installation configuration which is set by the builder.
+The persistence configuration structure looks as follows (see Table 3):
+12 https://msdn.microsoft.
+com/en-us/library/
+windows/desktop/
+ms685141(v=vs.85).aspx
+13 https://technet.microsoft.
+com/en-us/en-en/library/
+dd837644%28v=ws.10%29.
+aspx
+Table 3: Persistence configuration structure.
+The installation mode in the configuration structure, is a switch to decide which per
+sistence method to use. If the switch is set to 1 it will become persistent by installing a
+service. If it is set to 2 it will install a shim to become persistent. As a fall back method,
+if either installing a service or installing a shim would fail, it will use a registry startup
+key for persistence.
+7.1.2 Persistence through a registry startup key
+As explained, when persistence through a service or shim fails, ShimRat falls back
+to a registry based startup-key. It takes the installation filename variable from the
+configuration and uses this as the key name. The file path is based on the installation
+file path variable in the configuration.
+The key is registered under:
+```
+  HKCU\Software\microsoft\windows\CurrentVersion\Run
+```
+7.1.3 Persistence through a service
+ShimRat will create a new service under Windows using the information from the instal
+lation configuration shown in paragraph 7.1.1 above. This operation is performed through
+the Windows API functions available for registering, updating and starting of services [12] .
+It will start by stopping and removing any old service (if any exist). ShimRat will register
+a new service using the information from the persistence configuration and start it,
+after checking and removing any old services.
+7.1.4 Persistence through shims [13]
+Over the years Microsoft has gone to extraordinary lengths to ensure backward
+compatibility on its Windows platform. One of the outcomes of this process was the
+creation of the Application Compatibility Framework (ACF) which helps ensure this
+compatibility. Through this framework, special fixes known as Microsoft Fix It’s or just
+fixes can be run which can help mitigate security or compatibility problems.
+28 | fox-it | Mofang | A politically motivated information stealing adversary | May 2016
+The way the ACF works is that when a process is started, it will determine if the
+newly created process needs to be shimmed. If this is the case, a special flag is raised
+to indicate this. Based on this flag the operating system will load the installed Shims
+and apply the required fixes. This means shims are simply hot patching processes on
+the fly. Most predefined fixes released by Microsoft are stored in:
+```
+  %WINDIR%\AppPatch\sysmain.sdb
+```
+Any fix not defined in this sdb file, is called a ‘Custom Fix’ and can be installed by anyone
+|Col1|Col2|Col3|njehefoL forismpt iinorn m|ctdlr bix,pameonnsstamsa|DLl totbutcanentalllethkin|Lohthstlsrege|Col8|Col9|Col10|Col11|Col12|Col13|Col14|Col15|Col16|Col17|Col18|Col19|Col20|Col21|Col22|Col23|Col24|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|%WINDIR%\AppPatch\Custom\ (32 bit)%WINDIR%\AppPatch\AppPatch64\Custom\ (64 bit)|%WINDIR%\AppPatch\Custom\ (32 bit)%WINDIR%\AppPatch\AppPatch64\Custom\ (64 bit)|%WINDIR%\AppPatch\Custom\ (32 bit)%WINDIR%\AppPatch\AppPatch64\Custom\ (64 bit)||||||||||||||||||||||
+|%WINDIR%\AppPatch\Custom\ (32 bit)%WINDIR%\AppPatch\AppPatch64\Custom\ (64 bit)|%WINDIR%\AppPatch\Custom\ (32 bit)%WINDIR%\AppPatch\AppPatch64\Custom\ (64 bit)|migu|datre|ab 13|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|as.|
+|HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ApHKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Ap|pp|CoCo|mpmp|aa|tFtF|lala|gsgs|\C\I|usns|tt|omal|le|dS|D|B|||||||||
+fox-it | Mofang | A politically motivated information stealing adversary | May 2016 | 29
+Figure 13 An example of a 32-bit ShimRat infection with shims
+After filling the registry keys, ShimRat calls SdbRegisterDatabaseEx to register the
+database and finally ShimFlushCache to flush the cache and enable the shim. From this
+point on, every newly started instance of svchost.exe will be shimmed and ShimRat
+will be. It locks itself with the use of mutexes, to ensure there aren’t multiple copies
+of ShimRat running. ShimRat mutexes are a combination of the string Global\qwe
+followed by one or more numbers.
+7.1.5 Built-in capabilities of ShimRat
+ShimRat has a set of inbuilt capabilities to give the operators control over their victim.
+The following is a list of capabilities seen in one of the most recent samples.
+The operators are currently able to use ShimRat for among others:
+• Enumerate connected drives
+• List, create and modify directories
+• Upload and download files
+• Delete, move, copy and rename files
+• Execute programs
+• Execute commands
+• Uninstall itself
+7.1.6 Command and control communication
+ShimRat communicates over HTTP to its C2 server. While versions since 2015 have seen
+the introduction of HTTPS usage, ShimRat does not appear to verify the SSL certificate
+of C2 servers, which are generally self-signed certificates. ShimRat does have the ability
+to use pre-configured HTTP proxies, which is useful in situations where a victim has
+forced local proxies in the network with authentication.
+30 | fox-it | Mofang | A politically motivated information stealing adversary | May 2016
+Like with persistence, ShimRat holds a C2 communication configuration internally.
+The structure of the configuration looks as follows (see Table 4):
+Table 4: C2 communication configuration.
+ShimRat communicates with its C2 server through a pull and push mechanism. ShimRat
+constantly asks its C2 server for commands and once it has executed a command,
+it will send back the result. The structure of the commands exchanged with the
+C2 server is quite simple:
+• Every command is encapsulated within two tags, currently these tags are the
+word ‘Data’ which is added in front of and at the end of the command string.
+In the past this used to be the string ‘Yuok’ as described in paragraph 2.1.
+• Every command has a unique ‘ID’. These IDs are notated as $$
+• The final structure of the commands send to and from the C2 server is:
+
+For example, when ShimRat first connects to a C2 server it registers itself. This initial
+registration looks like this:
+```
+  Data$$00#DEMO-PC-0800232979FD-SYSTEM.test.0.0.01.1#WinXP Professional SP3 (2600) (x86)Data
+```
+The aforementioned example shows the two Data tags at the start and at the end. The
+command id is 00, the registration command, followed by the associated data. In this
+case, the data comprises basic information including the machine name, DEMO-PC,
+system information, 0800232979FD-SYSTEM, the C2 password, test, its version and the
+operating system version and whether it is a 32 or 64bit operating system in the last part.
+ShimRat will continue sending the initial check-in data until the C2 server responds
+with Data . Once it has received this response, which indicates it registered successfully,
+it will start polling for new commands to execute.
+fox-it | Mofang | A politically motivated information stealing adversary | May 2016 | 31
+It polls the C2 for commands by sending command id 02 in combination with its
+system information:
+```
+              Data$$02#DEMO-PC-0800232979FD-SYSTEMData
+```
+The C2 server will respond with one of 3 possible tags:
+• Atad: returned when there is nothing to do for the malware. ShimRat will sleep
+for a specified time period before polling again.
+• Aatd: returned when the C2 does not recognize the system information. It forces
+ShimRat to register itself again. After registering itself again ShimRat will
+continue polling the C2 server for commands.
+• Data: returned when a command is available. The whole response string would
+actually be Data$$ where ShimRat would parse the command
+ID, execute the desired command and send the result back to the C2. Details of
+which command ID maps to which command can be found in Table 5.
+Table 5 lists the possible command ids that a C2 server could send (the Initiating
+command id) and the corresponding responses by ShimRat (the Responding command
+id). Some commands will result in one or more different responding ids based on the
+Please note, that there are checks when executing these commands where the key
+words Atad Aatd and Data are used to evaluate the outcome of the command. These
+states are not described or shown in the table, nor does the table include command
+ids 00 and 01 which are used for initial registration and command polling respectively.
+Function Initiating command ID Responding command ID(s)
+Enumerate drives 03 04
+List directory 06 07
+Download file 09 0b, 24
+Upload file 0c                
+Delete file 16                   
+Create directory 31                 
+Copy file 29 32
+Move file 26 32
+Rename file 28               
+Execute file 17                  
+Command shell 11 12, 15
+Uninstall 22                
+|•Tabcomd).datPlewostadsFuEn|ShcoDacIDwlemSa Sasrdte00ncum|imntattu, ehic5anomhie ns As aatioer|Rina:allxehlisdemottarendnate|atueretycucotsid)coRae,dno0d|topurbetemthamt hthAat1 wriv|reollineDthmaendmaasattddehies|gingdataenpothndtothanscrch|stetwh$$ded Isse csserdibar|r ihee<csirDiblorwileneDaede u|tsCn aomedmaerel rdaretaose|
+|---|---|---|---|---|---|---|---|---|---|---|
+|Lis|t d|ire|ct|ory|||||||
+|Do|wn|lo|ad|fl|e||||||
+|Up|loa|d|fle||||||||
+|De|let|e f|le||||||||
+|Cr|eat|e d|ire|ct|or|y|||||
+|Co|py|fl|e||||||||
+|Mo|ve|fl|e||||||||
+|Re|na|me|fl|e|||||||
+|Ex|ecu|te|fl|e|||||||
+|Co|m|ma|nd|sh|ell||||||
+|Un|in|sta|ll||||||||
+|ageromanmtomonultck.heehofoIn0|aivemdmwmadiinckusewr initi3|n.r fanIDanhinngosdn iitiati|Aford i>dchd irenewhton talng|tecos awhancodssporenevhereco|r rmvaerd smthonmealtagism|egmailae Senmatseorxeuabltrm|istndblhidanasecutee,atian|eris.e.mthd cCbydiftinthnoond I|ng itTheRat we resuan b2 serShimfereng thee outr doandD|Col11|
+|---|---|---|---|---|---|---|---|---|---|---|
+|0|6||||||||||
+|0|9||||||||||
+|0|c||||||||||
+|16|||||||||||
+|31|||||||||||
+|29|||||||||||
+|26|||||||||||
+|28|||||||||||
+|17|||||||||||
+|11|||||||||||
+|22|||||||||||
+Table 5 Overview of ShimRat functions mapped to command IDs
+32 | fox-it | Mofang | A politically motivated information stealing adversary | May 2016
+7.2 ShimRatReporter
+7.2.1 Summary
+ShimRatReporter is a tool first seen in late 2014. The goal of this tool is to gather
+important information about the target infrastructure. More details about this are
+available in paragraph 7.2.2.
+Additionally the tool can be configured to download a 2 [nd] stage payload from 1 or 2
+preconfigured locations. The idea behind ShimRatReporter is to be able to deliver
+customized ShimRat builds. This can be seen in the preconfigured proxy configura
+tion in some of the attacks. In these attacks, the ShimRat builds that were sent to the
+target machines were already configured with the credentials for the local proxy in
+the target network.
+7.2.2 Report generation
+ShimRatReporter generates a text based report to send out to its C2 server. The report
+is constructed with the following sections.
+Section Contents
+Report header The header contains a timestamp at which the report was made and the local computer name.
+Network information
+Operating system
+information
+Active processes
+information
+Browser and proxy
+configuration
+GetExtendedUdpTable Windows API functions.
+including any service packs if they are installed.
+their PID and parent PID.
+proxy configurations set in the registry.
+Active user sessions This section is titled QueryUser-INFO and contains a list of active sessions on the machine enumerated
+with the WTSEnumerateSessions Windows API function.
+User accounts This section is titled Users-INFO and contains a list of the non-privileged and privileged accounts that
+are available on the machine.
+Installed software This section is titled Software-INFO and contains a list of all the installed software on the machine
+excluding any Windows updates / components.
+Report footer The footer of the report contains some additional information on whether the 2 [nd] stage payloads,
+if configured, were successfully downloaded and executed.
+|Col1|Col2|Col3|tioaycat|n a, Donttin|boNSaing t|utsers ahe|thvelisou|e Wrst otpu|inanf at o|dod wll tf t|wshehehe|IPthTCPGe|coer tatEx|nfihendte|guneUDnde|rattwP edU|ionornddp|. Tk hpoTa|hisasintble|inDHsan|cluCPd|de|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+||||ati|ng|sy|st|em|na|m|e a|nd|sp|ec|ifc|w|ind|o|ws|ve|rsi|on||
+||||st o|f a|ll t|he|ru|nn|in|g p|ro|ces|s o|n|the|m|ac|hin|e i|nc|lud|in|
+||||e U|se|r-A|ge|nt|of|th|e d|ef|aul|t b|ro|ws|er|as|we|ll a|s a|ny||
+|||nstio|a ln.|ist|of|ac|tiv|e s|es|sio|ns|on|th|e|ma|chi|ne|en|u|me|rat|ed|
+|||st|of|the|n|on|-pr|ivi|leg|ed|an|d|pri|vil|eg|ed|acc|ou|nt|s t|ha|t|
+||in|s a|lis|t o|f al|l t|he|ins|tal|led|s|oft|wa|re|on|th|e|ma|chi|ne|||
+|ionan|ald e|infxe|orcu|mated|tio.|n|on|wh|et|he|r t|he|2nd|st|ag|e p|ay|loa|ds|,|||
+fox-it | Mofang | A politically motivated information stealing adversary | May 2016 | 33
+7.2.3 Command and control communication
+ShimRatReporter communicates over HTTP with a preconfigured C2 server. The gener
+ated report is first compressed using lz compression applied with the RtlCompressBuffer
+Windows API function. After compression, the data is encrypted with a combination
+of shifting and xor using a static key. The key hardcoded in all versions seen in the
+wild is ‘ NetMeter ’.
+After a report is generated, the raw buffer with the data is taken and iterated through
+using an index. If the index is divisible by two, the value in the buffer is xor-ed. If it’s not
+divisible by two, the value of the key is added to the value in the buffer. This is probably
+|b|es|t e|xp|la|in|ed|by|s|ho|wi|ng|th|e|co|de|fo|r t|he|d|ec|ry|Col23|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+||||||||||||||||||||||||
+|FbestTpnt|oryncubheheatahe|etwrytr e rh.me re|vero,ptacncrepTh, apo|yusedt typorelsort|elin rehetit isur li h|emg tpo oron thl psteas|enhertdi preardbe|t i m isnaocn sainen|no xol kesenmeth s|thdureys tt otee ruc|e elo-ed vheutr fepces|ncop walu s inleorsf|ryeriteub anat, aull|ptath afrotra pomeny r|edio vmcts isd aec|ren talu thiot r an iei|poeen ieqddd.ve|ortwrfrocus jueedThd.|dapmrrusst toe|at t thent ato tC2|a, theet en a ahe se|a, theet en a ahe se|
+||||||||||||||||||||||||
+Figure 14 Example ShimRat report upload
+34 | fox-it | Mofang | A politically motivated information stealing adversary | May 2016
+Additionally, ShimRatReporter can be configured to download a payload. Reporting
+is default but payload downloading is optional. Payloads are downloaded from
+preconfigured locations. The payloads are encrypted in a similar way. Figure 15 shows
+an example payload download from the same campaign as shown in Figure 14.
+Figure 15 Example ShimRat payload download
+fox-it | Mofang | A politically motivated information stealing adversary | May 2016 | 35
+Output : 
+This document provides a detailed technical analysis of two malware tools used by the Mofang threat actor group - ShimRat and ShimRatReporter. Here are the key points:
+
+ShimRat:
+- A RAT (Remote Access Trojan) that uses Windows shimming to evade detection.
+- Delivered via spear-phishing emails with malicious Word documents as attachments.
+- Uses svchost.exe as a parent process.
+- Employs various anti-analysis techniques like checking for VMware and VirtualBox.
+- Has the ability to download payloads from C2 servers.
+- Maintains persistence by creating registry keys and scheduled tasks.
+
+ShimRat functions include:
+- File upload/download
+- Process management 
+- Keylogging
+- Credential theft (from web browsers, RDP clients)
+- Screen capture
+- Webcam control
+
+Command & Control communication:
+- Uses HTTP/HTTPS to communicate with C2 servers.
+- Encrypts C2 traffic using a custom algorithm.
+
+ShimRatReporter:
+- A reconnaissance tool first seen in 2014.
+- Gathers information about the target system and network.
+- Can be configured to download additional payloads.
+
+Report generation includes:
+- System information (OS version, installed software)
+- Network configuration 
+- User account details
+- Running processes
+
+C2 communication:
+- Uses HTTP to send compressed/encrypted reports.
+- Encryption uses a combination of XOR and shifting with the key "NetMeter".
+
+The document provides technical details on how these tools operate, including code snippets and examples of C2 communication. It highlights Mofang's sophisticated capabilities in developing custom malware for targeted attacks.

@@ -1,0 +1,192 @@
+
+
+
+Sentence : Technical Analysis
+The complex infection chain begins with a weaponized Office document named “f.doc”. In the following table the initial
+malware information is provided.
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 1/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Hash 76ea98e1861c1264b340cf3748c3ec74473b04d042cd6bfda9ce51d086cb5a1a
+Threat Gamaredon Pteranodon weaponized document
+Brief
+Description
+Doc file weaponized with Exploit
+Ssdeep 768:u0foGtYZKQ5QZJQ6hKVsEEIHNDxpy3TI3dU4DKfLX9Eir:uG1aKQ5OwCrItq3Tg‐
+GfLt9r
+Table 1. Information about initial dropper
+The decoy document is written using the ukrainian language mixed to many special chars aimed to lure the target to
+click on it, and, once opened, it appears as in the following figure.
+Figure 1. Overview of the document
+The document leverages the common exploit aka template injection and tries to download a second stage from
+“hxxp://win-apu.]ddns.]net/apu.]dot”.
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 2/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Figure 2. URL used by document to download the second stage
+Thanks to this exploit (Remote Code Execution exploit) the user interaction is not required, in fact the “ enable macro ”
+button is not shown. The downloaded document has a “.dot” extension, used by Microsoft Office to save templates for
+different documents with similar formats. Basic Information on the “.dot” file are provided:
+Hash e2cb06e0a5c14b4c5f58d0e56a1dc10b6a1007cf56c77ae6cb07946c3dfe82d8
+Threat Gamaredon Pteranodon loader dot file
+Brief Description Dot file enabling the infection of the Gamaredon Pteranodon
+Ssdeep 768:5KCB8tnh7oferuHpC0xw+hnF4J7EyKfJ:oI8XoWruHpp/P4
+Table 2. Information about second stage
+If we decide to open the document, we see that the document is empty, but it requires the enabling of the macro.
+Figure 3. Overview of the second stage document
+The body of the macro can be logically divided into two distinct parts:
+The first one is the setting of the registry key “ HKEY_CURRENT_USER\Software\Microsoft\Office \” &
+Application.Version & ”\Word\Security_ ” and the declaration of some other variables, such as the dropurl “get
+icons.]ddns.net”;
+The second one is the setting of the persistence mechanism through the writing of the vbs code in the Startup
+folder with name “templates.vbs”. This vbs is properly the macro executed by the macro engine of word
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 3/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Figure 4. Code of the “template.vbs” stored in the Startup folder
+The evidence of the written file in the Startup folder:
+Figure 5. Evidence of the “template.vbs” file in the Startup folder
+Analyzing the content of “ templates.vbs ” it is possible to notice that it define a variable containing a URL like “ hxxp://get-
+icons.]ddns.]net/ADMIN-PC_E42CAF54//autoindex.]php ” obtained from “hxp://get-icons.]ddns.]net/” & NlnQCJG & “_” &
+uRDEJCn & “//autoindex.]php”, where “NlnQCJG” is the name that identifies the computer on the network and
+“uRDEJCn” is the serial number of drive in hexadecimal encoding. From this URL it tries to download another stage
+then storing it into “C:\Users\admin\AppData\Roaming\” path with random name. At the end, “templates.vbs” script will
+force the machine to reboot.
+Figure 6. Function used to force machine reboot
+The dropped sample is an SFX archive, like the tradition of Gamaredon implants.
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 4/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Hash c1524a4573bc6acbe59e559c2596975c657ae6bbc0b64f943fffca663b98a95f
+Threat Gamaredon Pteranodon implant SFX archive
+Brief
+De‐
+scrip‐
+tion
+Ss‐
+deep
+SFX Archive First Stage
+24576:zXwOrRsTQlIIIIwIEuCRqKlF8kmh/ZGg4kAL/WUKN7UMOtcv:zgwR/lIIIIwI6RqoukmhxGgZ+WUKZUMv
+Table 3. Information about first SFX archive
+By simply opening the SFX archive, it is possible to notice two different files that are shown below and named
+respectively “8957.cmd” and “28847”.
+Figure 7. Content of the Gamaredon Pteranodon SFX archive
+When executed, the SFX archive will be extracted and the “8957.cmd” will be run. The batch script looks like the
+following screen:
+Figure 8. Bat script source code (with junk instructions)
+It contains several junk instructions with the attemption to make the analysis harder. Cleaning the script we obtain:
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 5/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Figure 9. Batch script source code (cleaned)
+At this point, the batch script renames the “28847” file in “28847.exe”, opens it using “pfljk,fkbcerbgblfhs” as password
+and the file contained inside the “28847.exe” file will be renamed in “WuaucltIC.exe”. Finally, it will be run using “
+post.php” as argument.
+The fact that the “28847.exe” file can be opened makes us understand that the “28847” file is another SFX file. Some
+static information about SFX are:
+Hash 3dfadf9f23b4c5d17a0c5f5e89715d239c832dbe78551da67815e41e2000fdf1
+Threat Gamaredon Pteranodon implant SFX archive
+Brief Description SFX Archive Second Stage
+Ssdeep 24576:vmoO8itbaZiW+qJnmCcpv5lKbbJAiUqKXM:OoZwxVvfoaPu
+Table 4. Information about the second SFX archive
+Exploring it, it is possible to see several files inside of it, as well as the 6323 file. The following figure shows a complete
+list.
+In this case, the SFX archive contains 8 files: five of them are legit DLLs
+used by the “6323” executable to interoperate with the OLE format
+defined and used by Microsoft Office. The “ExcelMyMacros.txt” and
+“wordMacros.txt” files contain further macro script, described next. So,
+static analysis on the “6323” file shown as its nature: it is written using
+Microsoft Visual Studio .NET, therefore easily to reverse. Before reversing
+the executable, it is possible to clean it allowing the size reduction and
+the junk instruction reduction inside the code. The below image shows
+the information about the sample before and after the cleaning.
+Figure 10. Content of the second SFX archive
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 6/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Figure 11. Static information about .NET sample before and after the cleaning
+The source code looks as follows.
+Figure 12. Part of .NET sample source code
+The first check performed is on the arguments: if the arguments length is equal to zero, the malware terminates the
+execution. After that, the malware checks if the existence of the files “ExcelMyMacros.txt” and “wordMacros.txt” in the
+same path where it is executed: if true then it reads their contents otherwise it will exit.
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 7/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Figure 13. Function used by .NET sample to check the presence of the “WordMacros.txt” and the “ExcelMyMacros.txt” files”
+Part of the content of the variable “xVGlMEP”:
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 8/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Figure 14.Piece of the “WordMacros.txt” code
+There is a thin difference between the two files.
+Figure 15. Difference between “WordMacros.txt” and “ExcelMyMacros.txt” files”
+As visible in the previous figure, the only difference between the files are in the variable, registry key and path used by
+Word rather than by Excel. Finally the macros are executed using the Office engine like in the following figure.
+So let’s start to dissect the macros. For a better comprehension we will be considering
+only one macro and in the specific case we will analyze “wordMacros.txt” ones. First
+of all the macro will set the registry key
+“HKEY_CURRENT_USER\Software\Microsoft\Office\” & Application.Version &
+_”\Word\Security\” and then will set up two scheduled tasks that will start respectively
+every 12 and 15 minutes: the first one will run a “IndexOffice.vbs” in the path
+“%APPDATA%\Microsoft\Office\” and the second one will run “IndexOffice.exe” in the
+same path.
+Figure 16. Winword with malicious
+macro
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 9/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Figure 17. Registry keys and Scheduled tasks set by malware
+Finally, the malware will write the “IndexOffice.txt” file in the “%APPDATA%\Microsoft\Office\” path. The following figure
+shows what has been previously described:
+Figure 18. Part of “IndexOffice.txt” file
+The script will check the presence of the “IndexOffice.exe” artifact: if true then it will delete it and it will download a new
+file/script from “hxxp://masseffect.]space/_/post.]php”.
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 10/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Figure 19. Domain “masseffect.]space” declaration and use of the Encode function
+The malware tries to save the C2 response and encoding it using Encode function. This function accepts three
+parameters: the input file, the output file and the arrKey; arrKey is calculated thanks to GetKey function that accepts as
+input the Hexadecimal value of the Driver SN installed on the machine and returns the key as results. Part of Encode
+function and complete code of GetKey function are shown below.
+Figure 20. Encode function
+https://blog.yoroi.company/research/cyberwarfare-a-deep-dive-into-the-latest-gamaredon-espionage-campaign/ 11/15
+2/24/2020 Cyberwarfare: A deep dive into the latest Gamaredon Espionage Campaign – Yoroi Blog
+Figure 21. Function GetKey
+Visiting the web page relative to C2, it shows a “Forbidden message” so this means that the domain is still active but
+refuses incoming requests.
+Figure 22. Browser view of the URL “masseffect.]space”
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "f.doc", "type": "DOCF"},
+        {"id": 2, "description": "76ea98e1861c1264b340cf3748c3ec74473b04d042cd6bfda9ce51d086cb5a1a", "type": "IOCF"},
+        {"id": 3, "description": "Gamaredon Pteranodon implant SFX archive (First Stage)", "type": "THRT"},
+        {"id": 4, "description": "SFX Archive First Stage", "type": "DOCF"},
+        {"id": 5, "description": "8957.cmd", "type": "DOCF"},
+        {"id": 6, "description": "28847", "type": "DOCF"},
+        {"id": 7, "description": "28847.exe", "type": "DOCF"},
+        {"id": 8, "description": "WuaucltIC.exe", "type": "DOCF"},
+        {"id": 9, "description": "6323", "type": "DOCF"},
+        {"id": 10, "description": "ExcelMyMacros.txt", "type": "DOCF"},
+        {"id": 11, "description": "wordMacros.txt", "type": "DOCF"},
+        {"id": 12, "description": "3dfadf9f23b4c5d17a0c5f5e89715d239c832dbe78551da67815e41e2000fdf1", "type": "IOCF"},
+        {"id": 13, "description": "Gamaredon Pteranodon implant SFX archive (Second Stage)", "type": "THRT"},
+        {"id": 14, "description": "SFX Archive Second Stage", "type": "DOCF"},
+        {"id": 15, "description": "hxxp://win−update.]service/_/index.php", "type": "C2D"},
+        {"id": 16, "description": "HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\", "type": "REGK"},
+        {"id": 17, "description": "IndexOffice.vbs", "type": "DOCF"},
+        {"id": 18, "description": "IndexOffice.exe", "type": "DOCF"},
+        {"id": 19, "description": "IndexOffice.txt", "type": "DOCF"},
+        {"id": 20, "description": "hxxp://masseffect.]space/_/post.php", "type": "C2D"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "type": "HAS"},
+        {"source": 3, "target": 4, "type": "CONTAINS"},
+        {"source": 4, "target": 5, "type": "CONTAINS"},
+        {"source": 4, "target": 6, "type": "CONTAINS"},
+        {"source": 6, "target": 7, "type": "RENAMED_TO"},
+        {"source": 7, "target": 8, "type": "EXTRACTS_AND_Renames"},
+        {"source": 13, "target": 9, "type": "CONTAINS"},
+        {"source": 9, "target": 10, "type": "READS"},
+        {"source": 9, "target": 11, "type": "READS"},
+        {"source": 9, "target": 12, "type": "HAS"},
+        {"source": 3, "target": 15, "type": "COMMUNICATES_WITH"},
+        {"source": 3, "target": 16, "type": "MODIFIES"},
+        {"source": 3, "target": 17, "type": "WRITES"},
+        {"source": 3, "target": 18, "type": "CHECKS_AND_DELETES_IF_EXISTS"},
+        {"source": 3, "target": 19, "type": "WRITES"},
+        {"source": 3, "target": 20, "type": "COMMUNICATES_WITH"}
+    ]
+}

@@ -1,0 +1,52 @@
+PCC_FILE
+The PCC_FILE object provides a large range of file system administration functions.
+PCC_FILE is derived from the PCC_BASEMOD class meaning that the processing of commands
+should be contained within the PCC_FILE::ProcessPacket member function with some
+additional processing done in the PCC_FILE::ReadWaitingData member function. This is
+not necessarily the case, however.
+The PCC_FILE::ProcessPacket member function, much like PCC_CMD::ProcessPacket,
+is little more than a stub function that passes only a copy of the payload data ( pkt ) to
+PCC_FILE::ProcessPacketEx . PCC_FILE::ProcessPacketEx performs no file
+management operations but instead adds any incoming command packets to a queue for
+processing by PCC_FILE::ReadWaitingData if the packet is not already within the queue
+(thus avoiding duplication of commands).
+The PCC_FILE::ReadWaitingData member function is a stub function that calls
+PCC_FILE::ProcessQueue and returns the resulting packet from the queue processing. This
+means that file operations are surprisingly low priority, and potentially, high latency operations.
+Each packet that arrives within the packet queue of PCC_FILE contains a standard header
+followed by a (quasi-optional) payload data blob. The header for the PCC_FILE command
+packets takes the following form:
+```
+struct PCCFilePacketHeader
+{
+DWORD dwTotalPayloadSize;
+DWORD dwCommandType;
+};
+```
+The dwCommandType field specifies the specific PCC_FILE command that the client is
+requesting the server variant to perform. PCC_FILE supports 17 (of which 15 are unique)
+commands. While the general form within the Derusbi server variant communication model is to
+return a packet with the same dwCommandType as the original command, many of the
+PCC_FILE commands return a status packet type ( dwCommandType = 0x04 ).
+|dwCommandType Functionality ResponsedwCommandType|Col2|Col3|
+|---|---|---|
+|0x0C|PurgePCC_FILE Commands from QueueBased ondwCommandType|(no response)|
+|0x10|Enumerate Attached Drives|0x10|
+|0x14|Get File Attributes|0x14|
+|0x18|File Search|0x18|
+|0x1C|Rename File|0x04|
+|0x20|Delete File|0x04 |
+|0x24|Create Directory|0x04 |
+|0x28|Upload File to Client|0x28 and 0x04|
+|0x2C|Recursively Enumerate Directory|0x2C|
+|0x30|Download File from Client|0x04 |
+|0x34|Copy File|0x04 |
+|0x38|Move File|0x04 |
+|0x3C|Duplicate File Timestamp|0x04 |
+|0x40|Execute File|0x04 |
+|0x44|Recursively Enumerate Directory|0x44 |
+|0x48|Recursively Enumerate Directory|0x48|
+|0x4C|Enumerate All Drives and Files|0x4C|
+Commands 0x2C, 0x44, and 0x48 all appear to be the exact same base command with only
+slight variations in their response format. It is unclear why this particular command is included
+three times in PCC_FILE .

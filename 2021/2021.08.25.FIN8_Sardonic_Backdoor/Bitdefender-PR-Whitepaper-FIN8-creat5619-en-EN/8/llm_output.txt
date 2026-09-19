@@ -1,0 +1,60 @@
+
+
+
+Sentence : .NET loader and downloader shellcode
+This stage consists of a .NET assembly that contains a piece of shellcode, compressed using GZip and RC4encrypted, using the key “CA0ac8F6655244d2E10e7819BD337bf9”, which is contained in the binary.
+Since the shellcode is both self-modifying and contains a self-inject feature, an unmodified copy of itself is required.
+It is prepended by a null-terminated “4BMARC2WKL” marker and copied in the same buffer, immediately before the
+copy that is executed, as seen in fig. 2. The second copy of the shellcode is executed from the beginning, using the
+Marshal.GetDelegateForFunctionPointer method.
+Fig. 2: Downloader shellcode buffer layout
+Most of the shellcode is encrypted and begins with a simple decryption routine (fig. 3). After decryption, the shellcode
+resolves a long list of Win32 API functions and checks whether the current process (where the .NET assembly DLL
+and downloader shellcode is running) is “powershell.exe”. This is expected when the DLL has been started using
+WMI, as the .NET assembly is loaded through PowerShell. In this case, the shellcode injects the unmodified copy
+mentioned above (located using the “4BMARC2WKL“ marker) into a new thread in the parent process (in case of WMI
+persistence, the “wmiprvse.exe” process) and returns. This could be done to prevent a long-running PowerShell
+process, which could raise suspicions; the shellcode will restart executing in the parent process, decrypting itself and
+checking the process name again. This execution flow is explained in fig. 4.
+Fig. 3: Shellcode decryption routine
+6
+Bitdefender Whitepaper
+FIN8 Threat Actor Goes Agile with New Sardonic Backdoor
+Fig. 4: Execution flow
+When not running inside PowerShell the downloader routine starts: A 32-bit or 64-bit binary (depending on which
+.NET assembly was persisted by the PowerShell first stage) is downloaded from one of the following C&C servers,
+in order of priority: “api-cdn[.]net”, “git-api[.]com”, “api-cdnw5[.]net”. A binary protocol over port 443
+is used, identical to the one used by the final backdoor, described below. If a server has port 443 closed, the next
+server will be tried after 50 minutes (a much longer sleep time than normal, probably to avoid triggering any network
+detection).
+The downloaded file is loaded in memory and its Run export is executed (all three argument values are zero). This
+is the final stage, the Sardonic backdoor . After the export function is executed, the shellcode exits. If it could not be
+loaded or executed, the download retries with the first C&C server.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": ".NET loader and downloader shellcode", "type" : "EXEF"},
+        {"id": 2, "description": "GZip compressed and RC4-encrypted shellcode", "type" : "EXEF"},
+        {"id": 3, "description": "CA0ac8F6655244d2E10e7819BD337bf9", "type" : "IOCS"},
+        {"id": 4, "description": "4BMARC2WKL marker", "type" : "TAMP"},
+        {"id": 5, "description": "powershell.exe", "type" : "EXEF"},
+        {"id": 6, "description": "wmiprvse.exe", "type" : "EXEF"},
+        {"id": 7, "description": "api-cdn[.]net", "type" : "CCSH"},
+        {"id": 8, "description": "git-api[.]com", "type" : "CCSH"},
+        {"id": 9, "description": "api-cdnw5[.]net", "type" : "CCSH"},
+        {"id": 10, "description": "port 443", "type" : "NETP"},
+        {"id": 11, "description": "Sardonic backdoor", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "encrypted with"},
+        {"source": 2, "target": 4, "rel_name" : "marked by"},
+        {"source": 1, "target": 5, "rel_name" : "checks for"},
+        {"source": 1, "target": 6, "rel_name" : "injects into"},
+        {"source": 1, "target": 7, "rel_name" : "downloads from"},
+        {"source": 1, "target": 8, "rel_name" : "downloads from"},
+        {"source": 1, "target": 9, "rel_name" : "downloads from"},
+        {"source": 1, "target": 10, "rel_name" : "uses port"},
+        {"source": 1, "target": 11, "rel_name" : "loads and executes"}
+    ]
+}

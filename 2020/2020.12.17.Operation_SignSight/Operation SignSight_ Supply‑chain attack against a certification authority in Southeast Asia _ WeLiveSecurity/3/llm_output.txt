@@ -1,0 +1,67 @@
+
+
+
+Sentence : Supply-chain attack in Vietnam
+In Vietnam, digital signatures are very common, as digitally-signed documents have the same level of enforceability as “wet” signatures. According to Decree No. 130/2018, the cryptographic certificates
+used to sign documents must be granted by one of the authorized certificate providers that include the VGCA, which is part of the Government Cipher Committee. That committee, in turn, depends on
+the Ministry of Information and Communication.
+In addition to issuing certificates, the VGCA develops and distributes a digital signature toolkit. It is used by the Vietnamese government, and probably by private companies, to sign digital documents.
+The compromise of a certification authority website is a good opportunity for APT groups, since visitors are likely to have a high level of trust in a state organization responsible for digital signatures.
+As shown in Figure 1, it seems that these programs are deployed in the Party and State agencies.
+https://www.welivesecurity.com/2020/12/17/operation-signsight-supply-chain-attack-southeast-asia/ 1/6
+12/18/2020 Operation SignSight: Supply ~~-~~ chain attack against a certification authority in Southeast Asia | WeLiveSecurity
+Figure 1. Screenshot of ca.gov.vn
+According to ESET telemetry, ca.gov.vn was compromised from at least the 23 of July to the 16 of August 2020. Two of the installers available for download, gca01-client-v2-x32-8.3.msi and gca01- rd th
+client-v2-x64-8.3.msi, were modified to include a piece of malware known as PhantomNet or SManager and recently analyzed by NTT Security. We were able to confirm that those installers were
+downloaded from ca.gov.vn over the HTTPS protocol, so we believe it is unlikely to be a man-in-the-middle attack. The URLs pointing to malicious installers were:
+https://ca.gov[.]vn/documents/20182/6768590/gca01-client-v2-x64-8.3.msi
+https://ca.gov[.]vn/documents/20182/6768590/gca01-client-v2-x32-8.3.msi
+This is also confirmed by data from VirusTotal as shown in Figure 2.
+https://www.welivesecurity.com/2020/12/17/operation-signsight-supply-chain-attack-southeast-asia/ 2/6
+12/18/2020 Operation SignSight: Supply ~~-~~ chain attack against a certification authority in Southeast Asia | WeLiveSecurity
+Figure 2. Screenshot of VirusTotal. It shows the URL where the trojanized installer was downloaded from.
+The trojanized installers are not properly signed but, we noticed that clean GCA installers are also incorrectly signed ( The digital signature of the object did not verify ). Both the official and trojanized
+MSIs use a certificate assigned to the Safenet company.
+Figure 3 is a summary of the supply-chain attack. To be compromised, a user would have to manually download and execute the compromised software hosted on the official website.
+Figure 3. Simplified scheme of the supply-chain attack.
+https://www.welivesecurity.com/2020/12/17/operation-signsight-supply-chain-attack-southeast-asia/ 3/6
+12/18/2020 Operation SignSight: Supply ~~-~~ chain attack against a certification authority in Southeast Asia | WeLiveSecurity
+Once downloaded and executed, the installer starts the genuine GCA program and the malicious file. The malicious file is written to C:\Program Files\VGCA\Authentication\SAC\x32\eToken.exe. By
+also installing the legitimate program, the attackers make sure that this compromise won’t be easily noticed by the end-users.
+This malicious file is a simple dropper that extracts a Windows cabinet file (.cab) named 7z.cab and that contains the backdoor.
+If the dropper runs as an admin, the backdoor is written to C:\Windows\apppatch\netapi32.dll and for the persistence, the dropper registers the malicious DLL as a service.
+If run as a regular user, the backdoor is written to %TEMP%\Wmedia\.tmp and for the persistence, the dropper creates a scheduled task that calls the export Entery of the malicious
+DLL. It’s interesting to note that the Entery export was also seen in versions of TManger used by TA428, as detailed by NTT Security.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "APT groups", "type" : "ACTO"},
+        {"id": 2, "description": "ca.gov.vn", "type" : "CCSH"},
+        {"id": 3, "description": "gca01-client-v2-x64-8.3.msi", "type" : "DOCF"},
+        {"id": 4, "description": "gca01-client-v2-x32-8.3.msi", "type" : "DOCF"},
+        {"id": 5, "description": "PhantomNet or SManager malware", "type" : "EXEF"},
+        {"id": 6, "description": "HTTPS protocol", "type" : "NETP"},
+        {"id": 7, "description": "VirusTotal", "type" : "STOR"},
+        {"id": 8, "description": "C:\\Program Files\\VGCA\\Authentication\\SAC\\x32\\eToken.exe", "type" : "SYSP"},
+        {"id": 9, "description": "Windows cabinet file (.cab) named 7z.cab", "type" : "DOCF"},
+        {"id": 10, "description": "Backdoor in C:\\Windows\\apppatch\\netapi32.dll", "type" : "SYSP"},
+        {"id": 11, "description": "%TEMP%\\Wmedia\\.tmp", "type" : "TPTH"},
+        {"id": 12, "description": "Scheduled task for persistence", "type" : "REGI"},
+        {"id": 13, "description": "TA428", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "compromised"},
+        {"source": 2, "target": 3, "rel_name" : "hosted by"},
+        {"source": 2, "target": 4, "rel_name" : "hosted by"},
+        {"source": 3, "target": 5, "rel_name" : "includes"},
+        {"source": 4, "target": 5, "rel_name" : "includes"},
+        {"source": 3, "target": 2, "rel_name" : "downloaded from"},
+        {"source": 4, "target": 2, "rel_name" : "downloaded from"},
+        {"source": 3, "target": 8, "rel_name" : "writes to"},
+        {"source": 4, "target": 8, "rel_name" : "writes to"},
+        {"source": 5, "target": 9, "rel_name" : "extracts from"},
+        {"source": 9, "target": 10, "rel_name" : "contains"},
+        {"source": 9, "target": 11, "rel_name" : "writes to"},
+        {"source": 5, "target": 12, "rel_name" : "creates"}
+    ]
+}

@@ -1,0 +1,46 @@
+Backdoor.Remsec indicators of compromise
+The Executable_Blob_Header can be interpreted as the following structure:
+Offset Size Purpose
+0 Dword Magic, enforcing value C102AA02
+4 Byte Version_Major (guess), enforcing value 2
+5 Byte Version_Minor (guess), we observed values 0, 1 and 3 in analyses samples
+6 Dword Entry_32, entry point for 32-bit mode represented as offset from start of Executable_Blob structure
+0A Dword Entry_64, entry point for 64-bit mode represented as offset from start of Executable_Blob structure
+0E Dword Tag (guess), introduced starting with Version_Minor 1, we observed values 0 and 7B3924B1 in analyzed samples
+12 Byte unknown purpose, introduced after Version_Minor 1, but not later than Version_Minor 3, observed only value 0 in
+analysed samples
+Table 2. Executable_Blob_Header structure
+The loaded executable blobs may be retrieved from the following path:
+  - c:\System Volume Information\_restore{ED650925-A32C-4E9C-8A738E6F0509309A}\RP0\A0000002.dll
+
+Persistence
+The loader is implemented as a (fake) Security Support Provider. Implementing the export
+of InitSecurityInterfaceW effectively functions as a loadpoint for the module.
+Injection library
+This loader contains a relatively advanced library supporting injections into both 32-bit and 64-bit targets.
+The implementation includes multiple redundant capabilities, including an embedded implementation of
+CreateRemoteThread with CSR notification by way of CSRSS_CREATE_THREAD_LPCMESSAGE .
+Payload structure
+The payload file, referred to by the attackers as a "module" per error messages, contains an encrypted
+structure storing the following:
+  - _PE_Executable_ with only minimal verification by checking _Machine_ field
+
+from IMAGE_FILE_HEADER
+  - _Helper_Blob,_ described below
+
+Based on checks implemented by the Loader, the Helper_Blob can be interpreted as the following
+structure of length Helper_Blob_Size :
+Offset Size Purpose
+0 Dword Data_Blob_Size, enforcing Data_Blob_Size < Helper_Blob_Size         - 4
+4 Data_Blob_Size Bytes Data_Blob
+variable variable PE_Loader responsible for loading PE_Executable
+Table 3. Helper_Blob structure
+The PE_Executable and Helper_Blob are serialized as the following variable-length structure:
+Offset Size Purpose
+0 Dword Version, referred as "module file version" in error messages, enforcing value 1
+4 Dword PE_Executable_Size
+8 Dword Helper_Blob_Size
+0C PE_Executable_Size Bytes PE_Executable
+variable Helper_Blob_Size Bytes Helper_Blob described above
+Table 4. Payload_Blob structure
+Security Response — August 8, 2016 — Copyright © 2016 Symantec Page 3

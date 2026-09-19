@@ -1,0 +1,240 @@
+
+
+
+Sentence : Collection TA0009
+Archive Collected Data T1560
+Basic description
+Contents 256
+In most of the incidents that we detected, Asian APT groups used a variety of archivers to compress data
+that was collected from various hosts. The attackers employed this technique before data exfiltration so that
+they could quickly transfer this data to their C2 server. This technique is also convenient because the required
+software is often already available on the machines of victims. This technique allows forwarding valuable data
+with minimal risk of detection.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Collection TA0009  |  Archive Collected Data: Archive via Utility T1560.001
+Archive Collected Data: Archive via Utility T1560.001
+Basic description
+Contents 257
+Attackers use various data encryption and compression tools that are available in the operating system, and
+deliver their own tools to infected machines for later use. We identified the top archivers that were used by
+Asian APT groups in the incidents that we detected:
+
+
+Winrar
+
+
+7-ZIP
+
+
+WinZip
+
+
+Examples of procedures
+As described in the technique known as Masquerading: Match Legitimate Name or Location T1036.005,
+attackers use their own tools disguised as standard system tools. In one example, the Rar.exe archiver was run
+under the name svchost.exe:
+C:\Windows\ime\svchost.exe a -r -hpzxcv@wsx -ta20220627 C:\Windows\ime\microsoft.dat c:.doc
+d:.doc e:.doc c:.pdf d:.pdf e:.pdf h:.doc h:.xls h:.pdf f:.doc f:.xls f:.pdf g:.doc g:.xls g:.pdf
+One of the distinguishing features in the procedures that we observed among Asian APT groups is their
+movement of archives to the Recycle Bin (C:\$Recycle.Bin) before their subsequent exfiltration. We detected
+one of these examples in Vietnam:
+$system32\cmd.exe /C $programfiles\Winrar\Winrar.exe a -r -ta20221020 -n.doc -n.docx -n.xls
+-n.xlsx -n.pdf -n.vsd -n.vsdx -sl104857600 -hp"6A(Zu%s0aC)Seb(B&rpvJa$rcZf6-weTjbFcinrr"
+$appdata\%COMPUTERNAME%-%random%.rar C:\$Recycle.Bin C:\ D:\ E:\ F:\
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Collection TA0009  |  Archive Collected Data: Archive via Utility T1560.001
+Contents 258
+In an attack targeting a government agency in a Pacific region country, an Asian APT group also used the RAR
+archiver but this time named it r.exe:
+$system32\cmd.exe /c C:\textar\EnDeCrypt\r.exe a -dh -hpaskuernlaos8BDBFKqlwu4bflasld
+-ta20230515 C:\textar\ExportData\20231107Ha.tmp \10.10.10.10\c$\users\random\downloads
+Asian threat actors often use the 7zip utility to create archives. Here's an example from the attack targeting a
+company in Indonesia:
+$windir\Help\Help\7z.exe a $windir\Help\Help\tg.7z $windir\Help\Help\1.rar
+We observe similar procedures in attacks launched by Asian APT groups against Russian companies:
+rar a -r 123.rar \10.10.10.10\c$\users\random\desktop* -hp1qaz2wsx3edc4rfv5tgb6yhn -ta20220302
+"\10.10.10.10\c$\Program Files\winrar\rar.exe" a -r -m5 -hp0p;/5tgb1qaz5tgb \10.10.10.10\c$\windows\
+temp\sduid.sys \10.10.10.10\c$\users\random\desktop*
+In one incident in Russia, we observed the use of the makecab utility. Make Cabinet is a tool that is built into
+Windows operating systems. This tool is used to create and manage compressed archives in Cabinet (CAB)
+format. Initially, attackers dump registry keys containing user account credentials. Then they pack them into
+ZIP archives using the makecab utility:
+$system32\makecab.exe "makecab $public\videos\sam.hive $public\videos\sa.zip"
+$system32\makecab.exe "makecab $public\videos\system.hive $public\videos\sy.zip"
+$system32\makecab.exe "makecab $public\videos\security.hive $public\videos\se.zip"
+Attackers also use their own custom-written tools that duplicate the functionality of well-known archivers.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Collection TA0009  |  Archive Collected Data: Archive via Utility T1560.001
+Detection
+Contents 259
+You can detect this technique by tracking process creation events (Event ID 4688 in Windows and Event ID 1 in
+Sysmon) and execution of PowerShell script blocks (Event ID 4103 and 4104).
+Pay attention to the Image field in process creation events and look for popular archivers and/or tools such
+as makecab designed to work with specific file formats. The command line used to start an archiver and the
+image of the parent process are also important for detection. For example, if console-based tools are not
+typically used for archiving purposes in your infrastructure, you can effectively track the startup of these tools
+from command shells.
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Compress Data for Exfiltration via Archiver
+
+
+Sigma-Generic-Archive via PowerShell
+
+
+Sigma-Generic-Windows Shell Started Archive Utility
+
+
+Sigma-Generic-Archive File in Local Users Folders via Makecab.exe
+
+
+Sigma-Generic-Archiving Files in Recycle Bin via Archive
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Collection TA0009  |  Automated Collection T1119
+Automated Collection T1119
+Basic description
+Contents 260
+After gaining access to a system or network, attackers can use automated data collection methods.
+Procedures used for this technique may include ones that are also used for the Command and Scripting
+Interpreter technique to search for and copy information that matches various filters, such as the type,
+name and specific creation dates of files and directories. In a cloud infrastructure, attackers may use APIs or
+command-line interfaces.
+This technique may be used in combination with other techniques, such as "File and Directory Discovery" and
+"Lateral Tool Transfer" to search for and deliver files or "Cloud Service Dashboard" and "Cloud Storage Object
+Discovery" to identify hosts in cloud infrastructures. One example of this technique is when an attacker starts
+scripts that automatically collect relevant information from an infected machine.
+Examples of procedures
+Example 1
+Below are some examples that we encountered when analyzing the incidents mentioned in the report:
+dir C:\Users -File -Recurse -Include '.pdf', '.doc', '.docx', '.xls', '*.xlsx' | where LastWriteTime -gt $lte |
+sort LastWriteTime -Descending | %{$_.FullName}
+write-output $fp1 >> "$env:tmp\$hostname\path.txt"
+$fp1 | copy-item -Destination "$env:tmp\$hostname" -Force -ErrorAction SilentlyContinue
+Example 2
+Recursively searching for files and copying them to a temporary directory using PowerShell:
+PowerShell.exe "dir C:\Users -File -Recurse -Include '.pdf', '.doc', '.docx', '.xls', '*.xlsx' | where
+LastWriteTime -gt (Get-date).AddDays(-8) | copy-item -Destination C:\Users\public\tmp -Force
+-ErrorAction SilentlyContinue
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Collection TA0009  |  Automated Collection T1119
+Detection
+Contents 261
+One of the ways to detect the Automated Collection T1119 technique is to look for process creation events and
+the execution of PowerShell script blocks. You should pay close attention to any running utilities or tools that
+were mentioned above, and analyze the command-line contents (with audit enabled).
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Possible wildcard collection sensitive data via PowerShell
+
+
+Sigma-Generic-Suspicious Wildcard Searching Data
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Collection TA0009  |  Data from Local System T1005
+Data from Local System T1005
+Basic description
+Contents 262
+Attackers gather various files potentially containing account credentials or other information useful to them,
+and then try to exfiltrate this data from the infected system. To do so, they may use the cmd command-line
+shell or PowerShell, which attackers often automate as we observed above.
+Examples of procedures
+Example 1
+Below are some examples that we encountered when analyzing the incidents described above:
+xcopy /s $user\desktop c:\$recycle.bin\tempptcl
+cmd.exe /C $programfiles\winrar\rar.exe a -r -hp1234 C:$recycle.bin\10020111desk.rar
+$user\desktop*.txt
+$user\desktop*.xls
+$user\desktop*.pdf
+$user\desktop*.doc
+$user\desktop*.jpg >
+$temp\lwefqERM.tmp 2>&1
+Detection
+The Data from Local System T1005 technique can be detected by tracking process creation events. You
+should pay close attention to any running utilities or tools that were mentioned above, and analyze the
+command-line contents (with audit enabled).
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Collection TA0009  |  Data from Local System T1005
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Possible wildcard collection sensitive data via PowerShell
+
+
+Sigma-Generic-Suspicious Wildcard Searching Data
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 263
+Technical details  |  Command and Control TA0011  |  Application Layer Protocol T1071
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Asian APT groups", "type" : "ACTO"},
+        {"id": 2, "description": "Winrar", "type" : "APPS"},
+        {"id": 3, "description": "7-ZIP", "type" : "APPS"},
+        {"id": 4, "description": "WinZip", "type" : "APPS"},
+        {"id": 5, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 6, "description": "C:\\Windows\\ime\\microsoft.dat", "type" : "DOCF"},
+        {"id": 7, "description": "C:\\$Recycle.Bin", "type" : "SYSP"},
+        {"id": 8, "description": "C:\\$Recycle.Bin C:\\ D:\\ E:\\ F:\\", "type" : "TPTH"},
+        {"id": 9, "description": "10.10.10.10\\c$\\users\\random\\downloads", "type" : "NETP"},
+        {"id": 10, "description": "r.exe", "type" : "EXEF"},
+        {"id": 11, "description": "\\10.10.10.10\\c$\\users\\random\\desktop*", "type" : "TPTH"},
+        {"id": 12, "description": "makecab.exe", "type" : "EXEF"},
+        {"id": 13, "description": "$public\\videos\\sam.hive", "type" : "DOCF"},
+        {"id": 14, "description": "$public\\videos\\sa.zip", "type" : "DOCF"},
+        {"id": 15, "description": "$public\\videos\\system.hive", "type" : "DOCF"},
+        {"id": 16, "description": "$public\\videos\\sy.zip", "type" : "DOCF"},
+        {"id": 17, "description": "$public\\videos\\security.hive", "type" : "DOCF"},
+        {"id": 18, "description": "$public\\videos\\se.zip", "type" : "DOCF"},
+        {"id": 19, "description": "C:\\Users -File -Recurse -Include '.pdf', '.doc', '.docx', '.xls', '*.xlsx'", "type" : "TPTH"},
+        {"id": 20, "description": "$env:tmp\\$hostname", "type" : "SYSP"},
+        {"id": 21, "description": "C:\\Users\\public\\tmp", "type" : "SYSP"},
+        {"id": 22, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 23, "description": "$user\\desktop", "type" : "TPTH"},
+        {"id": 24, "description": "C:\\$recycle.bin\\10020111desk.rar", "type" : "DOCF"},
+        {"id": 25, "description": "Vietnam", "type" : "COUN"},
+        {"id": 26, "description": "Pacific region country", "type" : "COUN"},
+        {"id": 27, "description": "Indonesia", "type" : "COUN"},
+        {"id": 28, "description": "Russia", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "uses"},
+        {"source": 1, "target": 4, "rel_name" : "uses"},
+        {"source": 5, "target": 6, "rel_name" : "compresses"},
+        {"source": 7, "target": 8, "rel_name" : "contains"},
+        {"source": 9, "target": 10, "rel_name" : "is_target_of"},
+        {"source": 10, "target": 11, "rel_name" : "compresses"},
+        {"source": 12, "target": 13, "rel_name" : "compresses_into"},
+        {"source": 12, "target": 14, "rel_name" : "results_in"},
+        {"source": 12, "target": 15, "rel_name" : "compresses_into"},
+        {"source": 12, "target": 16, "rel_name" : "results_in"},
+        {"source": 12, "target": 17, "rel_name" : "compresses_into"},
+        {"source": 12, "target": 18, "rel_name" : "results_in"},
+        {"source": 19, "target": 20, "rel_name" : "searches_for"},
+        {"source": 19, "target": 21, "rel_name" : "copies_to"},
+        {"source": 22, "target": 23, "rel_name" : "uses_path_of"},
+        {"source": 22, "target": 24, "rel_name" : "compresses_into"}
+    ]
+}

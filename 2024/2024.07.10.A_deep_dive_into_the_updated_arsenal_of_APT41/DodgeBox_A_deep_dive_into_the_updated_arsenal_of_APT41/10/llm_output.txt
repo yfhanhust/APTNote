@@ -1,0 +1,128 @@
+
+
+
+Sentence : Similarities between DodgeBox and StealthVector
+During our analysis of DodgeBox, we noted a number of similarities with
+StealthVector. In this section, we compare the code between variants of
+StealthVector uploaded to VirusTotal in 2021 and 2024, along with DodgeBox.
+Similarities in checksum and configuration decryption
+Both StealthVector and DodgeBox perform an integrity check on their encrypted
+configurations. This verification process consists of two essential steps. First, the
+hard-coded size of the configuration is validated, ensuring it matches the
+expected size. Second, the hash of the configuration is verified to ensure its
+integrity. Once these checks are successfully completed, the malware proceeds
+with decrypting the configuration.
+StealthVector (2021)
+Figure 4: StealthVector uses the CRC32 hashing algorithm and the ChaCha20
+algorithm for decryption (screenshot from TrendMicro).
+Old variants of StealthVector use a CRC32 hashing algorithm for integrity checks
+and ChaCha20 for decryption of the configuration.
+StealthVector (2024)
+Figure 5: StealthVector uses the CRC32 hashing algorithm and AES-CBC
+algorithm for decryption.
+Newer variants of StealthVector use a CRC32 hashing algorithm, and AES-CBC for
+decryption.
+DodgeBox
+Figure 6: DodgeBox uses the MD5 hashing algorithm and AES-CFB algorithm for
+decryption.
+DodgeBox uses an MD5 hashing algorithm for integrity checks, and AES-CFB for
+decryption of the configuration.
+Similarities in decrypted configuration format
+These similarities encompass various aspects such as guardrails, payload
+filenames, sizes and offsets, as well as cryptographic secrets. Both the original
+StealthVector and DodgeBox configurations also incorporate checksums for their
+encrypted payloads.
+StealthVector (2021)
+Figure 7: Configuration extracted from the 2021 variant of StealthVector.
+The configuration extracted from the 2021 variant of StealthVector reveals several
+similarities with the 2024 variant of StealthVector and DodgeBox.
+StealthVector (2024)
+Figure 8: Configuration extracted from the 2024 variant of StealthVector.
+The configuration extracted from the 2024 variant of StealthVector reveals several
+similarities with the 2021 variant of StealthVector and DodgeBox.
+DodgeBox
+Figure 9: Configuration extracted from DodgeBox.
+The configuration extracted from DodgeBox reveals several similarities with the
+2024 and 2021 variant of StealthVector.
+Similarities in environment keying
+Both StealthVector and DodgeBox perform environment keying by decrypting
+then re-encrypting the bundled payload.
+StealthVector (2021)
+TrendMicro’s report did not document StealthVector utilizing environment keying.
+StealthVector (2024)
+Figure 10: 2024 variant of StealthVector performing environment keying, using a
+rolling XOR against the computer name.
+The updated version of StealthVector employs the first four bytes of the payload
+( rgbDecryptedData_In_Out ) to check whether the payload has been keyed. If
+the payload has not been previously keyed, StealthVector proceeds to key it using
+the computer name of the target machine.
+This keying process involves a rolling XOR operation to encode the payload,
+followed by re-encryption using AES. In the analyzed sample, StealthVector sets
+the first four bytes of the payload to 0x90909090, serving as an indicator that
+the payload has been successfully keyed.
+DodgeBox
+Figure 11: DodgeBox uses a technique called environment keying, where it uses
+the hash of the machine's GUID as the AES Initialization Vector (IV).
+DodgeBox employs the first four bytes of the payload ( pFileData ) to determine
+whether it has been keyed. If the payload has not been previously keyed,
+DodgeBox decrypts the payload using the AES IV from its configuration.
+DodgeBox then proceeds to re-encrypt it using the MD5 hash of the target
+machine's MachineGUID as the new AES IV.
+In the given sample, DodgeBox sets the first four bytes of the payload
+to 0x000000ED . This non-zero value serves as an indicator that the payload has
+indeed been keyed and should be decrypted with the new AES IV.
+Similarities in disabling CFG
+All three samples exhibit remarkably similar logic in their approach to patching
+CFG. This similarity extends to the use of identical byte patterns for locating
+the LdrpHandleInvalidUserCallTarget function, as well as applying the same patch
+in this function.
+StealthVector (2021)
+Figure 12: Code from the 2021 variant of StealthVector disabling CFG (screenshot
+from TrendMicro).
+The code extracted from the 2021 variant of StealthVector showcases the
+disabling of CFG with striking similarity to all three samples.
+StealthVector (2024)
+Figure 13: Code from the 2024 variant of StealthVector, disabling CFG.
+The code extracted from the 2024 variant of StealthVector showcases the
+disabling of CFG with striking similarity to all three samples.
+DodgeBox
+Figure 14: Code from DodgeBox disabling CFG.
+The code extracted from DodgeBox showcases the disabling of CFG with striking
+similarity to all three samples.
+Similarities in the use of DLL Hollowing
+All three samples exhibit the capability to load bundled payloads through DLL
+hollowing. Notably, the 2024 version of StealthVector shares an identical list of
+blocklisted DLLs with DodgeBox.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DodgeBox", "type" : "ACTO"},
+        {"id": 2, "description": "StealthVector", "type" : "ACTO"},
+        {"id": 3, "description": "VirusTotal", "type" : "STOR"},
+        {"id": 4, "description": "CRC32 hashing algorithm", "type" : "TTPS"},
+        {"id": 5, "description": "ChaCha20 algorithm", "type" : "TTPS"},
+        {"id": 6, "description": "AES-CBC algorithm", "type" : "TTPS"},
+        {"id": 7, "description": "MD5 hashing algorithm", "type" : "TTPS"},
+        {"id": 8, "description": "AES-CFB algorithm", "type" : "TTPS"},
+        {"id": 9, "description": "Environment keying", "type" : "TTPS"},
+        {"id": 10, "description": "Computer name of the target machine", "type" : "TAMP"},
+        {"id": 11, "description": "Machine's GUID", "type" : "TAMP"},
+        {"id": 12, "description": "LdrpHandleInvalidUserCallTarget function", "type" : "EXEF"},
+        {"id": 13, "description": "DLL Hollowing", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "uses for integrity check"},
+        {"source": 1, "target": 8, "rel_name" : "uses for decryption"},
+        {"source": 1, "target": 9, "rel_name" : "performs"},
+        {"source": 1, "target": 10, "rel_name" : "uses for keying"},
+        {"source": 1, "target": 12, "rel_name" : "patches to disable CFG"},
+        {"source": 1, "target": 13, "rel_name" : "uses for payload loading"},
+        {"source": 2, "target": 4, "rel_name" : "uses for integrity check"},
+        {"source": 2, "target": 5, "rel_name" : "uses for decryption (2021)"},
+        {"source": 2, "target": 6, "rel_name" : "uses for decryption (2024)"},
+        {"source": 2, "target": 9, "rel_name" : "performs (2024)"},
+        {"source": 2, "target": 11, "rel_name" : "uses for keying"},
+        {"source": 2, "target": 12, "rel_name" : "patches to disable CFG"},
+        {"source": 2, "target": 13, "rel_name" : "uses for payload loading"}
+    ]
+}

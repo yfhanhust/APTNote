@@ -1,0 +1,52 @@
+
+
+
+Sentence : Document search module: Mssqldbserv.xml
+This module has been described before in the article here. The purpose of this tool is to
+parse the hard drive for files with a specific extension and create an archive with these
+files. Finally, the archive is encoded before being sent to the C2.
+https://blog.talosintelligence.com/2020/06/promethium-extends-with-strongpity3.html 10/17
+6/30/2020 Talos Blog || Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: PROMETHIUM extends global reach with StrongPity3 APT
+mssqldbserv.xml main function
+However, there are some interesting details we decided to share. Clearly, this was not
+originally designed to be executed in the background. The first instructions in the main
+function hide the console window from the user. Afterward, the module will delete old
+"sft" files assuming they were already exfiltrated. After a pause of 6,500 milliseconds, it
+will start its search for the targeted files.
+SFT file creation routine
+Using the working directory as a base path, which in this sample case is C:\DOCUME~1\
+~1\LOCALS~1\Temp\4CA-B25C11-A27BC\, each selected file will be
+compressed into the file kr.zp. The kr.zp data is then read and encoded using the same
+unusual encoded scheme.
+```
+   byte = byte XOR (byte >> 4)
+```
+If the file is larger than 2048*53 bytes (~ 106kb) it is split into chunks and saved into the
+sft files according to the naming convention below.
+```
+   gui_app0_[VolumeSerialNumber][MonthDayHourMinuteSecondMilliseconds][Counter].sft
+```
+https://blog.talosintelligence.com/2020/06/promethium-extends-with-strongpity3.html 11/17
+6/30/2020 Talos Blog || Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: PROMETHIUM extends global reach with StrongPity3 APT
+Since this module does not have a loop, it will only be executed at the communications
+module startup, which means that it is only executed once per service start.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Mssqldbserv.xml", "type": "DOCF"},
+        {"id": 2, "description": "C2 server", "type": "CCSH"},
+        {"id": 3, "description": "sft files", "type": "DOCF"},
+        {"id": 4, "description": "kr.zp file", "type": "DOCF"},
+        {"id": 5, "description": "C:\\DOCUME~1\\~1\\LOCALS~1\\Temp\\4CA-B25C11-A27BC\\", "type": "SYSP"},
+        {"id": 6, "description": "PROMETHIUM APT group", "type": "ACTO"},
+        {"id": 7, "description": "https://blog.talosintelligence.com/2020/06/promethium-extends-with-strongpity3.html", "type": "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name": "compresses into"},
+        {"source": 1, "target": 3, "rel_name": "deletes old files of type"},
+        {"source": 1, "target": 2, "rel_name": "sends to"},
+        {"source": 5, "target": 4, "rel_name": "base path for"},
+        {"source": 6, "target": 1, "rel_name": "uses"},
+        {"source": 7, "target": 6, "rel_name": "reference in"}
+    ]
+}

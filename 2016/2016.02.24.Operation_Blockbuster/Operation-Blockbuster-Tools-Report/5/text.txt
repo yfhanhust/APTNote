@@ -1,0 +1,40 @@
+Operation Blockbuster: Tools Report 4
+A rudimentary but somewhat clever design, KiloAlfa provides keylogging capability for the Lazarus Group’s collection
+of malicious tools. The design of KiloAlfa is broken down into two basic components: the persistence functionality and
+the keylogging functionality. The persistence functionality of KiloAlfa allows the malware to self-install on a victim’s
+machine when activated (described below). The keylogging functionality, as the name would imply, provides keystroke
+capturing capabilities by continually monitoring the foreground window and recording the current keyboard’s state to a
+log file for later retrieval. KiloAlfa establishes a keystroke log file for each user that accesses the infected machine. KiloAlfa
+has no capabilities to transmit the log files to an external server thereby requiring an additional companion malware
+family be utilized by attackers for the retrieval of the key log files.
+KiloAlfa is a self-installing binary. When activated without any command line arguments or with the command line
+argument –reg, KiloAlfa activates its persistence functionality. In order to maintain persistence on a victim’s machine,
+KiloAlfa copies itself to either %ALLUSERSPROFILE%\Intel\mscorsw.exe (if the victim is running Windows Vista
+or newer) or %ALLUSERSPROFILE%\Application Data\Intel\mscorsw.exe (if the victim is running Windows
+XP or older). A registry key for HKLM\Software\Microsoft\CurrentVersion\Run\Mozilla Update is added
+and set to the path of the newly copied KiloAlfa binary with the –run command line argument added. If the registry key
+insertion is unsuccessful, KiloAlfa attempts to insert the same key and value within the current user hive (HKCU).
+If KiloAlfa is activated without any arguments, the persistence functionality attempts to run KiloAlfa under all users logged
+into the victim’s machine through terminal services. By calling WTSEnumerateSessionsA to get a list of all currently
+active Windows Terminal Services sessions, KiloAlfa uses the list of active terminal sessions to determine if explorer.exe
+is running under the session (to eliminate non-interactive user sessions); KiloAlfa then obtains the token of the user of the
+session and calls CreateProcessAsUserA to activate the newly installed KiloAlfa binary ( mscorsw.exe ) with the –run
+command line argument. KiloAlfa then activates mscorsw.exe with the –run argument for the console session.
+After installing KiloAlfa as mscorsw.exe and activating the new binary for all active users, KiloAlfa generates and
+executes a suicide script to remove the initial instance of itself. The suicide script is saved to %TEMP%\AUTOEXEO . bat and
+takes the form presented in Figure 2-1. The script is constructed one line at a time using string concatenation and saved
+via WriteFile before CreateProcess is called to execute the script. It is worth noting that KiloAlfa and IndiaFoxtrot
+share the same suicide generation script code in both functionality and the script itself. Additionally, KiloAlfa and
+IndiaFoxtrot also use AUTOEXEO.bat as the suicide script’s filename.
+```
+  @echo off
+:R1
+```
+del /a "{KiloAlfa’s filename}"
+if exist "{KiloAlfa’s filename}" goto R1
+del /a "{suicide script filename}"
+Figure 2-1: KiloAlfa’s Suicide Script
+When KiloAlfa is activated with the –run command line argument, KiloAlfa activates its keylogger functionality.
+This functionality begins by loading the configuration file %ALLUSERSPROFILE%\Application Data\Intel\
+AdobeUpdaterPrefs.dat (on Windows XP and later) or %ALLUSERSPROFILE%\Intel\AdobeUpdaterPrefs.
+dat (on Windows Vista or newer). The configuration file contains a list of usernames and their respective keylogger

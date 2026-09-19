@@ -1,0 +1,53 @@
+Threat actors found using POWERSTATS V3 – a multi- stage backdoor
+In one of the MuddyWater campaigns we spotted, we detected spear-phishing emails that the group sent
+to a university in Jordan and the Turkish government. In both cases, the threat actor group did not spoof
+the said legitimate entities’ sender address to deceive email recipients, but instead used compromised
+legitimate accounts to trick users into installing malware.
+Figure 1. Screenshot of a spear-phishing email spoofing a government office, dated April 8, 2019.
+Figure 2. Email headers showing the origin of the spear-phishing email
+The legitimate owners of the compromised email accounts were from the same countries the target
+entities are based. As of this writing, it’s unclear how they were compromised, but it’s possible that the
+group had used the Gophish toolkit since they have already utilized it in an old campaign.
+2
+The threat actor group deployed a new multi-stage PowerShell-based backdoor called POWERSTATS v3 .
+The spear-phishing email that contains a document embedded with a malicious macro will drop a VBE file
+encoded with Microsoft Script Encoder. The VBE file, which holds a base64-encoded block of data
+containing obfuscated PowerShell script, will then execute. This block of data will be decoded and saved
+to the %PUBLIC% directory under various names ending with image file extensions such as .jpeg
+and .png. The PowerShell code will then use custom string obfuscation and lots of useless blocks of code
+to make it difficult to analyze.
+Figure 3. Code snippet of obfuscated and useless code
+The final backdoor code will be shown after the deobfuscation of all strings and removal of all
+unnecessary code. But first, the backdoor will acquire the operating system (OS) information and save
+the result to a log file.
+Figure 4. Code snippet of OS information collection
+This file will be uploaded later to the command and control (C&C) server. Each victim machine will
+generate a random GUID number, which will be used for machine identification. Later on, the malware
+variant will start the endless loop, querying for the GUID-named file in a certain folder on the C&C server.
+If the file is found, it will be downloaded and executed using the Powershell.exe process.
+The threat actor group can then proceed to a second stage attack by sending commands to a specific
+victim in an asynchronous way. In essence, they can download another backdoor payload from the C&C
+server and install it on their targets' systems.
+Figure 5. The code in POWERSTATS v3 that downloads the second attack stage
+3
+We were able to look into an instance where the group proceeded to launch a second stage attack. In this
+scenario, another backdoor was downloaded. The backdoor supports the following commands:
+
+
+Take screenshots
+
+
+Command execution via the cmd.exe binary
+
+
+If there’s no keyword, the malware variant assumes that the input is PowerShell code and
+
+
+executes it via the “Invoke-Expression” cmdlet
+Figure 6. The code in POWERSTATS v3 (second stage) that handles the screenshot command
+The C&C communication is done using PHP scripts with a hardcoded token and a set of backend
+functions, e.g., sc (screenshot), res (result of executed command), reg (register new victim), and uDel
+(self-delete after an error).
+Figure 7. In an endless loop, the malware variant queries a given path on C&C server, trying to download a
+GUID-named file with commands to execute.
+4

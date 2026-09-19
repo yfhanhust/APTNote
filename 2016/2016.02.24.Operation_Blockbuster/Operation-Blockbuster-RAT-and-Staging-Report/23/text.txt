@@ -1,0 +1,48 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 22
+RomeoDelta is a RAT dropped by IndiaFoxtrot alongside DeltaBravo. In addition to being dropped alongside DeltaBravo,
+RomeoDelta contains a significant amount of code and artifact overlap with DeltaCharlie, indicating a shared
+development environment, if not a shared developer(s).
+Operating as a service DLL, RomeoDelta performs the necessary scaffolding required by Windows Services in order to
+appear as a legitimate service before spawning a thread that contains the core functionality of RomeoDelta. The core
+functionality begins by dynamically loading the necessary API functions (the names of which are obfuscated using
+Space-Dot encoding). RomeoDelta then determines its exclusivity on the victim’s system by detecting the presence (or
+absence) of Global\WindowsUpdateTracing {number} . {number}, where the two {number} values change as the
+malware has evolved over time. The first {number} is typically 0 with the second {number} incrementing over time as if to
+indicate a versioning system. The same type of mutex name is also found in IndiaFoxtrot.
+The configuration file for RomeoDelta typically exists within a file named msxml13.xml (or msxml15.xml in later
+variants of RomeoDelta). Encrypted using RC4, the configuration file is loaded and decrypted by RomeoDelta
+with the most commonly observed passwords for the configuration file being BAISEO%$2fas9vQsfvx%$,
+C!@I#%VJSIEOTQWPVz034vuA, and GetFileAttributesW .
+The configuration file contains three C2 server addresses (and their listening port numbers). After loading the
+configuration, RomeoDelta attempts to contact one of the C2 server addresses (in the order present in the configuration).
+The connection process begins with RomeoDelta resolving the domain name of the C2 server. If the address resolves,
+the IP address is XOR’d with 0x1AB9C2D8 in order to reveal the real address of the C2 server. RomeoDelta attempts to
+contact the C2 server and, if successful, begins the handshake process. The handshake procedure is identical to that used
+by DeltaCharlie, consisting of a 16-byte authentication sequence involving the use of DNSCALC-style encoding. The
+following sequence occurs during the handshake between RomeoDelta and the C2 server:
+
+
+RomeoDelta generates a random 16-byte buffer
+
+
+RomeoDelta encodes the bytes using DNSCALC-style encoding
+
+
+RomeoDelta sends the encoded buffer to the C2 server
+
+
+The C2 server replies with the original 16-bytes (before the DNSCALC-style encoding)
+
+
+RomeoDelta verifies the original 16-byte buffer and sends back a packet with the identifier of 0x611 to indicate a
+
+
+successful handshake.
+The handshake that RomeoDelta (as well as DeltaCharlie) employs has a striking similarity to the handshake procedure of
+SierraJuliett-MikeOne.
+After the handshake, RomeoDelta transmits a portion of the configuration to the C2 server. If the configuration of
+RomeoDelta does not contain a non-zero ID number, the malware transmits details of the victim’s system to the C2 server
+and the C2 server responds with an ID number.
+For later variants of RomeoDelta, the malware will locate the directory containing the keylog files of KiloAlfa and proceed
+to decrypt the files. Once decrypted, RomeoDelta will generate a ZIP file with the contents of the keylog files, encrypt the
+file using RC4, and transmit the file to the C2 server.

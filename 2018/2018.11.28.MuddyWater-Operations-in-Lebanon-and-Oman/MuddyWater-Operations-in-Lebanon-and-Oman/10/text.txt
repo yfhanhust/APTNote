@@ -1,0 +1,107 @@
+Second Stage Analysis
+Looking at the additional PowerShell code that is downloaded from the compromised domains, we identified
+few variables and commands that perform the following actions:
+
+
+Saving JavaScript, encoded VBScript (VBE) and PowerShell code respectively to three files.
+
+
+Initialization of three-steps backdoor execution mechanism:
+
+
+1) WScript.exe executes VBE code.
+2) CScript.exe executes obfuscated JavaScript code.
+3) PowerShell command de-obfuscates and executes POWERSTATS backdoor.
+
+Using taskkill command to kill Excel’s process.
+
+Figure 9: Second-stage PowerShell code downloaded from the compromised domains
+VBE Deobfuscation
+The base64 encoded VBScript code is saved to a PowerShell variable called $vbs, then it is decoded and stored
+in another variable named $Content. Its value is saved to the following path:
+C:\Windows\temp\Windows.vbe
+```
+$vbs ="I0B+XlhBQUFBQT09L00rQ0QrfTRMf21EY0pxL15EYndPIFV0K15zSipSSSFVfkoxLzFEcndPfkoybExrXkRid09+Oyk
+tdwlieFtXU2QnLVB/OmEtLUQrczJSTndMSkJQVFMsc2xeZCsvQjhBQUE9PV4jfkAA"
+```
+Source code 1: base64 encoded VBE code found in the compromised domains
+```
+--> CreateObjzct("Wscript.Shell").Run "cscript /E:jscript C:\Windows\Tzmp\temp.jpg ", 0, False
+```
+Source code 2: base64 decoded VBE code
+The decoded VBScript code is responsible for running the obfuscated JavaScript code stored in another file
+masquerading an image file “temp.jpg”. The VBE code is executed using WScript.exe, leading to the JavaScript
+code execution via CScript.exe. Both Windows Script Host processes are used as a method of executing
+commands from external files and support various scripting languages.
+10
+Figure 10: Second-stage process tree depicting Windows Script Host usage
+JavaScript Deobfuscation
+From the second-stage PowerShell code that was downloaded from the compromised domains, an
+obfuscated JavaScript code is stored in a variable named $js. Its content decoded and saved in the following
+path:
+C:\Windows\Temp\temp.jpg
+Within the above-mentioned three-steps POWERSTATS execution mechanism, the second step consists of
+running the obfuscated base64 encoded JavaScript. This code snippet leverages the Winmgmt WMI service
+classes Win32_Process and Win32_ProcessStartup.
+$js ="dmFyIGE9Wyd3Nm5Dc01LQk44TzUnLCdCOE8rd3I5M3dwMDhTakhDbUV3cndybkRvY0tidz[…] "
+Source code 3: base64 decoded JavaScript code
+```
+var a=['w6nCsMKBN8O5','B8O+wr93wp08SjHCmEwrwrnDocKbw4[…]
+```
+Source code 4: Obfuscated decoded JavaScript code
+Figure 11: De-obfuscated JavaScript Code
+Thus, a relevant PowerShell process is created for decoding the main obfuscated POWERSTATS backdoor,
+completing the third step towards running the backdoor. This de-obfuscated JavaScript snippet holds a
+PowerShell command that is intended to de-obfuscate and execute the PowerShell backdoor that is
+encapsulated in a C# code. Previously, the obfuscated main backdoor code was stored into a “Microsoft.db”
+file via the seconds-stage PowerShell file, which was hosted on one of the compromised domains. The full
+path of the main obfuscated backdoor code file:
+C:\ProgramData\Microsoft.db
+In addition, the group uses various techniques in order to bypass UAC. As seen in the past, MuddyWater
+makes use of a tool found in the .NET framework called csc.exe, which can be used to compile an executable
+from C# code. This means that an attacker doesn’t necessarily need to download a compiled executable to
+the target’s computer, but can instead download the source code and compile it on the target computer.
+11
+Figure 12: PowerShell process de-obfuscates and runs POWERSTATS
+Persistency
+Notice that POWERSTATS backdoor maintain the same persistency mechanism with almost every new
+campaign. It makes use of a scheduled task named “MicrosoftEdge” (Scheduled task name may differ from
+one sample to another) running daily at 12:00 o’clock, which starts the three-steps backdoor’s execution
+mechanism using the following command:
+```
+"C:\Windows\system32\schtasks.exe" /Create /F /SC DAILY /ST 12:00 /TN MicrosoftEdge
+/TR "c:\windows\system32\ wscript.exe C:\Windows\temp\ Windows.vbe "
+```
+POWERSTATS Deobfuscation
+The POWERSTATS backdoor’s code is a multi-layered obfuscated, encoded and compressed blob. As
+mentioned in the upper section, the latter PowerShell command de-obfuscates the main POWERSTATS
+backdoor’s code, first to a deflated-compressed base64 code. Then, a decoded and decompressed using an
+inflate method, but obfuscated PowerShell code snippet is revealed. Finally, this code is de-obfuscated to
+the main backdoor code.
+```
+   $code = "-FJ+QM2?@2CQ1AX1G-,<*+VI.XQ/UW-BQ0RZ2?C1B91=C.ER2[Z1GD0IH[...]"
+```
+Source code 5: Main POWERSTATS backdoor code hosted on the compromised domains as part of the second-stage
+```
+$( New-Object IO.StreamReader ($( New-Object IO. Compression . Deflate Stream ($( NewObject IO.MemoryStream
+(,$([Convert]::FromBase64String('jX1pdxq7sujnZK38B92sc2PYG[…]')))),
+[IO.Compression.CompressionMode]::Decompress)), [Text.Encoding]::ASCII)).ReadToEnd();
+```
+Source code 6: Main POWERSTATS backdoor code de-obfuscated by the PowerShell command found inside the JavaScript code
+snippet
+```
+&("{2}{0}{3}{1}" -f 'R','abLE','set-Va','i') ("UW"+("{0}{1}" -f'1r9','P')) ( "
+)'x'+]31[dIlleHS$+]1[dILleHs$ (& | )421]rAhc[,'Fe5' ecaLperC-[…]
+```
+Source code 7: Main POWERSTATS backdoor code is decoded and decompressed, but still obfuscated
+Although we cannot present the full code of the backdoor, we would like to examine part of the backdoor’s
+persistency mechanism. This mechanism involves creating a registry key called “MicrosoftEdge”, with a value
+corresponds to the command that is responsible to initialize the above-mentioned three-steps backdoor’s
+execution mechanism:
+```
+start-sleep (Get-Random -Minimum 10 -Maximum 20)ertChfu -p
+"HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -k 'MicrosoftEdge' -v
+'c:\windows\system32\ wscript.exe C:\Windows\temp\ Windows.vbe '
+```
+Source code 8: POWERSTATS backdoor persistency mechanism found inside the backdoor’s
+12

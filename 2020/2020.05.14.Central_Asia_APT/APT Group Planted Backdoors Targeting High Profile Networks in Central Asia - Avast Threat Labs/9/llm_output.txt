@@ -1,0 +1,53 @@
+
+
+
+Sentence : Technical details ( logsupport.dll )
+Similarly to the previous DLLs, the logsupport.dll is primarily used as a backdoor, but uses a
+different C&C server than the other backdoors. Its corresponding log file is located at
+%TEMP%\rar%[A-Z0-9]{4}%.tmp . The structure of the log file is also the same. The main
+difference is that the log file is encrypted by a XOR cipher with a hardcoded key.
+https://decoded.avast.io/luigicamastra/apt-group-planted-backdoors-targeting-high-profile-networks-in-central-asia/ 4/9
+5/15/2020 APT Group Planted Backdoors Targeting High Profile Networks in Central Asia - Avast Threat Labs
+Figure 3: Log file is decrypted by a XOR cipher with a hardcoded key
+This backdoor checks whether the malware is running in a virtualized environment. Additionally,
+the DLL fingerprints the infected device (NETBIOS name, IP address, username, OS version,
+MAC address and RAM usage, OEM code page, token information, number of CPU cores,
+is64bit), and sends this information to the C&C server.
+The communication with the C&C server is encrypted by a simple stream cipher. If the malware
+fails to establish an encrypted channel, it checks whether a proxy is being used, using different
+methods than the previous two DLLs. It tries to connect to http://www.google.com/index.asp and
+retrieve information about a possible proxy from the connection, and it also checks the value of
+ProxyServer in the Windows registry key:
+HKLM\Software\Microsft\Windows\CurrentVersion\Internet Settings.
+Based on what we saw in the code, the backdoor is also capable of accepting various commands
+from the C&C server. These commands allow the backdoor to manipulate files (move, read,
+delete, check existence), manipulate processes (create, terminate, retrieve parent, and process
+ID) and Windows services (start, stop, check), execute console commands, remove itself, and
+more. Some of these commands (read/check file, check services, check processes) also send
+data back to C&C. The infected device can also be commanded by C&C to act as a proxy or
+listen on a specific port on every network interface.
+Interestingly, the backdoor has a set of commands specifically targeting files with .tu and .tut file
+extension. These commands may similarly check for their existence, send their content back to
+the C&C, and modify their content (append or rewrite by data given by the C&C server).
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "logsupport.dll", "type" : "EXEF"},
+        {"id": 2, "description": "%TEMP%\\rar%[A-Z0-9]{4}%.tmp", "type" : "SYSP"},
+        {"id": 3, "description": "C&C server (different from other backdoors)", "type" : "CCSH"},
+        {"id": 4, "description": "XOR cipher with a hardcoded key", "type" : "TTPS"},
+        {"id": 5, "description": "http://www.google.com/index.asp", "type" : "URLS"},
+        {"id": 6, "description": "HKLM\\Software\\Microsft\\Windows\\CurrentVersion\\Internet Settings", "type" : "REGI"},
+        {"id": 7, "description": ".tu and .tut file extension", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "creates log file at"},
+        {"source": 1, "target": 3, "rel_name" : "communicates with"},
+        {"source": 2, "target": 4, "rel_name" : "encrypted by"},
+        {"source": 1, "target": 5, "rel_name" : "checks connection to"},
+        {"source": 1, "target": 6, "rel_name" : "reads registry value of"},
+        {"source": 3, "rel_name" : "sends information to", "target": 1},
+        {"source": 3, "rel_name" : "sends data back to (from commands)", "target": 1},
+        {"source": 1, "target": 7, "rel_name" : "targets files with extension"}
+    ]
+}

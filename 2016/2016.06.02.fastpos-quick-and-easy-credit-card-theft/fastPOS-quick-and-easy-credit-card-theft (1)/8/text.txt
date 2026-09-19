@@ -1,0 +1,42 @@
+Data exfiltration
+This RAM scraper has an unusual way of data exfiltration. It does not have any HTTP useragent. Instead of HTTP POST, the HTTP GET verb is used. This implies that a server would
+have to do post-processing on their server-side logs. GET method is usually employed to
+request data from a specific HTTP resource while POST is for submitting data to the specified
+HTTP resource. Analysis of the HTTP responses indicates that a positive HTTP 200 response is
+given by the C&C server – meaning that the HTTP GET request is processed correctly.
+However, no content is provided back to the client from the server.
+4
+Trend Micro | FastPOS: Quick and Easy Credit Card Theft
+Figure 4. HTTP GET request to C&C server
+Furthermore, because of the use of HTTP GET, the requests are cached on the infected
+endpoints and remain in web browser history. FastPOS either deletes the URL cache entry to
+handle the cached content or when it attempts to update using the third thread for self-update.
+Aside from implementing HTTP GET (instead of HTTP POST) on the client-side, the command
+and control server does not implement HTTPS to encrypt the traffic. This makes the requests
+and responses, including the credit card data, exposed in the network traffic. In turn, this makes
+the network traffic easy to spot as it exposes all gathered information from the endpoint in every
+HTTP transaction. However, this threat does so in a quick and easy manner, hence the name
+FastPOS.
+Typically, PoS threats either log data locally or send it out to their respective C&C servers
+immediately. In the case of FastPOS, it does not store any scraped information or status logs
+locally but sends it to C&C server hard-coded in the malware. It does this using the following
+commands/parameters:
+|key&log=TWND%sKWND%s|Used to send the logged keystrokes. Firststring is the window title; second string is thekey log|
+|---|---|
+|add&log=%s&foundin=%s|Used by the RAM Scraper thread during dataexfiltration. First string is the card dump;second string is the process name.|
+Table 1. Commands for sending the stolen information
+It also continuously sends status logs to the C&C server using the parameters listed below:
+5
+|new&username=%s&computername=%s&os=%s&architecture=%s|Registersnew infectedsystem withuser name,computername, OSandarchitecture|
+|---|---|
+|statuslog&log=scanning-%s|Indicatesprocessesbeing|
+Trend Micro | FastPOS: Quick and Easy Credit Card Theft
+|Col1|scanned forcredit carddata|
+|---|---|
+|update&username=%s|Sends whena softwareupdate isrequested|
+|statuslog&log=CheckedForUpdate|Sends afterrequest forsoftwareupdate|
+|statuslog=&log=GetLastError%d|Reportsencounterederror with anerror code|
+Table 2. Parameters for sending logs
+FastPOS has implemented a functionality that indicates the process name where the credit card
+is found. This is usually used to pre-filter if the entry is valid or not. They can also reuse this
+later for profiling purposes or for determining the PoS software running on the infected terminal.

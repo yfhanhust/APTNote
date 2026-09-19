@@ -1,0 +1,64 @@
+Backdoor analysis
+The backdoor has a single export, which for instance is named “JorNgoq” in the Hungarian case. When this export is called at
+load, the backdoor sets the “.rdata” section’s permissions to “RWX” and sets the mutex to a hardcoded string “nljhfdb”.
+The entrypoint of the library (DllMain) is obfuscated and the main body of the malware is encrypted. The encryption is rather
+simple: the “.rdata” section of the library is ROL’ed with a linear key and XOR’ed with a fixed key. Both keys are derived from
+the length of the encrypted part.
+PAGE 6| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+Decryption loop in the obfuscated code.
+0x4522 is the actual size of the encrypted part
+Once finished decrypting, the library proceeds to the real “main” function. The main part of the library is written in Assembler,
+in an “old-school” manner typical for low-level viruses. The code is position independent; it has no imports and resolves API
+function addresses by hash values of their names.
+.
+Typical low-level malware programming style:
+passing strings as parameters via call, addressing API functions by hash values
+The backdoor maintains seven call addresses that each maintain their own block of functionality.
+The first block calls GetAsyncKeyState twice, checking for a mouse click, which indicates user activity in the system. The second
+block searches for all “.exe” and “.dll” files located in the %temp% directory. The third block fetches information about the
+infected system with calls to gather information about the CPU, drive and the computername - these are used to decrypt the
+backdoor’s main body, which is custom encrypted for each unique victim.
+PAGE 7| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+The fourth block attempts to maintain self-protection from malware analysis. Below is the list of tools (and VMware) that it
+attempts to identify and protect against. It fetches the list of running processes on the system and attempts to identify if these
+tools are among them:
+apispy32.exe, apimonitor.exe, winapioverride32.exe, procmon.exe, filemon.exe, regmon.exe, winspy.exe, wireshark.exe,
+dumpcap.exe, tcpdump.exe, tcpview.exe, windump.exe, netsniffer.exe, iris.exe, comview.exe, ollydbg.exe, windbg.exe,
+odb.exe, ImmunityDebugger.exe, syser.exe, idag.exe, idag64.exe, petools.exe, vboxtray.exe, vboxservice.exe, procexp.exe,
+vmtools.exe, vmwaretray.exe, vmwareuser.exe
+If any of the tools above are detected on the system, the malware will continue running on the system without further
+decrypting its code and exhibiting any other functionality. This will prevent it from doing any outbound communications with
+Twitter accounts, as described below. In other words, it will attempt to appear non-functional, especially to automated
+analysis, hiding its true nature behind its layers of encryption.
+User agent strings for web browsers like Opera, Mozilla and Internet Explorer are decrypted and used for all Internet access.
+Oddly, there are Linux versions included as well:
+(Windows NT 5.1; (Windows NT 6.0; (Windows; U; Windows NT 5.2; (X11; Linux i686; (X11; Linux x86_64; (compatible; MSIE
+6.0; Windows NT 5.0; (compatible; MSIE 7.0; Windows NT 6.0; (compatible; MSIE 9.0; Windows NT 6.1;WOW64) ;Trident/4.0) ;
+Trident/5.0) ; WOW64; Trident/5.0) ; SV1) )
+The fifth and sixth code blocks are most interesting. They calculate the SHA1 of main system information which will be used in
+the C2 interaction later.
+Following the SHA-1 hash generation, the backdoor will base64 encode its unique hash for later C2 communication.
+The malware is activated upon reboot of the infected machine. To gain control at boot, it writes a randomly named LNK file to
+the startup folder, which in turn calls the main body using rundll32:
+PAGE 8| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+PAGE 9| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+In the picture above, the malware’s main body is stored as “stat.bin” (a randomly selected name) in the “Adobe” folder. The
+LNK file calls it only exported function, “ImqRgno”.
+Once activated, the malware will first contact Twitter and look for posts from some very specific accounts. These accounts
+should have posted an encrypted string which contains the magic identifier “uri!”, then an encrypted c2 string.
+PAGE 10| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+We presume many other Twitter accounts exist with similar parameters.
+The encrypted “uri!” holds a different c2 for each version of the malware:
+PAGE 11| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+|Hungary|arabooks[dot]ch|194.38.160.153 /Switzerland|/lib/index.php|
+|---|---|---|---|
+|Luxemburg|artas[dot]org|95.128.72.24 / France|/engine/index.php|
+|Belgium|tsoftonline[dot]com|72.34.47.186 / UnitedStates|/views/index.php|
+|(Multiple)|www[dot]eamtm[dot]com |188.40.99.143 / Germany|/piwik/web/index.php|
+It’s most likely that these websites have been hacked by the attackers and injected with the command and control PHP script.
+Secondly, the malware will connect to “www.geoiptool.com” to obtain information about the victim’s location.
+Interestingly, the backdoor has another update/c2 functionality. It searches Google for a very specific string:
+The string “lUFEfiHKljfLKWPR” which the malware seeks on Google
+The pages found by the Google search may hold an update “uri” similar to the one from Twitter. We can assume the attackers
+wanted to have a second channel for updates in case the Twitter accounts are closed.
+PAGE 12| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |

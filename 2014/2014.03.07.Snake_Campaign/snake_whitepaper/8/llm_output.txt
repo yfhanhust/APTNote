@@ -1,0 +1,78 @@
+
+
+
+Sentence : ROOTKIT EXECUTION
+When first executed, the driver creates device named \Device\vstor32 with a symbolic link \DosDevices\vstor32.
+This device is used for userland/kernel communications.
+Next, it drops a DLL into the %windows% directory - the DLL is carried in the body of the driver as a binary chunk with
+XOR 0xAA applied on top of it, so the driver decrypts it first.
+Depending on the variant, the DLL is dropped either under a random name or a hard-coded name, such as mscpx32n.dll.
+The purpose of this DLL is to be injected into the user-mode processes. Some variants of Snake carry the DLL modules that can be
+installed as a service, to be run within taskhost.exe or services.exe processes.
+Next, the driver sets up the hooks for the following kernel-mode APIs:
+• ZwCreateThread
+• ZwCreateUserProcess
+• ZwShutdownSystem
+After that, it calls PsSetCreateProcessNotifyRoutine() in order to be notified whenever a new process is started.
+The handlers of the hooks above along with the notification callback allow Snake to stay persistent on a system, being able to infect
+any newly created processes, and restore its driver file in case it gets deleted.
+Another set of hooks it sets is designed to hide the presence of the Snake components on the system:
+• ZwQuerySystemInformation
+• ZwQueryInformationProcess
+• ZwClose
+• ZwTerminateProcess
+The driver then watches for all userland processes to see if they load any web pages.
+As long as the user is not using the Internet, Snake stays dormant too, as there is no process that communicates with the web
+servers.
+However, as soon as the user goes online, the driver intercepts that event and then immediately injects the malicious DLL module
+into the process that initiated connection (the browser).
+Once injected, the module initiates polling from one of the hard-coded C&C servers.
+The purpose of this behaviour is to blend Snake’s traffic with the browser traffic, bypassing the firewalls, and keeping a low profile
+at the same time. By communicating from within a process that also communicates, even a technically savvy user will find it
+challenging to detect Snake traffic among legitimate traffic.
+The reason behind such difficulty is because modern web pages often fetch pages from the different web servers, including such
+data as additional scripts, CSS templates, advertising contents, analytics data, blogs, social networking data, etc. When intercepted
+with the purpose of analysis, such traffic may literally represent itself hundreds of DNS and HTTP requests made when a popular
+website, such as a news website is open.
+Hiding a few DNS/HTTP requests among busy network traffic allows Snake rootkit to stay unnoticed.
+In order to test Snake’s communications with the C&C servers, and still being able to clearly distinguish its traffic, a small tool was
+built to generate GET request to a web server running on the analysed system.
+The tool was named as chrome.exe in order to trigger the malware communications.
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 8
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "\\Device\\vstor32", "type" : "TPTH"},
+        {"id": 2, "description": "\\DosDevices\\vstor32", "type" : "SYSP"},
+        {"id": 3, "description": "%windows% directory", "type" : "STOR"},
+        {"id": 4, "description": "mscpx32n.dll", "type" : "APPS"},
+        {"id": 5, "description": "taskhost.exe", "type" : "APPS"},
+        {"id": 6, "description": "services.exe", "type" : "APPS"},
+        {"id": 7, "description": "ZwCreateThread", "type" : "TTPS"},
+        {"id": 8, "description": "ZwCreateUserProcess", "type" : "TTPS"},
+        {"id": 9, "description": "ZwShutdownSystem", "type" : "TTPS"},
+        {"id": 10, "description": "PsSetCreateProcessNotifyRoutine()", "type" : "TTPS"},
+        {"id": 11, "description": "ZwQuerySystemInformation", "type" : "TTPS"},
+        {"id": 12, "description": "ZwQueryInformationProcess", "type" : "TTPS"},
+        {"id": 13, "description": "ZwClose", "type" : "TTPS"},
+        {"id": 14, "description": "ZwTerminateProcess", "type" : "TTPS"},
+        {"id": 15, "description": "web pages", "type" : "TAMP"},
+        {"id": 16, "description": "C&C servers", "type" : "CCSH"},
+        {"id": 17, "description": "chrome.exe", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has symbolic link"},
+        {"source": 3, "target": 4, "rel_name" : "drops"},
+        {"source": 4, "target": 5, "rel_name" : "can be injected into"},
+        {"source": 4, "target": 6, "rel_name" : "can be injected into"},
+        {"source": 10, "target": 7, "rel_name" : "sets up hooks for"},
+        {"source": 10, "target": 8, "rel_name" : "sets up hooks for"},
+        {"source": 10, "target": 9, "rel_name" : "sets up hooks for"},
+        {"source": 10, "target": 11, "rel_name" : "sets up hooks to hide presence of components"},
+        {"source": 10, "target": 12, "rel_name" : "sets up hooks to hide presence of components"},
+        {"source": 10, "target": 13, "rel_name" : "sets up hooks to hide presence of components"},
+        {"source": 10, "target": 14, "rel_name" : "sets up hooks to hide presence of components"},
+        {"source": 15, "target": 16, "rel_name" : "polls from"},
+        {"source": 17, "target": 16, "rel_name" : "triggers communication with"}
+    ]
+}

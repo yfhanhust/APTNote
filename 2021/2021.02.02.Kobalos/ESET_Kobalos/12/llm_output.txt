@@ -1,0 +1,70 @@
+
+
+
+Sentence : 5. OPENSSH CREDENTIAL STEALER
+On most systems compromised by Kobalos, malware was also deployed to steal SSH credentials via
+a trojanized SSH client. Different variants of these files were found, including Linux and FreeBSD instances.
+Unlike Kobalos, this credential stealer features almost no obfuscation.
+Their main capabilities consist of stealing hostname, port, username and password used to establish an SSH
+connection from the compromised host. They are saved into an encrypted file. Recent versions of this trojan
+also feature the ability to exfiltrate credentials over the network via UDP, but this was not activated
+in the configuration of most of the samples we analyzed.
+At the time we published our previous research on OpenSSH backdoors, “The dark side of the ForSSHE”,
+we didn’t know about this credential stealer and it doesn’t correspond to any malware family we described
+in that paper. We also cannot map it to any other publicly documented OpenSSH credential stealer.
+The location of the file where the stolen SSH credentials are saved varies depending on the variant.
+All samples create a file under ~~/var/run~~ with a “.pid” extension. The “.pid” file extension is used for most
+of the legitimate files under ~~/var/run~~ ~~.~~ See the SSH credential stealer samples in the Indicators of compromise
+section for example filenames and paths used in various samples.
+All samples found use the same simple cipher for the contents of the files. As seen in Figure 18 it simply
+adds 123 to each byte of data to be saved.
+Figure 18 // Encrypting and writing SSH credentials to a file
+For the FreeBSD version, the same format and cipher is applied. However, there are some small
+implementation differences, such as encrypting the file path in the malware with a single-byte XOR.
+25 A wild Kobalos appears Tricksy Linux malware goes after HPCs TLP: WHITE
+5.1 An evolving malware family
+After we notified one of the victims, they found what seems to be a more recent version
+of the credential stealer.
+This new version contains an encrypted configuration and adds the functionality to exfiltrate credentials
+over UDP to a remote host specified in the configuration. Exfiltrating credentials over UDP is something
+Ebury and other SSH credential stealers such as Bonadan, Kessel and Chandrila have been doing. The choice
+of UDP could be to bypass a firewall and avoid creating TCP network flow to potentially untrusted hosts.
+It can only use one exfiltration method, file or network, because the configuration holds the target
+hostname and file path in the same variable.
+Figure 19 shows the decompiled code responsible for sending data over UDP. Figure 20 is the
+configuration blob found in the sample. This sample was configured to write stolen credentials
+in ~~/var/run/sshd/sshd.pid~~ ~~.~~
+Figure 19 // Malware sending credentials over UDP
+Figure 20 // Example configuration using a file to write stolen credentials
+Interestingly, the configuration includes the hostname of the victim. It is likely used by the operators
+to know the origin of the credentials. This also means that each compromised server receives a unique
+sample of the credential stealer.
+26 A wild Kobalos appears Tricksy Linux malware goes after HPCs TLP: WHITE
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Kobalos", "type" : "ACTO"},
+        {"id": 2, "description": "Trojanized SSH client", "type" : "APPS"},
+        {"id": 3, "description": "Linux instances", "type" : "OPPS"},
+        {"id": 4, "description": "FreeBSD instances", "type" : "OPPS"},
+        {"id": 5, "description": "SSH connection", "type" : "NETP"},
+        {"id": 6, "description": "Encrypted file with stolen credentials", "type" : "DOCF"},
+        {"id": 7, "description": "~~/var/run~~", "type" : "SYSP"},
+        {"id": 8, "description": ".pid file extension", "type" : "TAMP"},
+        {"id": 9, "description": "UDP exfiltration method", "type" : "NETP"},
+        {"id": 10, "description": "~~/var/run/sshd/sshd.pid~~", "type" : "SYSP"},
+        {"id": 11, "description": "Remote host for UDP exfiltration", "type" : "CCSH"},
+        {"id": 12, "description": "Ebury", "type" : "ACTO"},
+        {"id": 13, "description": "Bonadan", "type" : "ACTO"},
+        {"id": 14, "description": "Kessel", "type" : "ACTO"},
+        {"id": 15, "description": "Chandrila", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 2, "target": 6, "rel_name" : "creates and saves"},
+        {"source": 6, "target": 7, "rel_name" : "located in"},
+        {"source": 6, "target": 8, "rel_name" : "has extension"},
+        {"source": 9, "target": 11, "rel_name" : "sends to"},
+        {"source": 9, "target": 5, "rel_name" : "used for exfiltrating from"},
+        {"source": 6, "target": 10, "rel_name" : "can be saved in"}
+    ]
+}

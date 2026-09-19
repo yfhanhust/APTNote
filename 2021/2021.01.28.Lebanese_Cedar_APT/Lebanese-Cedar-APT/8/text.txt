@@ -1,0 +1,367 @@
+Modus Operandi
+Lebanese Cedar APT conducts their attack to reach a wide range of targets. We observed a highly selective
+targeting process that points to extensive reconnaissance efforts. Knowing that the group scans public
+facing web servers for known vulnerabilities, we deduce that Lebanese Cedar, like other attackers, uses
+public tools such as Shodan, Censys and ZoomEye. We have no indication of active vulnerability scanning
+against our clients in this context. At the same time, the attackers utilize URI Brute Force tools such as
+GoBuster and DirBuster to identify open directories that could be used as a platform for WebShell injection.
+At the exploitation stage, the attackers exploit vulnerabilities to gain access to the web server. Our research
+indicates a regular use of critical 1-day vulnerabilities based on the vulnerable versions of the services in
+the compromised servers. These 1-day vulnerabilities include:
+
+
+Atlassian Confluence Server (CVE-2019-3396)
+
+
+Atlassian Jira Server or Data Center (CVE-2019-11581)
+
+
+Oracle 10g 11.1.2.0 (CVE-2012-3152)
+
+
+Moreover, we identified the same pattern in other Oracle Web Application 10g servers like 10.1.2.0.2
+version. In these cases we cannot determine whether one-day vulnerabilities or web-hacking techniques
+were used. We suppose that the likelihood that zero-day vulnerabilities were used is very low. We assess
+that the adversary exploits a few different vulnerabilities in Oracle 10g servers, as can be presented from
+the victims’ map.
+At the injection stage, there are two main attacking vectors:
+
+
+‘Caterpillar 2’ WebShell Installation
+
+
+JSP File Browser and deploying ‘Explosive RAT’
+
+
+Acting as a focal point, the group usually attacks web servers via a custom WebShell, namely Caterpillar –
+a variant of the open source WebShell ‘ASPXspy’. By using WebShell, the attackers leave their fingerprint
+on the web server and the internal network, move laterally, and deploy additional tools. On each
+compromised network the attacker installed one or more WebShell, supposedly to gain persistence and
+diversify the use of similar tools. The attackers use the WebShell to communicate with their C&C server for
+running commands and exfiltrating sensitive information. Connection to the WebShell is made using
+NordVPN or ExpressVPN services.
+The attacker installed a modified version of ‘test.jsp’ or ‘yup.jsp’ file browser on the servers of victims that
+have Oracle web application 10g servers, mainly 10.1.2.0.2 or 11.1.2.0 versions. These file browsers allow
+the group to deploy its custom RAT – Explosive. We assess that the attackers use both WebShell and RATs.
+In our research, we found that Caterpillar 2.0 WebShell was used more often than the Explosive RAT.
+Deployment of the Explosive RAT provides the attackers with higher visibility and functionality at the
+endpoint level. The malware executes commands such as keylogging, screenshot capture and command
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+11 | P a g e
+execution. Explosive utilizes multiple evasion techniques to avoid detection and maintain persistence,
+such as obfuscation, communication encryption and using a separate DLL for API activity. Since 2015, the
+tool had been minorly changed in obfuscation and communication encryption. The RAT’s control network
+is well thought out. It consists of default hard-coded C&C servers, static update servers and DGA-based
+dynamic update servers.
+Installation & C&C
+The primary attack vector utilized by the Lebanese Cedar group is taking over a target organization’s
+vulnerable web server by exploiting a security flaw, followed by a WebShell installation. Once the WebShell
+is installed, the attacker establishes a connection over HTTP using compromised credentials and activates
+the WebShell modules via a visual GUI.
+Each of the WebShell modules has several key functions, primarily designed to obtain escalated privileges
+(LPE), and perform a variety of espionage functions, such as file password theft within the target network.
+The WebShell is a key component of the attack process - it replaces the need for installing a RAT in the
+compromised machine. The WebShell is used to execute remote commands within the target network and
+escalate privileges. However, in some cases a RAT (Remote Access Tool) and an LPE tool (Local Privilege
+Escalation) had been observed in the victims’ network in addition to the WebShell.
+The WebShell we observed can be divided into three categories:
+
+
+Custom-made WebShell
+
+
+Existing WebShell
+
+
+Open-source WebShell
+
+
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+12 | P a g e
+We estimate that the primary WebShell utilized by the Lebanese Cedar APT is “Caterpillar” V2. In some
+cases, when extensive operations within the target network are required, the attackers use Yup.jsp to
+install a RAT for remote activities. Other WebShells are used mainly to assure persistency and redundancy.
+Some of the WebShells we traced contain code snippets associated with tools used by Iranian hacktivist
+groups such as “Iranian Hacker” [4] and “ITSecTeam”. While we are unable to determine the nature of the
+relationship between these groups and the Lebanese Cedar APT, we find it important to highlight this
+connection, as it may point to a connection between the APT, which is associated with Hezbollah, and the
+Iranian regime.
+Customized WebShell – "Caterpillar" 2.0
+As previously indicated, Caterpillar Shell 2.0 by N.T is the main WebShell in the Lebanese Cedar APT attack
+infrastructure. It is a WebShell written in Visual Basic. First observed in 2015, the WebShell is used to carry
+out various espionage operations over the attacked web server, including potential asset location for
+further attacks, file installation server configuration and more.
+According to our findings, the group currently uses the WebShell’s second version, which is characterized
+by the ASPX file type, unlike the first version, that used both ASPX and ASP file types. The WebShell can be
+found within the target file by its original name ‘Caterpillar.aspx’ or alternatively, less prominent names
+such as 405.aspx, resume.aspx and more.
+Screenshot from an exposed WebShell found in a Saudi website, showing the connection to “Caterpillar”
+While accessing the WebShell, the attackers are prompted to type a designated user and password, usually
+embedded within the source code of the file as an md5 hash. In many cases, duplicate user and password
+were observed.
+Screenshot from the GUI of Caterpillar WebShell
+4 BAX26
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+13 | P a g e
+As can be seen above, the management panel of the WebShell is divided into four module groups:
+
+Operate – modules that run on the compromised server, such as file download and upload, file
+
+search and more. These modules are used to install further malware or attack tools for privilege
+escalation. Among these modules is “RottenPotato”.
+
+Go To – modules used to select the desired hard drive among those installed on the compromised
+
+server.
+
+
+Database   - two modules used to control datasets; only one of them is currently functional.
+
+
+Tool – the broadest module group, that enables the attackers to characterize the current
+
+
+workspace and perform actions for lateral movement, command execution and more.
+Each WebShell module has several properties. First, the technical properties – the module’s form ID, the
+http request (GET/POST) used by the attackers to communicate with the server in every command, and
+the designated parameters of the desired URI. Then, verbal instructions will be displayed. The instructions
+contain explanations about the module and the parameters the attacker must fill in order to execute
+commands, or in some cases attacks. Our research of the “Caterpillar” WebShell, uncovered modules that
+were fully copied from other sources. These modules were attached a note such as “This function has fixed
+by Tatra has not detected” as well as a date, in this case, from 2009. These notes enabled ClearSky
+researchers to identify the names of three developers involved in writing the tools used by the Lebanese
+Cedar APT - Nido, Zero Lord and Tatra.
+In the following chapter, we present a review of the module groups, including a description of the modules
+and a summary of the parameters of each of them.
+OPERATE Modules
+Operate is a module group used to perform various espionage functionalities such as file creation, file
+download and upload, file search in selected hard drives (Chosen via the ‘Go To’ module group) and file
+download from external links.
+Screenshot from the Operate module group
+Screenshot showing a file download process from an external link, such as an embedded website
+|GUI Input parameter|Webshell Module Description|Action (URI)|HTTPRequest|Form ID (Webshell Module)|
+|---|---|---|---|---|
+|-|Creating new file or directory|?action=new|POST|New|
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+14 | P a g e
+|File|Upload file from hacker’scomputer to the directory|?action=upfile|POST|UpLoadFile|
+|---|---|---|---|---|
+|Paste information tothe directory|?action=paste|POST|Paste|Paste|
+|Search term (String)|Search File in the directory|?action=search|POST|Search|
+|A link to a file on aserver|Download file from the directory|?action=goto|GET|DownloadfileRemote|
+|-|Go to a file's directory||POST|GoBackDir|
+|-|Go to Document and Settingsfolder||POST|Documents and Settings|
+|-|Go to Temp folder||POST|Temp|
+DATABASE Modules
+The Database module group is responsible for the management of datasets on the server infected with the
+WebShell, or alternatively, datasets accessible via the WebShell.
+Screenshot from the Data Base module group
+|Input parameter|WebShell CommandDescription|Action (URI)|Method|Form ID(WebShell Module)|
+|---|---|---|---|---|
+|Server Name (IP)Database NameUsernamePasswordPage sizeActionConnectionString|Connect to a Databaseserver|?action=DbManager|GET|Dbase Manager|
+||Read database|?action=ReadDbManager|POST|Read DB Manager|
+|User list (embedded inthe code)|Connect to a SQL serverfrom a user list|?action=DbEnumerateLogin|GET|User SQL Enum Login|
+TOOL Modules
+The Tool module group is responsible for executing commands over the compromised server, selected by
+the attackers to gain persistent access to the server and the organizational network, perform
+reconnaissance activities and execute modules related to gaining control over the network. This module
+group contains functions similar to those of a RAT (Remote Access Tool).
+Screenshot from the Tool module group
+It is the broadest module group, containing 25 modules divided into the following categories:
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+15 | P a g e
+
+Server & Network Fingerprinting - Modules used to obtain information about the compromised
+
+server and network.
+
+Rootkit and server command execution modules - Modules used to perform a variety of actions
+
+over the network servers
+
+Network Shell creation - Modules feature the Shell Connection module, meant to enable attacker
+
+to create a Network Shell
+
+Network server’s brute forcing – Modules used to preform brute force attack against a verity of
+
+users and servers over the network
+|Input Parameter|WebShell CommandDescription|Action (URI)|HTTPRequest|Form ID (WebShellModule)|
+|---|---|---|---|---|
+|Server & Network Fingerprinting|Server & Network Fingerprinting|Server & Network Fingerprinting|Server & Network Fingerprinting|Server & Network Fingerprinting|
+|UsernamePassword|General informationabout thecompromised assetincludes computerversion, computername, IIS version, IPaddress and more|?action=information|GET|System info|
+|-|List of Processes|?action=pro|GET|List Processes|
+|-|List of Services|?action=srv|GET|List Services|
+|-|List of User Accounts|?action=user|GET|List user accounts|
+|Port ListIP Address|Port Scanner|?action=PortScan|GET|PORT Scan|
+|-|Logs of runningapplication|?action=applog|GET|Application Event Log|
+|-|System Log|?action=syslog|GET|System Log|
+|-||?action=auser|GET|IIS List Anonymous|
+|-||?action=iisspy|GET|IIS Spy|
+|-|Ip Config|?action=ipconfig|GET|Ip Config|
+|-|List of Local Group ofusers|?action=localgroup|GET|Local Group|
+|-|User home directoryaccounts detection|?action=homedirectory|GET|User Home Directory|
+|IP|HTTP Fingerprintdetection|?action=HttpFinger|GET|Http Finger|
+|-|Scanning sub-netassets|?action=GetNTPC|GET|GetNetworkComputers|
+|FTP Server IPUsernamePasswordFTP root|Change the label of anFTP server|?action=FtpSwitch|GET|Ftp Switch|
+|Rootkit and Server Command Execution Modules|Rootkit and Server Command Execution Modules|Rootkit and Server Command Execution Modules|Rootkit and Server Command Execution Modules|Rootkit and Server Command Execution Modules|
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+16 | P a g e
+|Input Parameter|WebShell CommandDescription|Action (URI)|HTTPRequest|Form ID (WebShellModule)|
+|---|---|---|---|---|
+|UsernamePasswordHostCommand|Run commands inSQL Server(local/remote)|?action=sqlrootkit|POST|SqlRootKit|
+|UsernamePasswordHostCommandWMI classes|Run commands onremote server|?action=adminrk|POST|AdminRootKit|
+|Command|Run commands onthe compromisedasset with CMDfunctions|CMD?action=cmdCMD.W32?action=cmdw32CMD.WSH?action=cmdwshCMD.WMI?action=cmdwmi|POST|CMD*|
+|Command line|Change Registry Key|?action=regshell|POST|Registry Shell|
+|Rework file or DirCopied Filed or Dir|Copy files to anotherdirectory|?action=clonetime|POST|Clone Time|
+|Network Shell Creation|Network Shell Creation|Network Shell Creation|Network Shell Creation|Network Shell Creation|
+|-|-|?action=RvConnect|-|Shell Connection|
+|BruteForce|BruteForce|BruteForce|BruteForce|BruteForce|
+|Multiple– OpenSource based|Brute Force on a useron server|?action=UserEnumLogin|Post|User Enum Login|
+|Multiple– OpenSource based|Brute Force on an FTPserver|?action=FtpBrute|Post|FTP Brute|
+|Multiple– OpenSource based|Brute Force on anPOP3 server|?action=POP3Brute|Post|POP3 Brute|
+WebShell Containing Modules Taken from Iranian Hacktivist Groups
+"Caterpillar" variant - ITSecTeam Module
+One of the WebShells we found in our research is a variant of the “Caterpillar” WebShell that contains an
+additional module, taken from a WebShell developed by the known Iranian hacktivist group ‘ITSecTeam’.
+The module, named ‘ITSecTeam.WS’, is used by the Lebanese Cedar APT to deploy additional tools,
+including the ‘Explosive’ RAT.
+As mentioned above, the code snippet belongs to ‘ITSecTeam’ - a group associated with the IRGC (Iranian
+Revolutionary Guard Corps). The signature reveals that the code was written by an individual called ‘Amin
+Shokoni’, a member of the group. The group gained publicity from reports published by the United States
+Department of Justice – according to those, members of the group were convicted for conducting DDoS
+attacks against United States financial sector institutions between 2011-2013.
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+17 | P a g e
+These WebShells point at the timestamp 07/07/2014. Please note that the date on the timestamp is
+hardcoded into the original code of the Caterpillar WebShell, as well as a specific URL.
+Screenshot from the ‘ITSecTeam’ module
+We cannot determine why this code snippet had been embedded into the WebShell, and whether it was
+provided to Lebanese Cedar APT by ITSecTeam or obtained unknowingly.
+“Mamad Warning Sheller” WebShell
+During a response to a recent Incident, ClearSky researchers detected an ASPX file called ‘Pars.aspx’. An
+in-depth analysis of the file revealed that it is a WebShell developed by a hacker dubbed ‘Mamad Warning’.
+The WebShell name provides a basis for our assumption that the hacker is a member of the Iranian
+hacktivist group ‘Persian Hacker’ or ‘Iranian Hacker’, also dubbed ‘Pars’. This hacker has been actively
+defacing Middle East websites, often government owned.
+In September 2020, the United States Justice Department Indicted two hackers that are part of the group,
+for defacing websites world-wide with pro-Iranian messages, such as promoting Ghasem Soleimani’s
+photo. The first hacker is Mrb3hz4d from Iran, and the second is Mrwn007, allegedly a stateless national of
+the Palestinian Authority. Mamad himself was not indicted by the Justice Department, and we do not know
+if his origin is Iran, the Palestinian Authority or Lebanon. Unlike the other two hackers, Mamad is still active
+in ‘Iranian Hackers’, which also goes by the handle ‘Bax 026’ [5] .
+The WebShell features three key modules:
+
+BindShell – The module is almost identical to the ‘Shell Connection’ module of the “Caterpillar”
+
+WebShell, which had been reviewed in detail above.
+
+Replicate – The module enables an attacker to create a new folder within the WebShell.
+
+5 https://www.justice.gov/opa/pr/two-alleged-hackers-charged-defacing-websites-following-killing-qasem
+soleimani
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+18 | P a g e
+
+Upload – The module enables an attacker to download files from their own machine or from a
+
+selected URL.
+Open-Source WebShell Obtained Online
+During our investigation, we found two open-source WebShell used by the attackers for various purposes.
+The first WebShell is called “ASPXSpy”. According to Check Point, this WebShell is the basis of the custom
+“Caterpillar” WebShell. The second WebShell we tracked is called “SharPyShell”. This WebShell enables
+the attackers to download a ‘Juicy Potato’ file to the compromised machine so as to obtain extended
+privileges.
+Further information about the “ASPXSpy” WebShell can be found in the hackingscripts [ 1] website. Further
+information about the “SharPyShell” WebShell can be found on GitHub [2] .
+Open-Source Management Panels
+We found two management web panels on the networks that we investigated, that allow the attackers to
+perform varied operations on the compromised servers and are not WebShell like those previously
+discussed in our report.
+Adminer
+Adminer is a web-based database management panel, capable of managing the following data sources 
+SimpleDB, Firebird, Oracle, MySQL, SQLite, PostgreSQL, MariaDB, MS SQL, Elasticsearch and MongoDB [3] .
+JSPFile Browser
+The modified JSP file browser, mainly named test.jsp or yup.jsp is a variant of the management panel open
+source based JSP File Browser [6] . The system allows its users, in our case the attackers, web-based access
+and manipulation of files stored on a remote server, including uploading, copying, shifting, and even
+deleting files. The system also provides the ability to download new files to the server – in this case, the
+‘Explosive’ RAT. The panel is the installed in 2 different paths, which helped us to identify these JSP files in
+the wild.
+The panel was found in GitHub, however, a code comparison between the tool found on the compromised
+server and the GitHub code revealed that the attackers have added an additional function to the system 
+CheckConUrl, which performs a file transfer over HTTP. We cannot determine if Lebanese Cedar created
+this function, however, we did not identify any other usage of this function that was not attributed to this
+APT. Therefore, we estimate that this file browser was edited by the group. Based on this edition, we were
+able to identify more servers world-wide that were attacked by the adversary. ‘test.jsp/yup.jsp’ is first
+injected to the compromised public-facing web server, and then used to deploy the ‘Explosive’ RAT.
+6 http://www.vonloesch.de/filebrowser.html
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+19 | P a g e
+The code snippet of the new function added by the attackers to the system
+The "Explosive" Custom RAT
+‘Explosive’ is a RAT (Remote Access Tool) first revealed in 2015 by Check Point, in a report reviewing the
+activities of the Lebanese Cedar APT, referred to in the report is ‘Volatile Cedar’. The campaign probably
+began in late 2012, targeting carefully chosen individuals, companies, and state institutions worldwide,
+using a range of attack techniques, that revolve around the group’s custom-designed malware, Explosive.
+Explosive is implanted on the target server – a public facing web server - by the JSP file (WebShell) as the
+initial point of access to the target network and used to gather information.
+The malware’s data collection capabilities are both passive and active – it harvests data found on the
+compromised machine and features the ability to search for data on-demand. Explosive runs a keylogger
+on the compromised machine as of its installation and sends the data to the attackers via a C&C server. Its
+infrastructure includes both static and dynamic C&C servers. It also has multiple stealth and detection
+evasion capabilities – including a self-destruct mechanism - that can be activated upon command by its
+operators. Explosive also features functionalities such as machine fingerprinting, memory usage
+monitoring to assure stealth, remote shell, and arbitrary code execution.
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+20 | P a g e
+During our analysis, we identified only a few changes between the 2015 version of Explosive RAT and its
+current version. We identified three major changes: Anti-debugging methods, 2 new modules and
+encrypted communication between the compromised machine to the C2.
+Anti-Debugging
+The major add-on of the new version is the presence of multiple anti-debugging methods, part of which,
+are operating as a never-ending thread. First, Explosive will check the window name of each process. The
+RAT will search for a few debuggers, such as Immunity, Ollydebug and Phantom (We did not identify any
+search for IDA pro). Then, Explosive will run the function “IsdebuggerPresent” and will check for flags in the
+Process Environment Block.
+New Modules
+In our analysis, we were able to identify two new modules.
+
+NTCommand – Run a function named ReadSocket in the DLL module. Read.socket is a function
+
+that reads a string from the specified socket.
+
+RenF – Rename file in the system.
+
+Communication with C2 over SSL
+In CheckPoint’s report from 2015, they identify two communications methods: Communication over HTTP
+(Port 80) to a dynamic C&C server update server, and communication with a static update server. Moreover,
+the identified using of RAW TCP for communication with the C&C server. The URL and IP addresses were
+hard-coded stings in the explosive file.
+In our analysis, we found a new method – communication over HTTPS (Port 443). The data is encrypted
+with RC4 method. Similar to the original methods, the RC4 decryption key is a hard-coded string as well.
+Further information about the malware can be found in the CheckPoint’s technical report .
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2021
+TLP: WHITE
+21 | P a g e

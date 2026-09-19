@@ -1,0 +1,79 @@
+
+
+
+Sentence : Version 1.0
+Date: 5/12/2009
+SHA256: a7d07b92e48876e2195e5d8769a47cf0a237e11ac304e41b14fc36042b0d9484 Original
+Name: WUMsvc.dll
+Initial Release
+The initial loader Trojan writes Emissary to %SYSTEM%\WSPsvc.dll and installs it as a service,
+which will run the exported function “ServiceMain” within the Emissary Trojan to carry out its
+functionality.
+Configuration data is stored in the last 1024 bytes of the payload, from which the Trojan will extract�
+an 896 byte structure. The configuration is decrypted with an algorithm that uses the XOR operation�
+on each byte using the value at a different offset within the ciphertext.�
+The code will create the following registry keys:
+1
+2
+HKEY_CLASSES_ROOT\Shell.LocalServer\CheckCode
+HKEY_CLASSES_ROOT\Shell.LocalServer\CheckID
+Emissary uses the “CheckCode” registry key to store the encrypted configuration for the Trojan,�
+while it stores a GUID that Emissary uses to uniquely identify the compromised host in the
+“CheckID” key.
+The malware performs initial system information gathering and saves data to a file named�
+TMP2548. The initial gathering relies on a combination of the following commands executed by the
+command prompt:
+Emissary parses command and control responses for “instru”, which will precede a GUID value that
+designates the command the C2 server wishes to execute on the system. The command handler
+does not use a nested if/else or switch statement like most malware families, instead Emissary
+creates a structure that contains all of the available command GUIDs that it will iterate through each
+time the C2 supplies a GUID in order to determine which command the operator wishes to execute.
+Emissary can include up to 32 different commands within this data structure, but it appears the�
+author has decided to include six commands within the Trojan. The following denotes the command
+handler structure used by Emissary v1.0:
+Table 1 contains the commands available within the Emissary v1.0 command handler.
+|Command|Description|
+|---|---|
+|bac84b12-5b0b-491f-a885-8667d156394f|Upload ﬁle.�|
+|3d8313cc-53ca-4751-bbbf-ea5f914f8e65|Download ﬁle.�|
+|db0e93e7-b46c-4cba-81f1-ec70da57dc19|Update conﬁg. C2 speciﬁes ﬁles as: p1�= C2 server 1, p2 = C2 server 2, p3 =C2 server 3, p4 = Sleep Interval, p5 =System Identiﬁer (computer name), p6�= GUID for beacon.|
+|2e382e51-3089-4293-8454-5eccb253eb54|Executes a speciﬁed command.�|
+|a57db08a-bf97-4b43-b27d-157e62e2fd74|Create remote shell.|
+|eab5c1ab-a497-4fc2-bbe0-049be45d6f2d|Update Trojan with new executable.|
+Table 1: Emissary command handler
+The Emissary version 1.0 beacon to the C2 server appears as follows:
+Date: 5/31/2009
+SHA256: e6c4611b1399ada920730686395d6fc1700fc39add3d0d40b4f784ccb6ad0c30, Original
+Name: WUMsvc.dll
+Removed checks for “//” and “/” in the update configuration command when updating the three C2�
+servers.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "WUMsvc.dll", "type" : "EXEF"},
+        {"id": 2, "description": "a7d07b92e48876e2195e5d8769a47cf0a237e11ac304e41b14fc36042b0d9484", "type" : "IOCS"},
+        {"id": 3, "description": "%SYSTEM%\\WSPsvc.dll", "type" : "SYSP"},
+        {"id": 4, "description": "ServiceMain", "type" : "TTPS"},
+        {"id": 5, "description": "HKEY_CLASSES_ROOT\\Shell.LocalServer\\CheckCode", "type" : "REGI"},
+        {"id": 6, "description": "HKEY_CLASSES_ROOT\\Shell.LocalServer\\CheckID", "type" : "REGI"},
+        {"id": 7, "description": "TMP2548", "type" : "DOCF"},
+        {"id": 8, "description": "C2 server 1", "type" : "CCSH"},
+        {"id": 9, "description": "C2 server 2", "type" : "CCSH"},
+        {"id": 10, "description": "C2 server 3", "type" : "CCSH"},
+        {"id": 11, "description": "Computer name", "type" : "TTPS"},
+        {"id": 12, "description": "GUID for beacon", "type" : "TTPS"},
+        {"id": 13, "description": "e6c4611b1399ada920730686395d6fc1700fc39add3d0d40b4f784ccb6ad0c30", "type" : "IOCS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has hash"},
+        {"source": 1, "target": 3, "rel_name" : "writes to"},
+        {"source": 1, "target": 4, "rel_name" : "executes function"},
+        {"source": 1, "target": 5, "rel_name" : "creates registry key"},
+        {"source": 1, "target": 6, "rel_name" : "creates registry key"},
+        {"source": 1, "target": 7, "rel_name" : "writes to file"},
+        {"source": 8, "target": 1, "rel_name" : "commands"},
+        {"source": 9, "target": 1, "rel_name" : "commands"},
+        {"source": 10, "target": 1, "rel_name" : "commands"},
+        {"source": 13, "target": 1, "rel_name" : "has hash"}
+    ]
+}

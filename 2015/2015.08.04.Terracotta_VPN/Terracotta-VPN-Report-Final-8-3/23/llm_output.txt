@@ -1,0 +1,256 @@
+
+
+
+Sentence : DETECTING TERRACOTTA ASSOCIATED MALWARE
+RSA Research has associated several notable malware samples with the Terracotta eco-system. These binaries have been used
+to provide backdoor/RAT services on compromised servers. RSA Research has observed that this malware is commonly installed
+by the actors concurrently with other remote administration tools including Radmin, DameWare, and Windows telnet server.
+Other lateral reconnaissance and exploitation tools used by the Terracotta actors include various port scanners and password
+dumpers such as Mimikatz and a Chinese tool called DolphinQ. [4] Additionally, many Terracotta nodes had sometimes multiple
+instances of CCProxy installed to provide additional anonymization services. These CCProxy instances used locally configured
+credentials, and not central authentication like the VPN services.
+While this is not a thorough analysis of the malware encountered during this investigation, several samples were directly tied to
+the initial enlistment of the servers as nodes into the Terracotta VPN ecosystem, as mentioned in the Modus Operandi section.
+Gh0st RAT MM523
+File Size: 21.9 MB
+MD5: bccbba3ed45ead051f56fc62fef005a6
+C2: vpn.mm523.net:10000 (currently sinkholed by RSA Research [5] )
+http://www.trendmicro.com/vinfo/us/threat-encyclopedia/malware/zegost
+http://www.microsoft.com/security/portal/threat/encyclopedia/entry.aspx?Name=TrojanDropper:Win32/Zegost.B#tab=2
+RSA Research refers to this variant, or build of Gh0st RAT as “MM523” based on the C2 domain. Gh0st is a full function Remote
+Administration Tool (RAT) with keystroke logger, file manager, remote terminal shell, screen control and capture, and many
+other functions. Pertinent analysis on Gh0st RAT is available [6] . Since the majority of confirmed Terracotta-compromised
+systems are running 64-bit Windows Server 2008 R2, this section will detail more findings that are pertinent to that platform,
+rarely covered by typical sandbox analysis.
+This particular binary was found on only one system, but appears to be an installer or “dropper” for the Gh0st malware that was
+found on multiple Terracotta compromised servers prior to February 2015. This malware is unusually large because it is padded
+with zeros. The large file size may have been a rudimentary attempt to avoid antivirus or network security systems. To be
+sure, absent the padding, a binary comparison proves that the sample is identical to the sample submitted to VirusTotal in July
+2014 with MD5 of e421d07c316ab6e04fd0bfa122f1d953. [7]
+Gh0st was coded originally for Windows XP. Though the dropper will successfully install on more modern Windows systems,
+there are unresolved issues with its installation on Windows 7 and Windows Server 2008R2.
+The dropper scans the Windows registry here:
+HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Svchost\Netsvcs
+It finds the first unused (stopped and disabled) service that runs under service process svchost netsvcs. On typical Terracotta
+victim servers, this has been the FastUserSwitchingCompatibility service, which is a deprecated service left-over from Windows
+XP for compatibility. Since FastUserSwitchingCompatibility it is not an actual service that can run on versions later than Windows
+4 https://www.virustotal.com/en/file/9b8257000b05116a3631630c44b9f6b18c13e5bc5635c1fa3f20a01f70380909/analysis/
+5 A sinkholed domain is one that was used by its owner specifically for malicious activity and thus subject to lawful seizure. Malware that is sinkholed is
+redirected to an analysis system controlled by researchers or law enforcement instead of the criminals. The sinkhole is then used for intelligence
+research and victim notification.
+6 http://www.mcafee.com/us/resources/white-papers/foundstone/wp-know-your-digital-enemy.pdf
+7 https://www.virustotal.com/en/file/3a2d5ce9f5f953f0499773a05f26317f9f6745352031bb8dafbb6aadf0e8e57b/analysis/
+16
+XP, Microsoft has omitted the service description text. So the Gh0st dropper scans to the next description, and artifacts arising
+from that issue include a misspelled and mismatched description for the hijacked FastUserSwitchingCompatibility which is
+“Windows Sxitcway Firewall/Internet Connection Sharing (ICS)”. A Google search for the word “Sxitcway” will reveal other
+malware that encounters similar platform compatibility problems.
+The dropper installs its service DLL named with five random letters with the following path in the normally hidden ProgramData
+directory. Example:
+C:\ProgramData\Application Data\Storm\update\%SESSIONNAME%\hbeya.cc3
+The Gh0st service DLL binary in this location is approximately 22MB in size, and because the file is generated dynamically, has a
+unique file hash for each installation.
+Upon initial execution, the Gh0st RAT dropper is extremely busy, querying for some 75 URLs associated with legitimate antivirus
+vendors; however, no connections are made to these URL for C2. For control, the RAT connects to the IP found with a DNS
+query to vps.mm523.net on port 10000 using the same connection string as the “cb1st” variant of Gh0st analyzed by Norman in
+“The Many Faces of Gh0st” paper here:
+http://download01.norman.no/documents/ThemanyfacesofGh0stRat.pdf
+RSA Research determined that some 240 systems around the world are infected with this Trojan, including approximately 100
+Terracotta VPN nodes.
+Gh0st RAT GDS520
+File Size: 204.5KB
+MD5: possibly 81c08ae40700d863f5dbd35599192962 and/or ef938cd1594b6b44507c6423cd39d5f5
+C2: gds520.com:8086 (Active)
+Following the neutralization of the MM523 Gh0st RAT communication with the RSA Research seizure of its C2 domain, RSA
+Research observed malicious services installed by a dropper variant very similar to the MM523 Gh0st variant on newly
+compromised Terracotta victims. While similar to the “Gh0st RAT MM523” build, this build we dub GDS520 has a different
+service DLL location and C2 URL. The GDS520 sample had been in the wild before the RSA Research sinkholing of mm523.net,
+based on the date two dropper variants were uploaded to VirusTotal. Similar to Gh0st RAT MM523, these variants are
+characterized by DNS lookups to multiple antivirus vendor update URLs, in addition to the C2 URL, gds520.com over port TCP
+port 8086. The Ghost RAT GDS520 service DLL is named with five random letters and is installed in the following location with
+the example file name:
+C:\ProgramData\DRM\%SESSIONNAME%\vxujx.cc3
+Notably, the dropper deletes itself after successfully installing the RAT service. This is unlike the Gh0st RAT MM523 variant,
+which did not delete itself.  Finally, the two GDS520 Ghost RAT variants found on VirusTotal were built with file properties to
+resemble a legitimate Microsoft program (Figure 9), and included a digital certificate as one of the executable’s resources, which
+can be displayed in the file properties digital signatures tab (Figure 10). RAT files were appended with a digital signature taken
+from a legitimate file signed by Kaspersky Lab. Since the signature corresponds to a different file, it appeared as invalid. Any
+more than cursory review of the dropper executable properties would reveal the invalid signature. These dropper samples used
+the exact same Kaspersky certificate described in the article “Certificate Snatching—ZeuS Copies Kaspersky’s Digital Signature”
+by TrendMicro. [8]
+8 http://blog.trendmicro.com/trendlabs-security-intelligence/certificate-snatching-zeus-copies-kasperskys-digital-signature/
+17
+Figure 9. Gds520 Gh0st RAT installer file details
+Figure 10. Gds520 Gh0st RAT installer with invalid code signing using Kaspersky public certificate
+On one compromised system investigated in May of 2015, forensic artifacts showed the source IP address of the GDS520
+installer (Figure 11).
+Figure 11. Forensic artifacts left behind on a victim server by the actor downloading the GDS520 Gh0st
+RAT installer from a Beijing IP address
+18
+A cache of the page indicated it was from a type of ephemeral file server known as HTTPFileServer (HFS) [9] . The HFS server
+cached page showed that the HFS daemon had been up for 4 minutes (Figure 12). Fortunately for the investigation, the
+ephemeral HFS daemon maintains usage statistics. Out of the 37 files available on the HFS page to the Terracotta actor, the
+GDS520 Gh0st RAT appeared to be the most commonly downloaded, with 1225 total downloads (Figure 12).
+9 http://www.rejetto.com/hfs/
+19
+Figure 12. HFS-hosted tool repository from which Terracotta actor downloaded the GDS520 RAT
+installed on victim server. Note the yellow-highlighted information for “s.exe”.
+20
+The HFS daemon was running on an IP address from a range assigned to a middle school in Beijing according to Whois
+information [10] . Virus Total [11] [12] [13] [14] reveals that hosts in this IP range have been used, extensively in the first half of 2015, to host
+malicious tools including the GDS520 Gh0st RAT variant and other exploitation tools found on at least three Terracotta victim
+systems. Also notable in Figure 12 is the third most-often downloaded tool from the actor’s HFS page, named “Win64.exe [15] .”
+RSA Research found this on one Terracotta victim server, and determined this to be a variant of the Windows privilege
+escalation exploit tool as described by Crowdstrike in a blog post on Hurricane Panda [16] . RSA Research does not know if the
+Beijing IP address range was leveraged exclusively by Terracotta operators.
+Mitozhan Trojan
+File Size: 87 KB
+MD5: 7b18614df95e71032909beb25a7b1e87
+C2: vps.mm523.net:81 (sinkholed)
+This malware copies itself to the Windows directory (C:\Windows) and gives itself a new random name. Every time the malware
+runs, the executable name will vary but the file name length remains the same; 6 characters.
+Example:
+C:\WINDOWS\fatjse.exe
+The Image Path of the newly-copied file is then used to add a new service to the ControlSet Registry Key. This will ensure
+persistence on the infected machine. The name of the new service (GHIJKL NOPQRSTU WXY) might be suspicious to
+administrators.
+Example:
+RegKey Name: MACHINE\SYSTEM\CONTROLSET001\SERVICES\GHIJKL NOPQRSTU WXY
+RegKey Data: C:\WINDOWS\fatjse.exes\0
+The malware performs a DNS request to vps.xxxxx.net for resolution of its controller. The infected machine connects to the
+controller over TCP port 81 with the following initial connection string (Figure 13).
+Figure 13. Mitozhan C2 connection string
+Two strings of interest are revealed upon examination of the process in memory.
+%c%c%c%c%c%c.exe
+GET %s HTTP/1.1Content-Type: text/htmlHost: %sAccept: text/html, /User-Agent:Mozilla/4.0 (compatible; MSIE %d.00;
+Windows NT %d.0; MyIE 3.01)
+Search engine results for the last part of the UA string MyIE 3.01 show the exact UA string mentioned in a blog post by FireEye
+in 2010 [17] . The FireEye blog references another blog by researchers from Arbor Networks [18] . The latter blog describes in more
+10 https://whois.domaintools.com/211.153.xx.x
+11 https://www.virustotal.com/en/ip-address/211.153.xx.x/information/
+12 https://www.virustotal.com/en/ip-address/211.153.xx.x/information/
+13 https://www.virustotal.com/en/ip-address/211.153.xx.x/information/
+14 https://www.virustotal.com/en/ip-address/211.153.xx.2xx/information/
+15 https://www.virustotal.com/en/file/d7bd289e6cee228eb46a1be1fcdc3a2bd5251bc1eafb59f8111756777d8f373d/analysis/1429772817/
+16 http://blog.crowdstrike.com/crowdstrike-discovers-use-64-bit-zero-day-privilege-escalation-exploit-cve-2014-4113-hurricane-panda/
+17 https://www.fireeye.com/blog/threat-research/2010/10/avzhan-botnet-the-story-of-evolution.html
+18 http://www.arbornetworks.com/asert/2010/09/another-family-of-ddos-bots-avzhan
+21
+depth the malware behavior, which shares several elements with the sample under investigation, including the use of a raw TCP
+connection to the server, the UA string in memory, and the pattern to generate the executable name.
+The legitimate properties and text depicted in the file appear to obscure the actual malicious intent.  The file is named after a
+very popular photo markup program in China called 美�秀秀 [19] or “Mito Xiu Xiu” (Figure 14).
+Figure 14. Mitozhan file properties shares name and description with popular benign program
+RSA Research determined that approximately 180 systems were infected with this Trojan, approximately one third of which were
+active in the Terracotta VPN node ecosystem.
+Backdoor Liudoor
+File Size: 87 KB
+MD5: 531d30c8ee27d62e6fbe855299d0e7de [20]
+C2: 0.0.0.0:3433
+This is a simple backdoor similar to the common Portless Backdoor [21] found running as a service on at least five Terracotta VPN
+victim servers, that RSA Research has dubbed Liudoor. It was installed as Windows\SysWOW64\rasauto.dll running as what
+would be the unused “RasAuto” service on victim Windows Server 2008 R2 systems.
+While RSA Research did not find the dropper for this backdoor, it could have just as easily been installed with a batch script.
+This sample binds to TCP port 3433 and waits for an incoming request, probably from a dedicated client used by its operator. It
+will send the 4 bytes "pass", it expects to receive the binary string "E10ADC3949BA59ABBE56E057F20F883E" (shown here in
+ASCII text). This is the MD5 hash of the ASCII string "123456". The backdoor process will compare what is passed from the
+client to that hard coded value, and if successful it will send back "succ", if not it will sent back "fail".
+Once the sample has successfully authenticated it will create a thread and pipe data back and forth to the Windows command
+shell process, cmd.exe. It takes the input and parses the string sent to the sample for 0x0D (the obfuscation XOR key) or
+carriage return...and then passes everything before that to cmd.exe. The shell can be halted with the "exit" command. Other
+hard coded binary options include a certain value that will run the console program “nbstat.exe” for NetBIOS network
+information, which might be useful to its operator for lateral exploitation of other Windows computers on the victim network.
+RSA Research found similar Backdoor Liudoor files on VirusTotal with the following characteristics:
+78b56bc3edbee3a425c96738760ee40622 listens on port 3340
+5aa0510f6f1b0e48f0303b9a4bfc641e23 listens on port 3433
+2be2ac65fd97ccc97027184f0310f2f324 listens on port 1234
+On more recently discovered Terracotta victims, Liudoor was observed to listen on TCP port 64111 or 33911.
+19 http://xiuxiu.web.meitu.com
+20 https://www.virustotal.com/en/file/ad1a507709c75fe93708ce9ca1227c5fefa812997ed9104ff9adfec62a3ec2bb/analysis/
+21 http://www.symantec.com/security_response/writeup.jsp?docid=2003-122516-0717-99&tabid=2
+22 https://www.virustotal.com/en/file/deed6e2a31349253143d4069613905e1dfc3ad4589f6987388de13e33ac187fc/analysis/
+23 https://www.virustotal.com/en/file/4575e7fc8f156d1d499aab5064a4832953cd43795574b4c7b9165cdc92993ce5/analysis/
+24 https://www.virustotal.com/en/file/e42b8385e1aecd89a94a740a2c7cd5ef157b091fabd52cd6f86e47534ca2863e/analysis/
+22
+Output : 
+### Overview of Malware and Backdoors in the Terracotta Ecosystem
+
+The Terracotta ecosystem, as described, is a network of compromised systems primarily targeting Windows Server 2008 R2. The following malware and backdoors have been identified within this ecosystem:
+
+#### 1. **Gh0st RAT (Gh0st Remote Access Tool)**
+- **File Size:** 96 KB
+- **MD5:** `7b18614df95e71032909beb25a7b1e87`
+- **C2 Server:** `vps.mm523.net:81` (sinkholed)
+- **Description:** This malware copies itself to the Windows directory and gives itself a random name of 6 characters. It adds a new service to ensure persistence on the infected machine.
+- **Service Name Example:** `GHIJKL NOPQRSTU WXY`
+- **Image Path Example:** `C:\WINDOWS\fatjse.exe`
+- **Behavior:**
+  - Performs DNS requests to resolve its controller.
+  - Connects to the controller over TCP port 81 with a specific connection string.
+  - Contains strings in memory that match known malware behavior.
+
+#### 2. **Gh0st RAT (Alternative C2)**
+- **File Size:** 96 KB
+- **MD5:** `7b18614df95e71032909beb25a7b1e87`
+- **C2 Server:** `vps.mm523.net:81` (sinkholed)
+- **Description:** Similar to the above, but with a different C2 server.
+- **Behavior:** Same as the first Gh0st RAT.
+
+#### 3. **Mitozhan Trojan**
+- **File Size:** 87 KB
+- **MD5:** `7b18614df95e71032909beb25a7b1e87`
+- **C2 Server:** `vps.mm523.net:81` (sinkholed)
+- **Description:** This malware copies itself to the Windows directory and gives itself a random name of 6 characters. It adds a new service to ensure persistence on the infected machine.
+- **Service Name Example:** `GHIJKL NOPQRSTU WXY`
+- **Image Path Example:** `C:\WINDOWS\fatjse.exe`
+- **Behavior:**
+  - Performs DNS requests to resolve its controller.
+  - Connects to the controller over TCP port 81 with a specific connection string.
+  - Contains strings in memory that match known malware behavior.
+
+#### 4. **Backdoor Liudoor**
+- **File Size:** 87 KB
+- **MD5:** `531d30c8ee27d62e6fbe855299d0e7de`
+- **C2 Server:** `0.0.0.0:3433`
+- **Description:** A simple backdoor similar to the common Portless Backdoor, running as a service on victim servers.
+- **Installation Path:** `Windows\SysWOW64\rasauto.dll`
+- **Behavior:**
+  - Binds to TCP port 3433 and waits for incoming requests.
+  - Authenticates using an MD5 hash of the string "123456".
+  - Creates a thread to pipe data back and forth to the Windows command shell (`cmd.exe`).
+  - Supports additional commands for NetBIOS network information.
+
+#### 5. **Gh0st RAT (Additional Variants)**
+- **File Size:** Various
+- **MD5s:**
+  - `78b56bc3edbee3a425c96738760ee406` (listens on port 3340)
+  - `5aa0510f6f1b0e48f0303b9a4bfc641e` (listens on port 3433)
+  - `2be2ac65fd97ccc97027184f0310f2f3` (listens on port 1234)
+- **C2 Server:** Varies
+- **Behavior:**
+  - Similar to the previously described Gh0st RATs, with different ports and C2 servers.
+
+#### 6. **Mitozhan Trojan (Additional Information)**
+- **File Size:** 87 KB
+- **MD5:** `7b18614df95e71032909beb25a7b1e87`
+- **C2 Server:** `vps.mm523.net:81` (sinkholed)
+- **Description:** This malware copies itself to the Windows directory and gives itself a random name of 6 characters. It adds a new service to ensure persistence on the infected machine.
+- **Service Name Example:** `GHIJKL NOPQRSTU WXY`
+- **Image Path Example:** `C:\WINDOWS\fatjse.exe`
+- **Behavior:**
+  - Performs DNS requests to resolve its controller.
+  - Connects to the controller over TCP port 81 with a specific connection string.
+  - Contains strings in memory that match known malware behavior.
+
+### Additional Observations
+- **Persistence:** All identified malware and backdoors use various methods to ensure persistence, such as adding new services or copying themselves to system directories.
+- **C2 Communication:** The C2 servers are often sinkholed, indicating potential law enforcement or security community intervention.
+- **Exploitation Tools:** Additional tools like the Windows privilege escalation exploit tool (`Win64.exe`) and other exploitation tools have been found on victim systems, suggesting a multi-faceted attack strategy.
+
+### Recommendations
+1. **Network Monitoring:** Implement continuous network monitoring to detect unusual traffic patterns and C2 communication.
+2. **Endpoint Protection:** Deploy advanced endpoint protection solutions capable of detecting and blocking known malware signatures.
+3. **Regular Audits:** Conduct regular security audits and vulnerability assessments to identify and mitigate potential weaknesses.
+4. **User Training:** Educate users about phishing and other social engineering techniques to reduce the risk of initial infection.
+
+By understanding the nature and behavior of these threats, organizations can better protect their systems and data from similar attacks in the future.

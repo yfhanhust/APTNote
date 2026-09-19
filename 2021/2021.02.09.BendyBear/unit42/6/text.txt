@@ -1,0 +1,22 @@
+Payload In-Memory Loading
+Once the payload is fully decrypted, the stager performs some basic checks to ensure that
+the payload conforms to a Windows executable. It validates the DOS and PE header and
+that the payload is a DLL. It then direct-memory loads the payload and calls into its entry
+point (AddressOfEntryPoint). The direct memory load of the payload emulates that of the
+Windows PE loader – LoadLibrary. As a result, the PEB LDR_DATA_TABLE_ENTRY
+metadata structures are not created and the PEB for the process running the shellcode has
+11/19
+no record of the DLL loading, which can be used to detect rogue modules running on your
+host. This is visible in WinDbg running the command !address within the process that
+loaded the shellcode. An example is shown in Figure 8.
+Figure 8. Artifact of direct in-memory loaded DLL.
+In-memory artifacts:
+Type is MEM_PRIVATE, meaning it is private to the process that loaded it. On
+Windows platforms, DLLs are typically loaded as MEM_IMAGE so that they can be
+shared between different processes to save memory space.
+Protection is PAGE_EXECUTE_READWRITE(RWX), which means the area is
+writable and executable with a memory area containing an MZ header. The MZ
+header is the in-memory loaded module.
+The output of the WinDbg !address command shown in Figure 8 spots the anomalous
+entry. The memory address of module 0x7ff4c2450000 was the result of private memory
+allocation, protection set to RWX and usage containing an MZ header.

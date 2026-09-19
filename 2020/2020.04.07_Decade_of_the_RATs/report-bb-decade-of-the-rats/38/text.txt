@@ -1,0 +1,239 @@
+Many of the previously exposed WINNTI Windows implants have continued to evolve, and the APT groups behind them continue to deploy new malware alongside other well- known families as well as other signed, open- source backdoors.
+D E C A D E O F T H E R A T S 29
+Figure 14: Example of Malware Signed with Adware Certificate and Detections
+In our judgement, these threat actors would rather be found and then ignored than found
+and investigated, particularly on the Windows platform where so much of the antivirus
+attention is focused. Malware masquerading as adware stands a good chance of being
+overlooked or disregarded if it is detected, especially in busy corporate enterprise
+environments because they manage a “stack” of multiple security technologies, each
+with its own set of alerts.
+While this practice often provides greater visibility, it can also obscure what really
+matters. The APT groups BlackBerry researchers investigated in this report seem to
+have leveraged this. Many of CASPER’s samples are currently and have historically been
+flagged by numerous antivirus solutions as potentially unwanted applications (PUAs),
+which is an understatement to say the least.
+Analysts, if presented with a piece of information, tend to use it. So, if an antivirus
+program alerts an analyst to adware on a system, they would tend to trust that
+classification. How likely would you be to investigate further once that happened?
+BlackBerry researchers suspected the action for most would be to simply move
+on. After all, a large majority of adware is signed using legitimate code-signing
+certificates anyway.
+Both network and host defenders are usually inundated with alerts on any given day,
+and filtering through them can be a monumental task unto itself. Determining which of
+those adware alerts is actually the foothold for an APT intrusion and not just a run-ofthe-mill nuisance is an unreasonable expectation for the average organization.
+BlackBerry researchers believe these types of modifications will become increasingly
+common as time goes on. It’s likely that malware bearing stolen adware certificates
+will need a new classification or designation within the information security community
+so it can be better understood.
+What the attackers have done in donning the façade of adware is to directly target the
+psychology and methodology of blue team members to exploit inherent weaknesses in
+their assumptions. Alert fatigue is real, and adware is boring. The authors of this paper
+have increasingly seen these techniques employed by a number of other nation state
+actors to intentionally avoid analysis, or at the very least provide a layer of misdirection
+that’s not easily detected. Readers will find a list of compromised adware and greyware
+code-signing certificates and associated malicious binaries in the Appendix of
+this report.
+D E C A D E O F T H E R A T S 30
+New(er) Droppers:
+In this section, we undertake a technical analysis of several of the newer, and thus,
+undocumented updates to the modified ZXShell variants commonly used by BRONZE
+UNION (aka APT27, EMISSARY PANDA).
+General readers will note that all of these new droppers were predominantly signed with
+legitimate certificates stolen from other companies based in Asia and adware vendors.
+This may indicate either a tactical shift in targeting priorities or may simply be a case
+of harvesting the lowest-hanging fruit.
+Examination of several newer ZXShell droppers, ones which BlackBerry researchers
+associate with BRONZE UNION, began by noting changes made following Dell’s report
+in February of 2019 (Dell Counter Threat Unit Research Team, 2019). After public
+research is released, threat actors often change their tactics. BlackBerry researchers
+took a closer look to see what, if anything, had changed in response to the publication
+of that research.
+The new droppers examined were signed with older stolen certificates, however the
+rootkits used a previously unseen code-signing certificate belonging to “Xiamen
+Tongbu Networks”. Interestingly, several of the other groups discussed in this
+report also continued to use other older stolen certificates and countersigned their
+executables so they would remain valid long past the certificates’ original expiration
+date. Some examples:
+Recent Droppers:
+• ce3424524fd1f482a0339a3f92e440532cff97c104769837fa6ae52869013558
+• caa46c001c3180eb7fdd5e5cbf7d084b75b7bdf72e61e06430a88378604a25eb
+• fbe294910ef833e1c9b2c8663c06b6ef99c13b2bc5eb01e87defb798c8066f0b
+• 8674c76583c13c60fcb6dc344bae4a5149cce35a85bb600f0a6af5e769b98585
+BlackBerry researchers examined whether anything substantial had changed from
+2018 to 2019, starting with the SHA256 hash beginning “ce34” above (#1 in the list).
+Dropper 1
+The sample was a 32-bit executable with a compile date of “January 1, 1970 03:25:45am
+UTC” – an indication to that a packer may have been used to obfuscate the malware and
+impede detection. However, this was a somewhat unusual time and was not associated
+with any particular programming languages or known packers as far as the researchers
+were aware. The actual UNIX timestamp value equated to “12345”.
+At first glance it appeared that the file was packed with UPX, based upon the section
+names “.UPX0” and “.UPX1”. This was clearly untrue though, given the sheer number of
+additional anti-debugging tricks it employed. In any case, these seemingly insignificant
+details when taken together were used to identify related files despite not getting to the
+bottom of the packer mystery.
+The following YARA rule will find all related malware packed in this manner:
+import “pe”
+rule BronzeUnionPacker
+{
+```
+  condition:
+```
+pe.timestamp == 12345 and for any i in (0..pe.number_of_sections - 1):
+(pe.sections[i].name == “.UPX0”) and pe.number_of_signatures >= 1
+```
+  }
+```
+Figure 15: Generic Yara Detection for Bronze Union Packer
+D E C A D E O F T H E R A T S 31
+Once unpacked, the dropper would create two files: a driver with the full path “\
+Windows\System32\drivers\ autochk.sys” and a DLL in one of the following locations:
+\Windows\System32\ \Windows\System32\ \Windows\System32\
+AudioSdk.dll cryptdns.dll odbcwg32.cpl
+\Windows\System32\ \Windows\System32\ \Windows\System32\
+audiosrc.dll dhcpcsvcd.dll PINTLGNT.dll
+\Windows\System32\ \Windows\System32\ \Windows\System32\
+bitsprx.ime imekr61.dll prnfsdk.dll
+\Windows\System32\ \Windows\System32\ \Windows\System32\
+bootred.dll imseo21.ime samlib32.dll
+\Windows\ \Windows\System32\ \Windows\System32\
+System32\C_1950.NLS iscsiapi.dll shlwapi.dll
+\Windows\ \Windows\System32\ \Windows\System32\
+System32\c_21268.nls KBDDWSKY.DLL shlyapi.dll
+\Windows\ \Windows\System32\ \Windows\System32\
+System32\C_26849.NLS keyzip.dll shlzapi.dll
+\Windows\System32\ \Windows\System32\ \Windows\System32\
+chrsben.dll mfc100usx.dll sqlnclc11.dll
+\Windows\System32\ \Windows\System32\ \Windows\System32\
+chrsben.ime mfc120du.dll stdole32.dll
+\Windows\System32\ \Windows\System32\ \Windows\System32\
+cliconfg.cpl midiapi.dll wbem\loadperf.dll
+\Windows\System32\ \Windows\System32\ \Windows\System32\
+cryptbios.dll odbccx32.dll wlanseo.dll
+Table 5: Potential FilePaths for the ZXShell Backdoor
+Driver: 28924b6329f5410a5cca30f3530a3fb8a97c23c9509a192f2092cbdf139a91d8
+DLL: a37574387a4bacfb69e7369d6ac8749603038a1b232d9a482bbcd2dce0c091b0
+The driver prevented deletion of the backdoor while it was loaded and redirected any filebased requests made of the backdoor to the legitimate “shlwapi.dll”. It would similarly
+redirect file requests made of the driver “autochk.sys” to the legitimate “fltMgr.sys”.
+When the researchers arrived at this discovery, they realized that Ori Damari had already
+produced an excellent writeup containing this same revelation. His detailed report was
+produced in November of 2019 (Damari, 2019).
+That said, the rootkit for the particular sample BlackBerry researchers examined lacked
+any of the network-hiding features Damari wrote about. Instead, it curiously contained
+two different code-signing signatures: one belonging to “Shanghai Hintsoft Co., Ltd.”
+using a SHA1 digest, and the other belonging to “Hangzhou Bianfeng Networking
+technology Co., Ltd.” using a SHA256 digest. Details of both certificates are listed in
+the appendix of this report. The DLL was similarly signed with the “Hangzhou Bianfeng”
+certificate “June 6, 2018 4:49:06 UTC”, which provided a better approximate idea of
+when the dropper was actually created because the compile time of the DLL was “April
+10, 2018 19:42:09 UTC”.
+The DLL exported a number of unique functions that could be readily used to identify
+similar backdoors. The dropper would configure the DLL to run as a ServiceDLL on boot
+beneath a new randomly named service beginning with the string “netsvc_” and ending
+with eight random lowercase hex characters. Analysis of the DLL was hindered slightly
+by the custom packer but dumping from memory worked like a charm. The DLL was
+a modified variant of ZXShell and quite large. The backdoor contained a plethora of
+functionality and could accept the following commands:
+D E C A D E O F T H E R A T S 32
+Help Displayed Help Information
+Exit/Quit
+Sysinfo Provided System Information including OS, disk information, CPU,
+RAM, user information, and system uptime
+RunAs Executed a process as another user
+GetCMD Provided an interactive Command Shell
+SockProxy Started a Socks4 or Socks5 Proxy via internal program
+“SockProxy V1.2”
+PortScan Port Scanning Functionality
+ShareShell Shared a shell to others via netcat-like function
+SuspendFW Suspend the Windows Firewall
+Ps Provided process and service management
+FileTime Cloned a file’s timestamp information
+fileMG Provide an interactive file manager
+winvnc Remote Desktop (did not appear to be used)
+rPortMap Remap a port on the local host
+Remarks A commenting system
+logonPasswords Dump cleartext stored passwords
+Htran Full Htran functionality
+Uninstall Uninstall and remove the DLL
+The group used a modified cipher for sensitive parameters, such as network callback
+information that utilized a combination of base64 and a custom XOR implementation.
+The cipher stored the size of the string in the last value and used it as a seed value to
+generate a custom position dependent XOR key.
+Dropper 1 Network Callback Details
+The backdoor would attempt to beacon to the domain “tdjsyqty0takah2x.gitoos[.]
+com” on ports 53, 80, and 443. The domain currently resolves to the IP address
+“35.186.159[.]221” which belongs to Google’s cloud service “Google Compute Engine [™] .”
+BlackBerry researchers identified several other domains ascribed to BRONZE UNION
+that currently resolved to IP addresses within Google’s cloud service. All of the IP
+addresses were running the Remote Desktop Protocol (RDP) Service on TCP port 3389
+and appeared to be various Windows virtual machines:
+```
+  Initial Handshake:
+```
+~~00000000 04 c8 07 d8 30 b9 03 98 da ac 7b 10 13 20 03 10~~ ~~....0... ..{.. ..~~
+~~00000010 fc 0b 53 0f~~ ~~..S.~~
+~~00000000 12 b0 11 30 83 98 19 10 57 55 1d 50 82 99 39 10~~ ~~...0.... WU.P..9.~~
+~~00000010 7f 35 ec 79~~ ~~.5.y~~
+```
+ Info Request:
+```
+~~00000014 fd 81 4e 00 98 5e a2 60 ac 64 b2 60 bc 1c ba 10~~ ~~..N..^.~~ ~~.d.~~ ~~....~~
+~~00000024 fc 18 45 05~~ ~~..E.~~
+~~00000014 dc 8f 6b 1c 98 8b 27 18 54 87 e3 14 10 83 bf 10 . .k...’.~~
+~~T.......~~
+~~00000024 7e 42 de 6f~~ ~~~B.o~~
+~~00000028 55 73 65 72 2d 50 43 40 2d 61 64 6d 69 6e 40 31~~ ~~User-PC@ -admin@1~~
+~~00000038 39 32 2e 31 36 38 2e 31 30 30 2e 33 30 20 4f 53~~ ~~92.168.1 00.30 OS~~
+~~00000048 3a 20 57 69 6e 64 6f 77 73 37 20 50 72 6f 20 53~~ ~~:Window s7 Pro S~~
+~~00000058 50 31 2e 30 28 37 36 30 31 29 20 43 50 55 3a 33~~ ~~P1.0(760 1) CPU:3~~
+~~00000068 36 38 34 20 4d 48 7a 2c 33 36 31 36 20 4d 48 7a~~ ~~684 MHz, 3616 MHz~~
+~~00000078 2c 33 36 31 30 20 4d 48 7a 2c 33 36 30 30 20 4d~~ ~~3610 MH z,3600 M~~
+~~00000088 48 7a 2c 52 41 4d 3a 34 30 39 36 4d 42~~ ~~Hz,RAM:4 096MB~~
+~~00000028 f4~~
+~~00000095 0d 0a 55 73 65 72 2d 50 43 3e 0d 0a~~ ~~..User-P C>..~~
+Figure 16: Network Traffic exchange from Modified ZXShell Protocol
+D E C A D E O F T H E R A T S 33
+The hex dump above shows the initial network traffic exchange between the victim and
+server. The server’s traffic is in blue while the victim’s traffic is in red. The protocol was
+modified from the original source, so the researchers did not spend too much additional
+time on it. Identification of servers on the internet that send data first on port 80, 443,
+or 53 should be a dead giveaway that something is not quite right. The initial exchange
+always used TCP packets that were 0x14 bytes in length as opposed to 0x10 bytes as
+in the original protocol.
+Dropper 2:
+The hash beginning “caa” (#2 in the list above) was a much newer dropper signed on
+July 26, 2019, using the “Hangzhou Bianfeng” certificate previously mentioned, and it
+was packed with the custom packer described above. It utilized the exact same file
+locations for the driver and DLL, although both dropped files bore different hashes:
+Driver: 9b7c1e37d5f56cc0b5e5e22ce9805e237a189297e78405b9c392a0953b6e0321
+DLL: 101171cc6ffda3428089e77ce2a90f0d2f490fa68970c09f777c5ec0b0707cf6
+BlackBerry researchers took a closer look to see what if anything had changed from
+2018 and found that driver was signed with a new stolen code-signing certificate
+belonging to “Xiamen Tongbu Networks Ltd.”, which was founded by the former head
+of Google China, Li Kai Fu.
+BlackBerry researchers identified another rootkit signed with the same driver, which is
+also listed in the Appendix. The file’s compile time appeared to be accurate, as it was
+“May 4, 2019 21:34:08 UTC”, just before the DLL was compiled. The driver’s code had
+been updated and the list of filenames was now stored with the characters reversed,
+but otherwise the paths remained the same. It contained new code which provided the
+ability to hide network connections made by the backdoor from tools like netstat, as
+explained in the Damari research (Damari, 2019).
+The first noticeable difference between the two DLLs was that the compile date of the
+second DLL seemed to be accurate: “May 4, 2019 21:36:36 UTC”. The file contained
+UPX section names “.UPX0” and “.UPX1” and was still protected with the same custom
+packer. The researchers dumped and rebuilt the DLL from memory to speed up analysis.
+The DLL was more or less unchanged from a command and functionality perspective,
+and it used the same custom cipher to obfuscate sensitive strings and a similar modified
+network protocol with 0x14 byte handshake.
+Dropper 2 Network Callback Information
+The ZXShell variant dropped by the second sample beaconed to a different domain:
+“yofeopxuuehixwmj.redhatupdater[.]com” on TCP ports 53, 80, and 443. The first
+recorded IP resolution the researchers could find was in September of 2019, nearly
+four months after the backdoor was built.
+The IP addresses the domain resolved to did not appear to coincide with any
+similar samples. They belonged to VeeSP (https://www.veesp[.]com/en), Fishnet
+Communications, and Profit Server (https://profitserver[.]ru/en). This may represent
+a tactical shift for newer domains or indicated a disparate or separate attack group
+may have been responsible. One IP range was of particular interest, “77.73.64[.]0/21”,
+as other attack groups including CHAFER (Symantec Threat Intelligence, 2018) had
+utilized IP addresses within it.

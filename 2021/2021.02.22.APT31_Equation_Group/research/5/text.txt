@@ -1,0 +1,55 @@
+Comparing CVE-2017-0005 and CVE-2019-0803
+In the following section, we describe in detail some of the characteristics of the packer and
+the loader used in CVE-2017-0005 and CVE-2019-0803, and highlight their
+commonalities and differences.
+Jian, the exploit of CVE-2017-0005, was shipped in a DLL named Add.dll . It contained
+an interesting PDB path suggesting that it was written in 2015 under a project named
+“rundll32_getadmin”.
+F:\code\ 2015 \rundll32_ getadmin \ Add \x64\Release\Add.pdb
+When we checked the Time Date Stamp of the binary in the file header, we saw that the
+DLL was compiled on Wed May 06 02:08:24 2015, which fits nicely with the folder
+name from the PDB. An additional timestamp on the export directory points to the exact
+same date. Speaking of the export directory, the DLL has a single exported function
+named “AddByGod”, which, as we will learn soon, is the entry function of the packer.
+The decryption routine is very straightforward. The packer starts by allocating memory
+for the encrypted code and copies it to the newly allocated buffer. It then allocates a buffer
+with PAGE_EXECUTE_READWRITE protection to store the decrypted code. After the buffers
+are allocated, the packer checks if a string argument, which will be used as a decryption
+key, was passed to the AddByGod function. Next, the packer uses the AES256 algorithm
+with a SHA1 derived key of the passed argument to decrypt the encrypted code. If the
+decryption is successful, the decrypted code is executed and a second stage payload runs.
+Luckily, we managed to obtain the password that was needed to execute the binary and
+decrypt the encrypted payload.
+rundll32.exe Add.dll AddByGod [password]
+The second stage begins with a typical shellcode technique, searching the module’s header
+for the address of kernel32.dll and dynamically retrieving a pointer to the
+GetProcAddress export function. Next, the program decompresses another Portable
+Executable (PE) and jumps to its entry point. The decompressed PE, which is the 3rd
+stage in the loading sequence, has intentionally corrupted headers. It does basic loading
+5/36
+operations and then begins with a reflective loading of an embedded executable (yes,
+another one). The loaded PE is the last stage in the loading sequence and is responsible
+for executing the exploit.
+It’s interesting to mention that the compilation time of the embedded binary — the exploit
+itself — goes back to October 2014. This suggests that the attackers used this 0-day in
+2014, almost three years before it became publicly available in the Shadow Brokers leak
+and was fixed by Microsoft.
+Figure 4: The execution flow of the loaders used for CVE-2017-0005 and CVE-2019
+0803.
+As can be seen in the figure above, the packer used for CVE-2019-0803 is very similar to
+the one used in CVE-2017-0005. In fact, the flow is almost identical. The file was
+compiled on September 18, 2018, and is also internally named “Add.dll”. Like the
+previously packed exploit, CVE-2019-0803 also has an export function named
+“AddByGod” and contains debug information:
+C:\Users\sms2056\Desktop\ Add （未修改 dll‘ ） \x64\Release\Add.pdb
+Unlike the previous sample, this one uses a different decryption password and needs an
+additional argument when running (used in later stages). The execution flow then
+continues exactly as we observed in the previous sample with one exception: after the
+program decompresses a PE payload and jumps to its entry point, it does not have a 4th
+stage of another embedded PE, but simply begins the exploitation stage.
+We looked for more samples that use this or a similar variant of the packer we described,
+and found multiple samples and malware families that have used it for many years. All of
+the malware are clearly and exclusively attributed to Chinese-affiliated attack groups.
+Adding this conclusion to the contextual information we have, Microsoft’s independent
+6/36
+attribution of CVE-2017-0005 to a Chinese APT, and NSA’s attribution of CVE-20190803 to “Chinese State-Sponsored Actors”, make us believe that the exploit of CVE-20170005 was indeed used by attackers that are part of a Chinese group.

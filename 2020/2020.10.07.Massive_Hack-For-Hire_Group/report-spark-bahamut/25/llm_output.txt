@@ -1,0 +1,286 @@
+
+
+
+Sentence : Bellingcat — Extra Credit Time
+In the follow-up BAHAMUT research published by Bellingcat, Anderson and Guarnieri noted, “We
+have not fully explored the extent of Bahamut’s operations, such as its Windows malware agent
+or possible other Android malware” (Anderson, Bahamut Revisited, More Cyber Espionage in the
+Middle East and South Asia, 2017). BlackBerry undertook the task.
+In a departure from past development preferences observed by BlackBerry, BAHAMUT programmed
+the following Windows malware entirely in C#:
+d0e2e7fe3fab992a670137d0693a2b76a5ac88283011b4aa8786d439b37c877b
+Strings within the program were base64 encoded and encrypted using AES in CBC mode with a
+key that was derived from the SHA256 hash of the string “mysec”. The final key was derived using
+Microsoft’s implementation of “PBKDF2” which was provided via the function “Rfc2898DeriveBytes”.
+BlackBerry spent some time reimplementing the code in Python3, for wider reuse within the security
+community:
+Figure 33: Python snippet to decrypt strings from the .NET binary beginning d02e…
+The only interesting tidbit gleaned from the encrypted strings was the name of the LNK file that
+would be created in the victim’s Startup directory, “Yrtss Linker.lnk”.
+Beyond that, the sample was a simple downloader. It would first communicate some information
+about the victim machine, such as username and computer name. Following this first beacon it
+would then periodically query a particular URL. If the response received was greater than 4KB it
+would be downloaded, written to the file “%ApplicationData%/p/SmartHelp.exe”, and executed.
+This particular deployment strategy strongly suggested one of two possibilities: either “SmartHelp.
+exe” had its own persistence mechanism built-in and was likely a secondary payload – or the
+malware author did not have a firm grasp of the in-memory execution capabilities of arbitrary
+payloads in C#. BlackBerry identified a handful of other BAHAMUT C# samples, but this did not
+appear to be the group’s preferred programming language.
+Extra Credit — Continued
+BlackBerry examined one of the other two Windows payloads Bellingcat mentioned:
+1518badcb2717e6b0fa9bdd883d5ff61fedddf7ddf22cc3dc04a38f4e137fc96
+“1518” was a zip file downloaded from the URL (from 2016), “http://online-tracking-status.hymnfork[.]
+com/Authority/E-Challan.zip”. It contained a binary payload within the archive that used a Microsoft
+Word icon that was clearly designed to trick a user into clicking on it:
+933fb101747796a2f3b57db91047fd90867f8d1c3a7cf1d8149f0c83b1467f74
+The above hash was named:
+“E_challan_and_pending_challan_status_along_with_guidelines_as_per_required_.doc_.SCR”
+The extension “.scr” was originally reserved for Windows screensavers. But renaming any “.exe”
+file to end with “.scr” will retain its ability to execute via Windows Explorer. If the target had not
+explicitly opted to view all file extensions for known file types, this file would have appeared to be
+a document with the appropriate matching icon. The file itself was a self-extracting RAR archive
+(SFX). The archive contained the following SFX script commands:
+Path=%userprofile%
+Setup=dsexplrob.exe
+Setup=“msvsmuns.exe”
+Setup=“E-Challan.doc”
+Silent=1
+Overwrite=2
+These commands would overwrite three files without prompting to the %userprofile% directory with
+the specified names and silently execute them. Upon execution, the victim would have seen only
+the decoy document open on the screen and be unaware that two other files had executed silently
+in the background:
+msvsmuns.exe - d92037764fbd8a2dab9577b43e9a007af77859e38b67175fec6b
+7484efccea28
+dsexplrob.exe - 1be9579507a8b20110b740c65f1b65d920c455ab1c026cadb1a25
+0a267c206be
+The binary beginning “1be” communicated to the following URL:
+“http://i3mode[.]com/dbExpressversion/db87987Administrator.php”
+…while the binary “d92” communicated to the URL:
+http://by4mode[.]com/rsdgbukhifndfjdn/gfvbjkjfvhbdfdn.php”
+Both domains “i3mode[.]com” and “by4mode[.]com” were listed in Kaspersky’s write-up as C2 servers
+utilized in weaponized InPage documents, which BlackBerry assesses were the work of BAHAMUT.
+Matching on the unique string obfuscation technique used in the “d92” sample, BlackBerry correlated
+a handful of other samples which communicated to another domain, “logstrick[.]com”. See for
+example the following hash:
+19a3b044449217c86215acdd7e8036d8d2a933a1cb7f02235cb5ce68ab1153a7
+BlackBerry noted the “logstrick[.]com” domain was listed in the Appendix of Trend Micro’s URPAGE
+report. This provided yet another BAHAMUT connection.
+The decoding function for the strings in the sample (19a…) employed a 94-character long, custom
+character substitution method. In BlackBerry’s opinion, the likelihood of someone else co-opting
+this particularly unique obfuscation method is low.
+Figure 34: Python function to decode the substitution cipher used in 19a3...
+The only other public mention BlackBerry identified with regard to the group using a substitution
+cipher was in a Palo Alto report on InPage from 2017 (Soo & Grunzweig, 2017). This provides yet
+another precise tie-in to BAHAMUT.
+Gazing Into the Abyss – Trend Micro’s URPAGE
+As we mentioned previously and referenced above, Trend Micro’s detailed URPAGE whitepaper
+was released in August of 2018. The paper provided a glimpse into BAHAMUT’s much larger
+set of operations. The report spanned nearly five years’ worth of malware samples. Utilizing an
+infographic, Trend Micro considered evidence that suggested BAHAMUT, CONFUCIUS, URPAGE,
+and PATCHWORK were all connected. BlackBerry originally decided to focus on the common
+linkage provided specifically by the “BioData” Delphi backdoors and Android malware. Below you’ll
+find the original Trend Micro infographic which we modified and reduced to the following relevant
+connections:
+We have already provided evidence suggesting strong links between the Android and BioData
+samples in the Bellingcat, WINDSHIFT, and Kaspersky InPage sections above.
+Next, we inspected the InPage documents referenced in the Trend Micro report, which suggested
+a connection between URPAGE and CONFUCIUS. BlackBerry also took a more in-depth look at
+“BioData,” specifically its correlation to the PATCHWORK group as first described by Norman in
+OPERATION HANGOVER (Fagerland, 2013). BlackBerry also referenced a later presentation by Trend
+Micro researchers, which provided additional details on the methods the researchers employed
+to reach their crossover conclusions (Lunghi & Horejsi, Linking cyberespionage groups targeting
+victims in South Asia, 2019).
+xldbszcd???
+BlackBerry started with samples containing the string “xldbszcd”, which Trend Micro used to link
+HANGOVER, CONFUCIUS, and URPAGE together. BlackBerry identified the following hashes in our
+collection containing this string:
+Backdoors
+1f0dabd61947b6df8a392b77a0eae33777be3caad13698aecc223b54ab4b859a
+cf2b71cb187010c28ccfee8fe17a69808b2bbb327eb9a6fc9fa345a8ebe904cf
+File Stealers
+3e7c61dd4b4dc702f59b16d92fe5a67f4ba5cfdb7d8bb2c4bee888aeca95abcc
+472ea4929c5e0fb4e29597311ed90a14c57bc67fbf26f81a3aac042aa3dccb55
+be76f24280919f1cb952c9996bc927e6e485123839ba84bbadc8fb9eb885c354
+caade5a1d0004d64e874aae9955725f43062896f64f51b29f559c3992828bc31
+cca74bb322ad7833a21209b1418c9837e30983daec30d199a839f46075ee72f2
+BlackBerry confirmed “1f0d…” was a BAHAMUT-related file that communicated to the domain
+“ambicluster[.]com”, which was previously identified and disclosed by Kaspersky. BlackBerry further
+analyzed exactly how the string “xldbszcd” was recycled in this and the other binaries. We found
+the string was used to seed a decoding function that used it to derive an 8-byte XOR key which
+could be used to unencode strings in the samples. Several of the strings in the files with network
+connectivity were additionally hex-encoded, although the function below could be readily used to
+decode these as well:
+Figure 35: Python snippet to decode strings from samples listed above
+The binary beginning “cf2b” was another BAHAMUT backdoor that communicated to the domain
+“classmunch[.]com”, which first appeared in Trend Micro’s 2018 URPAGE writeup.
+The file beginning “472e” appeared to match what Trend Micro previously described in their
+CONFUCIUS whitepaper (Lunghi & Horejsi, Confucius Update: New Tools and Techniques, Further
+Connections with Patchwork, 2018) as the “usctrls stealer”. The program copied files from removable
+media to the file “%AppData%\OffLogs\items.log” if any of the files ended with one of the following
+extensions: “.pdf”, “.doc”, “.docx”, “.xls”, “.xlsx”, “.ppt”, or “.pptx”. Most of the other binaries employed
+the same persistence method using the same file path as “1f0d” via an LNK file in the Windows
+Startup Folder named “protector.lnk” and had similar functionality to “472e”.
+One of the files was a bit different from the rest. The hash beginning “cca7” had an additional
+obfuscation method in it which used the seed value “cwboeays” toward the same custom XOR
+function. The binary enumerated several extra filetypes including “inp”, “rtf”, “txt”, and “kmz” files.
+KMZ was an especially interesting filetype to enumerate and exfiltrate, as these files would likely
+contain compressed Keyhole Markup Language data. This data can either be displayed directly in
+maps or inside of other geospatial software that implements KML encoding. This was a somewhat
+rare find in our experiences with malware.
+After reviewing this particular finding, BlackBerry now questions Trend Micro’s assessment that
+the string “xldbszcd” was a high-fidelity indicator linking the groups together. It was possible the
+groups may have shared a document stealer. However, the C2 infrastructure that BAHAMUT used
+appeared to be isolated and completely separate from the infrastructure of the other groups.
+Samples connected to CONFUCIUS also did not appear to communicate to any external addresses.
+Another Link in the Chain? – HANGOVER
+BlackBerry identified several cases of IP crossover between BAHAMUT C2 domains and C2 domains
+both previously disclosed and as yet undisclosed that were associated with another group called
+HANGOVER. For example, the domain “similerwork[.]net” resolved to the IP address “31.210.96[.]222”
+from August 11, 2013 to November 6, 2013. This particular domain was mentioned in numerous
+HANGOVER write-ups from 2013 (Blasco, 2013) (OpenDNS Security Research, 2013). BlackBerry
+located a sample that used an identical C2 protocol to samples described in the aforementioned
+HANGOVER reports. BlackBerry then located an additional BAHAMUT backdoor that communicated
+to the domain “traxbin[.]com”, which resolved to the same IP address from January 31, 2017 to
+January 28, 2018. Indeed, BlackBerry identified several instances of similar BAHAMUT / HANGOVER
+IP-related crossover as summarized below:
+Crossover IP address: 31.210.96[.]222
+Resolution Window “similerwork[.]net”: 8/11/2013 – 11/6/2013
+HANGOVER Sample: 9005bede88a85ebe90960fca54eff7d69e7fb0fb45944a4eb49ffb65f565f2c3
+Resolution Window “traxbin[.]com”: 1/31/2017 – 1/28/2018
+BAHAMUT Sample:
+ad41a8e1967987d260c2ca8ae392e6735f1a61ab0304d86454fadd2e992d8aa3
+Crossover IP Address: 31.210.96[.]220
+Resolution Window “maptonote[.]com”: 9/9/2013-11/6/2013
+HANGOVER Sample:
+0caaf92b928446e8705587744951568d96fa68d7bf4a9988ea9e98cf6ffb44f3
+Resolution Window “redopro[.]com”: 12/13/2016 – 12/19/2017
+BAHAMUT Sample:
+816a272e95f223eaf31e8830e054e0711cb868684c0d0569a52c2abfd0ad28bb
+Crossover IP Address: 31.210.96[.]213
+Resolution Window “myflatnet[.]com”: 9/25/2013 – 11/6/2013
+HANGOVER Sample:
+64023272dc7bc0c97123a6b41e3db3af179826e01457709e76e048b1a93185b4
+Resolution Window “source4z[.]com”: 6/6/2015 – 10/30/2015
+Downloaded BAHAMUT Sample:
+2af07c7cee0743b9ab84eb5947d0334cb0b1dc874fa562920aafbc4ad95b12fc
+It’s important to note here that in each case of IP overlap there was a significant time gap of multiple
+years between HANGOVER activity and BAHAMUT activity. Similarly, numerous other unrelated
+domains resolved to those IP addresses within those interim gap periods, indicating the servers
+or VPS providers had likely changed ownership one or more times. Therefore, despite rampant
+speculation in the published research around HANGOVER and BAHAMUT connections, it should
+be remembered that attribution is also a function of time and, most importantly, correlation is not
+causation. BlackBerry found only circumstantial and tenuous evidence to suggest direct linkage
+via IP crossover alone. As such, BlackBerry does not believe BAHAMUT in its current form was
+related to previously documented HANGOVER activity based upon these associations. BlackBerry
+assesses with high confidence that it was more likely both groups purchased/rented a block of IP
+addresses from the same common provider.
+EHDEVEL — Eh?
+The Trend Micro URPAGE report also attempted to make connections to EHDEVEL via the
+following sample:
+5bebe3986c2dcb5f50ea5d34c564c24ad3bbc132e648f1d009757a0d69c87e52
+This sample was an SFX archive that dropped both a BAHAMUT (BioData) backdoor and a compiled
+Python executable associated with EHDEVEL. The SFX script was as follows.
+Path=%userprofile%
+Setup=inetsrvce.exe
+Setup=winitst.exe
+Silent=1
+Overwrite=1
+Update=U
+The file dropped to “%userprofile%/inetsrvce.exe” was a BAHAMUT backdoor that communicated
+to “scan8t[.]com” while the file dropped to “%userprofile%winitst.exe” was a compiled Python
+executable. Their hashes were
+inetsrvce.exe 184446BCB17021C39128369E9FE3D06CD0DDE430C7F2E90C945C5A3299
+EF7B52
+winitst.exe 1E8CB07AE43AA1AA75B73D43DCE6A0AE3FEFCE8823BD3C3B19F6F
+DCD9E7C9B37
+Again, BlackBerry held in mind that correlation and causation are two separate things, and proceeded
+with the notion that this could very well have been another instance. Anyone could have created an
+SFX archive containing two separate backdoors. BAHAMUT is an actor that has been previously
+observed going to great lengths to provide false leads and misdirect investigations, in part by
+dropping previously known samples associated with other threat groups. So BlackBerry inspected
+the details of each binary a little more closely:
+SFX Archive Compile Time: February 15, 2015 8:00:31 UTC
+winitst.exe Compile Time: Mar 23, 2013 22:26:55 UTC
+inetsrvce.exe Compile Time: ???
+Typically, the resource directory of Delphi executables can be used to gain an approximate compile
+time for the sample. But in this case, these values were either modified or forged. Given the sample’s
+submission to a common malware repository in March of 2015, BlackBerry assumed the SFX archive
+compile time was likely accurate. The compiled Python executable was created with “Pyinstaller”
+and some of the uncompressed sizes were modified so public scripts would fail without slight
+modifications. The compiled Python could still be trivially decompiled to source.
+Figure 36: Decompiled Python snippet related to EHDEVEL
+The sample above communicated with the IP address “95.211.189[.]56” which, BlackBerry found
+was mentioned in a “Cyber Espionage Advisory” from the Government of Pakistan (Pakistan
+Government, 2016).
+Given that a security researcher could decompile a script to source, BlackBerry questioned why
+an attacker couldn’t also reuse the same code. Most of the other samples BlackBerry identified
+which communicated to the IP were more closely related to HANGOVER than EHDEVEL, with a
+single exception:
+4c37ee05dd6858f52e86676721c65ab4f942d365bb19c75158fd3f227c435895
+This sample was explicitly listed in the Appendix of Bitdefender’s 2017 EHDEVEL paper, (Maximciuc
+& Vatamanu, 2017). BlackBerry confirmed this particular finding which actually linked HANGOVER,
+EHDEVEL, and BAHAMUT together. The compilation date for that sample was also at least one year
+prior to anyone publicly disclosing the IP address “95.211.189[.]56”. BlackBerry therefore assesses
+with high confidence that EHDEVEL is either a direct side-project of the BAHAMUT group or uses
+one or more common development resources.
+Output : 
+The provided document delves into the intricate relationships and potential connections between several cyber threat groups, primarily focusing on BAHAMUT and its possible links to HANGOVER, EHDEVEL, and other entities. Here's a structured summary of the key points:
+
+### Overview of BAHAMUT
+
+- **BAHAMUT** is a sophisticated threat actor known for complex operations and attempts to mislead investigations by dropping samples associated with other groups.
+- The group has been observed using various techniques, including SFX archives and custom backdoors.
+
+### Analysis of BAHAMUT's Activities
+
+1. **SFX Archive Sample (2015)**
+   - **Files Dropped:**
+     - `inetsrvce.exe` (BAHAMUT backdoor)
+     - `winitst.exe` (compiled Python executable associated with EHDEVEL)
+   - **Crossover IP Address:** 95.211.189[.]56
+   - **Compile Times:**
+     - SFX Archive: February 15, 2015
+     - `winitst.exe`: March 23, 2013
+     - `inetsrvce.exe`: Unknown (but likely forged)
+   - **Observations:**
+     - The sample communicated with an IP address mentioned in a Cyber Espionage Advisory from the Government of Pakistan.
+     - The compiled Python executable could be decompiled to source, suggesting potential reuse by attackers.
+
+2. **IP Crossover with HANGOVER**
+   - **Crossover IPs:**
+     - 31.210.96[.]222
+     - 31.210.96[.]220
+     - 31.210.96[.]213
+   - **Resolution Windows and Samples:**
+     - `similerwork[.]net` (HANGOVER) and `traxbin[.]com` (BAHAMUT)
+     - `maptonote[.]com` (HANGOVER) and `redopro[.]com` (BAHAMUT)
+     - `myflatnet[.]com` (HANGOVER) and `source4z[.]com` (BAHAMUT)
+   - **Time Gaps:**
+     - Significant time gaps between HANGOVER and BAHAMUT activities, with numerous unrelated domains resolving to the same IPs.
+   - **Conclusion:**
+     - Attribution is complex due to potential changes in server ownership over time. BlackBerry assesses that both groups likely purchased/rented IP addresses from the same provider.
+
+3. **EHDEVEL Connection**
+   - **Sample Analysis:**
+     - SFX archive containing a BAHAMUT backdoor and an EHDEVEL-related Python executable.
+     - The sample communicated with 95.211.189[.]56, which was mentioned in a Pakistani advisory.
+   - **Findings:**
+     - A single sample (4c37ee05dd6858f52e86676721c65ab4f942d365bb19c75158fd3f227c435895) linked HANGOVER, EHDEVEL, and BAHAMUT.
+   - **Conclusion:**
+     - EHDEVEL is likely a direct side-project of BAHAMUT or shares common development resources.
+
+### Attribution Challenges
+
+- **Correlation vs. Causation:**
+  - BlackBerry emphasizes that correlation alone does not imply causation.
+  - The presence of similar IP addresses and protocols does not definitively prove direct links between groups.
+- **Time and Context:**
+  - Attribution must consider the time frame and context of activities, as server ownership can change over time.
+
+### Conclusion
+
+- BlackBerry's analysis suggests that while there are circumstantial and tenuous connections between BAHAMUT, HANGOVER, and EHDEVEL, these links do not provide strong evidence for direct affiliation.
+- The group's history of misdirection and use of known samples from other threat actors complicates attribution efforts.
+
+This summary provides a structured overview of the document's key findings and conclusions regarding the relationships between BAHAMUT, HANGOVER, and EHDEVEL.

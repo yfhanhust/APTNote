@@ -1,0 +1,89 @@
+
+
+
+Sentence : The art and science of detecting Cobalt Strike
+parameter and a “type” parameter
+with the value “os.” The payload is
+slightly different, however, since it
+uses the same shellcode stub. We
+already know what this does for
+the most part, so we’ll skip further
+analysis.
+Java Archive
+Per the Cobalt Strike official
+documentation, we can get a brief
+understanding of this module’s goal.
+• The smart applet analyzes its
+environment and decides which
+Java exploit to use. If the Java
+version is vulnerable, the applet
+will disable the security sandbox,
+and spawn a session using Cobalt
+Strike’s Java injector.
+• These exploits in this attack work
+against Java 1.7u21 and older.
+Java 1.6u45 and older is also
+vulnerable to this attack.
+The exploits used are not specified
+however, we know it affects the Java
+versions shown in Figure 31. Since
+we don’t know what exploits it’s
+using already, we must look closer.
+There are a lot more classes shown
+in Figure 32, but we can see that
+main.dll/main64.dll are still included.
+A quick sha256sum reveals that
+these are the same DLLs included
+in the Signed Applet Attack module.
+We once again can decompile the jar
+using jadx as we did in the Signed
+Applet Attack. The decompilation
+was not clean as we receive one
+error for an unknown instruction,
+“invoke-polymorphic”. This
+instruction is not currently supported
+in jadx, so we will just ignore it for
+now and start looking at JavaApplet.
+class in Figure 31.
+This class directs execution based on
+Figure 31
+Figure 32
+the version of Java installed, here we can identify how it targets each version. The
+code polls “java.version” via a call to System.getProperty to get the JRE version
+installed, if any. Following that it is matched against the PCRE 1.(\d+).0_(\d+). The
+important thing with this PCRE is that it has two capture groups that retrieve major
+and minor Java versions for further processing. It’s important to understand the
+structure of Java version strings. [See https://www.oracle.com/java/technologies/
+    [javase/versioning](https://www.oracle.com/java/technologies/javase/versioning-naming.html) naming.html].
+
+"1..0_"
+When the version string for the product is reported as “java version 1.8.0_5”, the
+product will be called JDK 8u5, JDK 8 update 5 or, when the update version is not
+© 2020 Cisco. All rights reserved. talos-external@cisco.com | talosintelligence.com page 19 of 29
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cobalt Strike", "type" : "TTPS"},
+        {"id": 2, "description": "Java Archive (JAR)", "type" : "APPS"},
+        {"id": 3, "description": "shellcode stub", "type" : "EXEF"},
+        {"id": 4, "description": "Java security sandbox", "type" : "OPPS"},
+        {"id": 5, "description": "Cobalt Strike’s Java injector", "type" : "TTPS"},
+        {"id": 6, "description": "Java 1.7u21 and older", "type" : "CVES"},
+        {"id": 7, "description": "Java 1.6u45 and older", "type" : "CVES"},
+        {"id": 8, "description": "main.dll/main64.dll", "type" : "EXEF"},
+        {"id": 9, "description": "jadx decompiler", "type" : "APPS"},
+        {"id": 10, "description": "JavaApplet class", "type" : "APPS"},
+        {"id": 11, "description": "java.version", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "includes"},
+        {"source": 2, "target": 4, "rel_name" : "disables"},
+        {"source": 2, "target": 5, "rel_name" : "spawns session using"},
+        {"source": 6, "target": 2, "rel_name" : "affected by"},
+        {"source": 7, "target": 2, "rel_name" : "affected by"},
+        {"source": 8, "target": 10, "rel_name" : "included in"},
+        {"source": 9, "target": 2, "rel_name" : "decompiles"},
+        {"source": 10, "target": 11, "rel_name" : "polls"}
+    ]
+}

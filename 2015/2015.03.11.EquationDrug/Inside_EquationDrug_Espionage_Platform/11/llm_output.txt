@@ -1,0 +1,144 @@
+
+
+
+Sentence : User-mode loader - mscfg32.exe, svchost32.exe
+MD5 c3af66b9ce29efe5ee34e87b6e136e3a
+10 of 30 03/22/2015 10:21 PM
+http://securelist.com/blog/research/69203/inside-t...
+Size 22 016 bytes
+Format PE32 EXE
+Compiled 2008.01.23 14:26:05 (GMT)
+Location %System32%\mscfg32.exe
+This module opens a unique event named " D0385CB7-B834-45d1-A501-1A1700E6C34E ". If the event
+exists, it waits for 10 seconds and attempts to open a �le whose name can be decrypted as
+" \.\MSNDSRV ". If the device �le is successfully opened, the code issues a device request with IOCTL code
+0x80000194 and no parameters.
+This module uses RC5 in CBC-like mode with a key length of 96-bit for string encryption.
+Careful analysis reveals some bits of uninitialized memory found next to encryption key locations. This is
+unused but partly meaningful memory, because it seems to contain short chunks of strings resembling
+some local �lepaths:
+"rver\8" (probably part of "Server\8..." string)
+"LInj" (could be a part of "DLLInjector" or similar)
+It's apparent that some parts of the code were designed to run on Windows 9x, for example a call to
+RegisterServiceProcess Windows API function makes sense only on Windows 9x OS family, because this
+API function doesn't exist on Windows NT platform.
+The module uses a unique algorithm for generating registry value names. The code contains strings, such
+as "SkyhookChow Target", that are converted to GUID-like strings by calculating SHA1 hash and using its
+hexadecimal representation as a string. The resulting strings are used as actual registry value names in
+[HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\MemSubSys] registry key.
+Sample registry value names:
+Original String GUID-like registry value name
+SkyhookChow Target {B6F5CD13-A74D-8B82-A6AA-6FA1BE2484C1-6832DF06}
+SkyhookChow Payload {F4CF0326-6DCD-EEC8-5323-01CEDB66741A-B55F6F12}
+These registry values are encrypted using an RC5 algorithm using a hardcoded 1024-bit key with 24
+rounds.
+The registry value:
+[HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\MemSubSys] {F4CF0326-6DCD-
+EEC8-5323-01CEDB66741A-B55F6F12} ("SkyhookChow Payload")
+should contain the location of the orchestrator DLL �le ("mscfg32.dll"). If the value is not present a
+default value "%SYSTEM%\mscfg32.dll" is used.
+11 of 30 03/22/2015 10:21 PM
+http://securelist.com/blog/research/69203/inside-t...
+The registry value:
+[HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\MemSubSys] {B6F5CD13-A74D-8B82-
+A6AA-6FA1BE2484C1-6832DF06} ("SkyhookChow Target")
+may contain the location of the executable �le that will be used as a "shell" process for the orchestrator
+library.
+The module attempts to start the "shell" process in suspended mode. If there is no "SkyhookChow Target"
+value or the speci�ed executable fails to start, the module tries different failsafe locations of the programs
+that can be used instead:
+
+Default browser set in the registry [HKLM\SOFTWARE\Clients\StartMenuInternet{current @default
+
+value}\shell\open\command]
+
+
+%SystemRoot%\System32\svchost.exe
+
+
+%SystemRoot%\System32\lsass.exe
+
+
+Spoolsv service binary from the [HKLM\SYSTEM\CurrentControlSet\Services\Spooler] ImagePath
+
+
+registry value.
+
+
+Default html �le handler from [HKLM\SOFTWARE\Classes\html�le\shell\open\command] registry value.
+
+
+Internet Explorer path from [HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths]
+
+
+IEXPLORE.EXE registry value.
+Next, the module injects extra code into a newly started target process. The injected code loads the
+payload DLL ("mscfg32.dll") into the target process and waits for the parent process to exit. When the
+parent process quits, it unloads the payload DLL and exits as well. The rest of the logic relies on the
+loaded DLL in that new process. See the description of the "mscfg32.dll" module below.
+The module communicates with the Stage0/Rootkit driver "msndsrv.sys" by sending DeviceIoControl
+messages to the device " \.\MSNDSRV". It activates the rootkit for its own process, for the target process
+holding the orchestrator and for all the �les involved.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "mscfg32.exe", "type": "EXEF"},
+        {"id": 2, "description": "svchost32.exe", "type": "EXEF"},
+        {"id": 3, "description": "c3af66b9ce29efe5ee34e87b6e136e3a", "type": "IOCS"},
+        {"id": 4, "description": "http://securelist.com/blog/research/69203/inside-t...", "type": "URLS"},
+        {"id": 5, "description": "22 016 bytes", "type": "TAMP"},
+        {"id": 6, "description": "PE32 EXE", "type": "TAMP"},
+        {"id": 7, "description": "2008.01.23 14:26:05 (GMT)", "type": "TAMP"},
+        {"id": 8, "description": "%System32%\\mscfg32.exe", "type": "SYSP"},
+        {"id": 9, "description": "D0385CB7-B834-45d1-A501-1A1700E6C34E", "type": "TAMP"},
+        {"id": 10, "description": "\\.\MSNDSRV", "type": "TAMP"},
+        {"id": 11, "description": "0x80000194", "type": "TAMP"},
+        {"id": 12, "description": "RC5", "type": "TAMP"},
+        {"id": 13, "description": "Windows 9x", "type": "OPPS"},
+        {"id": 14, "description": "RegisterServiceProcess", "type": "TAMP"},
+        {"id": 15, "description": "[HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\MemSubSys]", "type": "REGI"},
+        {"id": 16, "description": "SkyhookChow Target", "type": "TAMP"},
+        {"id": 17, "description": "{B6F5CD13-A74D-8B82-A6AA-6FA1BE2484C1-6832DF06}", "type": "TAMP"},
+        {"id": 18, "description": "SkyhookChow Payload", "type": "TAMP"},
+        {"id": 19, "description": "{F4CF0326-6DCD-EEC8-5323-01CEDB66741A-B55F6F12}", "type": "TAMP"},
+        {"id": 20, "description": "mscfg32.dll", "type": "EXEF"},
+        {"id": 21, "description": "%SYSTEM%\\mscfg32.dll", "type": "SYSP"},
+        {"id": 22, "description": "[HKLM\\SOFTWARE\\Clients\\StartMenuInternet{current @default value}\\shell\\open\\command]", "type": "REGI"},
+        {"id": 23, "description": "%SystemRoot%\\System32\\svchost.exe", "type": "SYSP"},
+        {"id": 24, "description": "%SystemRoot%\\System32\\lsass.exe", "type": "SYSP"},
+        {"id": 25, "description": "[HKLM\\SYSTEM\\CurrentControlSet\\Services\\Spooler] ImagePath", "type": "REGI"},
+        {"id": 26, "description": "[HKLM\\SOFTWARE\\Classes\\htmlfile\\shell\\open\\command]", "type": "REGI"},
+        {"id": 27, "description": "[HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths] IEXPLORE.EXE", "type": "REGI"},
+        {"id": 28, "description": "msndsrv.sys", "type": "EXEF"},
+        {"id": 29, "description": "\\.\MSNDSRV", "type": "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name": "has_hash"},
+        {"source": 1, "target": 4, "rel_name": "analyzed_by"},
+        {"source": 1, "target": 5, "rel_name": "has_size"},
+        {"source": 1, "target": 6, "rel_name": "has_format"},
+        {"source": 1, "target": 7, "rel_name": "compiled_on"},
+        {"source": 1, "target": 8, "rel_name": "located_at"},
+        {"source": 1, "target": 9, "rel_name": "opens_event"},
+        {"source": 1, "target": 10, "rel_name": "opens_file"},
+        {"source": 1, "target": 11, "rel_name": "issues_request_with_code"},
+        {"source": 1, "target": 12, "rel_name": "uses_encryption"},
+        {"source": 1, "target": 13, "rel_name": "runs_on"},
+        {"source": 1, "target": 14, "rel_name": "calls_function"},
+        {"source": 1, "target": 15, "rel_name": "writes_to_registry"},
+        {"source": 1, "target": 16, "rel_name": "generates_value_name_from"},
+        {"source": 1, "target": 17, "rel_name": "generates_value_name_to"},
+        {"source": 1, "target": 18, "rel_name": "generates_value_name_from"},
+        {"source": 1, "target": 19, "rel_name": "generates_value_name_to"},
+        {"source": 1, "target": 20, "rel_name": "loads_dll"},
+        {"source": 1, "target": 21, "rel_name": "uses_default_dll_path"},
+        {"source": 1, "target": 22, "rel_name": "reads_failsafe_location_from"},
+        {"source": 1, "target": 23, "rel_name": "reads_failsafe_location_from"},
+        {"source": 1, "target": 24, "rel_name": "reads_failsafe_location_from"},
+        {"source": 1, "target": 25, "rel_name": "reads_failsafe_location_from"},
+        {"source": 1, "target": 26, "rel_name": "reads_failsafe_location_from"},
+        {"source": 1, "target": 27, "rel_name": "reads_failsafe_location_from"},
+        {"source": 1, "target": 28, "rel_name": "communicates_with_driver"},
+        {"source": 1, "target": 29, "rel_name": "communicates_with_device"}
+    ]
+}

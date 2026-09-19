@@ -1,0 +1,48 @@
+IISSpy: tracing Moriya back to a user-mode rootkit
+IISSpy is an older user-mode version of the Moriya rootkit that we were able to pinpoint in our telemetry. It is used to target IIS servers
+for establishing a backdoor in their underlying websites. It was detected on a machine in 2018, unrelated to any of the attacks in the
+current operation. This suggests the threat actor has been active since at least that year.
+The malware, which comes as a DLL, achieves its goals by enumerating running IIS processes on the server (i.e., those that are executed
+from the image w3wp.exe), and injecting the malware’s DLL into them to alter their behavior. The executed code in the IIS processes
+will then set inline hooks for several functions, most notably CreateFileW.
+The corresponding CreateFileW hook function checks if the filename argument contains the directory ‘\MORIYA\’ or ‘\moriya\’ in its
+path, and if so, infers that the attacker has sent a specially crafted HTTP request to the web server. In this request, the Moriya path in
+the URL is followed by an encoded command. After the command is decoded and processed, it is passed via a mailslot
+(\.\mailslot\slot) to a separate thread, while signaling an event called Global\CommandEvent.
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 25/33
+5/7/2021 Operation TunnelSnake | Securelist
+Fig. 15. Code of the CreateFileW hook function that looks for the ‘MORIYA’ \ ‘moriya’ directory in a request path
+Should the currently handled file contain the Moriya path, the very same hook function will generate a special file on the web server to
+which command execution output will be written. This file’s path is created by finding the position of the ‘\MORIYA\’ or ‘\moriya\’
+strings in the inspected filename argument, and replacing it with the string ‘\IISINFO.HTM’. This will then be appended to the
+command data passed on the mailslot, following a ‘ > ‘ character.
+The other thread waiting on the command event mentioned above is in charge of processing attacker data fetched from the mailslot. Any
+such command will be read and parsed to find the ‘ > ‘ character and the file path that follows it, in this case the one corresponding to
+‘IISINFO.HTML’. After executing the command via cmd.exe, the output will be written to the file in this path, allowing the attacker to
+read it by issuing a corresponding HTTP request where the URL path leads to this file on the server.
+Other functions that are hooked in the IIS process are CreateProcessAsUserW and CreateProcessW. These are used to detect if the
+current process spawns a new server instance, which will in turn be injected with the malware’s DLL. Apart from this, IISSpy will also
+create a monitoring thread that will periodically look for newly created httpd.exe processes, corresponding to the Apache server. If
+detected, the malware will be injected to them as well.
+Although it is evident from both the functionality and use of the Moriya keyword by the malware that IISSpy and the Moriya rootkit are
+related, further evidence in the code substantiates the connection:
+The older variant is capable of creating a reverse shell transmitted through an overt channel in exactly the same way as the more
+recent version of the malware, i.e., it identifies a connect request followed by a C&C server address and port, connects to it and
+redirects the IO of a new exe process to the underlying socket.
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 26/33
+5/7/2021 Operation TunnelSnake | Securelist
+Both variants use the same packet encoding and decoding algorithm, whereby each clear-text byte is XORed with 0x5 and negated,
+and vice-versa.
+Fig. 16. Packet decoding loop that follows the same logic as that used in Moriya
+In both cases the developers left a trail of unique debug messages, issued to the
+OutputDebugString API function. An example of such a string used in identical code in the
+two variants is shown below.
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 27/33
+5/7/2021 Operation TunnelSnake | Securelist
+Fig. 17. Code used in both variants to spawn a new shell, while printing unique debug messages
+Both implants are deployed by invoking an export function named Install that creates a service that allows persistent execution,
+with the malware’s logic residing in the ServiceMain Moreover, the Install functions are highly similar to one another.
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 28/33
+5/7/2021 Operation TunnelSnake | Securelist
+Fig. 18. Comparison of Install export function CFGs between IISSpy and
+Moriya

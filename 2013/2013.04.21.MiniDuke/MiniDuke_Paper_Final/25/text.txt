@@ -1,0 +1,38 @@
+6.2 The Communication Protocol
+The malware performs a GET request to a server with a Base64-encoded string that, if
+decoded, reads the following:
+For 2011 samples:
+crc32
+country_code
+ComputerName/%USERDOMAIN%
+OS major, minor, sp_major, prod_type, architecture(32/64bit)
+antivirus_list
+proxy_list
+version (the version of the malicious sample)
+All values are split with ”|”. The entire string is encoded in Base64.
+For 2012/2013 samples:
+These samples send additional data, such as the system username. Another significant change
+is the fact that the malware encodes the text using XOR and a key that results from SHA-1
+hashing of the Google identifier. The resulting buffer is then encoded with Base64.
+This is a practical example of the GET request:
+?a=MjIzMTQyMzkzM3xST3xIT01FL0hPTUV8NXwxfDN8MXwwfC18LXwyLjEy&g=MjIzMTQy
+M.
+The variables names in the GET requests are randomly-picked. The second variable holds a
+CRC modulo 13D455h on the encoded string. The server responds with a GIF file that holds
+either a DLL or an EXE file.
+16
+© 2013 Bitdefender
+6.3 Adding Modules and Updates
+After a request is sent to the C2, the malware receives a file with a .GIF header. This is usually
+a valid image that has appended to it a payload or an update in an encrypted form.
+The malware checks for the ‘GIF8’ magic at the beginning of the file and looks for the 0x3b00
+word. If the pattern is found, the malware isolates the next four bytes that actually represent
+the decryption key, followed by the encrypted payload. Next, the digital signature is verified
+and then the payload is decrypted. If it is a DLL file, it attempts to load it via LoadLibrary() ; if it
+is an EXE file, it gets written on disk with one of the following names: winupdt.exe,
+wcsntfy.exe, netmngr.exe, dumpreport.exe, taskhosts.exe, wupdmngr.exe, winhlp.exe,
+dllhosts.exe, dxdiagupd.exe, dialers.exe, netschd.exe, connwiz.exe, certupdt.exe,
+repfault.exe, wuapreport.exe, lanmgr.exe . The file is then executed.
+The GIF file is digitally signed with RSA 2048bit. The signature is located at the end of the GIF
+file and uses SHA-1. This mechanism ensures that the updates are “legit” and prevents an
+outsider from pushing a fake update.

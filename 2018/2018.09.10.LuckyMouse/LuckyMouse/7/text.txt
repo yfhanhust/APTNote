@@ -1,0 +1,45 @@
+NDISProxy network filtering driver
+Driver MD5 hash Timestamp Size Bits
+8e6d87eadb27b74852bd5a19062e52ed 2018.03.29 07:33:58 40400 64
+d21de00f981bb6b5094f9c3dfa0be533 2018.03.29 07:33:52 33744 32
+a2eb59414823ae00d53ca05272168006 2018.03.26 04:15:28 40400 64
+3/7
+493167e85e45363d09495d0841c30648 2018.03.26 04:15:21 33744 32
+ad07b44578fa47e7de0df42a8b7f8d2d 2017.11.08 08:04:50 241616 64
+This digitally signed driver is the most interesting artefact used in this campaign. The
+network filtering modules serve two purposes: first they decrypt and inject the RAT; second,
+they set its communication channel through RDP port 3389.
+The drivers are signed with a digital certificate issued by VeriSign to LeagSoft, a company
+developing information security software such as data loss prevention (DLP) solutions.
+This driver makes extensive use of third-party publicly available C source code, including
+from the Blackbone repository available at GitHub.
+Feature Public repository
+Driver memory
+injection
+NDIS network
+filtering driver
+Parse HTTP
+packets
+Blackbone https://github.com/DarthTon/Blackbone
+Microsoft Windows Driver Kit (WDK) sample code “Windows Filtering Platform
+Stream Edit Sample/C++/sys/stream_callout.c”
+Http-parser https://github.com/nodejs/http-parser
+The driver again checks if the Windows version is higher than Vista, then creates a device
+named \Device\ndisproxy-%s (where the word after “-” varies – see Appendix for all
+variants) and its corresponding symbolic link \DosDevices\Global\ndisproxy-%s.
+The driver combines all the Trojan-related registry values from
+HKLM\SOFTWARE\Classes\32ndisproxy-mn and de-XORs them with a six-byte hardcoded
+value. It then injects the resulting Trojan executable shellcode into lsass.exe memory using
+Blackbone library functions.
+NDISProxy works as a network traffic filter engine, filtering the traffic going through RDP
+port 3389 (the port number is hardcoded) and injecting messages into it.
+The communication between the user-mode in-memory Trojan and the driver goes through
+the custom control codes used by the DeviceIoControl() Windows API function. Apart from
+the auxiliary codes, there are two codes worth mentioning:
+4/7
+Driver control
+code
+Meaning
+0x222400 Start traffic filtering at RDP port 3389
+0x22240C Inject given data into filtering TCP stream. Used for Trojan communication with
+C2

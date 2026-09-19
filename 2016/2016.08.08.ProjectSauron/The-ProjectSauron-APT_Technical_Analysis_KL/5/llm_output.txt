@@ -1,0 +1,111 @@
+
+
+
+Sentence : Passive sniffer backdoor
+Format: PE DLL 32/64 bit
+File sizes: 75 – 91 Kb
+For any inquiries, contact intelreports@kaspersky.com Page 2 of 33
+The ProjectSauron APT. Technical analysis
+Compilation timestamps, linker versions: multiple variant, but match those of the target OS files (usually
+“svchost.exe”).
+The module is known to be installed as either an LSA password manager library, or as a Security Provider .
+The business logics is provided by one of the exported functions and is triggered when the corresponding
+system layer loads the library. When invoked, the module decrypts the first layer from the blob that contains
+actual code. The blob happens to have the same format as the RPC Helper payload. Once the magic value
+and code boundaries are verified, the code invokes the shellcode from the blob.
+The shellcode removes subsequent layers of encryption and decompresses its payload using the Jcalg1
+algorithm. The payload contains another layer of shellcode that loads, relocates and invokes the PE binary
+inside. The configuration consists of 1-3 DLL files, the first one being the main module and 1-2 others are
+optional plugins.
+The main module starts by enumerating all available plugins and starting them by calling the function
+exported by the name “ainit”. Every plugin provides a pointer to its own function table to the calling core.
+The configuration provided by the “upper” layer of the shellcode also contains the names of the event and
+mutex objects that are created by the core – these are usually unique for each sample.
+Then, it locates its configuration data in the resource called “ CONFIG ” of type “ RT_CONFIG ”. The resource is
+encrypted using AES-CBC with a hardcoded key
+“EFEB0A9C6ABA4CF5958F41DB6A31929776C643DEDC65CC9B67AB8B0066FF2492”.
+The key is not encrypted and can be located in the memory of the target processes while the module is
+running.
+The configuration is in readable text format. It is separated into sections that refer to different plugins by
+headers starting with ':'. Every option contains a prefix that specifies its format – S (string), B (boolean),
+'I', 'D', 'N' (integer), 'E' (list)
+:Core
+[S] Public
+Key ="ul35zkT/MGP3poQe+enL0dZef5rkaQtaZ78rn2qCsJjB45TCsSG26Qhz9lTtucKGpAqxmB5ByUOMsENKQL1twZm8zuxxfOIViGnj
+a0Yr49v8SlS9vCD/wibjo/0ri4c9JH80h5z3EWfXKIAmdgKRuCQXgiORBz4TFx1C+MRt0bzOYsM+kzuRsvUhmKPkL6iVAwpic1LGMH5S
+kMeWmtHbWYpOL+3U70YeHgFCKjWuhy9Nmt36EWZLKzZitjvYFq8EJ3QfpoMB+oWa9OhOlde2+9zOeTYPwGUq9t/oQwlXXTnfA7
+HkSVcvuoo+E//gzPJ/wT6Xq82IlsqB/IznIeaZaQ=="
+[S] Process List ="svchost.exe:netsvc,spoolsv.exe:*"
+[B] Monitor Child Thread=false
+[B] Disable Master Execute =false
+:Raw
+[S]IP="0.0.0.0"
+[B]Any Dest=false
+:Icmp
+[S]IP="0.0.0.0"
+Then the module reads base64-encoded “ Public Key ” value from the config and sets it as RSA key. After that
+the module creates a socket and starts a new thread to monitor routing and IP changes. Finally, it starts every
+plugin, providing pointer to own function table.
+For any inquiries, contact intelreports@kaspersky.com Page 3 of 33
+The ProjectSauron APT. Technical analysis
+Once a network packet is received by a plugin, it pushes the packet to the core and tries to decrypt the packet
+header with RC5 using the public key. If the first dword matches 0x11111111, it decrypts the rest of the
+packet, verifies the CRC32 and appends it to the queue.
+The packet is expected to be a command, either providing the core plugin with the address of the C&C server
+to connect to, the local port number to listen to, or the path to the additional local module to load and start.
+Depending on the command received in a packet, the module can:
+Execute an arbitrary binary from disk
+Load and start an encrypted plugin from disk
+Spawn a network connection object
+The plugin on disk is encrypted with RC6 with a 64-bit key that is provided by the C&C server. The decrypted
+and decompressed blob is expected either to be a valid PE file or a standard blob.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PE DLL 32/64 bit", "type" : "EXEF"},
+        {"id": 2, "description": "75 – 91 Kb files", "type" : "DOCF"},
+        {"id": 3, "description": "intelreports@kaspersky.com", "type" : "MAIL"},
+        {"id": 4, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 5, "description": "LSA password manager library", "type" : "TAMP"},
+        {"id": 6, "description": "Security Provider", "type" : "TAMP"},
+        {"id": 7, "description": "RPC Helper payload", "type" : "DOCF"},
+        {"id": 8, "description": "Jcalg1 algorithm", "type" : "APPS"},
+        {"id": 9, "description": "PE binary inside shellcode", "type" : "EXEF"},
+        {"id": 10, "description": "1-3 DLL files (configuration)", "type" : "DOCF"},
+        {"id": 11, "description": "ainit function", "type" : "TAMP"},
+        {"id": 12, "description": "Event and mutex objects", "type" : "REGI"},
+        {"id": 13, "description": "CONFIG resource (RT_CONFIG)", "type" : "DOCF"},
+        {"id": 14, "description": "AES-CBC encryption", "type" : "APPS"},
+        {"id": 15, "description": "Hardcoded key EFEB0A9C6ABA4CF5958F41DB6A31929776C643DEDC65CC9B67AB8B0066FF2492", "type" : "TAMP"},
+        {"id": 16, "description": "Public Key (RSA key)", "type" : "TAMP"},
+        {"id": 17, "description": "Process List configuration", "type" : "REGI"},
+        {"id": 18, "description": "Socket for monitoring routing and IP changes", "type" : "NETP"},
+        {"id": 19, "description": "RC5 encryption", "type" : "APPS"},
+        {"id": 20, "description": "C&C server address", "type" : "CCSH"},
+        {"id": 21, "description": "Local port number to listen to", "type" : "NETP"},
+        {"id": 22, "description": "Path to additional local module", "type" : "SYSP"},
+        {"id": 23, "description": "RC6 encryption (64-bit key)", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has size"},
+        {"source": 1, "target": 4, "rel_name" : "masquerades as"},
+        {"source": 1, "target": 5, "rel_name" : "installed as"},
+        {"source": 1, "target": 6, "rel_name" : "installed as"},
+        {"source": 1, "target": 7, "rel_name" : "contains"},
+        {"source": 1, "target": 9, "rel_name" : "loads and starts"},
+        {"source": 1, "target": 10, "rel_name" : "has configuration"},
+        {"source": 1, "target": 11, "rel_name" : "calls function"},
+        {"source": 1, "target": 12, "rel_name" : "creates"},
+        {"source": 1, "target": 13, "rel_name" : "reads from resource"},
+        {"source": 13, "rel_name" : "encrypted with", "target": 14},
+        {"source": 15, "rel_name" : "located in memory of target processes", "target": 1},
+        {"source": 16, "rel_name" : "used by module", "target": 1},
+        {"source": 17, "rel_name" : "contains process list", "target": 1},
+        {"source": 18, "rel_name" : "monitors routing and IP changes with", "target": 1},
+        {"source": 19, "rel_name" : "decrypts packet header using", "target": 1},
+        {"source": 20, "rel_name" : "provides address of", "target": 1},
+        {"source": 21, "rel_name" : "listens to local port number", "target": 1},
+        {"source": 22, "rel_name" : "loads and starts additional module from path", "target": 1},
+        {"source": 23, "rel_name" : "encrypts plugin on disk with", "target": 1}
+    ]
+}

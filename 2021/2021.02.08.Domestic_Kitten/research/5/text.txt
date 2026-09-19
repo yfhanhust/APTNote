@@ -1,0 +1,87 @@
+FurBall – Technical Analysis
+7/17
+Upon execution, the first thing Furball does is to allow execution of the application on the
+device startup. To achieve this, FurBall starts its code on a receiver that listens for the
+BOOT_COMPLETED event, which in turn calls to the ‘startService’ method to initiate
+everything that is needed for the malware’s functionality.
+–
+Figure 8 BOOT_COMPLETED receiver
+–
+Figure 9 The startService method
+In addition, this piece of code also initializes a ‘settings’ object, which contains the
+configuration for FurBall: which C&C to connect to, another back-up C&C address, flags
+to allow functionality, frequency for C&C pulling commands, and more.
+–
+Figure 10 FurBall configuration
+8/17
+After initialization, FurBall creates 3 threads.
+The first periodically sends media files such as videos, photos, and call records to the
+server, with a default frequency of every 20 seconds. The remaining 2 threads are keepalive threads that communicate with //answer.php .
+We assume this allows the threat actors to see which devices are currently active.
+The next step for FurBall is to initialize the Command Manager. This component pulls
+commands from the C&C by requesting the //get-function.php
+and awaits commands. Each command is delimited by the “===” string, and the
+arguments are delimited by the “~~~” string.
+NoCommand No command.
+Set Sets a configuration parameter given as the first argument,
+to a specific value given as the second argument.
+Get~~~AllLog Gets log files
+Get~~~AllContact Gets all contacts.
+Get~~~AllSms Gets all SMS.
+Get~~~AllApp Gets a list of all installed applications on the device.
+Get~~~AllAccount Gest a list of all user accounts stored on the device.
+Get~~~Location Gets the current location of the device.
+Get~~~File Gets a specific file and upload it to
+//upload-file.php
+9/17
+Take~~~Audio Starts audio recording with the microphone for a given
+amount of time.
+Take~~RecordCall Starts recording calls from this point on.
+Delete~~~Call Deletes all calls from the “HiddenNumber” parameter in the
+configuration.
+Reset~~~AllCommand Deletes all logs and media files, resets to a “default”
+configuration.
+–
+Figure 11 FurBall possible commands
+–
+Figure 12 the Command Manager listening for commands
+10/17
+–
+Figure 13 Command Manager parsing commands
+After all initializations, it’s time to start collecting the initial data on the device. FurBall
+collects the following data on startup:
+Hardware Information
+Contacts
+Call logs
+Accounts
+Browser history
+File list on the SD card
+11/17
+–
+Figure 14 the sendStartup method
+After collecting initial data on the device, FurBall initialize two other components. The
+first one is a clipboard monitor which monitors the clipboard content (where data is
+stored when it’s “copied”), and the other collects info about the top-most application’s
+activity.
+–
+Figure 15 Clipboard monitor
+12/17
+– -
+Figure 16 Top most application monitor
+The last significant component that is used by FurBall is the Notification Observer
+Service, a service that is based on the NotificationListenerService and allows FurBall to
+access all notifications received by the device.
+–
+Figure 17 NotificationObserverService
+While investigating the new version of Domestic Kitten’s FurBall, we noticed that FurBall
+is actually based on a commercially available parental control software called KidLogger .
+As FurBall shares a lot of infrastructure code with KidLogger, it seems that the developers
+used the KidLogger source-code available on github.
+13/17
+A few noticeable differences between KidLogger and FurBall:
+FurBall has a configuration update mechanism that is not present in KidLogger.
+FurBall is based on plain threads, while KidLogger is based on services.
+14/17
+–
+Figure 18 Code similarity between FurBall and KidLogger
+15/17

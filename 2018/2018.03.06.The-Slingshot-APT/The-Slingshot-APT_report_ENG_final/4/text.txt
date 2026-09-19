@@ -1,0 +1,71 @@
+Slingshot
+Slingshot is a loader used as a first stager. It replaces an existing system DLL with a malicious one of
+exactly the same size. We noticed that the attackers replace scesrv.dll more often than other DLLs,
+but in some cases attackers also replaced spoolsv.exe.
+The system DLL patching is one of the most technically interesting features of this loader, and it
+works as follows:
+
+Inserts all necessary modules into the victim’s system DLL file, compressing part of the original
+
+file in the malware´s data section to retain the same size.
+
+
+Changes the entry point, pointing to one of the added loaders. Loaders are written in the
+infected DLL as base-independent code.
+
+
+Calculates the new checksum of the DLL.
+
+
+When started, after executing all malicious actions, the malware restores the original code of
+the system DLL in memory.
+
+
+Each added malicious module has the following structure:
+{ uint module_id, uint module_size, char data[module_size] }.
+Actually, the malware itself on disk is an array of modules.
+Fig. 1 Green is the ID, yellow size in bytes, red the encrypted ‘Slingshot’ word.
+For instance, the described loader (6637DBCC6059A1E2E45956D98A3EA590) has the value
+module_id = 0xFF000001 and contains the encrypted word ‘Slingshot’. In its entry point it directly
+jumps to the malicious code with ‘jmp 758E618C’.
+The malicious module is located right after the header. Actually, this would be the unpacker for the
+embedded MZPE module. The original entry point address and the checksum of the DLL are stored in
+the module with module_id=0xFF000003. The original code is stored in the module with
+module_id=0xEF000007.
+This module uses the following parameters:
+Ss -a 24964 -s 163007 -o 8 -l 313856 -r 24964 -z 228584
+where:
+
+
+L – Size of the infected library
+
+
+R – RVA of patched data in library (where the malware code starts)
+
+
+A – RVA of modules array, 24964 = 0x6184 => ImageBase library .758E0000
+
+
+S – size of modules array, 163007 = 0x27CBF => in the infected library modules are embedded
+
+
+from .758E6184 to .7590DE43 address
+
+
+O – offset from the beginning of the compressed MZPE file till the modules list. Uses for finding
+the modules array (address .758E6184 in a picture above)
+
+
+Z – Maximum data size that will be restored in the original library
+
+
+To ensure correct execution and avoid system crashes, Slingshot restores the original library data
+stored in ImageBase + R to ImageBase + R + Z in memory.
+In case the malicious modules can´t be embedded into the target system library, Slingshot uses an
+additional file on disk. The path for this file is stored in the module with module_id 0xFF000006. It
+could be a hardcoded path in the recycler bin (first dword is 0x12000006O); or, if the first dword is
+0x12000007, malware tries to read this file directly from the PhysicalDrive object by calling:
+CreateFile(\\.\PhysicalDrive + drive_number), SetFilePointer, ReadFile.
+Module_id 0xFF000007 stores the encryption key in module_id 0xCF000009: this module is called
+Cahnadr and this is the main kernel mode loader implementing almost all the payloads.
+After loading additional modules, Slingshot passes the execution to Cahnadr .

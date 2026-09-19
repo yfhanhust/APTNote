@@ -1,0 +1,102 @@
+
+
+
+Sentence : d3d11.dll
+MD5: bb897e34bc0d1e82dfe79d0898f5aa88
+SHA256: c3681cd6e3fb12a4962091a981598c636f214237ec6c8b2915b2ff714d7f6e49
+Upon discovery of this sample, we first performed a retrohunt analysis. The discovery of a
+related binary led us to initially believe the sample was a Dumpert. However, a more in-depth
+analysis revealed that the d3d11.dll sample implanted a skeleton key, where adversaries could
+persistently control (before the system reboot) the infected machine and machines under the
+infected AD. More specifically, the malware was an account manipulation tool that contained code
+extracted from both Dumpert and Mimikatz. We called this malware SkeletonKeyInjector. The
+malware employed a technique that altered the NTLM authentication program and implanted a
+skeleton key to allow adversaries to log-in without a valid credential. This allowed the adversary to
+achieve the following objectives:
+Persistence: After the code in memory was altered, the adversary could gain access to the
+compromised machines before the next system reboot. As AD machines are rarely rebooted,
+the adversary was able to control the machines for a very long time.
+Defense Evasion: Aside from the different login password and login algorithm scheme,
+there was no difference when compared to a normal login activity. Furthermore, normal
+users could still log-in to the system via their original password. Thus, the probability of
+being exposed was low.
+Lateral Movement: Adversaries could use the skeleton key to log in to other machines that
+were in the same domain. This made it easier for an adversary to conduct lateral movement.
+To show which functions shared a resemblance to Mimikats or Dumpert, we reversed the
+functions of d3d11.dll and recovered the function names in Fig 14. For easy understanding, we
+recovered the function names that migrated from Mimikatz, which have either the “kuhl” or “kull”
+prefix. As for functions that migrated from Dumpert, the prefix “Dumpert” was included in the
+name. For functions that were implemented by the adversary, no prefix was added.
+13
+Figure 14: Reversed function names
+In order to bypass the API monitoring, which is widely used in anti-virus or EDR products, the
+malware directly invoked syscalls and implemented high level API logic. Since the syscall numbers
+differ between each Windows version, the following code snippet was used to determine the OS
+version in use, and thereby obtain the correct syscall number. Our analysis showed that this code
+snippet was copied from Dumpert.
+Figure 15: Dumpert detect OS version capability
+To run the Mimikatz code snippet used by the malware, a privilege called
+14
+SE_DEBUG_PRIVILEGE was needed. The code shown in Fig 16 used RtlAdjustPrivilege to
+obtain the SE_DEBUG_PRIVILEGE to allow the malware to open, read, and write other process
+memory as a debugger. By comparing the code snippet (Fig 17) with the original code in Mimikatz
+(Fig 18), we found that instead of calling the OpenProcess API, the malware instead invoked
+OpenProcess via Dumpert. As mentioned earlier, the malware sought to bypass the API hooking via
+syscalls.
+Figure 16: SE_DEBUG_PRIVILEGE
+SkeletonKeyInjector first searched for the string “Kerberos-Newer-Keys” in the lsass.exe
+process memory. When the “Kerberos-Newer-Keys” address was found, it then searched for the
+Unicode structure in the memory that referenced this address. Afterwards, the Unicode structure
+was altered with empty strings by manipulating the string reference to an empty string and size
+zero. This manipulation downgraded the lsass.exe in using insecure crypto scheme - RC4 without
+salt. From Fig 17 and Fig 18, the similar code segments between Mimikatz and d3d11.dll are
+shown.
+Figure 17: SkeletonKeyInjector Code Snippet I
+15
+Figure 18: Similar code in Mimikatz
+Figure 19: Code of SkeletonKeyInjector to patch the CDLocateCSystem
+After downgrading to RC4, the SkeletonKeyInjector altered the function pointers
+in cryptdll.dll!CDLocateCSystem by redirecting them to its customized functions (Fig 19).
+Specifically, two functions were altered, one for the RC4 initialization, and the other for the RC4
+decryption. In the RC4 initialization function, a new RC4 NTLM was injected with a pre-calculated
+hash value of the skeleton key. When the authentication check failed due to incorrect credentials,
+the RC4 decryption function prompted the authentication process to compare the credentials with
+the skeleton key. Once a match was confirmed, the log in was permitted. Noteworthy, the malware
+contained customized NTLM hash, which had a slight difference over the original Mimikatz.
+16
+Figure 20: Forged RC4 init function
+In Fig 20 and 21, the similarities between SkeletonKeyInjector and Mimikatz are illustrated.
+Figure 21: Forged RC4 init function in Mimikatz
+17
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "d3d11.dll", "type": "EXEF"},
+        {"id": 2, "description": "bb897e34bc0d1e82dfe79d0898f5aa88", "type": "IOCS"},
+        {"id": 3, "description": "c3681cd6e3fb12a4962091a981598c636f214237ec6c8b2915b2ff714d7f6e49", "type": "IOCS"},
+        {"id": 4, "description": "SkeletonKeyInjector", "type": "TTPS"},
+        {"id": 5, "description": "Dumpert", "type": "APPS"},
+        {"id": 6, "description": "Mimikatz", "type": "APPS"},
+        {"id": 7, "description": "NTLM authentication program", "type": "TTPS"},
+        {"id": 8, "description": "SE_DEBUG_PRIVILEGE", "type": "TTPS"},
+        {"id": 9, "description": "RtlAdjustPrivilege", "type": "EXEF"},
+        {"id": 10, "description": "lsass.exe process memory", "type": "SYSP"},
+        {"id": 11, "description": "Kerberos-Newer-Keys", "type": "TAMP"},
+        {"id": 12, "description": "cryptdll.dll!CDLocateCSystem", "type": "EXEF"},
+        {"id": 13, "description": "RC4 NTLM", "type": "TTPS"},
+        {"id": 14, "description": "AD machines", "type": "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "has_hash"},
+        {"source": 1, "target": 3, "rel_name": "has_hash"},
+        {"source": 1, "target": 4, "rel_name": "implements"},
+        {"source": 4, "target": 5, "rel_name": "uses_code_from"},
+        {"source": 4, "target": 6, "rel_name": "uses_code_from"},
+        {"source": 4, "target": 7, "rel_name": "alters"},
+        {"source": 8, "target": 9, "rel_name": "obtained_via"},
+        {"source": 10, "target": 11, "rel_name": "searches_for"},
+        {"source": 12, "target": 4, "rel_name": "altered_by"},
+        {"source": 13, "target": 4, "rel_name": "injects"},
+        {"source": 4, "target": 14, "rel_name": "controls"}
+    ]
+}

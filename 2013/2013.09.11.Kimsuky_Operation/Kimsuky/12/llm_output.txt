@@ -1,0 +1,61 @@
+
+
+
+Sentence : Remote control module
+It is also interesting that the malware author did not custom develop a backdoor program. Instead, the
+author modified TeamViewer client version 5.0.9104. The initial executable pushed by attackers in e-mails
+related to the remote control module consists of three more executables. Two of them are Team Viewer
+components themselves, and another is some sort of backdoor loader. So, the dropper creates three files in
+the C:WindowsSystem32 directory:
+netsvcs.exe - the modified Team Viewer client;
+netsvcs_ko.dll - resources library of Team Viewer client;
+vcmon.exe - installer/starter;
+and creates the service " Remote Access Service ", adjusted to execute C:WindowsSystem32vcmon.exe at
+system startup. Every time the vcmon.exe is executed, it disables AhnLab's firewall by zeroing out
+following registry values:
+HKLMSOFTWAREAhnLabV3 365 ClinicInternetSec
+UseFw = 0
+UseIps = 0
+Then, it modifies the Team Viewer registry settings. As we said, the Team Viewer components used in this
+campaign are not the original ones. They are slightly modified. In total, we found two different variants of
+changed versions. The malware author replaced all the entries of " Teamviewer " strings in Team Viewer
+components. In the first case with the " Goldstager " string and with the string " Coinstager " in the second.
+TeamViewer client registry settings are then HKLMSoftwareGoldstagerVersion5 and
+HKLMSoftwareCoinstagerVersion5 correspondingly. The launcher sets up several registry values that
+control how the remote access tool will work. Among them is SecurityPasswordAES . This parameter
+represents a hash of the password with which a remote user has to connect to Team Viewer client. This
+way, the attackers set a pre-shared authentication value. After that, the starter executes the very Team
+Viewer client netsvcs.exe .
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "TeamViewer client version 5.0.9104", "type" : "APPS"},
+        {"id": 2, "description": "netsvcs.exe", "type" : "EXEF"},
+        {"id": 3, "description": "netsvcs_ko.dll", "type" : "EXEF"},
+        {"id": 4, "description": "vcmon.exe", "type" : "EXEF"},
+        {"id": 5, "description": "C:WindowsSystem32", "type" : "SYSP"},
+        {"id": 6, "description": "Remote Access Service", "type" : "APPS"},
+        {"id": 7, "description": "AhnLab's firewall", "type" : "FIRW"},
+        {"id": 8, "description": "HKLMSOFTWAREAhnLabV3 365 ClinicInternetSecUseFw = 0", "type" : "REGI"},
+        {"id": 9, "description": "HKLMSOFTWAREAhnLabV3 365 ClinicInternetSecUseIps = 0", "type" : "REGI"},
+        {"id": 10, "description": "Goldstager string", "type" : "TAMP"},
+        {"id": 11, "description": "Coinstager string", "type" : "TAMP"},
+        {"id": 12, "description": "HKLMSoftwareGoldstagerVersion5", "type" : "REGI"},
+        {"id": 13, "description": "HKLMSoftwareCoinstagerVersion5", "type" : "REGI"},
+        {"id": 14, "description": "SecurityPasswordAES", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 2, "target": 5, "rel_name" : "created in"},
+        {"source": 3, "target": 5, "rel_name" : "created in"},
+        {"source": 4, "target": 5, "rel_name" : "created in"},
+        {"source": 6, "target": 4, "rel_name" : "executes at startup"},
+        {"source": 7, "target": 8, "rel_name" : "disabled by setting"},
+        {"source": 7, "target": 9, "rel_name" : "disabled by setting"},
+        {"source": 2, "target": 10, "rel_name" : "replaced string with"},
+        {"source": 2, "target": 11, "rel_name" : "replaced string with"},
+        {"source": 2, "target": 12, "rel_name" : "sets registry to"},
+        {"source": 2, "target": 13, "rel_name" : "sets registry to"},
+        {"source": 4, "target": 14, "rel_name" : "creates registry value"},
+        {"source": 4, "target": 2, "rel_name" : "executes"}
+    ]
+}

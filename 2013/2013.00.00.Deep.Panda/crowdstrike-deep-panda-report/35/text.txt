@@ -1,0 +1,35 @@
+DEEP PANDA
+multiple instances of itself. If the event does not exist, the driver then creates it using the Windows API
+�������������������������������������������������������������������������������������������������������
+��������������������������������������������������������������������������������������������������������������
+and indicative of relatively limited Windows API knowledge of the author of that part of the code. It is
+interesting to note that some of the hex digits in the object name are mixed case which is potentially
+indicative of the code being re-appropriated from another source.
+Anti-Debugging Protection
+The second component of the entry point performs an anti-debugging technique, calling the function
+KdDisableDebugger(), which allows the driver to disable usage of the built-in Windows kernel debugging
+facility that is used by popular kernel debuggers KD and WinDbg. Tools such as Syser Debugger, or
+debugging through a virtual machine are unaffected by this technique. The sample, rather than importing the
+KdDisableDebugger() API using conventional methods, looks up the API through
+MmGetSystemRoutineAddress() instead. All of the other APIs used by the driver are imported normally, so
+this is not a technique to hide import APIs used throughout the driver. Searching Google for
+“MmGetSystemRoutineAddress” and “KdDisableDebugger” results in dozens of Chinese language blogs
+which explain how to use this technique to “Disable WinDbg”.
+Hooking
+�������������������������������������������������������������������������������������������������������������
+is designed to hook the system call table, while the other hooks the network stack.
+Network Stack Hooking
+��������������������������������������������������������������������������������������������������������
+the version is necessary because Windows versions beginning with Vista utilize a redesigned TCP/IP network stack, most hooking operations will require a different implementation for these versions. On versions
+prior to Windows Vista, the TCP/IP driver creates a \Device\Tcp device object through which most network
+requests are piped through. On Vista and later, TCP/IP has been split up into multiple components, and IP
+connection enumeration, which this driver is targeting, is managed by \Device\nsiproxy instead.
+In either case, the driver obtains the device object by using IoGetDeviceObjectPointer() and hooks Major
+Function 14 the IRP_MJ_DEVICE_CONTROL, as this is the function through which all Input Output
+ConTroLls (IOCTLs) are sent, such as the IOCTL for querying active IP connections.
+Network Store Interface (NSI) Hook
+The NSI hook, targets IOCTL 0x12001B, which is used by NsiGetObjectAllParameters() in nsi.dll when
+users typically run commands such as netstat.exe or use any of the IP Helper APIs in iphlpapi.dll. The
+purpose of the hook is to scan the list of active connections returned to the user, and hide any such
+connection currently bound to a local TCP port in
+CROWDSTRIKE S E N S I T I V E 15

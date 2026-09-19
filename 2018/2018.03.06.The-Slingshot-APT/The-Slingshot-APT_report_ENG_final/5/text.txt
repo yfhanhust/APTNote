@@ -1,0 +1,189 @@
+Ring0 loader
+This loader is compressed in module_id 0xBF000001. Actually, there might be more than one, so in
+case the first loader fails, there may be a second loader in the binary with module_id 0xBF000002. At
+this stage, Slingshot uses its internal logging system actively:
+Slingshot checks if there is any kernel-mode payload and any loader available, and then the loaders
+are run one after the other.
+Upon starting, this loader gets SeLoadDriverPrivilege for installing malicious drivers into the system
+that it will later abuse for obtaining kernel privileges.
+In order to avoid leaving any traces of this activity in system logs, it renames the ETW-logs, and for
+the Security and System logs adds the .tmp extension. After execution, the loader removes the
+extensions.
+The final goal of this module is to load the Cahnadr module (kernel mode main payload, described
+below) into kernel mode. As previously stated, Slingshot has different ways to load code into kernel
+mode, each using its own loader.
+The simplest loader is used for 32-bit systems where Driver Signature Enforcement (DSE), which
+requires signed drivers, does not apply. This loader simply saves the driver on disk and loads it.
+When the driver is loaded, the loader shares the malicious payload with it by calling DeviceIoControl
+with control code 0x222000.
+This driver receives commands from the user-mode loader via DeviceIoControl. The only available
+command in this case allows running this code as a WorkItem into the System Worker Threads pool,
+which is a pool used by legitimate software for running quick tasks.
+In cases where the operating system supports DSE, the loader exploits a couple of legitimate but
+vulnerable drivers that allow writing in MSR registers. Successful exploitation of the drivers would
+allow to set in the MSR_LSTAR register a handler that, after running Sleep, calls Cahnadr :
+In order to prevent patch protection, the handler restores the original MSR register.
+This loader leverages the following drivers:
+|312E31851E0FC2072DBF9A128557D6EF|Goad.sys – driver for x86 systems|
+|---|---|
+|5F9785E7535F8F602CB294A54962C9E7 |SpeedFan.sys - CVE-2007-5633 |
+|9a237fa07ce3ed06ea924a9bed4a6b99 |Sandra.sys - CVE-2010-1592 |
+|978CD6D9666627842340EF774FD9E2AC|ElbyCDIO.sys - CVE-2009-0824|
+It is important to mention that the digital signatures in these drivers are still not revoked.
+All the drivers above are loaded into the kernel directly by creating the required keys in the registry
+and calling the ntdll!NtLoadDriver function. The service key name in the registry starts with the PCX*
+prefix.
+Cahnadr – main kernel-mode payload
+This payload can be considered the main orchestrator, running in kernel mode and providing the
+necessary capabilities for all the other, user-mode payloads. This component is responsible for
+different features, including:
+
+Anti-debugging actions and checking if the kernel is patched or not
+
+Calling system services directly to hide malicious activities
+
+
+Hooks KTHREAD.ServiceTable for threads
+
+
+Rootkit actions for hiding traffic
+
+Injecting user-mode payload (main malicious payload) into services.exe
+Providing malicious API for user-mode modules
+Providing communications via network
+Notifying GollumApp payload about process-related events, providing interfaces for
+
+manipulating their memory
+9. Monitoring all network devices
+10. Providing sniffer functionality on the following protocols: ARP, TCP, UDP, DNS, ICMP, HTTP
+Anti-debug techniques include:
+
+If kernel is already being debugged, it calls KdDisableDebugger() terminating the debugging
+
+process
+
+
+It hooks LiveKd debugger driver's routines IRP_MJ_CREATE, IRP_MJ_READ, FastIoDeviceControl
+
+
+Installs notifiers to monitor PsSetLoadImageNotifyRoutine. If the LoadImageNotify event
+happens when LiveKdD.sys is loaded, the module patches the entry point that leads to error
+
+
+STATUS_FAILED_DRIVER_ENTRY
+In order to detect if the kernel is patched, it checks the kernel image in memory with the following
+kernel files on disk:
+
+
+\SystemRoot\system32\kernel_name
+
+
+\SystemRoot\LastGood\system32\kernel_name
+
+
+\SystemRoot\$*\system32\kernel_name
+
+
+For newer x32 versions it also checks win32k.sys at the same paths.
+It is important to note that Cahnadr checks only CheckSum and TimeStamp values for the kernel
+image in memory. If one of them is different, it means that the kernel was patched, and it
+terminates its execution.
+Actually, it needs an unpatched kernel and win32k.sys to get the origin function from
+KeServiceDescriptorTable and KeServiceDescriptorTableShadow, which will be used to directly
+interact with system services and hooking the KTHREAD.ServiceTable on x32 systems.
+In order to hide calls, it can associate system services to some Zw, Rtl, Nt functions. Instead of
+taking the addresses for these functions from SSDT, Cahnadr* extracts them from the kernel image
+on disk for unpatched kernels.
+It also implements code to find a function address by its name by comparing exported routines from
+ntdll and ntoskrnl addresses: if the address of the exported functions is the same as the system
+service address, it means the address was correctly found.
+Ntdll.dll exported functions addresses are also taken from the image stored on disk to avoid hooks
+set by other programs.
+For routines not directly operating with system services, Cahnadr has a hardcoded list:
+Not all functions are mandatory to be found, there is a flag for each of them. All listed routines are
+used for injecting malicious code into user-mode processes.
+For newer x32 versions this list was highly extended, adding debug-related functions and functions
+for suspending and resuming threads and processes.
+For x32 systems, Cahnadr hooks KTHREAD.ServiceTable. It copies the KeServiceDescriptorTable and
+KeServiceDescriptorTableShadow, then fills it with the original handlers restored from disk and
+changes the address in KTHREAD.ServiceTable to pointer to a new structure. This is used to inject
+threads into user mode: once a component is injected as a separate thread, Cahnadr patches its
+KTHREAD.ServiceTable with the original handlers in order to hide its malicious functionality and
+avoid possible installed hooks.
+Cahnadr also provides the following API functionality:
+
+
+Direct disk access: read/write by raw-offset, defragmentation ban, etc. These routines are used
+for working with the virtual file system
+
+
+Read/write into memory by raw address
+
+
+Routines for injecting code into a process as a separate thread. It is possible to set the thread
+state and choose the preferred routine for creating the thread (NtCreateThreadEx or
+NtCreateThread). For GollumApp it is obligatory to use NtCreateThread
+
+
+Get the access token by process_id
+
+
+Get the SERVICE_DESCRIPTOR_TABLE address
+
+
+Get the DRIVER_OBJECT object pointer by driver name
+
+
+Get detailed information about processes opened in csrss.exe (start time, time in kernel mode,
+time in user mode, number of calls ZwRead and ZwWrite, among of data received/sent via
+ZwRead/ZwWrite)
+
+
+Get handle for process_1 in process_2. In other words, opens process_1 from process_2. This
+way process_2 gets the handle of process_1
+
+
+Close handle that belongs to any process
+
+
+Provides network functionality: add a new network-related task, delete an old one, turn on/off a
+network task, send information about all active network tasks to GollumApp
+
+
+Hooks the ServiceTable in KTHREAD in the specified thread or process (only on x32), providing:
+setting/deleting a hook by ThreadID, setting/deleting hook for all threads by PID, checking if
+thread/process was hooked
+
+
+Sets time to sleep before shutdown
+
+
+Cahnadr calls PsSetCreateProcessNotifyRoutine, PsSetCreateThreadNotifyRoutine routines in order
+to automate installing hooks. Created processes will be hooked if their parent process was hooked,
+as will threads if their process was hooked.
+Shutdown notifications are detected by calling the IoRegisterShutdownNotification routine. When a
+notification is received, it is sent to GollumApp with the time that GollumApp can spend for
+completion. While GollumApp works, Cahnadr sleeps.
+It installs bugcheck notifications by calling the KeRegisterBugCheckReasonCallback routine. When a
+notification is received it calls KeBugCheck with the undocumented POWER_FAILURE_SIMULATE
+parameter, which is a way to reboot from kernel mode without BSOD and crush dump. This way, in
+case a fatal error occurs, Cahnadr reboots the system without creating a memory dump on disk.
+The communication between kernel and user mode modules is implemented in different ways for
+x32 and x64 components.
+In x64 components Cahnadr sets IRP-requests handlers for the ‘null.sys’ driver. Each handler
+contains a ‘jmp’ operation to the malicious code located in the ‘null.sys’ image in memory. This is
+how hooks are typically set in this APT, making them harder to detect. Also, the authors decided to
+use IRP-requests shown in the picture below:
+While null.sys uses:
+However malicious and legitimate IRP-handlers have a conflicting component, as both null.sys and
+Cahnadr can process requests to IRP-MJ-CLOSE. That’s why only one hook and three ordinary
+handlers are set. After that, user mode modules can send data to Cahnadr by calling
+CreateFile(\\.\NUL, …) + DeviceIoControl.
+In x32 components another approach was used. Cahnadr registers a RegistryCallback routine by
+calling CmRegisterCallback to monitor all operations in the registry. When any user mode module
+sends something to Cahnadr it sets the ArbitraryUserPointer field of the TIB pointer to the related
+data, starting with 0x2BADDOOD, and then calls RegEnumKeyW which triggers the kernel mode
+callback.
+Kernel mode registry callback checks that the registry operation is RegNtEnumerateKey and then
+looks for 0x2BADDOOD:
+If found, Cahnadr handles the command and returns the result to the buffer used in the request.

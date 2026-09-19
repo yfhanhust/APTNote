@@ -1,0 +1,45 @@
+Attacking AVP.EXE
+If the “avp.exe” process is running, the module attempts to open the OSBoot-section as
+described before and tries to attack the avp.exe process. The attack starts from
+identifying the exact path to the installed Kaspersky Lab product by iterating through an
+array of hardcoded registry keys and values for the following products:
+KES12
+KES11
+KES10
+AVP16.0.0
+AVP16
+AVP15.0.0
+AVP8
+AVP7
+AVP6
+AVP15
+AVP14.0.0
+AVP14
+AVP13
+AVP12
+AVP11
+AVP10
+KES9
+KES8
+AVP80
+AVP90
+AVP9
+The registry values queried by the module contain a filesystem path to the root directory
+where the corresponding product is installed. For example: “C:\Program Files\Kaspersky
+Lab\Kaspersky Internet Security 15.0.0\”
+Once the registry key and value is found, the module confirms that avp.exe file is located
+in that directory. It does some basic file availability checks as well: makes sure that
+environment variables are resolved and the file can be opened for reading and it begins
+with 0x5A4D (magic “MZ” value of Windows executables).
+After that, the module creates a new section and maps avp.exe as a file view to this
+section. To allow code execution, the attributes of this memory region are also changed
+accordingly. This allows the module to change bytes from the mapped avp.exe in
+memory. The module applies two patches to the mapped avp.exe in a quite unusual way
+using SSE2 CPU extensions. In fact, it patches just the old DOS PE header (less than 120
+bytes). The patches are simple callback mechanisms that call arbitrary function passed as
+an argument.
+Right after this, the module attempts to start a new thread that begins with one of the
+patched locations. So far, it looks like the new thread begins with a call originating from
+avp.exe module that does some other calls, i.e. jumping back to klif.dll. Apparently, this
+For any inquiries, please contact intelreports@kaspersky.com
+THE DUQU 2.0

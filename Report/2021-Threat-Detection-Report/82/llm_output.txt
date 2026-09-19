@@ -1,0 +1,83 @@
+
+
+
+Sentence : Analysis
+Why do adversaries use
+Service Execution?
+All production operating systems have one thing in common: a mechanism to
+run a program or service continuously. On Windows, such a program is referred
+to as a “service,” and in the Unix/Linux world, such a program is often referred to
+as a “daemon.” Regardless of what operating system you’re using, being able to
+install a program so it runs whenever the computer is on has an obvious appeal
+to adversaries.
+In addition to ensuring the program starts after a reboot, this technique usually
+runs the program with a high privilege level, a win-win for adversaries.
+How do adversaries use
+Service Execution?
+In the Windows world, adversaries may use the Windows Service Manager
+~~(~~ ~~services.exe~~ ~~)~~, ~~sc.exe~~ ~~,~~ or the ~~net.exe~~ commands to install or manipulate
+services. We often see the manipulation of registry entries with the
+~~regsvr32.exe~~ program. These attempts to install or modify a service are
+associated with T1543.003: Windows Service. While installation or modification
+of services is closely related to the subsequent execution of a service, MITRE
+ATT&CK classifies execution as a distinct sub-technique. The rationale for
+this distinction offers an opportunity to highlight detection domains that are
+separate and not necessarily dependent upon one another.
+When beginning to think about detection opportunities for Service Execution,
+it’s helpful to understand that all Windows services spawn as child processes
+of ~~services.exe~~ (kernel drivers being the exception). It’s also useful to know
+l [T1569.002: Service Execution]
+E X E C U T I O N
+“Adversaries may abuse the Windows
+service control manager to execute
+malicious commands or payloads.
+The Windows service control manager
+~~(~~ ~~services.exe~~ ~~)~~ is an interface to manage
+and manipulate services. The service
+control manager is accessible to users
+via GUI components as well as system
+utilities such as ~~sc.exe~~ and Net.”
+71
+2021 Threat Detection Report
+that distinct service types have different models of execution. For example,
+a ~~SERVICE_USER_OWN_PROCESS~~ service comprises a standalone service
+executable (EXE), whereas a ~~SERVICE_WIN32_SHARE_PROCESS~~ service
+comprises a service DLL that’s loaded into a shared ~~svchost.exe~~ process.
+Additionally, device drivers are traditionally loaded via a ~~SERVICE_KERNEL_~~
+~~DRIVER~~ service type.
+Detection engineers who are familiar with distinct service types are better
+equipped to scope their detection logic according to the execution options
+available to an adversary. For example, an adversary might consider executing
+their malicious service as a ~~SERVICE_WIN32_SHARE_PROCESS~~ service DLL
+rather than a standalone binary to stay evasive in cases when DLL loads are
+likely scrutinized less than standalone EXE process starts. An adversary of
+sufficient ability may also decide to execute under the context of a device driver,
+taking into consideration operational needs and perhaps a defender’s inability
+to discern a legitimate driver from a suspicious one.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Windows Service Manager", "type" : "APPS"},
+        {"id": 2, "description": "services.exe", "type" : "EXEF"},
+        {"id": 3, "description": "sc.exe", "type" : "EXEF"},
+        {"id": 4, "description": "net.exe", "type" : "EXEF"},
+        {"id": 5, "description": "regsvr32.exe", "type" : "EXEF"},
+        {"id": 6, "description": "T1543.003: Windows Service", "type" : "TTPS"},
+        {"id": 7, "description": "services.exe (child process)", "type" : "EXEF"},
+        {"id": 8, "description": "SERVICE_USER_OWN_PROCESS service", "type" : "DOCF"},
+        {"id": 9, "description": "SERVICE_WIN32_SHARE_PROCESS service", "type" : "DOCF"},
+        {"id": 10, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 11, "description": "SERVICE_KERNEL_DRIVER service", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "uses"},
+        {"source": 1, "target": 4, "rel_name" : "uses"},
+        {"source": 1, "target": 5, "rel_name" : "manipulates registry with"},
+        {"source": 6, "target": 2, "rel_name" : "related to"},
+        {"source": 7, "target": 8, "rel_name" : "spawns as child process of"},
+        {"source": 7, "target": 9, "rel_name" : "spawns as child process of"},
+        {"source": 9, "target": 10, "rel_name" : "loaded into shared process by"},
+        {"source": 2, "target": 11, "rel_name" : "loads"}
+    ]
+}

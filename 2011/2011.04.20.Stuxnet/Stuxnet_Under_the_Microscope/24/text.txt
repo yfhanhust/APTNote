@@ -1,0 +1,167 @@
+
+54
+s7ag_bub_read_var; 
+s7ag_bub_write_var; 
+s7ag_link_in; 
+s7ag_read_szl; 
+s7ag_test; 
+s7blk_delete; 
+s7blk_findfirst; 
+s7blk_findnext; 
+s7blk_read; 
+s7blk_write; 
+s7db_close; 
+s7db_open; 
+s7ag_bub_read_var_seg; 
+s7ag_bub_write_var_seg;
+Export 18
+This function completely removes the malware from the system. It performs the following operations:
+
+
+Restores forged dynamic link library (s7otbxdx.dll) for Siemens software;
+
+
+Notifies user-mode components to shutdown so as to remove them properly;
+
+
+Stops and deletes the MrxCls service (kernel-mode driver);
+
+
+Stops and deletes the MrxNet service (kernel-mode driver);
+
+
+Deletes oem7A.PNF (the main module);
+
+
+Deletes mrxcls.sys (kernel-mode injector);
+
+
+Deletes mrxnet.sys (kernel-mode hider);
+
+
+Deletes mdmeric3.pnf;
+
+
+Deletes mdmcpq3.pnf (Stuxnet's configuration file);
+
+
+Deletes oem6C.PNF (file with tracing/debugging information).
+
+
+Export 19
+This function drops the following files, used to propagate through USB flash drives, into a specified
+location that it receives as a parameter: 
+Copy of Shortcut to.lnk; 
+Copy of Copy of Shortcut to.lnk; 
+Copy of Copy of Copy of Shortcut to.lnk; 
+Copy of Copy of Copy of Copy of Shortcut to.lnk; 
+~WTR4141.TMP; 
+~WTR4132.TMP.
+Export 22
+This function is responsible for distributing of Stuxnet through the network by using vulnerabilities
+described in the section on Distribution (MS08-67 and MS10-061). Also this function performs
+communication (sending and receiving updates) with instances of the worm on the other machines by
+RPC mechanism.
+www.eset.com
+55
+Export 24
+This function performs modifications of the Bot Configuration Data.
+Export 27
+This function implements a component of Stuxnet's RPC Server responsible for handling remote calls.
+Export 28
+This function exchanges information with the C&C server. It creates and sends the message to the C&C
+server as described in the section Remote Communication Protocol. When the message is ready it scans
+processes in the system to find iexplore.exe. If this exists then it injects the main module into it and calls
+export function 29, passing the message as a parameter. This function is responsible for performing
+actual data exchange with the C&C server. In the event that there is no iexplore.exe in the system, it
+calls this function from the address space of the default browser: it starts the default browser as a new
+process, injects into it the main module, and calls the function performing data exchange.
+Figure 4.8 – The Scheme for Sending Data
+Export 29
+This function performs exchange of data with the C&C server. It receives the message to be sent as
+input. Much of its functionality is described in the section on the “Remote communication protocol.” Its
+purpose is to send data to the remote server and to receive a reply as a binary module that will be
+subsequently executed.
+www.eset.com
+56
+Export 31
+This function performs the same actions as function number 9. To build the dropper it can use either of
+the following sets of files: 
+%Dir%\GracS\cc_alg.sav; 
+%Dir%\GracS\db_log.sav; 
+%Dir%\GracS\cc_tag.sav.
+Or 
+%Dir%\XUTILS\listen\XR000000.MDX; 
+%Dir%\XUTILS\links\S7P00001.DBF; 
+%Dir%\XUTILS\listen\S7000001.MDX .
+Which set to use is specified as a parameter as well as %Dir% .
+Export 32
+This function is called from the services.exe process: otherwise, it won't be executed. This function
+starts the RPC server to handle RPC calls made by Stuxnet's user-mode components and creates a
+window that drops malicious files onto removable drives.
+It registers a window class with the name " AFX64c313" and creates a window corresponding to the
+class created. The window procedure of the class monitors WM_DEVICE_CHANGE messages sent when
+there is a change to the hardware configuration of a device or the computer. The window procedure of
+the class handles only requests with wParam set to DBT_DEVICEARRIVAL. These are sent when a device
+or removable media have been inserted and have become accessible (for instance, when a USB flash
+drive has been connected to the computer). When this happens, depending on parameters of the
+configuration data, it can either drop malicious files on the drive, or remove them from there.
+Moreover, configuration data also specify the minimum number of files that the removable drive should
+contain in order to perform infection.
+4.1.7 RPC Server
+Stuxnet implements an RPC server to communicate with other instances of the worm over the network.
+It uses the RPC mechanism to receive updates not only from the remote C&C server but from other
+instances of the worm running on the infected machines in the network. This feature adds flexibility as it
+is able to stay updated even without direct connection with C&C server. It requests the version of the
+worm installed on the remote machine, and if the remote machine is running a more recent version, the
+newer version is requested and installed on the requester machine. The following figure illustrates the
+architecture of the server:
+www.eset.com
+57
+Figure 4.9 – Architecture of Stuxnet's RPC Server
+It consists of the two components: 
+The first component is responsible for handling RPC calls from the local host, i.e. from
+modules injected into process within the local system. It is executed within the address space of
+the services.exe process; 
+The second component of the server performs handling RPC calls from remote hosts.
+This component is executed within the address space of the process hosting one of the
+following services: netsvc, rpcss, browser.
+Both components implement the same functions. The first five function as outlined on the figure above
+are executed by local component only: when these functions are executed they determine which
+component calls them, and if it is the component responsible for handling remote calls, they make a call
+to the local component and exit. This is indicated in the figure with arrows. Stuxnet's RPC Server
+implements the following procedures: 
+RpcProc1 – Returns the version of the worm; 
+RpcProc2 – Loads a module passed as a parameter into a new process and executes
+specified exported function; 
+RpcProc3 – Loads a module passed as a parameter into the address of the process
+executing this function and calls its exported function number 1; 
+RpcProc4 – Loads a module passed as a parameter into a new process and executes it; 
+RpcProc5 – Builds the worm dropper; 
+RpcProc6 – Runs the specified application; 
+RpcProc7 – Reads data from the specified file; 
+RpcProc8 – Writes data into the specified file; 
+RpcProc9 – Deletes the specified file; 
+RpcProc10 – Works with the files of which the names are intercepted by hooks set up in
+function number 2 and writes information in tracing file.
+www.eset.com
+58
+4.1.8 Resources
+Here we will describe the resources of the main module. According to X the module has 13 resources.
+The following table summarizes information as to what it contains.
+Table 4.1.2 – Resources of the Main Module
+|Resource ID|Description|
+|---|---|
+|201|Kernel-mode driver (MrxCls.sys) responsible for injecting code into certainprocesses|
+|202|A proxy dynamic link library|
+|203|A .cab file with dynamic link library inside|
+|205|Configuration data for MrxCls.sys|
+|208|A dynamic link library – fake s7otbldx.dll (Siemens SCADA module)|
+|209|Encrypted data file drop to %WINDIR%\help\winmic.fts|
+|210|Template PE-file, used to construct dropper (~WTR4132.TMP)|
+|221|Module used for distribution of the worm by exploiting RPC vulnerability|
+|222|Module used for distribution of the worm by exploiting MS10-061 vulnerability|
+|240|.LNK file template, used to create .LNK files exploiting vulnerability|
+|241|~WTR4141.TMP – dynamic link library, used to load dropper (~WTR4132.TMP)while infecting system|
+|242|Kernel-mode driver (MrxNet.sys) responsible for concealing files exploiting LNKvulnerability and infecting system|
+|250|Module used to escalate privileges by exploiting 0-day vulnerability in Win32k.sys|

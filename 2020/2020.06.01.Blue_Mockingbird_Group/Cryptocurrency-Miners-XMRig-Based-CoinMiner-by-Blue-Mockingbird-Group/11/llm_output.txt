@@ -1,0 +1,102 @@
+
+
+
+Sentence : COINMINER INSTALLATION AND PERSISTENCE
+```
+DLL INSTALLER
+The next step was to find what was responsible for the persistence described above. We
+had one more DLL with a unique hash, so now it was time to analyze it and try to answer
+the question of persistence.
+Despite its size of approximately 107kB, this DLL contained only a small portion of regular
+functions. Most of the code were known library functions. The biggest one of the regular
+WMI EVENT SUBSCRIPTION
+During the process, our monitoring team noticed hits on our watchlist with the known
+malicious hashes and filepaths. We saw the execution attempts of following command:
+
+cmd.exe /c sc config wercplsupport start= auto & sc start wercplsupport
+```
+    & copy c:\windows\System32\checkservices.dll
+    c:\windows\System32\wercplsupporte.dll /y & start regsvr32.exe /s
+    c:\windows\System32\checkservices.dll
+
+```
+But this time, it seemed that it was caused by WMI. Further investigation revealed the
+persistence was attributed to WMI Event Subscription. The attackers registered the Event
+Filter with conditions related to the Local Time 20:10. They also registered the Consumer
+which executed the above command. And lastly, there was registered Filter to Consumer
+Binding present.
+With that, one question was answered, but several new questions were raised. How did
+they register the WMI persistence? What created the other scheduled tasks and services?
+Digging deeper into the WMI-related artifacts, we found a .mof file (Managed Object
+Format) with the definition of WMI Event Subscription. This file was parsed by compiler
+mofcomp.exe and the defined classes and class instances were added to the WMI
+To speed up the process of cleaning and because there were hundreds of infected
+computers, we created and deployed the PowerShell script for the automation of cleaning
+the malicious artifacts.
+Suddenly, our monitoring team noticed something unusual... When we executed our
+script, the PowerShell process spawned the cmd.exe process which then spawned the
+schtasks.exe and tried to create scheduled tasks with persistence of CoinMiner.
+Our first suspicion was about process injection – either injection of remote thread or DLL
+hijacking, or some of the other known and documented techniques.
+During the investigation of this behavior, we used the SysInternals Process Monitor tool
+and it captured the events of querying the Registry values related to the malicious CLSID,
+followed by loading library – the DLL file with the “unique” hash. The DLL file we already
+analyzed and described as the installer.
+Figure 17. Loading the malicious DLL observed in Process Monitor
+Figure 18. Excerpt from the installation batch file rn.bat
+Together with the rn.bat, we found the batch file called set.bat as well. The purpose of
+the set.bat was to extract the “installation” package either in the file set.zip or set.zip.tmp
+placed in C:\ProgramData directory and via let.exe program which executed the rn.bat
+file. Then the set.bat deleted the extracted content of the package as well as itself.
+Figure 19. The extraction batch file set.bat
+While most of its content was pretty clear, the purpose of the let.exe program may not
+be very obvious for people without experience in pentesting and ethical hacking.
+On the other hand, when an experienced pentester saw the commandline arguments of
+via cmd.exe, in a very similar manner. Thus, the payload of CVE-2019-18935 exploit and
+this “nwgold” dll share non neglected portions of code, especially the parts for the
+execution of the malicious activity. There are three possible explanations:
+Authors of CVE-2019-18935 exploit and “nwgold” DLL are same,
+Authors of “nwgold” DLL inspired themselves from the open source CVE-2019
+18935 exploit,
+The functionality of both DLLs is so simple and straightforward, that it is only a
+coincidence.
+Figure 22. DllMain function.
+“nwgold” on the left, CVE-2019-18935 payload on the right
+Figure 24. Construction of set.bat’s content
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "checkservices.dll", "type" : "DOCF"},
+        {"id": 2, "description": "wercplsupporte.dll", "type" : "DOCF"},
+        {"id": 3, "description": "regsvr32.exe", "type" : "APPS"},
+        {"id": 4, "description": "cmd.exe /c sc config wercplsupport start= auto & sc start wercplsupport", "type" : "EXEF"},
+        {"id": 5, "description": "WMI Event Subscription", "type" : "TTPS"},
+        {"id": 6, "description": ".mof file (Managed Object Format)", "type" : "DOCF"},
+        {"id": 7, "description": "mofcomp.exe", "type" : "APPS"},
+        {"id": 8, "description": "PowerShell script for cleaning malicious artifacts", "type" : "EXEF"},
+        {"id": 9, "description": "schtasks.exe", "type" : "APPS"},
+        {"id": 10, "description": "rn.bat", "type" : "DOCF"},
+        {"id": 11, "description": "set.bat", "type" : "DOCF"},
+        {"id": 12, "description": "set.zip or set.zip.tmp", "type" : "DOCF"},
+        {"id": 13, "description": "C:\\ProgramData", "type" : "SYSP"},
+        {"id": 14, "description": "let.exe", "type" : "APPS"},
+        {"id": 15, "description": "CVE-2019-18935 exploit", "type" : "CVES"},
+        {"id": 16, "description": "nwgold.dll", "type" : "DOCF"},
+        {"id": 17, "description": "DllMain function of nwgold.dll", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 4, "target": 2, "rel_name" : "creates"},
+        {"source": 4, "target": 3, "rel_name" : "executes"},
+        {"source": 4, "target": 1, "rel_name" : "copies from"},
+        {"source": 5, "target": 4, "rel_name" : "triggers"},
+        {"source": 6, "target": 5, "rel_name" : "defines"},
+        {"source": 7, "target": 6, "rel_name" : "parses"},
+        {"source": 8, "target": 9, "rel_name" : "spawns"},
+        {"source": 9, "target": 4, "rel_name" : "executes"},
+        {"source": 10, "target": 12, "rel_name" : "extracts from"},
+        {"source": 10, "target": 13, "rel_name" : "places in"},
+        {"source": 11, "target": 10, "rel_name" : "executes"},
+        {"source": 14, "target": 10, "rel_name" : "runs"},
+        {"source": 15, "target": 16, "rel_name" : "shares code with"}
+    ]
+}

@@ -1,0 +1,80 @@
+
+
+
+Sentence : En Route with Sednit
+Bootkit
+Interestingly, we observed Downdelph deployment with a bootkit on two occasions, Cases 1 and 5
+in Figure 4. As defined in ESET’s VirusRadar® [17], a bootkit is “ A type of rootkit that infects the Master
+Boot Record or Volume Boot Record (VBR) on a hard disk drive in order to ensure that its code will be run
+each time the computer boots. […​] ”.
+In recent years, bootkits have become popular as a way to load unsigned malicious Windows drivers,
+which is normally prevented by the OS in 64-bit versions of Windows. But in the present case the bootkit
+serves as a stealthy persistence method for the user-mode downloader Downdelph — although
+for this purpose an unsigned driver will indeed be loaded, as we will describe later. Persistence through
+a bootkit makes detection harder, as its code is executed before the operating system is fully loaded.
+The bootkit in question has the ability to infect Microsoft Windows versions from Windows XP
+to Windows 7, on both 32-bit and 64-bit architectures. To the best of our knowledge the bootkit used
+by Downdelph has never been documented, even though it belongs to the well-known category
+of bootkits infecting the Master Boot Record (MBR) — first sector of the hard drive — to take control
+of the startup process.
+We will now describe the various components installed on the machine during the infection
+by the bootkit, and then how those components cooperate during startup to eventually
+execute Downdelph.
+Installation Process
+The bootkit installation process varies depending on the Windows version, and whether
+the machine is 32-bit or 64-bit. In all cases the bootkit installer starts by overwriting the hard
+drive’s first sectors — a sector being the basic hard drive storage unit, resulting in a new hard drive
+layout as shown in Figure 8 and described in the following.
+Sector 1
+Sector 2
+Sector 3
+Bootkit MBR
+Original MBR
+(XOR-encrypted)
+Bootkit Code
+(XOR-encrypted)
+Bootkit Driver
+(XOR-encrypted,
+RC4-encrypted)
+Legitimate
+data
+Figure 8. Beginning of infected hard drive layout
+First things first: the MBR is overwritten with a custom version, while an encrypted copy
+of the original MBR code is stored in the second sector. Starting in the third sector comes the core
+bootkit code, encrypted with a simple XOR-based algorithm. This core code will be slightly different
+depending on the operating system versions, as the hooks — described later — put in place at startup
+will vary. Finally comes an RC4-encrypted Windows driver, which depending on the architecture will
+be a 32-bit or 64-bit binary.
+16
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sednit", "type" : "ACTO"},
+        {"id": 2, "description": "Downdelph", "type" : "APPS"},
+        {"id": 3, "description": "Bootkit", "type" : "EXEF"},
+        {"id": 4, "description": "Master Boot Record (MBR)", "type" : "SYSP"},
+        {"id": 5, "description": "Volume Boot Record (VBR)", "type" : "SYSP"},
+        {"id": 6, "description": "Windows OS", "type" : "OPPS"},
+        {"id": 7, "description": "32-bit Windows", "type" : "OPPS"},
+        {"id": 8, "description": "64-bit Windows", "type" : "OPPS"},
+        {"id": 9, "description": "Windows XP to Windows 7", "type" : "OPPS"},
+        {"id": 10, "description": "Hard drive's first sectors", "type" : "SYSP"},
+        {"id": 11, "description": "Custom MBR version", "type" : "EXEF"},
+        {"id": 12, "description": "Encrypted copy of original MBR code", "type" : "DOCF"},
+        {"id": 13, "description": "Core bootkit code (XOR-encrypted)", "type" : "EXEF"},
+        {"id": 14, "description": "RC4-encrypted Windows driver", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "deploys"},
+        {"source": 3, "target": 4, "rel_name" : "overwrites"},
+        {"source": 3, "target": 5, "rel_name" : "can infect"},
+        {"source": 6, "target": 3, "rel_name" : "loads unsigned driver with"},
+        {"source": 7, "target": 9, "rel_name" : "part of"},
+        {"source": 8, "target": 9, "rel_name" : "part of"},
+        {"source": 10, "target": 3, "rel_name" : "overwritten by"},
+        {"source": 4, "target": 12, "rel_name" : "stored as encrypted copy in"},
+        {"source": 10, "target": 13, "rel_name" : "contains"},
+        {"source": 10, "target": 14, "rel_name" : "contains"}
+    ]
+}

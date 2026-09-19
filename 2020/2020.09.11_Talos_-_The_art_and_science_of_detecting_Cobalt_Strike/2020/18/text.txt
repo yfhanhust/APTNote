@@ -1,0 +1,48 @@
+The art and science of detecting Cobalt Strike
+l
+Figure 23
+infection, as it takes the second base64 blob and is creating
+an IO.MemoryStream object out of it. A quick look at the
+resulting code shows that we, once again, jumped the gun
+in analysis and it’s gzip compressed.
+l
+We can quickly decompress the extracted data on the CLI
+(Figure 23).
+The newly decoded payload declares some new functions.
+• func_get_proc_address()
+• func_get_delegate_type()
+This is a fairly old technique (around 2012) that allows
+the user to invoke calls via .NET native method wrappers
+in PowerShell. This allows the user to call the Windows
+API using and execute code in a fileless manner via the
+
+System.Reflection namespace.
+We can then useGetMethod() to acquire a handle to the
+desired functionality and bypass any restrictions. The goal
+in this payload is to expose the GetProcAddress library
+function so that we can load the desired Windows API code
+and interact with it.
+System.Reflection exposes another function called
+GetDeletegateForFunctionPointer. Using this, Cobalt
+Strike grabs a function pointer to any API function it needs
+for execution.
+Once an executable section of memory is allocated and
+l
+Figure 24
+Figure 25
+populated.. Cobalt Strike can then execute the payload
+in memory through another delegate defined for the
+memory region.
+l
+So what is the base64 string this time? It’s shell code, but
+actually XOR encrypted (Figure 24).
+This is pretty easy to decrypt. We know that it’s XOR’d using
+the key 0x23 (35) so we can decode this using our method of
+choice. In this case, we used xortool-xor (Figure 25)
+Eventually, we determined that this is the same code as
+seen in the raw payload section in different packaging.
+Once Cobalt Strike gets it right, it reuses that work across
+other attack options. This makes it more convenient for
+defenders to write detection.
+l
+© 2020 Cisco. All rights reserved. talos-external@cisco.com | talosintelligence.com page 14 of 29

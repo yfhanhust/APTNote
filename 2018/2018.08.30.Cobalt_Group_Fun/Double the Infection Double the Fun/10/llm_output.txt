@@ -1,0 +1,72 @@
+
+
+
+Sentence : Payload Stager: Part One
+The document from the embedded URL in the phishing email, Document00591674.doc
+(61e3207a3ea674c2ae012f44f2f5618b), renders a VBA infested word document which
+continues the infection cycle once macros are enabled. NOTE: The document requires
+user permission and/or a policy enabled that allows Macros to run for a successful
+launch.
+The VBA script pieces together a cmd.exe command that launches cmstp.exe with an INF
+file ( figure 3 ) allowing to potentially by-pass AppLocker. The INF file then beacons to
+download.outlook-368[.]com to download a remote payload that cmstp.exe will execute.
+Figure 3. INF File
+The file, info.txt, downloaded from download.outlook-368[.]com is an XML file with an
+embedded scriptlet tag. The XML’s content includes a registration section allowing it to
+be used as a SCT/COM object ( Figure 4 ).
+4/11
+Figure 4. COM Object
+“cmstp.exe” executes the SCT file, which subsequently drops and launches the JavaScript
+backdoor dropper binary, 31385.txt (e368365bece9fb5b0bc8de1209bab694), disguised
+as a text file. For the dropped binary, Cobalt Group makes use of another system provided
+binary to add a layer of stealth and bypass possible protections like AppLocker by
+launching it using regsvr32.exe ( Figure 5 ). This is consistent with TTPs for this actor.
+Figure 5. regsvr32 launching the 31385.txt
+The DLL file, 31385.txt, masquerading as a text file, is the last stage in the infection chain.
+The DLL drops the final obfuscated embedded file and launches it using regsvr32.exe
+before deleting itself ( Figure 6 ).
+Figure 6. Final Obfuscated Script
+The above script ( Figure 6 ) is launched using regsvr32.exe:
+REgSvr32 /S /N /U
+/I:”C:/Users/zgSpbU9Lu/AppData/Roaming/7F235861DB0B0024C3.txt” sCRObJ
+The script ensures persistence by modifying the registry key UserInitMprLoginScript with
+the following value:
+5/11
+Regxvr32 /S /N /U /I:C:/Users//AppData/Roaming/EE02EB37AA8.txt
+ScRObJ
+De-obfuscating the final script renders the C2 along with the RC4 key. This is the
+JavaScript backdoor “more_eggs” which has been analyzed by other researchers over the
+past few years ( Figure 7 ).
+Figure 7. De-Obfuscated JavaScript Backdoor – “More_eggs”
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Document00591674.doc", "type" : "DOCF"},
+        {"id": 2, "description": "61e3207a3ea674c2ae012f44f2f5618b", "type" : "IOCS"},
+        {"id": 3, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 4, "description": "cmstp.exe", "type" : "EXEF"},
+        {"id": 5, "description": "INF file", "type" : "DOCF"},
+        {"id": 6, "description": "download.outlook-368[.]com", "type" : "CCSH"},
+        {"id": 7, "description": "info.txt", "type" : "DOCF"},
+        {"id": 8, "description": "XML file with an embedded scriptlet tag", "type" : "DOCF"},
+        {"id": 9, "description": "31385.txt (e368365bece9fb5b0bc8de1209bab694)", "type" : "DOCF"},
+        {"id": 10, "description": "Cobalt Group", "type" : "ACTO"},
+        {"id": 11, "description": "regsvr32.exe", "type" : "EXEF"},
+        {"id": 12, "description": "DLL file (31385.txt)", "type" : "DOCF"},
+        {"id": 13, "description": "C:/Users/zgSpbU9Lu/AppData/Roaming/7F235861DB0B0024C3.txt", "type" : "SYSP"},
+        {"id": 14, "description": "UserInitMprLoginScript registry key", "type" : "REGI"},
+        {"id": 15, "description": "C:/Users//AppData/Roaming/EE02EB37AA8.txt", "type" : "SYSP"},
+        {"id": 16, "description": "JavaScript backdoor “more_eggs”", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "hash of"},
+        {"source": 5, "target": 6, "rel_name" : "beacons to"},
+        {"source": 6, "target": 7, "rel_name" : "downloads"},
+        {"source": 8, "target": 9, "rel_name" : "contains"},
+        {"source": 10, "target": 9, "rel_name" : "uses"},
+        {"source": 12, "target": 9, "rel_name" : "drops and launches"},
+        {"source": 11, "target": 9, "rel_name" : "launches using"},
+        {"source": 14, "target": 13, "rel_name" : "modified by"},
+        {"source": 16, "target": 15, "rel_name" : "executes from"}
+    ]
+}

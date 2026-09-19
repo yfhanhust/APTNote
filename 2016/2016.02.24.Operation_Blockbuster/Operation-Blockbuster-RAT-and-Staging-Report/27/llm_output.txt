@@ -1,0 +1,78 @@
+
+
+
+Sentence : Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 26
+A stark departure from the design pattern found in Romeo-CoreOne-base families, RomeoEcho is a RAT that uses a more
+interactive command shell format for command identification. The RomeoEcho samples begin within the DllMain
+function by attempting to create a mutex named “ mutex_set_cookie ”. If RomeoEcho is unable to create the
+mutex due to the error condition ERROR_ALREADY_EXISTS, indicating that the named mutex already exists, the DLL
+framework will not activate the RomeoEcho operational core.
+Whether activated by DllMain or WinMain (for the standalone executable sample), the operational core of RomeoEcho
+is the same. Upon activation, the core binds to a listening port on the victim’s computer. The port number varies per
+samples with known port numbers being 1984, 4558, 2550, 3080, and 3579.
+When an incoming connection occurs, the first task the core performs is a handshake to establish the authenticity of the
+client making the connection. The handshake protocol consists of the core sending a constant ( 0x18D1F71F ) to the client
+in plaintext as a 4-byte (DWORD) data buffer. The client must respond with another constant ( 0xC46FF197 ) over the
+same socket, also in plaintext, otherwise RomeoEcho terminates the connection with the client. The client then transmits
+another 4-byte value to the core. This 4-byte value is the communications key for any further communication between
+the client and the RomeoEcho instance.
+Communication between the client and RomeoEcho, after the handshake, is encrypted using a bitwise roll, an XOR,
+and either an addition or a subtract operation (depending on the direction of the encryption). The communications key
+dictates the particulars of the transformation, as Figure 7-1 illustrates. The core of the transformation is an XOR/SUB or
+XOR/ADD in the same vein as the DNSCALC-style encoding.
+void DecryptBuffer(char *pvData, int dwLength)
+  {
+  for (int j = 0; j < dwLength; ++j )
+  {
+pvData[j] = (cryptoKey[1] ^ ROL(pvData[j], cryptoKey[2])) - cryptoKey[0];
+```
+  }
+}
+void EncryptBuffer(char *pvData, int dwLength)
+  {
+  for ( int j = 0; j < dwLength; ++j )
+  {
+```
+pvData[j] = ROR1( cryptoKey[1] ^ (cryptoKey[0] + pvData[j]), cryptoKey[2]);
+```
+  }
+}
+```
+Figure 7-1: RomeoEcho’s Communication Decryption/Encryption Functions
+With the communications key established and the handshake complete, RomeoEcho’s core activates the communications
+loop function. RomeoEcho is single-threaded and does not spawn a new thread for incoming connections. As a result,
+only one client can access a RomeoEcho-infected node at a time.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RomeoEcho", "type" : "APPS"},
+        {"id": 2, "description": "DllMain function", "type" : "EXEF"},
+        {"id": 3, "description": "mutex_set_cookie", "type" : "REGI"},
+        {"id": 4, "description": "ERROR_ALREADY_EXISTS", "type" : "TAMP"},
+        {"id": 5, "description": "WinMain function", "type" : "EXEF"},
+        {"id": 6, "description": "listening port on the victim’s computer", "type" : "NETP"},
+        {"id": 7, "description": "1984", "type" : "NETP"},
+        {"id": 8, "description": "4558", "type" : "NETP"},
+        {"id": 9, "description": "2550", "type" : "NETP"},
+        {"id": 10, "description": "3080", "type" : "NETP"},
+        {"id": 11, "description": "3579", "type" : "NETP"},
+        {"id": 12, "description": "client", "type" : "ACTO"},
+        {"id": 13, "description": "0x18D1F71F", "type" : "TAMP"},
+        {"id": 14, "description": "0xC46FF197", "type" : "TAMP"},
+        {"id": 15, "description": "communications key", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "creates"},
+        {"source": 1, "target": 6, "rel_name" : "binds to"},
+        {"source": 1, "target": 7, "rel_name" : "uses port"},
+        {"source": 1, "target": 8, "rel_name" : "uses port"},
+        {"source": 1, "target": 9, "rel_name" : "uses port"},
+        {"source": 1, "target": 10, "rel_name" : "uses port"},
+        {"source": 1, "target": 11, "rel_name" : "uses port"},
+        {"source": 1, "target": 12, "rel_name" : "establishes handshake with"},
+        {"source": 1, "target": 13, "rel_name" : "sends constant to client"},
+        {"source": 12, "target": 14, "rel_name" : "responds with constant"},
+        {"source": 12, "target": 15, "rel_name" : "transmits key to core"},
+        {"source": 1, "target": 15, "rel_name" : "uses for encryption/decryption"}
+    ]
+}

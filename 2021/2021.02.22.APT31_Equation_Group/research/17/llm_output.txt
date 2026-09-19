@@ -1,0 +1,114 @@
+
+
+
+Sentence : Root Cause
+After we finished reverse engineering the rich context and utilities exposed as part of the
+DanderSpritz framework and API, the vulnerability itself was quite simple. A short
+analysis revealed that this is probably a NULL-Deref vulnerability, as the NULL page is
+allocated, and the shellcode is immediately copied to it, as can be seen below:
+12/36
+Figure 8: Preparation of the NULL-page, as part of the EpMo exploit.
+As this is a NULL-Deref vulnerability, we can immediately rule out CVE-2017-0005, as
+the stack trace shown in Microsoft’s blog has nothing to do with the NULL page. This
+means that this is possibly another vulnerability found and exploited by Equation Group
+in 2013. With that out of the way, it is time to understand what triggers this NULL-Deref
+vulnerability.
+Our first hint as to the identity of the affected module, which we expect to be the UMPD,
+can be found in this classic example of the use of the OS version enum field:
+Figure 9: Using OS version enum to query for the ppClientPrinterThunk callback
+index.
+After the version-dependent index of the callback is fetched, the callback itself is replaced
+with the attacker’s fake ClientPrinterThunk callback.
+13/36
+Figure 10: Replacing the KernelCallbackEntry with the attacker’s
+ClientPrinterThunk .
+Bingo! The exploit indeed makes use of a fake ClientPrinterThunk . Let’s dig in and
+analyze the exploit logic inside this fake callback.
+The callback itself is a thin wrapper that forwards the gdi_ctx and the original
+argument to a function that is very similar to Windows’s own GdiPrinterThunk . As a
+matter of fact, the code of the exploit is very modular, and each supported driver
+command is handled by its own virtual handler implemented in the gdi_ctx class.
+Aside from the chosen set of implemented handlers, there is no real logic in this function.
+Figure 11: Driver command types that are handled by the exploit’s user-mode driver.
+While analyzing this function, we stumbled upon the GDI configuration array that
+originally pointed us to this exploit sample. Now, placed in the right context, we can easily
+deduce the role of this configuration array. It holds the print driver’s INDEX_LAST value
+for each version of the target operating system.
+14/36
+Figure 12: Global INDEX_LAST configuration table, as used by the driver.
+As can be seen above, this configuration value is crucial for the driver’s logic as it
+represents the total number of dispatched functions that should be handled by the driver.
+Now that we understood the overall flow of the exploit, and the structure of the UserMode-Print-Driver (UMPD), tracing the root cause of the vulnerability proved to be a
+relatively simple task. The driver implemented special handlers only for the following
+basic command types:
+Figure 13: List of driver-supported
+command types.
+On top of these commands, there is one
+additional supported command, with the
+os-dependent value of INDEX_LAST +
+4 :
+15/36
+Figure 14: Handler for the DrvFN command type.
+In this command, we initialize an array that tells the operating system which function
+handlers we support. The attackers chose to mark all of the functions as “supported”
+except for 3 specific function handlers:
+invoked and tries to create a surface, exactly the operation that isn’t supported by our
+driver. Here is a debugging output from the vulnerable function:
+16/36
+Figure 15: Debugger output inside the vulnerable function showing the missing handler
+entry.
+While the entry for DrvDisablePDEV (0x02) exists, and points to the correct Windows
+function, the adjacent entry for DrvEnableSurface (0x03) contains only zeros.
+From this point, the vulnerability is clear. The vulnerable function assumes that our
+driver supports this handler, fetches the empty entry from the struct, and invokes NULL
+as the function responsible for enabling the surface. The figure below shows the full stack
+trace, right at the point in which the control flow is passed to the shellcode that the
+attacker stored at address 0x0:
+00 8aeb8c6c 8fa42330 0x0
+01 8aeb8c88 8fbae3f6 win32k!PDEVOBJ::bMakeSurface+0x43
+02 8aeb8cb0 8fbae94c win32k!GreStartDocInternal+0x7e
+03 8aeb8d1c 82a4f42a win32k!NtGdiStartDoc+0x2ff
+04 8aeb8d1c 000f0813 (T) nt!KiFastCallEntry+0x12a
+05 0022eed0 10008118 (T) 0xf0813
+06 0022ef18 10006f53 Mcl_NtElevation_EpMo_GrSa+0x8118
+07 0022ef28 10006fc3 Mcl_NtElevation_EpMo_GrSa+0x6f53
+08 0022ef44 10007af4 Mcl_NtElevation_EpMo_GrSa+0x6fc3
+09 0022ef74 10006ce5 Mcl_NtElevation_EpMo_GrSa+0x7af4
+17/36
+0a 0022efcc 10004a31 Mcl_NtElevation_EpMo_GrSa+0x6ce5
+0b 0022f324 100038c0 Mcl_NtElevation_EpMo_GrSa+0x4a31
+0c 0022f338 10003a7b Mcl_NtElevation_EpMo_GrSa+0x38c0
+0d 0022f370 10002adf Mcl_NtElevation_EpMo_GrSa+0x3a7b
+0e 0022f3d8 77d5af24 Mcl_NtElevation_EpMo_GrSa+0x2adf
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DanderSpritz framework and API", "type" : "TTPS"},
+        {"id": 2, "description": "NULL-Deref vulnerability", "type" : "CVES"},
+        {"id": 3, "description": "CVE-2017-0005", "type" : "CVES"},
+        {"id": 4, "description": "Equation Group", "type" : "ACTO"},
+        {"id": 5, "description": "UMPD (UserMode-Print-Driver)", "type" : "APPS"},
+        {"id": 6, "description": "ClientPrinterThunk callback", "type" : "TTPS"},
+        {"id": 7, "description": "GdiPrinterThunk function", "type" : "TTPS"},
+        {"id": 8, "description": "INDEX_LAST configuration table", "type" : "REGI"},
+        {"id": 9, "description": "DrvDisablePDEV (0x02)", "type" : "TTPS"},
+        {"id": 10, "description": "DrvEnableSurface (0x03)", "type" : "TTPS"},
+        {"id": 11, "description": "Mcl_NtElevation_EpMo_GrSa", "type" : "EXEF"},
+        {"id": 12, "description": "win32k!PDEVOBJ::bMakeSurface", "type" : "TTPS"},
+        {"id": 13, "description": "win32k!GreStartDocInternal", "type" : "TTPS"},
+        {"id": 14, "description": "win32k!NtGdiStartDoc", "type" : "TTPS"},
+        {"id": 15, "description": "nt!KiFastCallEntry", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "exploits"},
+        {"source": 4, "target": 2, "rel_name" : "found and exploited by"},
+        {"source": 5, "target": 6, "rel_name" : "replaces with fake"},
+        {"source": 5, "target": 8, "rel_name" : "uses configuration table"},
+        {"source": 5, "target": 9, "rel_name" : "supports handler"},
+        {"source": 5, "target": 10, "rel_name" : "does not support handler"},
+        {"source": 11, "target": 2, "rel_name" : "invokes vulnerability"},
+        {"source": 12, "target": 2, "rel_name" : "part of stack trace for"},
+        {"source": 13, "target": 12, "rel_name" : "calls"},
+        {"source": 14, "target": 13, "rel_name" : "calls"}
+    ]
+}

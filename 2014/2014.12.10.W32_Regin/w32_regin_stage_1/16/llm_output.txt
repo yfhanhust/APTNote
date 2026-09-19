@@ -1,0 +1,266 @@
+
+
+
+Sentence : 2.10 Imports & Trampolines
+Import resolution is the crucial part for achieving Regin
+stage #1’s goal of hiding the originator of system calls
+from external observers. The loader will correctly resolve
+the address of imported functions, but will embed these
+addresses in so-called ‘trampoline’ code. Addresses to
+the trampolines are instead added to the Import Address
+Table (IAT). From there, the execution will traverse different
+6
+pieces of code, eventually triggering the requested external
+subroutine before finally returning to the payload.
+Before getting into details, it is important to have an idea of
+how the trampolines work from a high-level perspective.
+A trampoline transition can be summarized as follows:
+
+Payload invokes “resolved” external subroutine
+Trampoline code receives control
+a. Trampoline code retrieves the previouslyresolved real address of the external subroutine
+
+b. Trampoline invokes the pre-API call code
+
+Pre-API call code prepares the environment to make
+the function call return to trusted location inside
+trusted module
+
+a. Pre-API call code invokes the external
+subroutine
+
+
+External subroutine performs its duty
+a. External subroutine returns
+
+
+Execution lands in appropriate part of trusted
+module
+
+
+Jump to post-API call code is executed
+
+
+Post-API call code receives control
+
+
+a. Post-API call code restores the environment for
+payload
+b. Post-API call code transfers control back to
+payload, as would normally happen after a call
+to an external subroutine
+
+Payload continues its operations
+
+In the following subsections we will discuss the details
+of how the malware retrieves and pieces together all the
+information required to produce and install the trampolines.
+Appendix B contains a diagram detailing a complete
+transition between the payload and an external module
+exporting a function.
+2.10.1 Embedded code templates
+The stage #1 malware uses predefined code for pre-API-call
+and post-API-call operations. This code is embedded in
+the binary and is almost ready for use, but it requires some
+customization to account for differences when it comes to
+memory addresses.
+The malware is aware of the start address of both pieces
+of code inside its own body, and has a rough idea of the
+size of the two code portions. The builder code contains
+wrong values for the size of both templates. This is most
+likely a remnant of a previous code version that contained
+templates that were bigger. y
+y
+With this information, the malware scans those sections of
+y
+code looking for specific DWORDs that mark locations that
+need customization. y
+As an example, we report a screenshot of the post-APIcall code (Image 6). The value of 0x99119911 as the second
+operand of the last instruction in this code portion is a
+placeholder that acts as a marker for the builder code.
+y
+The offset of the values needing customization are marked
+y
+by the values:
+y
+y y pre-API-call code: y
+y
+
+
+0x66116611
+
+
+0x77117711 y
+
+
+0x88118811 y
+
+
+y y post-API-call code: y
+
+0x99119911
+
+y
+y
+y
+y
+y
+y
+y
+y y
+y
+y
+y
+y
+y
+The addresses of such markers relative to the beginning of
+the owner code portion are recorded for later use. After all
+the information is recorded, Regin’s stage #1 copies both
+the pre-API-call and the post-API-call code portions to
+newly allocated memory regions.
+W32/Regin, stage #1
+2.10.2 Locating a safe location inside a trusted
+module
+For the trampolines to be successful, a safe location inside
+a trusted kernel module needs to be found. After the
+trampolines are in place, the affected module will be the
+one that is seen and “blamed” by an external observer every
+time the payload executes a call to an external subroutine.
+To find this location, Regin’s stage #1 scans all the sections
+that are executable and non pageable from a set of trusted
+modules. This set of modules includes:
+y y NTOSKRNL.EXE
+y y HAL.dll
+y y Disk.sys
+y y Atapi.sys
+These memory regions are scanned for a specific set of
+bytes. The sought after combinations are listed below,
+together with their assembly representation.
+y y 0xFF, 0x26: jmp dword ptr [esi]
+y y 0xFF, 0x27: jmp dword ptr [edi]
+y y 0xFF, 0x66: jmp dword ptr [esi+bb]
+y y y 0xFF, 0x67: jmp dword ptr [edi+bb]
+y y 0xFF, 0xA6: jmp dword ptr [esi+dddddddd]
+y y 0xFF, 0xA7: jmp dword ptr [edi+dddddddd]
+y y 0xFF, 0xE6: jmp esi
+y y 0xFF, 0xE7: jmp edi
+y
+The assembler representations make the malware’s purpose
+quite clear. The malware will arrange for the system call to
+return to this particular location inside a trusted module,
+fooling any external observer who may be monitoring the
+return address to identify the module originating the call to
+the external subroutine. Executing the code at this location
+will make the CPU execute the jump operation, which will
+eventually lead back to the payload’s code.
+If any of the two bytes sequences presented above is found
+in the code of a trusted module, and if the surrounding
+code passes further safety checks, its address is recorded.
+Depending on the specific byte combination found,
+additional information may be retrieved or calculated; for
+example, in the case of a jmp dword ptr [edi+xxxxxxxx], the
+immediate part of the operand is retrieved for calculating
+the delta between that value and the location containing
+the address of the post-API-call. The calculated delta value
+will be assigned to the EDI register so that the execution will
+flow smoothly.
+7
+F-Secure malware analysis report
+y
+y
+y
+y
+y
+y
+y
+y
+y
+y
+y
+y
+Image 7: Trampoline memory allocation
+y
+y
+y
+y
+y
+y
+If none of these sequences are found, the search continues y
+in other sections and trusted modules. If no suitable
+location is available, Regin’s stage #1 will simply terminate its
+execution.
+2.10.3 Code template customization
+Once the safe location in a trusted module has been located
+and its address and type retrieved, Regin’s stage #1 can
+customize the copies of the pre- and post-API-call code
+templates.
+Each of the values is customized as follows:
+y y 0x66116611: delta value to be applied to ESI/EDI register
+so that the jump instruction at the safe location will lead
+the execution back to the post-API-call code
+y y 0x77117711: address of the safe jump location
+y y 0x88118811: nothing, used only as an end marker
+y y 0x99119911: not specifically replaced, but parts of it are
+overwritten with the address of post-API-call code if the
+safe location involves an indirect jump
+2.10.4 Trampolines
+Trampolines are the mechanism that Regin’s stage #1 uses to
+reroute the execution through several pieces of code every
+time the payload executes a call to an external function.
+There exists a trampoline for each individual imported
+function, and the trampolines are stored sequentially in
+memory and accessed as an array.
+Each trampoline is constructed from the following
+template:
+mov eax, d1d1d1d1
+jmp $+d2d2d2d2
+The values “d1d1d1d1” and “d2d2d2d2” are placeholders that
+will be replaced during actual import resolution with the
+relevant information. In particular, the two values will be
+replaced with the following information:
+y y d1d1d1d1: replaced with the address of the external
+function from the third party module (for example:
+NTOSKRNL.EXE!memcpy)
+8
+y y d2d2d2d2: replaced with the offset of the pre-API-call
+code segment, relative to the instruction after the jmp
+During import resolution, each item to resolve is fetched
+and its address retrieved. The address is then used to fill
+a trampoline as described above. Finally, the address of
+the trampoline is added to the IAT of the module being
+mapped in place of the resolved address. Please note that,
+as is logical, this process is only executed for symbols
+whose address lies in a section that is flagged as executable.
+Other symbols are not protected by trampolines and their
+addresses are added directly to the IAT.
+The described trampoline mechanism clearly provides
+transparent protection to the payload.
+y
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "W32/Regin, stage #1", "type" : "EXEF"},
+        {"id": 2, "description": "Import Address Table (IAT)", "type" : "REGI"},
+        {"id": 3, "description": "Pre-API-call code", "type" : "EXEF"},
+        {"id": 4, "description": "Post-API-call code", "type" : "EXEF"},
+        {"id": 5, "description": "NTOSKRNL.EXE", "type" : "APPS"},
+        {"id": 6, "description": "HAL.dll", "type" : "APPS"},
+        {"id": 7, "description": "Disk.sys", "type" : "APPS"},
+        {"id": 8, "description": "Atapi.sys", "type" : "APPS"},
+        {"id": 9, "description": "External subroutine", "type" : "EXEF"},
+        {"id": 10, "description": "Trampoline code", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "embeds"},
+        {"source": 1, "target": 4, "rel_name" : "embeds"},
+        {"source": 1, "target": 9, "rel_name" : "invokes"},
+        {"source": 10, "target": 3, "rel_name" : "transfers to"},
+        {"source": 10, "target": 4, "rel_name" : "transfers to"},
+        {"source": 9, "target": 1, "rel_name" : "returns to"},
+        {"source": 5, "target": 10, "rel_name" : "contains safe location for"},
+        {"source": 6, "target": 10, "rel_name" : "contains safe location for"},
+        {"source": 7, "target": 10, "rel_name" : "contains safe location for"},
+        {"source": 8, "target": 10, "rel_name" : "contains safe location for"}
+    ]
+}

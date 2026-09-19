@@ -1,0 +1,78 @@
+
+
+
+Sentence : First stage
+PipeMon’s first stage consists of a password-protected RARSFX executable embedded in the .rsrc section of its
+launcher. The launcher writes the RARSFX to setup0.exe in a directory named with a randomly generated, eightcharacter, ASCII string located in the directory returned by GetTempPath. Once written to disk, the RARSFX is executed
+with CreateProcess by providing the decryption password in an argument, as follows:
+setup0.exe -p|T/PMR{|T2^LWJ
+Note that the password is different with each sample.
+The content of the RARSFX is then extracted into %TMP%\RarSFX0 and consists of the following files:
+CrLnc.dat – Encrypted payload
+Duser.dll – Used for UAC bypass
+osksupport.dll – Used for UAC bypass
+PrintDialog.dll – Used for the malicious print processor initialization
+PrintDialog.exe – Legitimate Windows executable used to load PrintDialog.dll
+setup.dll – Installation DLL
+setup.exe – Main executable
+Note that in the event of a folder name collision, the number at the end of the RarSFX0 string is incremented until a
+collision is avoided. Further, not all these files are necessarily present in the archive, depending on the installer.
+Once extracted, setup.exe is executed without arguments. Its sole purpose is to load setup.dll using LoadLibraryA. Once
+loaded, setup.dll checks whether an argument in the format –x:n (where n is an integer) was provided; the mode of
+operation will be different depending on the presence of n. Supported arguments and their corresponding behavior are
+shown in Table 1. setup.exe is executed without arguments by the RARSFX, and checks whether it’s running with
+elevated privileges. If not, it will attempt to obtain such privileges using token impersonation if the version of Windows is
+below Windows 7 build 7601; otherwise it will attempt different UAC bypass techniques, allowing installation of the
+payload loader into one of:
+C:\Windows\System32\spool\prtprocs\x64\DEment.dll
+C:\Windows\System32\spool\prtprocs\x64\EntAppsvc.dll
+C:\Windows\System32\spool\prtprocs\x64\Interactive.dll
+depending on the variant. Note that we weren’t able to retrieve samples related to Interactive.dll.
+Table 1. setup.exe supported arguments and their corresponding behavior.
+Command
+line argu‐
+ment value Behavior
+-x:0 Load the payload loader.
+-x:1 Attempt to enable SeLoadDriverPrivilege for the current process. If successful, attempt to
+install the payload loader; otherwise, restart setup.exe with the –x:2 argument using parent
+process spoofing.
+-x:2 Attempt to enable SeLoadDriverPrivilege for the current process. If successful, attempt to
+install the payload loader.
+This loader is stored encrypted within setup.dll, which will decrypt it before writing it to the aforementioned location.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PipeMon’s first stage", "type" : "EXEF"},
+        {"id": 2, "description": "RARSFX executable", "type" : "EXEF"},
+        {"id": 3, "description": ".rsrc section of its launcher", "type" : "SYSP"},
+        {"id": 4, "description": "setup0.exe", "type" : "EXEF"},
+        {"id": 5, "description": "%TMP%\\RarSFX0", "type" : "TPTH"},
+        {"id": 6, "description": "CrLnc.dat – Encrypted payload", "type" : "DOCF"},
+        {"id": 7, "description": "Duser.dll – Used for UAC bypass", "type" : "EXEF"},
+        {"id": 8, "description": "osksupport.dll – Used for UAC bypass", "type" : "EXEF"},
+        {"id": 9, "description": "PrintDialog.dll – Malicious print processor initialization", "type" : "EXEF"},
+        {"id": 10, "description": "PrintDialog.exe – Legitimate Windows executable used to load PrintDialog.dll", "type" : "EXEF"},
+        {"id": 11, "description": "setup.dll – Installation DLL", "type" : "EXEF"},
+        {"id": 12, "description": "setup.exe – Main executable", "type" : "EXEF"},
+        {"id": 13, "description": "C:\\Windows\\System32\\spool\\prtprocs\\x64\\DEment.dll", "type" : "TPTH"},
+        {"id": 14, "description": "C:\\Windows\\System32\\spool\\prtprocs\\x64\\EntAppsvc.dll", "type" : "TPTH"},
+        {"id": 15, "description": "C:\\Windows\\System32\\spool\\prtprocs\\x64\\Interactive.dll", "type" : "TPTH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "embedded in"},
+        {"source": 1, "target": 4, "rel_name" : "writes to"},
+        {"source": 4, "target": 5, "rel_name" : "extracts to"},
+        {"source": 5, "target": 6, "rel_name" : "contains"},
+        {"source": 5, "target": 7, "rel_name" : "contains"},
+        {"source": 5, "target": 8, "rel_name" : "contains"},
+        {"source": 5, "target": 9, "rel_name" : "contains"},
+        {"source": 5, "target": 10, "rel_name" : "contains"},
+        {"source": 5, "target": 11, "rel_name" : "contains"},
+        {"source": 5, "target": 12, "rel_name" : "contains"},
+        {"source": 12, "target": 11, "rel_name" : "loads using LoadLibraryA"},
+        {"source": 11, "target": 13, "rel_name" : "installs into (variant 1)"},
+        {"source": 11, "target": 14, "rel_name" : "installs into (variant 2)"},
+        {"source": 11, "target": 15, "rel_name" : "installs into (variant 3)"}
+    ]
+}

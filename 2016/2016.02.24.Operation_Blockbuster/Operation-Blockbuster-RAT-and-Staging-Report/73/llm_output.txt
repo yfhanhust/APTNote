@@ -1,0 +1,72 @@
+
+
+
+Sentence : 17.1 Server Mode Thread
+The service mode thread is an infinite loop that waits for incoming connections on the listening port and spawns a new
+thread to handle any connection. When a new peer node connects to another SJM1 node, an authentication phase begins.
+The authentication between two SJM1 nodes begins by the connecting node (the client, in this case) transmitting a 4-byte
+(DWORD) value to the receiving node (the server). The value that the client sends to the server indicates the general class
+of node the client is: standard node (0x1000) or a super-node (0x1000000). The authentication changes depending on the
+type of node connecting.
+A super-node transmits another 4-byte (DWORD) value that specifies the size of the next transmission. The next
+transmission contains a buffer of data that has been encrypted by the super-node’s private key. SJM1 decrypts the data
+using a hardcoded public key found within the SJM1’s .data section and the RSATransform function found in other
+Lazarus Group families. A standard node, on the other hand, will simply transmit a 16-byte buffer of random bytes to the
+server node. Both a super-node and a standard node will perform the initial data transmissions in cleartext.
+Regardless of the type of node attempting to authentication, the server node echoes back to the client the data the client
+sent to the server, with the exception that, in the case of a super-node, the data is now decrypted using the RSA transform.
+When the server sends the data to the client, the data is encrypted using RC4. For each buffer that SJM1 sends (in both
+server mode and client mode), the data is encrypted with RC4 using the key in Figure 17-2.
+0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0x11, 0x12, 0x13, 0x1A, 0xFF, 0xEE, 0x48
+Figure 17-2: SierraJuliett-MikeOne’s RC4 Key
+The Sbox within the RC4 implementation is reset after each buffer meaning that data boundaries are critical to avoid
+corrupting the data stream. It also means that particularly short bursts of data are going to retain discernable patterns as
+they traverse the network.
+The client will then transmit a 30-byte string to the server (over the encrypted channel) if the server’s response was
+correct. The server compares the 30-byte string with the hardcoded string https://www.google.com/index.h and if
+the two strings are identical, the authentication completes successfully. A misstep in any of the authentication steps will
+result in the authentication failing and the channel being closed by the server.
+While the client can identify as a super-node, there is no advantage to do so as SJM1 do not grant additional access
+or privileges to any node that authenticates as a super-node. The authentication process, from the perspective of the
+node in the server role, is purely a binary output: successful or unsuccessful. The authentication process does, however,
+ensure that both sides of the conversation have the same communication key for the RC4 encryption and that both sides
+understand the basic protocol for communication. After the authentication sequence completes, all communications
+between the two nodes uses the RC4 encryption for data that traverses the network between them.
+Follow the authentication phase, the server mode expects the client to send a 2-byte (WORD) value that specifies the
+particular channel the client wishes to access. SJM1 supports three different channels: crawler ( 0x2000 ), RAT ( 0x4000 ),
+sync ( 0x8000 ).
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SJM1", "type" : "APPS"},
+        {"id": 2, "description": "Listening port", "type" : "NETP"},
+        {"id": 3, "description": "Client node (standard or super-node)", "type" : "ACTO"},
+        {"id": 4, "description": "Server node", "type" : "ACTO"},
+        {"id": 5, "description": "4-byte value (DWORD)", "type" : "TAMP"},
+        {"id": 6, "description": "Standard node (0x1000)", "type" : "ACTO"},
+        {"id": 7, "description": "Super-node (0x1000000)", "type" : "ACTO"},
+        {"id": 8, "description": "Encrypted buffer of data", "type" : "DOCF"},
+        {"id": 9, "description": "Hardcoded public key in SJM1’s .data section", "type" : "TAMP"},
+        {"id": 10, "description": "RSATransform function", "type" : "APPS"},
+        {"id": 11, "description": "16-byte buffer of random bytes", "type" : "DOCF"},
+        {"id": 12, "description": "RC4 encryption key", "type" : "TAMP"},
+        {"id": 13, "description": "30-byte string (https://www.google.com/index.h)", "type" : "URLS"},
+        {"id": 14, "description": "Crawler channel (0x2000)", "type" : "TAMP"},
+        {"id": 15, "description": "RAT channel (0x4000)", "type" : "TAMP"},
+        {"id": 16, "description": "Sync channel (0x8000)", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "connects to"},
+        {"source": 5, "target": 4, "rel_name" : "transmits to"},
+        {"source": 7, "target": 8, "rel_name" : "encrypts and transmits"},
+        {"source": 1, "target": 8, "rel_name" : "decrypts using"},
+        {"source": 6, "target": 11, "rel_name" : "transmits to"},
+        {"source": 3, "target": 4, "rel_name" : "echoes back from (encrypted)"},
+        {"source": 3, "target": 12, "rel_name" : "encrypts using"},
+        {"source": 3, "target": 13, "rel_name" : "transmits to"},
+        {"source": 4, "target": 13, "rel_name" : "compares with hardcoded string"},
+        {"source": 3, "target": 14, "rel_name" : "requests access to (if authenticated)"},
+        {"source": 3, "target": 15, "rel_name" : "requests access to (if authenticated)"},
+        {"source": 3, "target": 16, "rel_name" : "requests access to (if authenticated)"}
+    ]
+}

@@ -1,0 +1,118 @@
+Appendix 5 (Second Stage Component)
+The purpose of the second stage component is to open a backdoor to allow the attacker to assess the target and download additional
+components.
+a. Dropper:
+As the First Stage Component, the important file is being installed using a dropper. ( winloat.exe )
+The main steps followed by the dropper are:
+
+
+Decrypt its overlay (containing the backdoor: advstoreshell.dll and the configuration file: msd )
+
+
+Write payload on disk
+
+
+Call the InitW method of advstoreshell.dll
+
+
+b. Configuration File:
+To encrypt/decrypt the configuration file and the APIs used by advstoreshell.dll the component uses a custom stream cypher with
+key length of 6. The function given below is used to retrieve the corresponding byte used to XOR at an index in the buffer.
+Algorithm 3:
+```
+  unsigned char decrypt(unsigned char key[6], uint32& buffer_pos)
+{
+     ixk = buffer_pos % 6 +2;
+
+     ixb = (unsigned char)(ixk);
+
+     buffer_pos++;
+
+     v_10 = key[(ixk -2)%6]^byte((uint32(ixb)*uint32(key[ixk-2])) >> 7)
+
+     v_11 = key[(ixk+1)%6] ^ ixb;
+
+     xc = (key [ixk%6] & v_11) + v10;
+
+     return xc
+
+}
+```
+[21]
+White Paper
+The configuration file ( msd ) file is encrypted using the algorithm described above and is 122 bytes long. It contains the following information:
+Where:
+
+
+Timeout1 = 60000 ; represents the number of miliseconds until timeout is reached when contacting the C&C
+
+
+Timeout2 = 60000 ; represents the number of miliseconds until timeout is reached when using contacting the C&C using encryption
+
+
+Computer name = DAE13WS01204030501 ; The name of the infected computer
+
+
+DomainName1= micro****ter.info
+
+
+DomainName2=dri**te.info
+
+
+Campaign id = rhbp ; we are still investigating the meaning of this field, but it is very likely a campaign identifier
+
+
+? = 1000 ; we are still investigating the role of this field, although preliminary information leads us to believe that it is used as a counter
+
+
+? = 600000; we are still investigating the meaning of this field, but it is very likely another timeout value
+
+
+Keylogging flag = 1; this indicates whether the backdoor should intercept keystrokes and send them to the C&C server.
+
+
+Main domain name = 1***.net ; this is the first domain that the malware tries to connect
+
+
+c. Backdoor Component:
+The most important component of APT28 is the backdoor, in this case, the file called advstoreshell.dll . This file reads the configuration
+file ( msd ) and contacts the C&C servers indicated in the configuration file. It can also read the configuration file from the registry. The
+configuration stored in the registry is probably obtained via update from one of the C&C servers.
+On the system we have analyzed, there were two configurations:
+
+
+The first one being the msd file that was located in the same path with advstoreshell.dll
+
+
+The second one was found in registry ( HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer**
+Path ). It contains almost the same data as the msd** file except for the first two domain names that are changed to win[redacted]
+ore.net and micr[redacted]er.com.
+
+
+This was the only component that was set to run at startup. This was achieved by creating the value AdvancedStorageShell in HKCU**
+Software\Microsoft\Windows\CurrentVersion\Run** with the contents:
+“RUNDLL32.EXE “C:\Documents and Settings\\Local Settings\Application Data\Microsoft Help\advstorshell.dll”, InitW”
+[22]
+White Paper
+The backdoor is highly advanced and supports 26 commands. We analyzed some of the supported commands, while the analysis for the
+|ll in progress.|Col2|
+|---|---|
+|5|fnd fle|
+|6|get fle content and timestamps|
+|9|enumerate registry keys and values|
+|10|set registry value|
+|11|delete registry value|
+|13|start process using CreateProcess|
+|14|kill process by id|
+|16|start process using cmd /c|
+|17|list drives and types|
+|19|read fle from offset|
+|21|get system info (run systeminfo in cmd)|
+|25|create thread|
+When running a command using the cmd /c option, the output is saved in a file named tmp.dat
+Communication between this component and the C&C server is carried out on port HTTP (443). If this is not possible, it attempts to
+connect on port 80. In some cases, the communication is encrypted using 3DES and RSA.
+One important function of this backdoor is that it can load external components. It can achieve this goal by calling the init function of
+any dll . This is how the s plugin is loaded.
+[23]
+White Paper

@@ -1,0 +1,54 @@
+3.3 Data exfiltration via get.adobe.com URLs
+Once the user has downloaded and launched the fake Flash installer, the compromise process
+starts. It begins by dropping a Turla backdoor on the machine. This could be Mosquito, a Win32 malware
+described in section 4, a malicious JavaScript file communicating with a web app hosted on Google
+Apps Script as described in section 5, or an unknown file downloaded from a fake Adobe URL:
+~~http://get.adobe.com/fashplayer/download/update/[x32|x64]~~ l
+For the last case, as this URL does not exist on Adobe’s server; for the Turla group to be able to send
+content through this URL, something must be man-in-the-middling traffic on the path between
+the compromised machines and the Adobe servers to provide a response to these requests.
+Then, a request is performed exfiltrating information about the newly-compromised machine.
+This is a GET request to ~~http://get.adobe.com/stats/AbfFcBebD/q=~~
+with, according to our telemetry, a legitimate Adobe IP address but with a URL pattern that is not used
+by Adobe and thus returns. As the request is performed through HTTP, the same MitM scenarios
+as discussed in section 3.2 are likely.
+9
+Figure 2 Code performing request to bogus get.adobe.com URL
+The base64-encoded data contain interesting and sensitive information about the victim machine,
+so it would be surprising that it would actually be sent to an Adobe server. Figure 3 is an example
+of a decoded report. It sends various information such as a unique id (the last 8 bytes of the fake
+Flash installer executable, as shown in Figure 4), the username, the list of security products
+installed and the ARP table.
+ID=
+```
+        Internal error: 0
+    Last error :0
+
+```
+Extracted
+user=
+AV=
+ip= 192.168.0.2 
+Interface: 192.168.0.2 --- 0x4
+Internet Address Physical Address Type
+192.168.0.1  dynamic
+192.168.0.255 ff-ff-ff-ff-ff-ff static
+224.0.0.2  static
+224.0.0.22  static
+224.0.0.252  static
+239.255.255.250  static
+255.255.255.255 ff-ff-ff-ff-ff-ff static
+Figure 3 Installation report sent to bogus get.adobe.com URL
+10
+Figure 4 Unique ID at the end of the installer
+Interestingly, the installer of Snake for macOS [8], a backdoor associated with Turla, also uses
+the exact same URL, as shown in Figure 5. The data sent are a bit different as they only contain
+the username and device name, although still encoded in base64. However, this behavior
+was not documented by Fox-IT when they published their analysis.
+Figure 5 Code performing request to bogus get.adobe.com URL in the Snake
+macOS installer
+Finally, the fake installer drops or downloads, then runs a legitimate Flash Player application.
+The legitimate installer is either embedded in the fake installer or downloaded from the following
+Google Drive URL: ~~https://drive.google[.]com/uc?authuser=0&id=0B_LlMiKUOIstM0R~~
+~~RekVEbnFfaXc&export=download~~
+11

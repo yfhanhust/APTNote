@@ -1,0 +1,79 @@
+TDTESS Backdoor
+TDTESS (22fd59c534b9b8f5cd69e967cc51de098627b582) is 64-bit .NET binary backdoor that provides a
+reverse shell with an option to download and execute files. It routinely calls in to the command and control
+server for new instructions using basic authentication. Commands are sent via a web page. The malware
+creates a stealth service, which will not show on the service manager or other tools that enumerate services
+from WINAPI or Windows Management Instrumentation.
+Installation and removal
+TDTESS can run as either an interactive or non-interactive (service) program. When called interactively, it
+receives one of the two arguments: installtheservice to install itself or uninstalltheservice to remove itself. The
+arguments are described below:
+installtheservice
+If running with administrator privileges, it will install a service with the following characteristics:
+Key name: bmwappushservice
+Display name: bmwappushsvc
+Description: WAP Push Message Routing Service
+Type: own (runs in its own process)
+Start type: auto (starts each time the computer is restarted and runs even if no one logs on to the
+computer)
+Path:  (In our analysis: c:\Users\PC008\Desktop\t.exe)
+Security descriptor:
+D:(D;;DCLCWPDTSD;;;IU)(D;;DCLCWPDTSD;;;SU)(D;;DCLCWPDTSD;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLC
+SWLOCRRC;;;SU)(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)S:(AU;F
+A;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)
+Service information from command-line using sc tool
+The hardcoded security descriptor used to create the service is a persistence technique. Interactive users, even
+if they are administrators, cannot stop or even see the service in services.msc snap-in.
+Page 27 of 48
+©All rights reserved to ClearSky cyber security and Trend Micro, 2017
+Following is a list of denied commands:
+service_change_config
+service_query_status
+service_stop
+service_pause_continue
+delete
+Service information in Registry
+Two log files are created during the service installation, but deleted by the program. Following is their
+recovered content:
+InstallUtil.InstallLog
+.t.InstallLog
+After creating the service, it will update the file creation time to that of the following file:
+%windir%\system32\svchost.exe
+Page 28 of 48
+©All rights reserved to ClearSky cyber security and Trend Micro, 2017
+uninstalltheservice
+If running with administrator privileges, it will uninstall the said service, create log files and then deletes them.
+InstallUtil.InstallLog
+.t.InstallLog
+Because the service installing mechanism appears to be default for .NET programs, the creator of the tool
+deletes the log files right after they are created.
+If no argument is given when called interactively, the program terminates itself.
+Functionality
+The service is started immediately after installation. After five minutes, it verifies internet connectivity by
+making a HTTP HEAD request to microsoft.com.
+Then it tries to access the C&C servers looking for commands.
+Hardcoded HTTP parameters and URL
+Page 29 of 48
+©All rights reserved to ClearSky cyber security and Trend Micro, 2017
+As a reply, TDTESS expects one of the following Bas64 encoded commands:
+getnrun - download and execute a file. Parameters are drop, drop_path and t.
+runnreport - send information about the computer. Parameters are cmd and boss.
+wait - time to next interval to get data.
+Getnrun command and parameters
+Indicators of Compromise
+File name:
+tdtess.exe
+md5:
+113ca319e85778b62145019359380a08
+Services:
+bmwappushservice
+Registry Keys:
+HKLM\System\CurrentControlSet\Services\bmwappushservice
+URLs:
+http://is-cdn.edge.g18.dyn.usr-e12-as.akamaitechnology[.]com/deploy/assets/css/main/style.min.css
+http://a17-h16.g11.iad17.as.pht-external.c15.qoldenlines[.]net/deploy/assets/css/main/style.min.css
+HTTP artifacts:
+"User-Agent : XXXXXXXXXXXXXXXXX/5.0 (Windows NT 6.1 WOW64; Trident/7.0; AS; rv:11.0) like Gecko"
+"Proxy-Authorization : Basic [Data]" – [Data] Will contain the TDTESS encrypted data to send
+Page 30 of 48
+©All rights reserved to ClearSky cyber security and Trend Micro, 2017

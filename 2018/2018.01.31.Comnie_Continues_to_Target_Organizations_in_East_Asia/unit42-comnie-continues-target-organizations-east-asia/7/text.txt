@@ -1,0 +1,202 @@
+Appendix Comnie Technical Analysis
+For the analysis of the Comnie malware family, we investigated the following sample:
+SHA256 18ec68e1bd9b11f22e481d48c415f8d80edb76e9032ba4e1d31d87e16eed9959
+When the sample is initially executed, it will attempt to create a mutex with a name of ‘tmutexabc’ to ensure only a single
+instance of Comnie is running at a given time. Should this mutex already be found to exist, the malware will immediately
+exit.
+Comnie continues to load an embedded bitmap (BMP) file and decrypt data at offset 0x512.
+Figure 11 Embedded BMP file containing encrypted string data
+RC4 is used to decrypt this data using a 16-byte key that is stored within the BMP file at offset 0x502. Once decrypted, we
+are provided with a large list of strings, as seen below (note that the data has been truncated for brevity):
+Figure 12 Decrypted strings from embedded BMP file
+After these strings are decrypted, the malware will load a series of Microsoft Windows API calls to be used later on. After
+these functions are loaded, Comnie determines if it is running within the %TEMP% directory of the victim machine. In the
+event it is not running within this directory, it will copy itself to %TEMP% and execute this newly created file with an
+argument of the original file’s path. A total of 64MB of garbage data is appended to this copied file, likely as a way to deter
+any security products in place that may be scanning files on disk. After running within the %TEMP% path, Comnie will
+delete the original file.
+After Comnie has been copied to the %TEMP% directory, it will look for the presence of the ‘DQuit.tmp’ file in this path. It is
+unclear how this file is used exactly, as it does not appear to ever be written during runtime by Comnie.
+Comnie continue to enter its installation routine. In doing so, it will attempt to detect the following Anti-Virus products via
+various techniques:
+Trend Micro
+Kaspersky
+Symantec
+Avira
+AVG
+ALYac
+Ahnlab
+Ahnlab and ALYac are the most widely used Anti-Virus solutions in South Korea (http://www.dt.co.kr/contents.html?
+article_no=2017102502101260041001), and Trend Micro and the rest are also known to be most widely used in Taiwan.
+These are in-line with the targeting of the victims witnessed by the attackers using Conmie.
+With a few exceptions, Comnie will perform the following actions regardless of what security product, if any, is discovered:
+Convert itself to a temporary DLL with a default export of ‘Dm’ in the %TEMP% directory.
+If running with administrator privileges on a 32-bit host:
+Copy the temporary DLL in %TEMP% to %WINDOWS%⧵LINKINFO.dll
+Otherwise:
+Copy the temporary DLL in %TEMP% to %APPDATA%⧵cnagnt.dll
+Delete the temporary DLL in %TEMP%
+Write a ‘Conime.lnk’ file in the user’s startup path. This shortcut file points to
+‘C:⧵Windows⧵system32⧵rundll32.exe “%APPDATA%⧵cnagnt.dll”,Sd’
+One of the exceptions to the installation routine above is in the event Symantec is detected. In such a scenario, Comnie will
+drop a temporary VBS script to write the ‘Conime.lnk’ file.
+Additionally, in the event Kaspersky is detected, the malware will immediately run the ‘Conime.lnk’ shortcut file in a new
+process after it is created.
+After the installation routine, the malware will decrypt an embedded blob of data using RC4 with an embedded 8-byte static
+key of ‘⧵x11⧵xcc⧵xd1⧵x32⧵x61⧵x21⧵xd1⧵xe2’. The results of the decoded data may be seen below:
+Figure 13 Decrypted information
+The decrypted data contains URLs for various online services that will be used by the attacker for downloading data that will
+contain the command and control (C2) server(s) and port(s) to be used by Comnie.
+Comnie will make requests to these URLs, looking for base64-encoded data after an identifier of ‘magnet:/’, as seen in the
+example below:
+Figure 14 GitHub storing Comnie C2 information
+In the example above, the C2 information is being stored within the user’s URL parameter within GitHub. In order to decode
+this data, Comnie first decodes it using base64 with the following non-standard alphabet (note that it is simply the original
+alphabet in reverse):
+/+9876543210zyxwvutsrqponmlkjihgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA
+The resulting data is then parsed and decrypted using RC4. The first 64 bytes are used as the key. The next 4 bytes
+represent the underlying data’s length, and the remaining data is the C2 data. The prior example decrypts to the following:
+mailto:121.126.211[.]94:8080;80;80
+The following Python script may be used to decode the C2 data used by the newest Comnie variant:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+import base64
+import sys
+import re
+from string import maketrans
+from struct import *
+import requests
+def rc4_crypt(data, key):
+S = range(256)
+j = 0
+out = []
+for i in range(256):
+j = (j + S[i] + ord( key[i % len(key)] )) % 256
+S[i], S[j] = S[j], S[i]
+i = j = 0
+for char in data:
+i = ( i + 1 ) % 256
+j = ( j + S[i] ) % 256
+S[i], S[j] = S[j], S[i]
+out.append(chr(ord(char) ^ S[(S[j] + S[i]) % 256]))
+return ''.join(out)
+def decode(data):
+o = ""
+for d in data:
+od = ord(d)
+o += chr((4 * (16 * od | od & 0xC) | (((od >> 4 | od & 0x30) >> 2))) & 0xFF)
+return o
+base64fixTable = maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"[::-1], "ABCDEFGHIJKLMNOP
+QRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
+def trans(string):
+return str(string).translate(base64fixTable)
+def altdecode(string):
+return base64.b64decode(trans(string))
+req = requests.get(sys.argv[1])
+fd = req.text
+original_data = re.search("magnet:/\?([^\?]+)\?", fd).group(1)
+parsed_data = altdecode(original_data)
+dataLength = unpack("<I", parsed_data[64:68])[0]
+key = decode(parsed_data[0:64])
+data = parsed_data[dataLength*-1:]
+d = rc4_crypt(data, key)
+print(d)
+Comnie will make attempts at connecting to the IP address above using the various ports specified. Data is sent via HTTP,
+and is encrypted against using the RC4 algorithm. The URIs used in the HTTP requests are randomly generated. Data is
+provided first via the ‘pid’ GET parameter initially, and via the ‘iid’ GET parameter when POST requests are made by
+Comnie. Initially, Comnie will send the following request:
+Figure 15 Comnie initial beacon
+In order to decrypt the data provided within the ‘pid’ parameter, a key is generated using the SessionID information, which is
+randomly generated. This particular data is decoded from hex and bytes at offsets 0, 2, 4, 6, 8, 10, 12, and 14 are used to
+form an 8-byte RC4 key. After applying this decryption algorithm, we are presented with the following data:
+h=HOSTNAME­PC&f=mission.ini&c=&
+The response made by the C2 server uses the same RC4 key for encryption. The data above contains the hostname
+(‘HOSTNAME-PC’) of the victim machine, as well as an instruction. In this case, the instruction is asking for information that
+is to be written to a temporary BAT file within the %TEMP% directory. The following example information is provided by the
+remote C2 server:
+1
+2
+3
+4
+5
+6
+7
+8
+[MISSION]
+Id=2017
+Crc=201701
+[BAT]
+Num=1
+FileName1=gethostinfo.bat
+Crc1=2017011
+ResultFile1=info.dat
+This INI file is parsed to determine what Comnie should do. Comnie allows the attacker to provide and subsequently
+execute a batch script (BAT), executable file (EXE), or dynamic-link library (DLL). Using this example, Comnie will then
+request data to supply to the BAT script, via the following decrypted request:
+h=HOSTNAME­PC&f=gethostinfo.bat&c=&
+Based on network traffic witnessed, the remote C2 server was found to respond with the following information:
+1
+2
+3
+4
+5
+6
+7
+netstat -ano > %TEMP%\info.dat
+ipconfig /all >> %TEMP%\info.dat
+route PRINT >> %TEMP%\info.dat
+net view >> %TEMP%\info.dat
+tasklist >> %TEMP%\info.dat
+net user >> %TEMP%\info.dat
+net start >> %TEMP%\info.dat
+This script is written to a temporary file prior to be executed. The results of this BAT script are uploaded to the remote C2
+server.

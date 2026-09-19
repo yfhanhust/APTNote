@@ -1,0 +1,497 @@
+Technical details
+In this section, we will describe technical aspects of Prikormka malware, including
+malware architecture, C&C communication and detailed analysis of modules used.
+Figure 12. Simplified scheme of the Prikormka malware's architecture.
+Operation Groundbait: Analysis of a surveillance toolkit 12
+The dropper
+The dropper is the initial component of this malware, which is usually sent through
+email as an attachment. Usually the dropper has a .SCR or .EXE file extension and
+is compressed into an archive. In order to trick the victim, the Prikormka dropper
+can masquerade as various types of document or self-extracting archive.
+Figure 13. Icons used by Prikormka malware.
+When executed, the dropper infects the computer, but also displays one or more
+decoy documents. To this end, the malware displays a WinRAR self-extraction
+(SFX) archive window. In some cases, the dropper creates a legitimate, non-mali
+cious SFX executable on disk and then launches it. Interestingly, that SFX archive
+always has a Russian localized graphic user interface, even in cases where the filename of the dropper is in Ukrainian. The dropper which has a Hungarian filename
+does not display this window at all.
+Figure 14. The Russian interface of SFX archive.
+The SFX executable can contain one or more decoy documents. For example one
+SFX that was dropped by Prikormka contained 24 documents. Of course, the number and size of the decoy documents affects the size of the droppers. The biggest
+dropper we identified had a file size of 25MB.
+Most of the dropper executables have an embedded application manifest, which
+specifies that the executable requires administrator privileges in order to run on
+the system. If the user does not have administrator privileges, the system will
+prompt for credentials.
+Figure 15. The embedded application manifest embedded in Prikormka dropper.
+The dropper needs administrator privileges because of the technique used by the
+malware to become persistent on the infected system. Specifically, the malware
+uses so-called DLL load-order hijacking in order to start automatically on every
+system boot. The dropper saves one of the Prikormka DLL modules to the Windows-directory under the name ntshrui.dll. Because this DLL file is stored in
+the Windows directory, it will be loaded on system boot by the explorer.exe
+process instead of the legitimate ntshrui.dll file, which is stored in the
+C:\Windows\System32 subdirectory. Thus, the Prikormka module hijacks the
+order of loading DLL files. This persistency method is not something new; it has
+been publicly examined multiple times by anti-malware research community.
+Another interesting technique is used by the Prikormka malware, specifically by
+droppers with .SCR file extensions. The .SCR file extension stands for screensaver
+and represents a standard Windows executable file. The main difference between
+.EXE and .SCR is that a screensaver is executed with special command line argu-
+ments . Usually, cybercriminals just rename an executable with the .SCR extension
+in order to bypass various security measures based on file extension. Prikormka's
+authors implemented a check for such command line arguments, so when the
+Operation Groundbait: Analysis of a surveillance toolkit 13
+binary is executed as a standard executable (without the required arguments),
+it won’t infect the system. Thus, this simple check allowed the malware to bypass
+some sandboxes used for automatic sample processing.
+In the case where the infection starts from a .SCR file, the Trojan uses standard
+methods for loading its DLL via rundll32.exe and for maintaining persistence, by
+setting an entry with the name guidVGA or guidVSA in the registry Run key:
+[HKCU\Software\Microsoft\Windows\CurrentVersion\Run]
+In order to be loaded by the 32-bit and the 64-bit version of Windows Explorer the
+malware has binaries for both platforms. Most modules are written in the C pro
+gramming language and compiled with Microsoft Visual Studio.
+The dropper stores modules in its resources; some of these resources are encrypt
+ed with a simple XOR operation.
+Figure 16. Resources located inside the Prikormka dropper binary.
+The dropper is responsible for creation of the rbcon.ini file, which used by the
+malware to store Campaign ID and other values.
+Earlier versions of Prikormka used a different technique – Campaign IDs were
+embedded in the binary file of one of modules:
+Figure 17. The Campaign ID with value hmyr32 is embedded in the binary.
+The Campaign ID value was hardcoded in the Prikormka binary at compilation
+time; moreover, the ID in the 32-bit version of binaries ended with 2, while the
+Campaign ID in 64-bit version of binaries ended with 4.
+This technique was probably efficient for a small number of victims, but it presumably created problems for the attackers once the number of victims grew. Perhaps
+recompiling and repacking the core parts of a toolset for every new victim became
+too time consuming, so somewhere around mid-2015, the attackers changed
+this scheme. Since June 2015 the Campaign ID is stored in a separate file named
+rbcon.ini, which the attackers call objectset. The malware authors have also
+included a new value called roboconid, which represents the Operator’s ID. Our
+investigation allowed us to confirm that this ID is a unique number for the malware operator, who performs cyber operations and is assigned to infect, spy on,
+and track a particular target.
+Figure 18. The rbcon.ini file which contains both Campaign ID and Operator ID.
+Operation Groundbait: Analysis of a surveillance toolkit 14
+Some of the binaries of the dropper contain a PDB-path, which can reveal the
+directory structure used by attackers.
+Figure 19. Some of the PDB-paths discovered inside Prikormka droppers.
+The malware writers internally call this Trojan PZZ; we have other evidence that
+supports this theory. The Prikormka family is a typical cyber-espionage Trojan
+with a modular architecture. The functionality of the Trojan allows attackers to
+steal sensitive data from the infected computer and upload them to command and
+control (C&C) servers.
+Prikormka modules
+The Prikormka modules are stored on disk in the infected system in the form of
+DLL files. There are modules for various purposes, such as communication with
+C&C servers, auxiliary purposes (e.g. persistence), and exfiltration of different
+types of sensitive information from the infected computer. As mentioned before,
+Prikormka modules are compiled for both 32- and 64-bit Windows platforms.
+There is a standard set of downloadable modules with pre-defined names, which
+will be described in detail in the next sections. So as to be executed, the module
+(DLL file) should be stored under a specific filename on the disk and should have
+one of the following export functions: Starting, KickInPoint, Cycle. However,
+attackers are able to push any custom module to a particular victim. Specifically,
+we observed that custom modules are usually named mp.dll.
+It should be noted that malware operators are responsible for deciding which
+modules should be pushed to the infected computer.
+Prikormka might store modules with different functionality under similar names
+or, conversely, it can store modules with similar functionality under various names.
+Some versions of the malware store modules with a filename that contains only
+the current date and time. For these reasons we refer to the plugins by code
+names in the following text.
+Module code name Internal name of FIlename Purpose
+module
+PERSISTENCE samlib.dll samlib.dll, ntshrui.dll Used for persistence
+DOWNLOADER helpldr.dll helpldr.dll, _wshdmi.dll Downloads CORE module
+CORE hauthuid.dll hauthuid.dll, _svga.dll, Loads all other modules,
+_wshdmi.dll communicates with C&Cservers, uploads logs
+DOCS_STEALER iomus.dll iomus.dll Collects documents
+KEYLOGGER kl.dll, hlpuctf.dll hlpuctf.dll Logs keystrokes
+SCREENSHOTS scrsh.dll scrsh.dll Grabs screenshots of
+desktop
+MICROPHONE snm.dll snm.dll Captures audio from
+microphone
+SKYPE swma.dll swma.dll Records Skype audio calls
+LOGS_ENCRYPTER atiml.dll atiml.dll Compresses and encrypts
+collected logs
+GEOLOCATION geo.exe Inv.exe Geo-locates the infected
+computer
+OS_INFO InfoOS mp.dll Collects information about
+infected computer
+PASSWORDS Brother mp.dll Collects saved passwords
+for various installed
+applications
+FILE_TREE mpTREE mp.dll Collects file tree of fixed disk
+of infected computer
+Table 1. List of Prikormka modules identified during our research.
+Operation Groundbait: Analysis of a surveillance toolkit 15
+The following list contains filenames of modules that were referenced within malware code, but we haven’t seen them during our research and thus were unable to
+assess their functionality:
+
+
+miron.dll
+
+
+meta.dll
+
+
+hmuid.dll
+
+
+sh.exe
+
+
+mupdate.exe
+
+
+It is important to note that Prikormka components made in the "old" period (between 2008 and 2010) used a completely different naming scheme. Here are some
+examples of such filenames:
+
+
+smdhostn.dll
+
+
+heading.dll
+
+
+lgs.dll
+
+
+la.dll
+
+
+lh.exe
+
+
+lp.exe
+
+
+inl.exe
+
+
+lid.dll
+
+
+PERSISTENCE module
+As described above, this module uses the DLL load-order hijacking technique to
+maintain persistence in the system.
+When launched, this module creates the folder %USERPROFILE%\AppData\Local\
+MMC and copies the following files there from the %WINDIR% directory:
+
+
+hauthuid.dll (CORE)
+
+
+hlpuctf.dll (KEYLOGGER)
+
+
+atiml.dll (LOGS _ ENCRYPTER)
+
+
+iomus.dll (DOCS _ STEALER)
+
+
+swma.dll (SKYPE)
+
+
+helpldr.dll (DOWNLOADER)
+
+
+rbcon.ini
+
+
+This component then loads and passes execution to the CORE module, or to the
+DOWNLOADER module if the CORE module is not found.
+If the %USERPROFILE%\AppData\Local\MMC\nullstate.cfg file exists, then the
+component deletes all the filenames listed above from the MMC directory and
+quits, thus deactivating itself.
+Some of the binaries of the PERSISTENCE module contain a PDB-path, which re
+veals the directory structure used by the malware authors at compile time. Three
+of these paths contain a time stamp, possibly from when the project was created
+or modified. One such path contains the Russian string Раб. программы, which
+translates as “computer programs for work”.
+Operation Groundbait: Analysis of a surveillance toolkit 16
+Figure 20. Some of the PDB-paths discovered inside Prikormka's PERSISTENCE module.
+DOWNLOADER module
+The main purpose of this component is to download the CORE module and ex
+ecute it. The DOWNLOADER module makes an HTTP request to one of its C&C
+servers, receives data, decrypts the data, saves it under the name hauthuid.dll
+and then loads the DLL. The communication is encrypted with the Blowfish cipher
+and then base64 encoded.
+Figure 21. Traffic captured from the Prikormka malware's DOWNLOADER module.
+Along with the Campaign ID and Operator ID, the module includes in the request
+a date and time when infection occurred and whether the platform is 32-bit or
+64-bit Windows. Some of the binaries of the DOWNLOADER module contain PDB
+paths, revealing that internally this module is called Loader or helpldr:
+Figure 22. PDB-paths discovered inside Prikormka's DOWNLOADER module.
+CORE module
+The CORE module is responsible for communications with C&C servers and other
+tasks, including downloading additional modules, loading them, and uploading
+stolen data to the remote server.
+Since this malware (and specifically the CORE module) has existed for several
+years, the details of implementation might vary, but the main concept of the CORE
+module has remained unchanged over the years. The concept of the Prikormka
+malware is simple: the CORE module downloads additional components, which
+are used to harvest various types of data. When such a component is loaded, it
+gathers sensitive information and saves this information to some specific log file.
+The log file might store collected data in plain-text or it may be encrypted. The
+CORE module checks periodically for such log files and when a log is available, it
+uploads it to the remote server. The CORE module won’t upload a log file if it is
+bigger than 500MB.
+In order to store downloadable modules and collected log files, the CORE module
+creates two directories:
+
+
+%USERPROFILE%\AppData\Local\MMC\
+
+
+%USERPROFILE%\AppData\Local\SKC\
+
+
+Operation Groundbait: Analysis of a surveillance toolkit 17
+The MMC folder is primarily used for additional downloadable malware components; the SKC folder is used for storing collected log files. In the subsequent text
+we will use the term “log folder” to refer the SKC directory.
+The downloadable modules are not able to upload collected data. In fact, only the
+CORE and DOWNLOADER modules communicate with C&C servers. The commu
+nication protocol of the CORE module is very similar to that of the DOWNLOADER
+module.
+Figure 23. Traffic captured from the Prikormka malware's CORE module.
+The only difference between DOWNLOADER and CORE HTTP requests is the st
+parameter in the URL. This parameter indicates which of the downloadable mod
+ules are active and loaded by Prikormka. With the current implementation, there
+is room for 11 additional modules. The server responds with the content of the
+module that should be executed, or with a dummy answer.
+The logs are uploaded during a POST request to a similar URL:
+
+hxxp:/server.ua/wd.php?sn=%DATE _ TIME _ OF _ INFECTION%
+
+It is worth mentioning that early versions of Prikormka stored C&C servers in
+plain-text; later, attackers used the base64 algorithm in order to hide the servers’
+addresses. Finally, the latest versions of the CORE modules use simple encryp
+tion: to decrypt it, the researcher should add the hexadecimal value 0x17 to each
+encrypted byte.
+Figure 24. Example of simple encryption used by Prikormka to hide C&C servers.
+DOCS_STEALER module
+This module is responsible for collecting documents from removable media or
+fixed drives, connected via a USB interface.
+The module focuses on collecting files with document-type extensions: .DOC,
+.XLS, .DOCX, .XLSX, .PPT, .PPTX, .PPS, .PPSX, .PDF, .RTF, .TXT, .ODT. However,
+it does not collect all files, but only those which were modified in the last 7 days
+(or 14, or 30, depending on which version of the module).
+The collected files then are compressed, encrypted with Blowfish, and stored
+under the following scheme:
+
+%USERPROFILE%\AppData\Local\ioctl\%DISK _ ID%\
+
+%DATE% _ %TIME%.kf
+Operation Groundbait: Analysis of a surveillance toolkit 18
+KEYLOGGER module
+This module is responsible for collecting keystrokes and the titles of foreground
+windows. The collected information is saved to the log folder under the following
+names:
+%DATE% _ %TIME% _ fix.lg
+lgfix
+
+
+lpl
+
+
+fplid
+
+
+fmmlg
+
+
+If the log file is bigger than 10Mb, the module removes the log and starts anew.
+Some versions of the module encrypt the log file using Blowfish.
+SCREENSHOTS module
+This module is responsible for capturing screenshots of the victim’s desktop.
+By default, the module captures a screenshot every 15 minutes. However, if the
+victim opens a VoIP application Skype or Viber, then the period between screen
+shots is lowered dramatically to 5 seconds. The captured screenshot is saved in the
+JPEG format. The collected information is saved to the log folder under filenames
+%DATE% _ %TIME%.tgz.scrsh or %DATE% _ %TIME%.stgz.
+MICROPHONE module
+This module is responsible for recording sound from a microphone. The module
+records audio with 10 minutes duration. It stops recording on command, or when
+there is no more free disk space available. The recorded audio is encoded with the
+LAME MP3 encoder. The collected information is saved to the log folder under the
+filename %DATE% _ %TIME%.snm.
+SKYPE module
+This module is responsible for recording Skype audio chats. In order to record
+Skype calls, the module uses a legitimate interface, called the Skype Desktop API .
+When a third party application is about to use this API, the Skype messenger
+displays a warning, which asks the user to allow the access. To bypass this Skype
+security feature, the Prikormka module creates a thread that attempts to find the
+window and click the “Allow access” button programmatically, without human
+interaction.
+Figure 25. The warning displayed by Skype.
+The strings and some code fragments in this Prikormka module suggest that the
+implementation of this module was partly borrowed from the code published on
+the website openrce.org in 2006 .
+Operation Groundbait: Analysis of a surveillance toolkit 19
+Figure 26. The string CREATE APPLICATION minishell suggests copied-and-pasted code.
+The collected information is saved to the log folder using %DATE% _ %TIME%.skw
+and _ skype.log filenames.
+LOGS_ENCRYPTER module
+This module is responsible for log encryption. The module compresses data via the
+LZSS algorithm and encrypts the following log files with Blowfish:
+
+
+%USERPROFILE%\AppData\Local\MMC\inf
+
+
+%USERPROFILE%\AppData\Local\MMC\fsh
+
+
+%USERPROFILE%\AppData\Local\SKC*.scrsh
+
+
+%USERPROFILE%\AppData\Local\SKC*.snm
+
+
+%USERPROFILE%\AppData\Local\SKC*.skw
+
+
+Files listed in %USERPROFILE%\AppData\Local\MMC\ierdir.dat
+
+
+The file ierdir.dat is created by the CORE module; it contains an encrypted list
+of files requested by attackers to upload from victim’s computer.
+After encryption, the original (but not the encrypted) files are deleted. Results of
+the encryption are stored in the following files:
+
+
+%USERPROFILE%\AppData\Local\MMC\ipl
+
+
+%USERPROFILE%\AppData\Local\MMC\kpl
+
+
+The encrypted content is additionally encoded with the base64 algorithm. Inter
+estingly, before the content starts, the module puts an additional signature there:
+Figure 27. The “atKsoft” signature at the beginning of encrypted log files.
+We have not found any legitimate application which can read such files or any
+other meaning of this mysterious “atKsoft” signature.
+Operation Groundbait: Analysis of a surveillance toolkit 20
+GEOLOCATION module
+This module is responsible for geo locating the infected computer. Unlike other
+modules, this module is written in the C# programming language. This module
+collects information about currently available WiFi networks, including Service Set
+Identifier (SSID) and MAC-address. Afterward, the module makes a request to the
+Google service, providing collected information as parameters; the Google service
+response contains the possible location based on the information supplied.
+Figure 28. Traffic captured from Prikormka malware's GEOLOCATION module.
+The collected information is saved to the log folder under the filename
+geo%DATE%.inf.
+The binary of the GEOLOCATION module has a PDB-path; the structure of this
+path is similar to the PDB-path of the DOWNLOADER module:
+Figure 29. The PDB-path discovered inside the GEOLOCATION module.
+OS_INFO module
+This module is responsible for collecting information about the infected computer.
+The following information is collected by this module:
+
+
+Battery info for Notebooks
+
+
+Windows OS version
+
+
+Computer name and User name
+
+
+IP Addresses and MAC Addresses
+
+
+Physical memory
+
+
+Available disk drives
+
+
+Available printers
+
+
+Desktop resolution
+
+
+Installed antivirus software
+
+
+The module uses Windows API functions in order to collect this information.
+The collected information is saved to the log folder under the filename
+%DATE% _ %TIME%.inf.
+Operation Groundbait: Analysis of a surveillance toolkit 21
+PASSWORDS module
+This module is responsible for collecting passwords stored in applications installed
+on the infected computer.
+The module gathers the application version, logins and passwords stored in the
+following applications:
+
+
+Google Chrome
+
+
+Opera Browser
+
+
+Yandex Browser
+
+
+Comodo Dragon Internet Browser
+
+
+Rambler Browser (Nichrome)
+
+
+Mozilla Firefox
+
+
+Mozilla Thunderbird
+
+
+For some reason, this module does not collect passwords for Microsoft Internet
+Explorer and Microsoft Edge browsers. Because the Yandex Browser and the
+Rambler Browser are popular mostly in Russian speaking countries, we think that
+it indicates that this module was designed for use against users located in such
+countries.
+The collected information is saved to the log folder under the filename
+%DATE% _ %TIME%.inf.
+FILE_TREE module
+This module is responsible for collecting information about the file system of the
+computer's fixed drives, including paths of files with specific file extensions, their
+size and creation time. The actual content of the file is not collected by this module.
+The attackers are interested in the following file extensions:
+
+
+Documents: TXT, DOC, DOCX, XLS, XLSX, PPT, PPTX, PDF
+
+
+Archives: ZIP, RAR
+
+
+Databases: DB, SQLITE
+
+
+The Bat! email client: TBB, CFG, CFN, TBN, TBB
+
+
+Microsoft Outlook: OST, PST
+
+
+Other: DAT, WAV, EXE
+
+
+Since The Bat! email client is popular in Russian-speaking countries, the fact that
+malware is focused on file extensions associated with this email client is another
+indicator that the malware is created with the intention of using it against Rus
+sian-speaking users.
+It should be noted that the list of all file extensions does not represent the list
+found in any particular sample. This list contains all the possible file extensions
+that we observed in different versions of the FILE_TREE module. The attackers
+might build a custom version of this module for a specific victim. The collected information is saved to the log folder under the filename %DATE% _ %TIME% _ tree.
+inf. Some binaries of FILE_TREE modules have PDB-paths; one such path reveals
+the username of the malware writer.
+Figure 30. A PDB-path discovered inside a FILE_TREE module.
+Operation Groundbait: Analysis of a surveillance toolkit 22

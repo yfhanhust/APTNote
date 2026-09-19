@@ -1,0 +1,342 @@
+
+
+
+Sentence : Analysis
+At the start of the malware disassembly it calls into a function named init . Here, it builds
+a path to its config, and then opens it. The path is built by appending .d to the malware’s
+binary full path:
+https://objective-see.org/blog/blog_0x78.html 5/11
+6/26/24, 9:33 AM Objective-See's Blog
+```
+    init(...){
+_sprintf_chk(config, 0x0, 0x41a, "%s.d", malwaresPath);
+
+...
+
+loadConfig(...)
+}
+
+```
+We can confirm this in a debugger, where at a call to fopen (in the load_config function)
+the malware will attempt to open the file macshare.d, in the directory where the malware
+is currently running (e.g. /Users/user/Downloads/ ).
+```
+    % lldb /Users/user/Downloads/macshare
+(lldb)
+
+* thread #1, queue = 'com.apple.main-thread'
+macshare`load_config:
+-> 0x100001890 <+32>: callq 0x100003d8c        ; symbol stub for: fopen
+
+Target 0: (macshare) stopped.
+(lldb) x/s $rdi
+
+0x100008820: "/Users/user/Downloads/macshare.d"
+
+```
+We can also see this in a File Monitor:
+```
+    # ./FileMonitor.app/Contents/MacOS/FileMonitor -pretty -filter macshare
+    {
+"event" : "ES_EVENT_TYPE_NOTIFY_OPEN",
+"file" : {
+
+"destination" : " /Users/user/Downloads/macshare.d ",
+"process" : {
+"pid" : 6818,
+"name" : "macshare",
+"path" : "/Users/user/Downloads/macshare"
+}
+
+}
+
+}
+
+```
+By looking at its cross-references (xrefs), we can see the xcrypt function is invoked to
+encrypt/decrypt the malware’s config and network traffic:
+https://objective-see.org/blog/blog_0x78.html 6/11
+6/26/24, 9:33 AM Objective-See's Blog
+XRefs to the xcrypt function
+…the xcrypt function according to ChatGPT appears to be a custom stream cipher.
+While static analysis shows that the key may be stored at the start of this config (address
+0x100008c3a ), and set to random 64bit value:
+```
+    *qword_100008c3a = sign_extend_64(rand()) + time(0x0) + sign_extend_64(rand() *
+    rand());
+```
+Back to the config file, unfortunately, I (currently) don’t have access an example config.
+Thus some of our continued analysis is based solely on static analysis.
+Once the init function returns (which loaded the config), that malware performs a myriad
+of actions that appear to complicate dynamic analysis and perhaps detection. This
+including fork ing itself, but also setting up a pseduo-terminal via posix_openpt (as noted
+by Phil Stokes):
+Uses grantpt to set up a pseudo-terminal. Not seen that before. Interesting!
+— Phil Stokes ⫍ 🐠 ⫎ (@philofishal) January 4, 2024
+…this is followed by more forks, execs, and more. Again, if I had to guess, this simply to
+complicate analysis (and/or perhaps, making it a detached/“isolated” process complicated
+detections)? We’ll also see that the psuedo-terminal is used to execute shell commands
+from the attacker’s remote C&C server.
+Regardless we can skip over this all, and simply continue execution (or static analysis)
+where a new thread (named _mainthread ) is spawned. After invoking functions such as
+openchannel and socket_connect to likely connect to its C&C server (whose address
+likely would be found in the malware’s config: macshare.d ), it invokes a function named
+mainprocess .
+The mainprocess function (eventually) invokes the read_packet function which appears
+to return the index of a command. The code in mainprocess function then iterates over an
+array named _procs in order to find the handler for the specified command (that I’ve
+https://objective-see.org/blog/blog_0x78.html 7/11
+6/26/24, 9:33 AM Objective-See's Blog
+named commandHandler in the below disassembly). The command handler is then directly
+invoked:
+```
+    1int mainprocess(int arg0, int arg1) {
+2
+
+3  var_558 = read_packet(...);
+4  if (var_558 != 0x0) goto loc_100002dfc;
+
+5
+
+6loc_100002dfc:
+7  var_560 = *(var_558 + 0x8);
+
+8  commandHandler = 0x0;
+
+9  addrOfProcs = _procs;
+10  do {
+
+11      var_5C1 = 0x0;
+12      if (*addrOfProcs != 0x0) {
+
+13        var_5C1 = (var_568 != 0x0 ? 0x1 : 0x0) ^ 0xff;
+14      }
+15      if ((var_5C1 & 0x1) == 0x0) {
+
+16        break;
+17      }
+18      if (*addrOfProcs == var_560) {
+19          commandHandler = *(addrOfProcs + 0x4);
+20      }
+
+21      addrOfProcs = addrOfProcs + 0xc;
+22  } while (true);
+
+23
+
+24
+
+25  var_538 = (commandHandler)(var_530, var_558);
+
+26
+
+27}
+
+```
+After creating a custom structure ( procStruct ) for this array, we can see each command
+number and its handler:
+https://objective-see.org/blog/blog_0x78.html 8/11
+6/26/24, 9:33 AM Objective-See's Blog
+```
+    procs:
+0x0000000100008000     struct procStruct {
+
+0x1,
+
+_proc_none
+}
+0x000000010000800c     struct procStruct {
+
+0x2,
+_proc_shell
+}
+0x0000000100008018     struct procStruct {
+
+0x3,
+_proc_dir
+}
+0x0000000100008024     struct procStruct {
+
+0x4,
+_proc_upload
+}
+0x0000000100008030     struct procStruct {
+
+0x5,
+_proc_upload_content
+}
+0x000000010000803c     struct procStruct {
+
+0x6,
+_proc_download
+}
+0x0000000100008048     struct procStruct {
+0x7,
+_proc_rmfile
+}
+0x0000000100008054     struct procStruct {
+
+0x8,
+
+_proc_testconn
+}
+0x0000000100008060     struct procStruct {
+
+0x9,
+_proc_getcfg
+}
+0x000000010000806c     struct procStruct {
+
+0xa,
+_proc_setcfg
+}
+0x0000000100008078     struct procStruct {
+0xb,
+_proc_hibernate
+}
+0x0000000100008084     struct procStruct {
+
+0xc,
+_proc_sleep
+}
+0x0000000100008090     struct procStruct {
+0xd,
+_proc_die
+}
+0x000000010000809c     struct procStruct {
+
+```
+https://objective-see.org/blog/blog_0x78.html 9/11
+6/26/24, 9:33 AM Objective-See's Blog
+```
+    0xe,
+_proc_stop
+}
+0x00000001000080a8     struct procStruct {
+0xf,
+
+_proc_restart
+}
+
+```
+Recall we saw the names of each command handler ( _proc_* ) in the output of nm . And,
+though we can guess the likely capability of eahc command from its name, let’s look a
+few to confirm.
+The proc_rmfile will remove a file by invoking the unlink API. However, we can also
+see that it first opens the file ( fopen ) and overwrites its contents with zero:
+```
+    1int proc_rmfile(int arg0, int arg1) {
+    2  var_4 = arg0;
+    3  var_10 = arg1;
+    4  var_18 = var_10 + 0x10;
+    5  file = fopen(var_18, "rb+");
+    6  if (file != 0x0) {
+7      fseek(file, 0x0, 0x2);
+8      var_28 = ftell(file);
+9      fseek(file, 0x0, 0x0);
+10      var_30 = 0x5000;
+11      if (var_28 < var_30) {
+
+12        var_30 = var_28;
+13      }
+
+14      var_38 = malloc(var_30);
+15      _memset_chk(var_38, 0x0, var_30, 0xffffffffffffffff);
+16      fwrite(var_38, 0x1, var_30, file);
+17      free(var_38);
+18      fclose(file);
+19  }
+
+20  rdx = unlink(var_18);
+21  rax = 0x0;
+22  if (rdx == 0x0) {
+
+23      rax = 0x1;
+24  }
+25  return _write_packet_value(var_4, *var_10, rax);
+26}
+
+```
+…each command will also report a result by invoking the malware write_packet_value
+API.
+The proc_restart will terminate the child process:
+https://objective-see.org/blog/blog_0x78.html 10/11
+6/26/24, 9:33 AM Objective-See's Blog
+```
+    1int main(...)
+2
+
+3  call    fork
+
+4  mov    dword [childPID], eax
+
+5
+
+6int proc_restart(int arg0, int arg1)
+
+7
+
+8  kill(*childPID, 0x9);
+9  return write_packet_value(arg0, *arg1, 0x0);
+
+```
+Finally, let’s look at the proc_shell, which executed a command by write ‘ing to the
+pseudo-terminal that was opened (via posix_openpt ) previously:
+```
+    1int main(...)
+2
+
+3  call    posix_openpt
+4  mov    dword [pt], eax
+
+5
+6int proc_shell(...) {
+7  var_8 = arg0;
+8  var_10 = arg1;
+9  if (write(*pt, var_10 + 0x10, strlen(var_10 + 0x10)) <= 0x0) {
+10      var_4 = _write_packet_value(var_8, *var_10, 0x0);
+11  }
+
+```
+The other commands execute actions consistent with their respective names.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "init function", "type" : "TTPS"},
+        {"id": 2, "description": "config file path (.d)", "type" : "SYSP"},
+        {"id": 3, "description": "macshare.d", "type" : "DOCF"},
+        {"id": 4, "description": "malware binary full path", "type" : "SYSP"},
+        {"id": 5, "description": "/Users/user/Downloads/macshare", "type" : "EXEF"},
+        {"id": 6, "description": "xcrypt function", "type" : "TTPS"},
+        {"id": 7, "description": "config file encryption key", "type" : "TAMP"},
+        {"id": 8, "description": "_mainthread thread", "type" : "TTPS"},
+        {"id": 9, "description": "openchannel function", "type" : "TTPS"},
+        {"id": 10, "description": "socket_connect function", "type" : "TTPS"},
+        {"id": 11, "description": "C&C server address", "type" : "CCSH"},
+        {"id": 12, "description": "mainprocess function", "type" : "TTPS"},
+        {"id": 13, "description": "read_packet function", "type" : "TTPS"},
+        {"id": 14, "description": "_procs array", "type" : "TAMP"},
+        {"id": 15, "description": "commandHandler", "type" : "TTPS"},
+        {"id": 16, "description": "procStruct structure", "type" : "TAMP"},
+        {"id": 17, "description": "proc_rmfile command handler", "type" : "TTPS"},
+        {"id": 18, "description": "proc_restart command handler", "type" : "TTPS"},
+        {"id": 19, "description": "proc_shell command handler", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "builds path to config"},
+        {"source": 2, "target": 3, "rel_name" : "points to file"},
+        {"source": 4, "target": 2, "rel_name" : "appends .d to path"},
+        {"source": 5, "target": 3, "rel_name" : "attempts to open file"},
+        {"source": 6, "target": 7, "rel_name" : "uses key for encryption/decryption"},
+        {"source": 8, "target": 12, "rel_name" : "invokes function"},
+        {"source": 9, "target": 11, "rel_name" : "connects to C&C server"},
+        {"source": 10, "target": 11, "rel_name" : "connects to C&C server"},
+        {"source": 12, "target": 13, "rel_name" : "reads packet from C&C"},
+        {"source": 12, "target": 14, "rel_name" : "uses array of command handlers"},
+        {"source": 14, "target": 15, "rel_name" : "contains command handler"},
+        {"source": 16, "target": 14, "rel_name" : "defines structure for array"},
+        {"source": 17, "target": 3, "rel_name" : "removes file and overwrites contents"},
+        {"source": 18, "target": 5, "rel_name" : "terminates child process"},
+        {"source": 19, "target": 3, "rel_name" : "executes command via pseudo-terminal"}
+    ]
+}

@@ -1,0 +1,87 @@
+
+
+
+Sentence : DEADEYE.DOWN
+A sample belonging to DEADEYE.DOWN (MD5: 5322816c2567198ad3dfc53d99567d6e )
+attempts to download two files on the first execution of the malware.
+The first file is downloaded from hxxp://checkin.travelsanignacio[.]com/static/20170730.jpg. The
+command and control (C2) server response is first RC5 decrypted with the key “wsprintfA” and
+then RC5 encrypted with a different key and written to disk as .mui.
+The RC5 key is constructed using the volume serial number of the C drive. The volume serial
+number is a 4-byte value, usually based on the install time of the system. The volume serial
+number is XORed with the hard-coded constant “f@Ukd!rCto R$.” and then converted to hex to
+derive a key of up to 28 bytes in length. The key length can vary if the XORed value contains an
+embedded zero byte because the lstrlenA API call is used to determine the length of it. Note that
+the lstrlenA API call happens before the result is converted to hex. If the index of the byte modulo
+4 is zero, the hex conversion is in uppercase. The key derivation is illustrated in Table 1.
+|Volume Serial number of C drive, for example 0xAABBCCDD|Col2|Col3|
+|---|---|---|
+|F          ^          0xAA|=          0xCC|uppercase|
+|@         ^          0xBB|=          0xFB|lowercase|
+|U          ^          0xCC|=          0x99|lowercase|
+|k          ^          0xDD|=          0xB6|lowercase|
+|d          ^          0xAA|=          0xCE|uppercase|
+|!           ^          0xBB|=          0x9A|lowercase|
+|r           ^          0xCC|=          0xBE|lowercase|
+|C          ^          0xDD|=          0x9E|lowercase|
+|t           ^          0xAA|=          0xDE|uppercase|
+https://www.fireeye.com/blog/threat-research/2019/10/lowkey-hunting-for-the-missing-volume-serial-id.html 2/17
+10/16/2019 LOWKEY: Hunting for the Missing Volume Serial ID | FireEye Inc
+|o ^ 0xBB|= 0xD4|lowercase|
+|---|---|---|
+|(0x20)   ^          0xCC|=          0xEC|lowercase|
+|R          ^          0xDD|=          0x8F|lowercase|
+|$          ^          0xAA|=          0x8E|uppercase|
+|.           ^          0xBB|=          0x95|lowercase|
+|Derived key CCfb99b6CE9abe9eDEd4ec8f8E95|Derived key CCfb99b6CE9abe9eDEd4ec8f8E95|Derived key CCfb99b6CE9abe9eDEd4ec8f8E95|
+Table 1: Key derivation example
+The second file is downloaded from hxxp://checkin.travelsanignacio[.]com/static/20160204.jpg.
+The C2 response is RC5 decrypted with the key “wsprintfA” and then XORed with 0x74, before it
+is saved as C:\Windows\System32\wcnapi.mui.
+Figure 2: 5322816c2567198ad3dfc53d99567d6e download
+The sample then determines its own module name, appends the extension mui to it and attempts
+to decrypt the file using RC5 encryption. This effectively decrypts the file the malware just
+downloaded and stored encrypted on the system previously. As the file has been encrypted with a
+key based on the volume serial number it can only be executed on the system it was downloaded
+on or a system that has the same volume serial number, which would be a remarkable
+coincidence.
+https://www.fireeye.com/blog/threat-research/2019/10/lowkey-hunting-for-the-missing-volume-serial-id.html 3/17
+10/16/2019 LOWKEY: Hunting for the Missing Volume Serial ID | FireEye Inc
+An example mui file is the MD5 hash e58d4072c56a5dd3cc5cf768b8f37e5e . Looking at the
+encrypted file in a hex editor reveals a high entropy (7.999779/8). RC5 uses Electronic Code
+Book (ECB) mode by default. ECB means that each code block (64 bit) is encrypted independent
+from other code blocks. This means the same plaintext block always results in the same cipher
+text, independent from its position in the binary. The file has 792933 bytes in total but almost no
+duplicate cipher blocks, which means the data likely has an additional layer of encryption.
+Without the correct volume serial number nor any knowledge about the plaintext there is no
+efficient way to decrypt the payload e58d4072c56a5dd3cc5cf768b8f37e5e with just the
+knowledge of the current sample.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DEADEYE.DOWN", "type" : "ACTO"},
+        {"id": 2, "description": "5322816c2567198ad3dfc53d99567d6e", "type" : "IOCS"},
+        {"id": 3, "description": "hxxp://checkin.travelsanignacio[.]com/static/20170730.jpg", "type" : "URLS"},
+        {"id": 4, "description": "wsprintfA", "type" : "TAMP"},
+        {"id": 5, "description": ".mui file (first downloaded)", "type" : "DOCF"},
+        {"id": 6, "description": "Volume serial number of C drive", "type" : "REGI"},
+        {"id": 7, "description": "f@Ukd!rCto R$.", "type" : "TAMP"},
+        {"id": 8, "description": "CCfb99b6CE9abe9eDEd4ec8f8E95", "type" : "TAMP"},
+        {"id": 9, "description": "hxxp://checkin.travelsanignacio[.]com/static/20160204.jpg", "type" : "URLS"},
+        {"id": 10, "description": "C:\\Windows\\System32\\wcnapi.mui", "type" : "SYSP"},
+        {"id": 11, "description": "e58d4072c56a5dd3cc5cf768b8f37e5e", "type" : "IOCS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "downloads from"},
+        {"source": 3, "target": 4, "rel_name" : "decrypted with"},
+        {"source": 4, "target": 5, "rel_name" : "encrypted and written as"},
+        {"source": 6, "target": 7, "rel_name" : "XORed with"},
+        {"source": 8, "target": 5, "rel_name" : "derived key for encrypting"},
+        {"source": 2, "target": 9, "rel_name" : "downloads from"},
+        {"source": 9, "target": 4, "rel_name" : "decrypted with"},
+        {"source": 4, "target": 10, "rel_name" : "XORed and saved as"},
+        {"source": 2, "target": 6, "rel_name" : "determines"},
+        {"source": 5, "target": 11, "rel_name" : "example of"}
+    ]
+}

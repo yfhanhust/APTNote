@@ -1,0 +1,79 @@
+Command and Control Communications
+In addition to being able to communicate with its C2 server from code injected into a web browser, the
+Trojan can also carry out the same communication process within its own process. The C2
+communication uses HTTPS and specifically sets the following flags to do so in a manner to allow invalid
+certificates:
+SECURITY_FLAG_IGNORE_CERT_DATE_INVALID|SECURITY_FLAG_IGNORE_CERT_CN_INVALID|SEC
+URITY_FLAG_IGNORE_UNKNOWN_CA|SECURITY_FLAG_IGNORE_REVOCATION
+The initial request sent from the Trojan is to google.com, likely as an internet connectivity check.
+Figure 7 Initial request from SofacyCarberp Trojan to Google to check for Internet access
+As seen in the activity above, the Trojan issues a POST request to a URL that contains randomly sized and
+randomly generated strings. The URL also contains a randomly chosen string from the following list:
+vnd.wmc
+.3gpp2
+.ktx
+.rfc822
+.vnd.flatland.3dml
+.report
+.vnd.radisys.msml-basic-layout
+.3gpp
+This list of strings differs from previously analyzed SofacyCarberp samples, such as the variant discussed
+in our June 2016 blog “New Sofacy Attacks Against US Government Agency
+(https://researchcenter.paloaltonetworks.com/2016/06/unit42-new-sofacy-attacks-against-us-
+government-agency/)“ that chose from a list of strings .xml, .pdf, .htm or .zip.
+The value for the one parameter, specifically WrLqG1kMJXpgID1rODM= is base64 encoded ciphertext that
+decrypts to the string UihklEpz4V, which is hardcoded in the Trojan. The algorithm used to encrypt the
+data in the URL the same algorithm as used in previous SofacyCarberp samples
+(https://researchcenter.paloaltonetworks.com/2016/06/unit42-new-sofacy-attacks-against-us-
+government-agency/) we have analyzed (https://researchcenter.paloaltonetworks.com/2016/10/unit42dealerschoice-sofacys-flash-player-exploit-platform). The data in the POST request is the base64
+encoded user-agent seen in the request.
+After establishing that the system has Internet access, the Trojan will gather detailed system information
+and send it to the C2 server. The gathered information includes a unique identifier based on the storage
+volume serial number (id field), a list of running processes, network interface card information, the storage
+device name (disk field), the Trojan’s build identifier (build field, specifically 0x9104f000), followed by a
+screenshot of the system (img field). The screenshot functionality in this Trojan is rather interesting, as
+instead of using Windows APIs to take a screenshot, the Trojan’s code simulates the user pressing the
+“Take Screenshot” key (VK_SCREENSHOT) on the keyboard which saves the screenshot to the clipboard.
+The Trojan then accesses the data in the clipboard and converts it to a JPG image to include in this HTTP
+request. All of this data is encrypted, base64 encoded and sent to the C2 server in a HTTP POST to a
+URL that a similar structure as the initial internet connectivity check.
+Figure 8 HTTP POST from SofacyCarberp to C2 server with system information
+The SofacyCarberp Trojan parses the C2 server’s response to the request for data that the Trojan will then
+use to download a secondary payload to the system. The Trojan looks in the response data for sections
+between the tags [file] and [/file] and [settings] and [/settings], which we have observed
+in other SofacyCarberp samples we have analyzed. However, this particular variant also contains another
+section with the tags [shell] and [/shell]. The Trojan parses these sections for specific fields that
+dictate how the Trojan will operate, including where the Trojan will save the downloaded file, how the
+Trojan runs the secondary payload and what C2 location the Trojan should communicate with. The
+following fields are parsed by the Trojan:
+FileName: Specified filename
+PathToSave: Path to specified file
+Execute: Create a process with the specified file
+Delete: Delete the specified file
+LoadLib: Load the specified DLL into the current process
+ReadFile: Reads a specified the file
+Rundll: Runs the specified DLL with a specified exported function
+IP: Set C2 location
+shell: Run additional code in a newly created thread
+The data in the shell section specified in the shell field is base64 encoded data that decodes to raw
+assembly. We surmise this fact based on the Trojan using the base64 decoded data to create a local
+thread, which suggests that the provided data can be any position independent code or shellcode.
+Got something to say?
+Leave a comment...
+Notify me of followup comments via e-mail
+Name (required)
+Email (required)
+Website
+SUBMIT
+SUBSCRIBE TO NEWSLETTERS
+Email SUBSCRIBE
+COMPANY
+Company (https://www.paloaltonetworks.com/company)
+Careers (https://www.paloaltonetworks.com/company/careers)
+Sitemap (https://www.paloaltonetworks.com/sitemap)
+Report a Vulnerability (https://www.paloaltonetworks.com/security-disclosure)
+LEGAL NOTICES
+Privacy Policy (https://www.paloaltonetworks.com/legal-notices/privacy)
+Terms of Use (https://www.paloaltonetworks.com/legal-notices/terms-of-use)
+ACCOUNT
+Manage Subscription (https://www.paloaltonetworks.com/company/subscriptions)

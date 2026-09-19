@@ -1,0 +1,79 @@
+
+
+
+Sentence : CRYPTOGRAPHIC ROUTINES
+Data transmission from the attacker’s server to the client is protected by a custom
+cryptosystem (Figure 3) leveraging a symmetric cipher (AES), that protects the data
+payload and an asymmetric cipher (RSA) to protect the symmetric key. The custom
+cryptosystem leverages a public Action Script library for low level operations.
+Figure 3: Generic network retrieval and decrypt routine
+Data transmission is initiated by the client, whereby the client HTTP POSTs a randomly
+generated RSA modulus n and the exponent 0x10001, and the server responds with the
+following structure:
+0x0: Encrypted AES key length (L)
+0x4: Encrypted AES key
+0x4+L: AES IV
+0x14+L: AES encrypted data payload
+Figure 4: Structure of encrypted data
+To decrypt the data payload, the client decrypts the encrypted AES key using its randomly
+generated private key, then decrypts the data payload with the decrypted AES key.
+The extra layer of public key cryptography, with a randomly generated key, is crucial here.
+By using it, one must either recover the randomly generated key or crack the RSA
+encryption to analyze subsequent layers of the attack. If implemented correctly, this
+renders packet capture in forensic analysis and automated security products ineffective.
+Furthermore, the decrypted data payloads will only reside in memory, challenging
+traditional disk forensics and non-volatile artifact analysis.
+In this scenario, the attacker chose an RSA modulus length of 512 bits, which is considered
+insecure by today’s standards and may be cracked with notable effort. Consequently,
+offline analysis is possible, although more laborious than online analysis, whereby the
+analyst may either instrument a mock victim or create a man-in-the-middle service, then
+attempt to be exploited by the attacker.
+The combination of a remotely included Flash exploit and asymmetric cryptography are
+particularly powerful counters against postmortem analysis. Once exploited, the only
+artifact residing on the victim’s system would be the initial lure document that only contains
+a URL. In that scenario, responders may look to network packet captures to recreate the
+attack. However, without the victim’s randomly created private key, it would be impossible
+for responders to decrypt the attacker’s code and recover subsequent protected stages
+like the exploit or payload. In this scenario, responders’ only saving grace would be the use
+of a weak RSA modulus.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "attacker's server", "type" : "CCSH"},
+        {"id": 2, "description": "client", "type" : "ACTO"},
+        {"id": 3, "description": "custom cryptosystem", "type" : "TAMP"},
+        {"id": 4, "description": "AES (symmetric cipher)", "type" : "TTPS"},
+        {"id": 5, "description": "RSA (asymmetric cipher)", "type" : "TTPS"},
+        {"id": 6, "description": "public Action Script library", "type" : "APPS"},
+        {"id": 7, "description": "HTTP POST request", "type" : "NETP"},
+        {"id": 8, "description": "randomly generated RSA modulus n", "type" : "TAMP"},
+        {"id": 9, "description": "exponent 0x10001", "type" : "TAMP"},
+        {"id": 10, "description": "encrypted AES key length (L)", "type" : "TAMP"},
+        {"id": 11, "description": "encrypted AES key", "type" : "TAMP"},
+        {"id": 12, "description": "AES IV", "type" : "TAMP"},
+        {"id": 13, "description": "AES encrypted data payload", "type" : "TAMP"},
+        {"id": 14, "description": "randomly generated private key", "type" : "TAMP"},
+        {"id": 15, "description": "RSA modulus length of 512 bits", "type" : "TAMP"},
+        {"id": 16, "description": "network packet captures", "type" : "IOCS"},
+        {"id": 17, "description": "remotely included Flash exploit", "type" : "EXEF"},
+        {"id": 18, "description": "initial lure document", "type" : "DOCF"},
+        {"id": 19, "description": "URL in the initial lure document", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 7, "rel_name" : "sends"},
+        {"source": 7, "target": 1, "rel_name" : "to"},
+        {"source": 8, "target": 7, "rel_name" : "includes"},
+        {"source": 9, "target": 7, "rel_name" : "includes"},
+        {"source": 1, "target": 2, "rel_name" : "responds to"},
+        {"source": 10, "target": 1, "rel_name" : "contains"},
+        {"source": 11, "target": 1, "rel_name" : "contains"},
+        {"source": 12, "target": 1, "rel_name" : "contains"},
+        {"source": 13, "target": 1, "rel_name" : "contains"},
+        {"source": 14, "target": 2, "rel_name" : "generates"},
+        {"source": 14, "target": 11, "rel_name" : "decrypts"},
+        {"source": 11, "target": 13, "rel_name" : "decrypts using"},
+        {"source": 2, "target": 16, "rel_name" : "uses for analysis"},
+        {"source": 17, "target": 2, "rel_name" : "included in"},
+        {"source": 18, "target": 19, "rel_name" : "contains"}
+    ]
+}

@@ -1,0 +1,307 @@
+
+
+
+Sentence : Operation
+```
+The module is automatically loaded into processes that use wbemsvc.dll. When loaded in “svchost.exe” that was started
+with “-k netsvc” parameter, it starts its main thread.
+The module creates “ShellHWStop”, “Global\ShellHWDetectionEvent” events, mutex “ShellHWDetectionMutex”.
+12
+The main thread exits if the following processes were found at its start:
+LMon.exe sagui.exe RDTask.exe kpf4gui.exe
+ALsvc.exe pxagent.exe fsma32.exe licwiz.exe
+SavService.exe prevxcsi.exe alertwall.exe livehelp.exe
+SAVAdminService.exe csi-eui.exe mpf.exe lookout.exe
+savprogress.exe lpfw.exe mpfcm.exe emlproui.exe
+savmain.exe outpost.exe fameh32.exe emlproxy.exe
+savcleanup.exe filemon.exe AntiHook.exe endtaskpro.exe
+savcli.exe procmon.exe xfilter.exe netguardlite.exe
+backgroundscanclient.exe Sniffer.exe scfservice.exe oasclnt.exe
+sdcservice.exe acs.exe scfmanager.exe omnitray.exe
+sdcdevconx.exe aupdrun.exe spywareterminatorshield.exe onlinent.exe
+sdcdevconIA.exe sppfw.exe spywat~1.exe opf.exe
+sdcdevcon.exe spfirewallsvc.exe ssupdate.exe pctavsvc.exe
+configuresav.exe fwsrv.exe terminet.exe pctav.exe
+alupdate.exe opfsvc.exe tscutynt.exe pcviper.exe
+InstLsp.exe uwcdsvr.exe umxtray.exe persfw.exe
+CMain.exe dfw.exe updclient.exe pgaccount.exe
+CavAUD.exe ipatrol.exe webwall.exe privatefirewall3.exe
+CavEmSrv.exe pcipprev.exe winroute.exe protect.exe
+Cavmr.exe prifw.exe apvxdwin.exe rtt_crc_service.exe
+Cavvl.exe tzpfw.exe as3pf.exe schedulerdaemon.exe
+CavApp.exe privatefirewall3.exe avas.exe sdtrayapp.exe
+CavCons.exe pfft.exe avcom.exe siteadv.exe
+CavMud.exe armorwall.exe avkproxy.exe sndsrvc.exe
+CavUMAS.exe avkservice.exe snsmcon.exe
+app_firewall.exe
+UUpd.exe blackd.exe avktray.exe snsupd.exe
+cavasm.exe blackice.exe avkwctrl.exe procguard.exe
+CavSub.exe umxagent.exe avmgma.exe DCSUserProt.exe
+CavUserUpd.exe kpf4ss.exe avtask.exe avkwctl.exe
+CavQ.exe tppfdmn.exe aws.exe firewall.exe
+Cavoar.exe blinksvc.exe bgctl.exe THGuard.exe
+CEmRep.exe sp_rsser.exe bgnt.exe spybotsd.exe
+OnAccessInstaller.exe op_mon.exe bootsafe.exe xauth_service.exe
+SoftAct.exe cmdagent.exe bullguard.exe xfilter.exe
+CavSn.exe VCATCH.EXE cdas2.exe zlh.exe
+Packetizer.exe SpyHunter3.exe cmgrdian.exe adoronsfirewall.exe
+Packetyzer.exe wwasher.exe configmgr.exe scfservice.exe
+zanda.exe authfw.exe cpd.exe scfmanager.exe
+zerospywarele.exe dvpapi.exe espwatch.exe dltray.exe
+13
+zerospywarelite_installer.exe clamd.exe fgui.exe dlservice.exe
+Wireshark.exe sab_wab.exe filedeleter.exe ashwebsv.exe
+tshark.exe SUPERAntiSpyware.exe firewall.exe ashdisp.exe
+rawshark.exe vdtask.exe firewall2004.exe ashmaisv.exe
+Ethereal.exe asr.exe firewallgui.exe ashserv.exe
+Tethereal.exe NetguardLite.exe gateway.exe aswupdsv.exe
+Windump.exe nstzerospywarelite.exe hpf_.exe avastui.exe
+Tcpdump.exe cdinstx.exe iface.exe avastsvc.exe
+Netcap.exe cdas17.exe invent.exe
+Netmon.exe fsrt.exe ipcserver.exe
+CV.exe VSDesktop.exe ipctray.exe
+The module reads the registry value “SOFTWARE\Microsoft\Windows\CurrentVersion\Reliability” “TimeStampForUI”. It is an
+encrypted configuration file. The configuration file contains the list of additional modules, their names, DLL exports names to
+call and location of the modules’ additional files.
+```
+              Gauss
+          ShellNotifyUser
+          ShellNotifyUserEx
+
+          SetWindowEvent
+
+          InitShellEx
+
+          %systemroot%\system32\winshell.ocx
+          %temp%\ws1bin.dat
+
+          Godel
+
+          InitCache
+
+          RevertCache
+
+          ValidateEntry
+
+          CreateEntry
+          %windir%\system32\dskapi.ocx
+          %temp%\~gdl.tmp
+
+          UsbDir
+
+          InitCache
+
+          RevertCache
+
+          ValidateEntry
+
+          CreateEntry
+          %windir%\system32\smdk.ocx
+          %temp%\~mdk.tmp
+
+```
+String values from config file (example)
+14
+Every module is loaded and its export functions are called as specified in the configuration. Most of the actions are logged in
+an encrypted (with XOR) file “%temp%\~shw.tmp”.
+Sample of decrypted “~shw.tmp”
+After loading additional modules, it tries to acquire the same privileges as “explorer.exe” and then starts its C&C interaction
+loop.
+Prior to communicating with the C&C, all the information from the other modules’ log files is copied to the ~shw.tmp file.
+Paths to the log files are taken from the TimeStampForUI configuration file. As a result, at this stage ~shw.tmp becomes a
+universal container file containing all the stolen data.
+It checks Internet connection (https) by accessing URLs specified in its resource 161.
+It then checks an https connection with www.google.com or www.update.windows.com. If “200 OK” is received in reply, it
+sends a request with the proxy server parameters taken from the prefs.js file of the Mozilla Firefox browser.
+15
+When an Internet connection is available, it connects to its C&C servers that are specified in resource 131:
+Connection is established using WinInet API and is performed in two stages:
+
+GET request to the server. The response from the server is expected to contain new modules, commands or
+
+configuration data.
+```
+    GET [C&C domain]/userhome.php?sid=[random string]==&uid=VfHx8fHx8fHx8fHx8f
+Hx8fHx8fE=
+
+```
+
+POST request to the server with the contents of the file “~shw.tmp” that contains all data
+
+collected from the infected computer.
+The response from the server is decrypted using XOR and 0xACDC as the key. Exfiltrated data is compressed with Zlib.
+The C&C connection routine is controlled by a DWORD value that is read from the registry value:
+```
+  [HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Reliability]
+ShutdownIntervalSnapshotUI
+```
+The initial value of the counter is read from resource 181 and is equal to 56. The counter is decremented every time the
+module fails to connect to its C&C server or to the servers specified in resource 161 and it is reset to the initial value after
+every successful connection to the C&C server. The module exits the C&C connection loop when the value of the counter
+becomes equal to zero.
+Resource Description
+16
+|121|3 DWORDs, related to list of AVs|
+|---|---|
+|131|Hostnames and URLs of C&C servers|
+|141|List of AVs, frewalls, etc.|
+|151|Additional confguration DWORDs|
+|161|Hostnames and URLs of legitimate sites to check Internet connection|
+|171|String with cryptic identifers|
+|181|DWORD, number of attempts to connect to the C&C before giving up|
+```
+File Version:    2001.12.4414.320
+Product Version:  5.1.2600.5788
+File OS:      WINDOWS32
+File Type:     DLL
+File SubType:    UNKNOWN
+Language/Code Page: 1033/1200
+CompanyName:    Microsoft Corporation
+FileDescription:  WMI COM Helper
+FileVersion:    2001.12.4414.320
+LegalCopyright:   Copyright (C) Microsoft Corp. 1995-1999
+LegalTrademarks:  Microsoft(R) is a registered trademark of
+Microsoft Corporation. Windows(TM) is a trade
+mark of Microsoft Corporation
+ProductName:    WMI COM Services Help
+ProductVersion:   05.01.2600.5788
+```
+Version info “wmiqry32.dll”
+17
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "wbemsvc.dll", "type" : "EXEF"},
+        {"id": 2, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 3, "description": "ShellHWStop", "type" : "REGI"},
+        {"id": 4, "description": "Global\\ShellHWDetectionEvent", "type" : "REGI"},
+        {"id": 5, "description": "ShellHWDetectionMutex", "type" : "REGI"},
+        {"id": 6, "description": "LMon.exe", "type" : "EXEF"},
+        {"id": 7, "description": "sagui.exe", "type" : "EXEF"},
+        {"id": 8, "description": "RDTask.exe", "type" : "EXEF"},
+        {"id": 9, "description": "kpf4gui.exe", "type" : "EXEF"},
+        {"id": 10, "description": "ALsvc.exe", "type" : "EXEF"},
+        {"id": 11, "description": "pxagent.exe", "type" : "EXEF"},
+        {"id": 12, "description": "fsma32.exe", "type" : "EXEF"},
+        {"id": 13, "description": "licwiz.exe", "type" : "EXEF"},
+        {"id": 14, "description": "SavService.exe", "type" : "EXEF"},
+        {"id": 15, "description": "prevxcsi.exe", "type" : "EXEF"},
+        {"id": 16, "description": "alertwall.exe", "type" : "EXEF"},
+        {"id": 17, "description": "livehelp.exe", "type" : "EXEF"},
+        {"id": 18, "description": "SAVAdminService.exe", "type" : "EXEF"},
+        {"id": 19, "description": "csi-eui.exe", "type" : "EXEF"},
+        {"id": 20, "description": "mpf.exe", "type" : "EXEF"},
+        {"id": 21, "description": "lookout.exe", "type" : "EXEF"},
+        {"id": 22, "description": "savprogress.exe", "type" : "EXEF"},
+        {"id": 23, "description": "lpfw.exe", "type" : "EXEF"},
+        {"id": 24, "description": "mpfcm.exe", "type" : "EXEF"},
+        {"id": 25, "description": "emlproui.exe", "type" : "EXEF"},
+        {"id": 26, "description": "savmain.exe", "type" : "EXEF"},
+        {"id": 27, "description": "outpost.exe", "type" : "EXEF"},
+        {"id": 28, "description": "fameh32.exe", "type" : "EXEF"},
+        {"id": 29, "description": "emlproxy.exe", "type" : "EXEF"},
+        {"id": 30, "description": "savcleanup.exe", "type" : "EXEF"},
+        {"id": 31, "description": "filemon.exe", "type" : "EXEF"},
+        {"id": 32, "description": "AntiHook.exe", "type" : "EXEF"},
+        {"id": 33, "description": "endtaskpro.exe", "type" : "EXEF"},
+        {"id": 34, "description": "savcli.exe", "type" : "EXEF"},
+        {"id": 35, "description": "procmon.exe", "type" : "EXEF"},
+        {"id": 36, "description": "xfilter.exe", "type" : "EXEF"},
+        {"id": 37, "description": "netguardlite.exe", "type" : "EXEF"},
+        {"id": 38, "description": "backgroundscanclient.exe", "type" : "EXEF"},
+        {"id": 39, "description": "Sniffer.exe", "type" : "EXEF"},
+        {"id": 40, "description": "scfservice.exe", "type" : "EXEF"},
+        {"id": 41, "description": "oasclnt.exe", "type" : "EXEF"},
+        {"id": 42, "description": "sdcservice.exe", "type" : "EXEF"},
+        {"id": 43, "description": "acs.exe", "type" : "EXEF"},
+        {"id": 44, "description": "scfmanager.exe", "type" : "EXEF"},
+        {"id": 45, "description": "omnitray.exe", "type" : "EXEF"},
+        {"id": 46, "description": "sdcdevconx.exe", "type" : "EXEF"},
+        {"id": 47, "description": "aupdrun.exe", "type" : "EXEF"},
+        {"id": 48, "description": "spywareterminatorshield.exe", "type" : "EXEF"},
+        {"id": 49, "description": "onlinent.exe", "type" : "EXEF"},
+        {"id": 50, "description": "sdcdevconIA.exe", "type" : "EXEF"},
+        {"id": 51, "description": "sppfw.exe", "type" : "EXEF"},
+        {"id": 52, "description": "spywat~1.exe", "type" : "EXEF"},
+        {"id": 53, "description": "opendnsupdate.exe", "type" : "EXEF"},
+        {"id": 54, "description": "explorer.exe", "type" : "EXEF"},
+        {"id": 55, "description": "services.exe", "type" : "EXEF"},
+        {"id": 56, "description": "winlogon.exe", "type" : "EXEF"},
+        {"id": 57, "description": "svchost.exe (other instance)", "type" : "EXEF"},
+        {"id": 58, "description": "explorer.exe (other instance)", "type" : "EXEF"},
+        {"id": 59, "description": "Software\\Microsoft\\Windows\\CurrentVersion\\Reliability", "type" : "REGI"},
+        {"id": 60, "description": "TimeStampForUI", "type" : "REGI"},
+        {"id": 61, "description": "~shw.tmp", "type" : "DOCU"},
+        {"id": 62, "description": "www.google.com", "type" : "CCOM"},
+        {"id": 63, "description": "www.update.windows.com", "type" : "CCOM"},
+        {"id": 64, "description": "[C&C domain]/userhome.php?sid=[random string]==&uid=VfHx8fHx8fHx8fHx8fHx8fHx8fE=", "type" : "URL"},
+        {"id": 65, "description": "prefs.js", "type" : "DOCU"},
+        {"id": 66, "description": "[HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Reliability]ShutdownIntervalSnapshotUI", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "type": "LOADED_BY"},
+        {"source": 2, "target": 3, "type": "CREATES"},
+        {"source": 2, "target": 4, "type": "CREATES"},
+        {"source": 2, "target": 5, "type": "CREATES"},
+        {"source": 6, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 7, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 8, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 9, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 10, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 11, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 12, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 13, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 14, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 15, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 16, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 17, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 18, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 19, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 20, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 21, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 22, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 23, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 24, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 25, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 26, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 27, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 28, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 29, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 30, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 31, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 32, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 33, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 34, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 35, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 36, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 37, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 38, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 39, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 40, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 41, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 42, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 43, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 44, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 45, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 46, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 47, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 48, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 49, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 50, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 51, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 52, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 53, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 54, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 55, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 56, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 57, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 58, "target": 2, "type": "CHECKS_FOR"},
+        {"source": 59, "target": 60, "type": "READS_FROM"},
+        {"source": 59, "target": 61, "type": "COLLECTS_DATA_INTO"},
+        {"source": 59, "target": 62, "type": "CHECKS_CONNECTION_TO"},
+        {"source": 59, "target": 63, "type": "CHECKS_CONNECTION_TO"},
+        {"source": 59, "target": 64, "type": "SENDS_DATA_TO"},
+        {"source": 59, "target": 65, "type": "READS_PROXY_FROM"},
+        {"source": 59, "target": 66, "type": "READS_VALUE_OF"}
+    ]
+}

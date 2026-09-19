@@ -1,0 +1,53 @@
+NDIS hooks and network injections
+The rootkit have some interesting network capabilities, it position itself at the NDIS level to
+communicate directly with the network card. Globally, the references to NDIS functions and hooks
+from the driver’s EntryPoint are the following:
+@ExaTrack http://www.exatrack.com Page 8
+The registerNdisProtocolDriver function will firstly search the TCPIP instance in the NDIS
+protocols. This process is done with a simple linked list.
+This code walks the registered protocols, once TCPIP (here tcp_ip_ustr ) is found, two functions will
+be hooked, ReceiveNetBufferLists and ProtSendNetBufferListsComplete . Those functions are
+used to receive and send packets of the associated protocol.
+The hook_ReceiveNetBufferLists function receives packets from the network adapter. Each
+packet’s content will be analyzed and verified against the configuration of the driver, if a precise
+format is respected some of the rootkit abilities will be enabled.
+It’s interesting to note that the rootkit have his own network packet parser.
+Firstly it checks if packet’s size is greater than 0x35 bytes: all TCP packets are larger this size. Next,
+the protocol type must be 0x800, this value represent the IP protocol. Then, the rootkit checks if the
+IP version is 4 (for IPv4) and that the next protocol is TCP.
+Then, the IP source address (so the remote server) is compared with a gobal variable. This variable
+can be setup with the IoCtl command SetIpAndPort . It is mandatory to announce the C&C‘s IP
+address to trigger the whole parsing of the packet.
+@ExaTrack http://www.exatrack.com Page 9
+Registering the IP address through an IoCtl command is operated like this:
+And checks of the source’s IP address:
+Lastly, a checksum is operated on the packet’s data:
+This « checksum » is a simple XOR operation between the first DWORD and the third DWORD of the
+data, followed by a rotation of 0x10 and the result is stored in the fourth DWORD.
+If this check is validated, the rootkit will reference the current handle ( OpenQueue ) in a global
+variable. This variable will be used to send raw packets on the network.
+We think those checks aims to probe if the remote server can be contacted and to identify which
+interface need to be used to send raw packets on the network.
+Once all the conditions are met we can send raw packets directly on the identified network interface.
+This can be achieve by using the IoCtl command send_packet (0x400) containing the data to send. As
+you can see, we were able to use the driver to send an arbitrary packet on the network.
+@ExaTrack http://www.exatrack.com Page 10
+To summarize, if we want to send raw packets on the network we need:
+
+
+To load the driver
+
+
+To communicate with \Device\Null
+
+
+Send an IOCTL to configure the IP address/port of C&C
+
+
+Exchange with the C&C to grab a checksum who validate the network interface to use
+
+
+Send an IOCTL to emit raw packets
+
+
+The steps to send this raw packet can be summed up by the following schema:

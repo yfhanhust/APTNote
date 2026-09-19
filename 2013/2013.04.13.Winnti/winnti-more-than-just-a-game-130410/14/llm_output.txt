@@ -1,0 +1,52 @@
+
+
+
+Sentence : Launching the main function
+As mentioned above, the PlusDLL library is a control module. Let’s look at how the cybercriminals implemented the
+transition to perform the malicious DLL’s main tasks. They could have simply called an appropriate function directly
+or created a separate thread in which to execute it, but for some reason they resorted to a trick: the code of the
+SetWindowStationUser function in the user32.dll library was modified. After modification, the function’s first
+command became jmp , where  is the address of the function in the PlusDLL library which
+implements the malicious library’s main features.
+PAGE 18| “Winnti” | More than just a game
+Hook on SetWindowStationUser
+Immediately after this modification, a thread is created (CreateThread) executing code starting from the
+SetWindowStationUser function address. As a result, when control is eventually passed to this function, the
+inserted command jmp  returns control back to the PlusDLL code.
+PAGE 19| “Winnti” | More than just a game
+Malicious DLL launching its own code by creating a thread that supposedly calls SetWindowStationUser
+The same method is used to execute two more functions in the PlusDLL library. One of them is used to initialize
+network routines; the other executes procedures terminating the malicious program at the very end. The only
+difference is that instead of SetWindowStationUser, the code of two other functions from user32.dll is modified –
+EndTask and WinHelpW, respectively.
+It is likely that this was done in order to hide the real addresses of functions in PlusDLL in case its code was
+analyzed based on its execution logs using an automatic system (sandbox) that looks at all function calls. If this trick
+is used, an execution log would only show threads launched from the addresses of the functions
+SetWindowStationUser, EndTask and WinHelpW, which could potentially confuse researchers.
+Another possibility is that this is an anti-emulation feature. Perhaps the emulators built into some anti-virus
+products are unable to cope with these ‘leaps’ – in this case, emulation will not result in the execution of malicious
+functions, which also suits the cybercriminals’ purposes.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PlusDLL library", "type" : "EXEF"},
+        {"id": 2, "description": "SetWindowStationUser function in user32.dll", "type" : "APPS"},
+        {"id": 3, "description": "CreateThread function", "type" : "TTPS"},
+        {"id": 4, "description": "EndTask function in user32.dll", "type" : "APPS"},
+        {"id": 5, "description": "WinHelpW function in user32.dll", "type" : "APPS"},
+        {"id": 6, "description": "Network routines initialization function in PlusDLL", "type" : "TTPS"},
+        {"id": 7, "description": "Termination procedures function in PlusDLL", "type" : "TTPS"},
+        {"id": 8, "description": "Automatic system (sandbox)", "type" : "APPS"},
+        {"id": 9, "description": "Anti-emulation feature", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "modifies"},
+        {"source": 3, "target": 1, "rel_name" : "creates thread in"},
+        {"source": 4, "target": 1, "rel_name" : "modified by"},
+        {"source": 5, "target": 1, "rel_name" : "modified by"},
+        {"source": 6, "target": 1, "rel_name" : "executed from"},
+        {"source": 7, "target": 1, "rel_name" : "executed from"},
+        {"source": 8, "target": 2, "rel_name" : "analyzes execution of"},
+        {"source": 9, "target": 1, "rel_name" : "implemented in"}
+    ]
+}

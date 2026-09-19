@@ -1,0 +1,189 @@
+6. Detailed Techniques of Bvp47 Backdoor
+The implementation of Bvp47 includes complex code, segment encryption and decryption, Linux multi-ver
+sion platform adaptation, rich rootkit anti-tracking techniques, and most importantly, it integrates advanced
+BPF engine used in advanced covert channels, as well as cumbersome communication encryption and
+decryption process.
+This chapter will analyze the above aspects.
+Main Behaviors
+There are several key points in the program initialization as follows:
+
+
+Linux user mode and kernel mode. The process in user mode will remain alive
+
+
+Initialize the Bvp engine
+
+
+A series of environmental tests. If environmental information do not meet requirements, sample will be
+
+
+automatically deleted.
+
+
+A series of payload block decryption
+
+
+Tamper with kernel devmem restrictions. This will allow process in user mode to directly read and write
+
+
+kernel space. And other kernel techniques are used as well.
+
+
+Load non-standard lkm module files
+
+
+Hook system function in order to hide its own process, file, network, and self-deleting detection in the
+
+
+covered channel communication as follows:
+a . After Bvp47 receives the SYN packet sent by the server, it will match the packet format in BPF filter
+rules (see below)
+b . Only after satisfying the BPF rules in operation 1, encryption algorithms such as RSA+RC-X will be
+decrypted;
+c . Perform corresponding command operations according to the decrypted instructions;
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn
+27
+Payload
+The entire file of Bvp47 adopts the commonly used backdoor packaging method, that is, the backdoor
+function modules are compressed and assembled and then placed at the end of the file, and the whole file
+exists in the form of additional data. The additional data is loaded through the loader function module built
+into the program, which mainly completes the following steps:
+Read
+Check
+Unzip
+Decryption
+Load
+The main data structure of payload is as follows:
+The specific content corresponding to the sample is as follows:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 28
+The parsed result using 010Editor is as follows :
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 29
+In terms of decryption, the loader of the payload will do followings:
+
+Call four different decryption functions (the underlying decryption method is the same) to complete the
+
+decompression operation of each slice;
+
+After completing operation 1, the loader will continue to call the Xor 0x47 algorithm (see other chapters)
+
+to complete the decryption of slice.
+The specific decryption functions are as follows:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 30
+Strings Encryption
+In the Bvp47 sample, many strings and blocks are encrypted to lower the possibility of exposure. These
+encryption techniques are mainly based on XOR operation. These subtle encryptions will cause consider
+able analysis costs to the researchers.
+According to the analysis, there are mainly 8 kinds of XOR operations:
+The algorithm of 0xa8a16d65_xor is as follows:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 31
+Techniques of Function Name Obfuscation
+The export functions of some code slice modules in Bvp47's payload generally use the form of "digital
+names" to provide interface services to external. Such confusion creates a big obstacle for researchers in
+analyzing the function analysis of the export interface:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 32
+Bvp Engine
+To improve its versatility, Bvp47 uses many dynamic calculations of Linux kernel data and function
+addresses. At the same time, to be fundamentally compatible with a large amount of Linux kernel data and
+various independently developed sections of the payload, they developed the Bvp engine to dynamically
+redirect and adapt the system functions and data structures required by Bvp47 in compilation and runtime.
+The Bvp engine adapts many functions and data structures:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 33
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 34
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 35
+There is a structure used to record and describe Bvp engine information in both 0x0b and 0x10:
+Parsed result of the Bvp engine format in 0x0b:
+The MD5 value calculation method in the above figure is to read the content of /proc/version, and directly
+calculate the MD5 value as the unique identifier of the operating system kernel. Different versions of the
+kernel will correspond to the corresponding MD5 and structure values.
+To verify the accuracy of the MD5 value, a series of kernel versions are collected as follows:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 36
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 37
+And perform MD5 calculation on the kernel information, that is, the content of /proc/version (the MD5
+values marked with the digital version number in the upper half of the figure can be found in Bvp47, and
+they are all affected system versions):
+System Hook
+Bvp47 mainly hooks nearly 70 process functions in the Linux operating system kernel, which are mainly
+used to hide network, process, file, and SeLinux bypass, etc. More details are as follows:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 38
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 39
+Example 1: Comparison of the hook of the __d_lookup function:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 40
+Bvp47 aims to hide its own files and trigger the self-deleting process by hooking __d_lookup function. The
+hooking procedure is also to verify if upper layer application access /usr/bin/modload file. First part of the
+handle function is as follows:
+In the handler function, a lot of techniques of instant function search are used:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 41
+Example 2: Comparison of the hook of the devmem_is_allowed function:
+After hooking devmem_is_allowed, Bvp47 can read and write the kernel space in user mode.
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 42
+Example 3: Comparison of the hook of the avc_has_perm function:
+By leveraging internal inline hook to avc_has_perm, Bvp47 can bypass SeLinux for any operations without
+limitation.
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 43
+Example 3: Comparison of the hook of the sys_read function:
+Bvp47 will filter read operations in sys_read.
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 44
+AV Evasion in Kernel Module
+Bvp47 will modify the first four bytes of the elf file of the kernel module to avoid memory search for elf and
+load it through its own lkm loader.
+BPF Covert Channel
+BPF (Berkeley Packet Filter) is a kernel engine used in the Linux kernel to filter custom format packets. It
+can provide a set of prescribed languages for ordinary process in user layer to filter the specified data
+packets.
+Bvp47 directly uses this feature of BPF as an advanced technique at the Linux kernel level in the covert
+channel to avoid direct kernel network protocol stack hooks from being detected by researchers.
+The specific BPF usage are as follows. Only SYN packets (including UDP packets) that meet the rules will
+be sent to the next step for encryption and decryption:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 45
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 46
+The common BPF Trigger data packet is a TCP packet, and the total size of the data carried by the TCP
+packet is 0x88 bytes. The structure of the Trigger Packege field is shown in the figure:
+Field structure diagram:
+The red part: the data length is 0x0088 XOR 0xE6CF;
+The green part: the actual length of the decrypted data;
+The dark blue part: purple Random and 0x9D6A XOR;
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 47
+Channel Encryption and Decryption
+Bvp47 uses asymmetric algorithms RSA and the RC-X algorithm as a guarantee for the security of the
+communication link. Intermediate calculations will involve factors such as the time and length of sending
+and receiving packets. Some of the key pairs are as follows:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 48
+After receiving the rebound command, Bvp47 will start the decryption process:
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 49
+Runtime Environment Detection
+To better protect itself, Bvp47 has made a series of operating environment tests to prevent security
+researchers from directly performing dynamic analysis after the sample is obtained. After decrypting the
+first block of the payload, a 32-bit unsigned integer value will be obtained. This value is mainly used as a
+checksum to verify the operating environment. The specific verification method is as follows:
+
+
+Loader executes statvsf("/", &stats);
+
+
+Get operation 1 blocks and files in the execution result;
+
+
+Compare the results of blocks ^ files == checksum ?. If they are equal, it is judged that the current envi
+ronment meet requirements of running;
+
+
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 50
+Other Techniques
+1. Use setrlimit api to set the core dump file size to 0 to prevent sample extraction;
+2. Anti-sandbox technology combined with argv[0] and lstat;
+Untrusted programs are often run by sandboxes and monitor behavior. When the program is running,
+it often does not really land, that is to say, the path pointed to by argv[0] at this time is not the real path
+of the program. The program calls lstat through syscall to bypass the Hook of SandboxRing3 and check
+whether the file pointed to by argv[0] really exists.
+3. mkstmp anti-sandbox technology
+API used to generate temporary files in the Linux /tmp directory when mkstmp. (from our assumption:
+because the sandbox did not provide support for this API at the time, or the sandbox policy disabled
+mkstmp. Therefore, the success of the mkstmp call can be used to identify the sandbox).
+4. /boot anti-sandbox technology
+There are often only two directories in the /boot directory in the sandbox: /boot/. and /boot/... So if you
+open the /boot directory to count the number of files in the /boot directory, you can often identify the
+sandbox. (On Windows, the number of temporary files in the TEMP directory will be passed).
+5. API Flooding and Delayed Execution
+Any sandbox will only allocate a limited amount of time to each sample. Therefore, many legitimate
+APIs are called to delay execution to avoid the initiation analysis of the sandbox.
+Beijing Qi An Pangu Laboratory Technology Co., Ltd www.pangulab.cn 51

@@ -1,0 +1,78 @@
+
+
+
+Sentence : Rely on source IP addresses? No
+One might suggest to use the source IP address to determine whether the check-in is a scan or
+an attack. Figure 5 illustrates what a Winnti check-in traffic looks like, where the host 192.168.2.6,
+part of the protected network, receives check-in messages from both the 218.211.168.178 and
+155.94.254.143 IP addresses. Is there an attack within the traffic?
+Figure 5: Is it an attack or a scan?
+There is no easy answer to this question, because the scans are generated from several source
+https://www.lastline.com/labsblog/helo-winnti-attack-scan/ IP addresses, many changing every week, making whitelisting a non-scalable work-around. 5/12
+Figure 6 shows the source IP address distribution based on two months of internal telemetry data
+10/1/2019 HELO Winnti: Attack or Scan? | Lastline
+since June 2019.
+Figure 6: Check-in source IP address distribution between June – August 2019.
+As we can see, the IP addresses are from a wide range of sources. Interestingly, some are well
+known scanners (which can be easily whitelisted), but many IP addresses are unknown, or
+belong to random cloud VMs (possibly provisioned/deployed by researchers inspired by recent
+news). Examples of well-known scanners are:
+
+
+155.94.254.143: scanner03.project25499.com
+
+172.104.242.173: winnti-scanner-victims-will-be-notified.threatsinkhole.com
+
+
+
+176.58.124.134: tequilaboomboom.club
+
+
+98.143.148.135: scanner05.project25499.com
+
+
+The two IP addresses dominating the chart above are from this last set. For instance, one has a
+single self-explanatory page with the following message:
+Figure 7: A landing page from a cloud VM-based scanner.
+It is worth noting that we also found some evidence of scans originating from private IP
+addresses, indicating that some of the check-ins were coming from within the local network. While
+we acknowledge that proactive security teams might be actively looking for infected endpoints,
+the most probable explanation is that such internal hosts might also be acting as a router,
+SNATing connections originating from outside (this normally happens when the traffic is not
+monitored from the perimeter but from inside the network), as depicted in Figure 8.
+https://www.lastline.com/labsblog/helo-winnti-attack-scan/ 6/12
+10/1/2019 HELO Winnti: Attack or Scan? | Lastline
+Figure 8: A Winnti scans appearing to originate from a private IP address; the most likely explanation being an external host
+contacting a service hosted on 10.2.138.7, whose port was forwarded to the DMZ by the router running on 172.31.2.6.
+Admittedly, this can be very confusing for SOC analysts: the mere presence of a check-in
+originating from inside the perimeter is an obvious cause of concern. It is clear how the
+investigation into the causes can take a significant amount of time and effort. This demonstrates
+that simply whitelisting private IP addresses without proper investigation may lead to security
+risks.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "192.168.2.6", "type" : "CCSH"},
+        {"id": 2, "description": "218.211.168.178", "type" : "CCSH"},
+        {"id": 3, "description": "155.94.254.143", "type" : "CCSH"},
+        {"id": 4, "description": "172.104.242.173", "type" : "CCSH"},
+        {"id": 5, "description": "176.58.124.134", "type" : "CCSH"},
+        {"id": 6, "description": "98.143.148.135", "type" : "CCSH"},
+        {"id": 7, "description": "10.2.138.7", "type" : "CCSH"},
+        {"id": 8, "description": "172.31.2.6", "type" : "ROUT"},
+        {"id": 9, "description": "Winnti check-in traffic", "type" : "TTPS"},
+        {"id": 10, "description": "scanner03.project25499.com", "type" : "URLS"},
+        {"id": 11, "description": "winnti-scanner-victims-will-be-notified.threatsinkhole.com", "type" : "URLS"},
+        {"id": 12, "description": "tequilaboomboom.club", "type" : "URLS"},
+        {"id": 13, "description": "scanner05.project25499.com", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "sends check-in to"},
+        {"source": 3, "target": 1, "rel_name" : "sends check-in to"},
+        {"source": 3, "target": 10, "rel_name" : "hosts"},
+        {"source": 4, "target": 11, "rel_name" : "hosts"},
+        {"source": 5, "target": 12, "rel_name" : "hosts"},
+        {"source": 6, "target": 13, "rel_name" : "hosts"},
+        {"source": 8, "target": 7, "rel_name" : "port forwarded to"}
+    ]
+}

@@ -1,0 +1,116 @@
+
+
+
+Sentence : Network Tools
+During the investigation we identified a netbios scanner, multiple samples of the Ladon scanner and two different
+types of proxy tools used in the operation. And all these tools contribute to the generation of a broader overview of the
+infrastructure used by actors.
+The netbios scanner has different file paths:
+C:\PerfLogs\winhp.exe
+%WINDOWS%\debug\winhp.exe
+C:\PerfLogs\taskmgr.exe
+It was used for network inspection and for machine identification by scanning the private IP range X.X.0.0/24. This
+discovery step is particularly interesting as it characterizes how the actor behaves - immediately after the execution
+of the scanner, we noticed the execution of net.exe and ping.exe tools, which were probably used for checking if a
+machine is up and running. Further actions correspond to the lateral movement step by running a command using
+wmic.exe on a remote machine.
+Other tool used by RainyDay is boost_proxy_client, called so because of use of the C++ boost libraries and because of
+the pdb path found in a sample. We obtained 2 samples of the tool located at:
+|abb48990eaabd5203c35bd26a0bb51e81e8eb2532d22d22fb2a6566bbda4c6a4|C:\Recovery\dwm.exeC:\PerfLogs\winlogin.exe|
+|---|---|
+|56085b27e7145bb2cfbf2d33fba30359d1429b507e3b9251cfdced50bba1f07f|c:\perfogs\winlogon.exe|
+There are a few differences between these two samples as the
+56085b27e7145bb2cfbf2d33fba30359d1429b507e3b9251cfdced50bba1f07f has the pdb path set to Z:\data\cc0\
+boost_proxy\boost_proxy_client_http_and_socks5\Release\boost_proxy_client.pdb and accepts 2 types of command
+lines:   and <http|socks5> . The option for using a proxy is
+absent in the abb48990eaabd5203c35bd26a0bb51e81e8eb2532d22d22fb2a6566bbda4c6a4, but it seems to encrypt
+the traffic send to the destination as it contains OpenSSL code.
+Information showing more about the actor’s infrastructure was extracted from the command line of these binaries and
+are as follows:
+150.109.184.127 3333
+150.109.184.127 4444
+150.109.178.252 2356
+150.109.184.127 4152
+150.109.184.127 1111
+150.109.184.127 4528
+150.109.184.127 792
+150.109.184.127 7859
+150.109.184.127 7954
+150.109.184.127 15784
+Yet another reverse proxy tool from the actor’s arsenal is the Go-written tool RcSocks v1.0 . We were able to collect 2
+samples of this type: %COMMON_APPDATA%\adobe\scupdate.exe %WINDOWS%\csc\winsrvc.exe, where scupdate.
+exe was executed by an instance of Rainyday with the “ scupdate -c 124.156.241.24:8550 ” command line.
+Speaking of tools written in Go, another one pops on the radar and this time it is a scanner known as LadonGo . The file
+13
+Bitdefender Whitepaper
+NAIKON – Traces from a Military Cyber-Espionage Operation
+C:\ProgramData\Adobe\wusa64 was executed at the same time as the %COMMON_APPDATA%\adobe\scupdate.exe
+RcSocks sample. The command line given to the wusa64.exe indicates that the intention of actor is to attempt a bruteforce attack against the SSH service on a local machine, likely to be used for lateral movement.
+More samples of Ladon.exe (.Net version) were found during the investigation, but we didn’t find any arguments to
+connect them to the operation other than the sample location (e.g. %WINDOWS%\debug\mmc.exe ):
+3a10cf56e2402bd42658ba7bbac72afb81de7f37c5a3f881f891c503dc0c039f
+d09b3d2bd3488f09949445f19eb90bfabb2395be1bc7a20054c84c93a44700ff
+98598ea719deb88d0416a313c67a653c807d7b69d13229fcacc352404035e052
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "netbios scanner", "type" : "APPS"},
+        {"id": 2, "description": "Ladon scanner", "type" : "APPS"},
+        {"id": 3, "description": "proxy tools", "type" : "APPS"},
+        {"id": 4, "description": "C:\\PerfLogs\\winhp.exe", "type" : "SYSP"},
+        {"id": 5, "description": "%WINDOWS%\\debug\\winhp.exe", "type" : "SYSP"},
+        {"id": 6, "description": "C:\\PerfLogs\\taskmgr.exe", "type" : "SYSP"},
+        {"id": 7, "description": "X.X.0.0/24", "type" : "NETP"},
+        {"id": 8, "description": "net.exe", "type" : "APPS"},
+        {"id": 9, "description": "ping.exe", "type" : "APPS"},
+        {"id": 10, "description": "wmic.exe", "type" : "APPS"},
+        {"id": 11, "description": "boost_proxy_client (sample 1)", "type" : "EXEF"},
+        {"id": 12, "description": "C:\\Recovery\\dwm.exe", "type" : "SYSP"},
+        {"id": 13, "description": "C:\\PerfLogs\\winlogin.exe", "type" : "SYSP"},
+        {"id": 14, "description": "56085b27e7145bb2cfbf2d33fba30359d1429b507e3b9251cfdced50bba1f07f", "type" : "IOCS"},
+        {"id": 15, "description": "C:\\perfogs\\winlogon.exe", "type" : "SYSP"},
+        {"id": 16, "description": "Z:\\data\\cc0\\boost_proxy\\boost_proxy_client_http_and_socks5\\Release\\boost_proxy_client.pdb", "type" : "TAMP"},
+        {"id": 17, "description": "abb48990eaabd5203c35bd26a0bb51e81e8eb2532d22d22fb2a6566bbda4c6a4", "type" : "IOCS"},
+        {"id": 18, "description": "OpenSSL code", "type" : "APPS"},
+        {"id": 19, "description": "150.109.184.127:3333", "type" : "CCSH"},
+        {"id": 20, "description": "150.109.184.127:4444", "type" : "CCSH"},
+        {"id": 21, "description": "150.109.178.252:2356", "type" : "CCSH"},
+        {"id": 22, "description": "150.109.184.127:4152", "type" : "CCSH"},
+        {"id": 23, "description": "150.109.184.127:1111", "type" : "CCSH"},
+        {"id": 24, "description": "150.109.184.127:4528", "type" : "CCSH"},
+        {"id": 25, "description": "150.109.184.127:792", "type" : "CCSH"},
+        {"id": 26, "description": "150.109.184.127:7859", "type" : "CCSH"},
+        {"id": 27, "description": "150.109.184.127:7954", "type" : "CCSH"},
+        {"id": 28, "description": "150.109.184.127:15784", "type" : "CCSH"},
+        {"id": 29, "description": "RcSocks v1.0 (Go-written)", "type" : "APPS"},
+        {"id": 30, "description": "%COMMON_APPDATA%\\adobe\\scupdate.exe", "type" : "SYSP"},
+        {"id": 31, "description": "%WINDOWS%\\csc\\winsrvc.exe", "type" : "SYSP"},
+        {"id": 32, "description": "124.156.241.24:8550", "type" : "CCSH"},
+        {"id": 33, "description": "LadonGo (Go-written scanner)", "type" : "APPS"},
+        {"id": 34, "description": "C:\\ProgramData\\Adobe\\wusa64", "type" : "SYSP"},
+        {"id": 35, "description": "%WINDOWS%\\debug\\mmc.exe", "type" : "SYSP"},
+        {"id": 36, "description": "3a10cf56e2402bd42658ba7bbac72afb81de7f37c5a3f881f891c503dc0c039f", "type" : "IOCS"},
+        {"id": 37, "description": "d09b3d2bd3488f09949445f19eb90bfabb2395be1bc7a20054c84c93a44700ff", "type" : "IOCS"},
+        {"id": 38, "description": "98598ea719deb88d0416a313c67a653c807d7b69d13229fcacc352404035e052", "type" : "IOCS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "has_path"},
+        {"source": 1, "target": 5, "rel_name" : "has_path"},
+        {"source": 1, "target": 6, "rel_name" : "has_path"},
+        {"source": 1, "target": 7, "rel_name" : "scans"},
+        {"source": 8, "target": 7, "rel_name" : "used_in"},
+        {"source": 9, "target": 7, "rel_name" : "used_in"},
+        {"source": 10, "target": 7, "rel_name" : "used_in"},
+        {"source": 11, "target": 12, "rel_name" : "has_path"},
+        {"source": 11, "target": 13, "rel_name" : "has_path"},
+        {"source": 14, "target": 16, "rel_name" : "has_pdb_path"},
+        {"source": 17, "target": 18, "rel_name" : "uses_code"},
+        {"source": 30, "target": 29, "rel_name" : "executes"},
+        {"source": 30, "target": 32, "rel_name" : "connects_to"},
+        {"source": 34, "target": 33, "rel_name" : "executes"},
+        {"source": 35, "target": 33, "rel_name" : "used_in"},
+        {"source": 36, "target": 2, "rel_name" : "sample_of"},
+        {"source": 37, "target": 2, "rel_name" : "sample_of"},
+        {"source": 38, "target": 2, "rel_name" : "sample_of"}
+    ]
+}

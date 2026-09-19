@@ -1,0 +1,29 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 14
+RomeoAlfa maintains its persistence by locating itself within the Start Menu folder ( CSIDL_STARTUP ) or the All User’s
+Start Menu ( CSIDL_COMMON_STARTUP ) of the victim’s computer. After initializing the configuration data structure,
+RomeoAlfa moves its current running executable to the Start Menu directory via a call to MoveFile .
+RomeoAlfa randomly selects a C2 server from the ten possible server addresses within the configuration data structure
+and use the selected address to establish a connection. If the connection to the selected C2 server fails or the selected C2
+server’s address is 0.0.0.0, a new C2 server is randomly selected and another attempt is made. If 10 unsuccessful attempts
+are made, RomeoAlfa sleeps for a defined period of time (as specified in the configuration data structure, typically set to
+60 seconds) before attempting the random C2 server selection and connection process again.
+One of the most distinctive features of RomeoAlfa is the use of the fake TLS communication scheme to encrypt
+end-to-end communication as well as to obfuscate the nature of the communication. After successfully connecting to a
+C2 server, RomeoAlfa generates a seemingly legitimate TLS channel, complete with the appropriate handshake protocol
+packets. However, the malware ultimately uses an encryption method that is not supported by the TLS standard. This
+encryption method therefore blends in with legitimate TLS traffic while at the same time is immune to SSL/TLS man-inthe-middle proxying that would reveal the plaintext of the communication.
+After establishing the fake TLS channel, RomeoAlfa exchanges a 12-byte datagram (through the fake TLS channel) with the
+C2 server as the first step in a two-part handshake. The datagram contains a channel identifier and the current connection
+state of the RomeoAlfa instance (Table 3-2). The channel identifier corresponds to the channel identifiers found within
+PapaAlfa samples. The code for establishing the handshake (Figure 3-3) is the exact inverse of the handshake function found
+in PapaAlfa. This implies that RomeoAlfa (and, as explained in later sections, RomeoBravo and RomeoHotel) can interface
+with a PapaAlfa instance, which in turn may be little more than a proxy point for the real C2 server. Regardless of the
+presence of PapaAlfa in the communication stream, the commands ultimately come from the C2 server.
+|STATE VALUE|DESCRIPTION|
+|---|---|
+|1|Initialized state (only occurs prior to first C2 connection attempt)|
+|2|Sleep state|
+|3|Not used in RomeoAlfa|
+|4|Not used in RomeoAlfa|
+|5|Active state|
+Table 3-2: RomeoAlfa’s State Values

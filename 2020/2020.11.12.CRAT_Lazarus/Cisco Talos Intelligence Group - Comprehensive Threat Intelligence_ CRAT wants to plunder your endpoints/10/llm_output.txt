@@ -1,0 +1,85 @@
+
+
+
+Sentence : Communication mechanisms
+Before detailing CRAT's capabilities, it is important to illustrate the communication
+mechanism used by CRAT to talk to its C2 servers.
+Both versions of CRAT use HTTP to communicate with the C2 servers. The data sent to the
+C2 is in the form of URL-encoded form data and may consist of 3 types of requests:
+Login: Login/check-in with the C2 to register the infected endpoint.
+Question: Request a command code to execute a malicious RAT functionality on the
+endpoint.
+Answer: Respond to the C2's command with the output of the executed RAT
+functionality.
+The HTTP GET/POST requests are sent to the C2 URLs appended with a 'timestamp' value:
+http(s)://?ts=_
+Exfiltration Mechanism
+CRAT uses the following algorithm to encode the data before sending it out via the HTTP
+POST request:
+
+
+Generate a random four-byte value (DWORD).
+
+
+XOR the data to be exfiltrated with the DWORD.
+
+
+Base64-encode (std alphabet) the XOR key and the XORed data to achieve the final
+
+
+form of the data.
+
+Exfiltrate the encoded data as URL encoded form data.
+
+The format of the response to the C2 is:
+code=answer&token=&content=frags=
+&limit=10
+Where:
+code = type of the communication being done. Values include:
+login = login request to C2 from implant
+question = request command to be processed
+answer = response to command executed
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 6/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+token = a token value sent by the C2 as a response to the login (session identifier)
+content = the actual base64-encoded + XORed data being exfiltrated
+frags = number of fragments of data being POSTed to the C2
+limit = retry count in case of failure to send
+The C2 server will respond with a JSON containing command codes and supporting data to
+be recognized by the implant to execute a corresponding RAT capability.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "CRAT", "type" : "APPS"},
+        {"id": 2, "description": "C2 servers", "type" : "CCSH"},
+        {"id": 3, "description": "HTTP", "type" : "NETP"},
+        {"id": 4, "description": "URL-encoded form data", "type" : "TAMP"},
+        {"id": 5, "description": "Login request", "type" : "TTPS"},
+        {"id": 6, "description": "Question request", "type" : "TTPS"},
+        {"id": 7, "description": "Answer response", "type" : "TTPS"},
+        {"id": 8, "description": "HTTP GET/POST requests", "type" : "NETP"},
+        {"id": 9, "description": "Timestamp value (ts=_) in URL", "type" : "URLS"},
+        {"id": 10, "description": "Random four-byte value (DWORD)", "type" : "TAMP"},
+        {"id": 11, "description": "XOR operation on data", "type" : "TTPS"},
+        {"id": 12, "description": "Base64-encoding of XORed data", "type" : "TTPS"},
+        {"id": 13, "description": "URL encoded form data for exfiltration", "type" : "TTPS"},
+        {"id": 14, "description": "Response to C2 (code=answer&token=&content=frags=&limit=10)", "type" : "TAMP"},
+        {"id": 15, "description": "Command codes and supporting data in JSON", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "communicates with"},
+        {"source": 3, "target": 8, "rel_name" : "used by"},
+        {"source": 4, "target": 5, "rel_name" : "contains"},
+        {"source": 4, "target": 6, "rel_name" : "contains"},
+        {"source": 4, "target": 7, "rel_name" : "contains"},
+        {"source": 8, "target": 2, "rel_name" : "sent to"},
+        {"source": 9, "target": 8, "rel_name" : "appended in URL"},
+        {"source": 10, "target": 11, "rel_name" : "used for"},
+        {"source": 11, "target": 12, "rel_name" : "results in"},
+        {"source": 12, "target": 13, "rel_name" : "encoded as"},
+        {"source": 14, "target": 7, "rel_name" : "contains response type"},
+        {"source": 14, "target": 5, "rel_name" : "contains request type"},
+        {"source": 14, "target": 6, "rel_name" : "contains request type"},
+        {"source": 2, "target": 15, "rel_name" : "responds with"}
+    ]
+}

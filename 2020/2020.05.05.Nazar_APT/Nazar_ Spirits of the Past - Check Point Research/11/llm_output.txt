@@ -1,0 +1,68 @@
+
+
+
+Sentence : Filesystem.dll
+Out of all the modules used in this attack, Filesystem.dll might be the only one whose code
+was actually written by the attackers themselves. The purpose of this module is to enumerate
+drives, folders and files on the infected system and write the final results to two text files:
+Drives.txt and Files.txt .
+We were able to get our hands on two versions of this module that were created a year apart,
+both of which included PDB paths that mentioned a folder with the Persian name Khzer (or ���):
+https://research.checkpoint.com/2020/nazar-spirits-of-the-past/ 12/22
+5/6/2020 Nazar: Spirits of the Past - Check Point Research
+```
+    C:\khzer\DLLs\DLL's Source\Filesystem\Debug\Filesystem.pdb
+    D:\Khzer\Client\DLL's Source\Filesystem\Debug\Filesystem.pdb
+```
+Upon closer inspection, there are some differences between the two paths: One starts with the
+C:\\ partition while the other starts with D:\\, one uses Khzer (uppercase) while the other
+uses khzer (lowercase), and so on. This might indicate that the two versions of the module
+were not compiled in the same environment, and is further strengthened by some of the included
+headers’ paths, which show that Visual Studio was installed in two different locations:
+But these are not the only differences between the two versions: while the Filesystem.dll
+module was dropped by all the known variants of gpUpdates.exe, it was not always used in the
+same manner.
+For example, versions of svchost.exe dating back to 2010 have three commands that have
+since been omitted: “211”, “212”, and “213”. Those commands allow svchost.exe to register
+the dropped DLL modules using regsvr32, a functionality that was later migrated to
+Distribute.exe (as described in the Execution Flow section above).
+An omitted command presented in svchost.exe, as can be seen in Cutter
+Then, when a command is received by the C2 to collect the files and drives on the system, the
+Filesystem.dll module is called after it was registered:
+https://research.checkpoint.com/2020/nazar-spirits-of-the-past/ 13/22
+5/6/2020 Nazar: Spirits of the Past - Check Point Research
+Registering Filesystem.dll, as can be seen in Cutter
+On the other hand, a more recent version of svchost.exe that was created in 2012 replicates the
+file and drive lookup functionalities found in Filesystem.dll when receiving the “199” and “200”
+commands from the C2, and performs the search itself. Therefore, even though it is still dropped
+in this case, it appears that the Filesystem.dll module is not used in the newer versions of Nazar:
+The same functionality presented in both files as can be seen in the disassembly from Cutter
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Filesystem.dll", "type" : "EXEF"},
+        {"id": 2, "description": "Drives.txt", "type" : "DOCF"},
+        {"id": 3, "description": "Files.txt", "type" : "DOCF"},
+        {"id": 4, "description": "https://research.checkpoint.com/2020/nazar-spirits-of-the-past/", "type" : "URLS"},
+        {"id": 5, "description": "C:\\khzer\\DLLs\\DLL's Source\\Filesystem\\Debug\\Filesystem.pdb", "type" : "SYSP"},
+        {"id": 6, "description": "D:\\Khzer\\Client\\DLL's Source\\Filesystem\\Debug\\Filesystem.pdb", "type" : "SYSP"},
+        {"id": 7, "description": "gpUpdates.exe", "type" : "EXEF"},
+        {"id": 8, "description": "svchost.exe (2010 version)", "type" : "EXEF"},
+        {"id": 9, "description": "regsvr32", "type" : "APPS"},
+        {"id": 10, "description": "Distribute.exe", "type" : "EXEF"},
+        {"id": 11, "description": "C2 server", "type" : "CCSH"},
+        {"id": 12, "description": "svchost.exe (2012 version)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "writes to"},
+        {"source": 1, "target": 3, "rel_name" : "writes to"},
+        {"source": 7, "target": 1, "rel_name" : "drops"},
+        {"source": 8, "target": 1, "rel_name" : "registers using regsvr32"},
+        {"source": 9, "target": 1, "rel_name" : "registers"},
+        {"source": 10, "target": 1, "rel_name" : "registers"},
+        {"source": 11, "target": 8, "rel_name" : "sends commands to"},
+        {"source": 11, "target": 12, "rel_name" : "sends commands to"},
+        {"source": 12, "target": 2, "rel_name" : "replicates functionality for"},
+        {"source": 12, "target": 3, "rel_name" : "replicates functionality for"}
+    ]
+}

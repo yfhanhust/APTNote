@@ -1,0 +1,121 @@
+
+
+
+Sentence : 2.2. String decryption
+Some of the strings in Duqu 2.0 are obfuscated by XOR-based encryption. The actual routine
+used is printed below:
+```
+.text:10012F6D         test  ecx, ecx
+.text:10012F6F         jnz   short loc_10012F77
+.text:10012F71         xor   eax, eax
+.text:10012F73         mov   [edx], ax
+.text:10012F76         retn
+.text:10012F77 ; -------------------------------------------
+.text:10012F77
+.text:10012F77 loc_10012F77:     ;
+.text:10012F77         mov   eax, [ecx]
+.text:10012F79         push  esi
+.text:10012F7A         push  edi
+.text:10012F7B         mov   edi, 86F186F1h
+.text:10012F80         xor   esi, esi
+.text:10012F82         xor   eax, edi
+.text:10012F84         mov   [edx], eax
+.text:10012F86         cmp   ax, si
+.text:10012F89         jz   short loc_10012FA2
+.text:10012F8B         sub   ecx, edx
+.text:10012F8D
+.text:10012F8D loc_10012F8D:    ;
+.text:10012F8D         cmp   [edx+2], si
+.text:10012F91         jz   short loc_10012FA2
+.text:10012F93         add   edx, 4
+.text:10012F96         mov   eax, [ecx+edx]
+.text:10012F99         xor   eax, edi
+.text:10012F9B         mov   [edx], eax
+.text:10012F9D         cmp   ax, si
+.text:10012FA0         jnz   short loc_10012F8D
+```
+Sample 1 – String decryption in Duqu 2.0 (assembly view)
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 9
+The decompiled version of the above assembly code can be seen in the following sample:
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 10
+Sample 2 – String decryptor from Duqu 2.0 (2014)
+The above string decryptor routine is a simple XOR decoder. It simply XORs consecutive 4-byte
+blocks of the encrypted string buffer, given by its pointer in the first parameter of the
+function, with a fixed 4-byte key (“0x86F186F1”). After the decryption of all consecutive 4
+byte blocks, the actual cleartext block is stored within the next 4 bytes of the output buffer,
+pointed by parameter “a2”. The decrypted (cleartext) string is terminated with a “\0”
+character, and if the decryptor cycle reaches the end of the (cleartext) string, the cleartext
+string will be pointed by the address stored in output argument “a2”.
+A closer look at the above C code reveals that the string decryptor routine actually has two
+parameters: “encrstr” and “a2”. First, the decryptor function checks if the input buffer (the
+pointer of the encrypted string) points to a valid memory area (i.e., it does not contain NULL
+value). After that, the first 4 bytes of the encrypted string buffer is XORed with the key
+“0x86F186F1” and the result of the XOR operation is stored in variable “result”. The first
+DWORD (first 4 bytes) of the output buffer a2 is then populated by this resulting value
+( *(_DWORD *)a2 = result; ). Therefore, the first 4 bytes of the output buffer will
+contain the first 4 bytes of the cleartext string.
+If the first two bytes (first WORD) of the current value stored in variable “result” contain ‘\0’
+characters, the original cleartext string was an empty string and the resulting output buffer
+will be populated by a zero value, stored on 2 bytes. If the first half of the actual decrypted
+block (“result” variable) contains something else, the decryptor routine checks the second half
+of the block (“ if ( !*(_WORD *)(a2 + 2) )” ). If this WORD value is NULL, then
+decryption will be ended and the output buffer will contain only one Unicode character with
+two closing ’\0’ bytes.
+If the first decrypted block doens’t contain zero character (generally this is the case), then the
+decryption cycle continues with the next 4-byte encrypted block. The pointer of the output
+buffer is incremeted by 4 bytes to be able to store the next cleartext block (” a2 += 4;” ).
+After that, the following 4-byte block of the ”ciphertext” will be decrypted with the fixed
+decryption key (“0x86F186F1”). The result is then stored within the next 4 bytes of the output
+buffer. Now, the output buffer contains 2 blocks of the cleartext string.
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 11
+The condition of the cycle checks if the decryption reached its end by checking the first half of
+the current decrypted block. If it did not reached the end, then the cycle continues with the
+decryption of the next input blocks, as described above. Before the decryption of each 4-byte
+”ciphertext” block, the routine also checks the second half of the previous cleartext block to
+decide whether the decoded string is ended or not.
+The original Duqu used a very similar string decryption routine, which we printed in the
+following figure below. We can see that this routine is an exact copy of the previously
+discussed routine (variable ”a1” is analogous to ”encrstr” argument). The only difference
+between the Duqu 2.0 and Duqu string decryptor routines is that the XOR keys differ (in
+Duqu, the key is”0xB31FB31F”).
+We can also see that the decompiled code of Duqu contains the decryptor routine in a more
+compact manner (within a ”for” loop instead of a ”while”), but the two routines are
+essentially the same. For example, the two boundary checks in the Duqu 2.0 routine (” if (
+!*(_WORD *)(a2 + 2) ) ” and ” while ( (_WORD)result ); ”) are analogous to
+the boundary check at the end of the ”for” loop in the Duqu routine (” if ( !(_WORD)v4
+|| !*(_WORD *)(result + 2) ) ”). Similarly, the increment operation within the
+head of the for loop in the Duqu sample (” result += 4 ”) is analogous to the increment
+operation ” a2 += 4; ” in the Duqu 2.0 sample.
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 12
+Sample 3 – String decryptor from original Duqu (from “cmi4432.pnf” file)
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 13
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Duqu 2.0", "type" : "ACTO"},
+        {"id": 2, "description": "XOR-based encryption", "type" : "TTPS"},
+        {"id": 3, "description": "0x86F186F1", "type" : "EXEF"},
+        {"id": 4, "description": "encrstr", "type" : "DOCF"},
+        {"id": 5, "description": "a2", "type" : "SYSP"},
+        {"id": 6, "description": "0xB31FB31F", "type" : "EXEF"},
+        {"id": 7, "description": "cmi4432.pnf", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "uses"},
+        {"source": 4, "target": 2, "rel_name" : "input of"},
+        {"source": 5, "target": 2, "rel_name" : "output to"},
+        {"source": 1, "target": 6, "rel_name" : "uses in previous version"},
+        {"source": 7, "target": 6, "rel_name" : "contains"}
+    ]
+}

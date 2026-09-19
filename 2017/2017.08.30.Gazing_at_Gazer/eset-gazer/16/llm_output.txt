@@ -1,0 +1,87 @@
+
+
+
+Sentence : Gazing at Gazer
+Turla’s new second stage backdoor
+The pattern “FFFF-F” is replaced with values computed from the security identifier (SID) of the current
+user and the current timestamp.
+Let’s take for example the current date as: “2017/04/24” and the SID: ~~“S-1-5-21-84813077-~~
+~~3085987743-2510664113-1000”~~ .
+To generate the pattern at the end of the named pipe, some arithmetic is performed:
+```
+        time = SystemTime.wDay * Systemtime.wMonth * SystemTime.wYear =
+    24 * 04 * 2017 = 0x2f460
+
+    x sid = (1 * 21 * 84813077 * 3085987743 * 2510664113 * 1000) &
+    0xFFFFFFFF = 0xefa252d8
+
+    ((time >> 20) + (time & 0xFFF) + ((time >> 12) & 0xFFF)) % 0xFF =
+
+    0x93
+
+    ((x sid >> 20) + (x sid & 0xFFF) + ((x sid >> 12) & 0xFFF)) % 0xFF =
+
+    0x13
+
+    ((time * x sid >> 24) + (uint8_t)(time * x sid ) + ((uint16_t)(time *
+    x sid ) >> 8) + (uint8_t)(time * x sid >> 16)) % 0xf) = 0xa
+
+```
+In this case, the named pipe will be:
+```
+\\.\pipe\Winsock2\CatalogChangeListener-9313-a
+```
+If the current user’s SID cannot be retrieved, the named pipe ~~\\\\.\\pipe\\\Winsock2\\~~
+~~CatalogChangeListener-FFFE-D~~ will be used by default.
+Code injection through thread hijacking
+A not-so-common trick is used in order to inject the orchestrator into a remote process. Indeed,
+a running thread from the remote process is hijacked in order to run shellcode that will execute
+the communication module entry point.
+
+
+The whole module and shellcode are copied into the remote process;
+
+
+the function ~~ZwQuerySystemInformation~~ is used to retrieve the total number
+of the running threads in the targeted process;
+
+
+the following operations are attempted on each of those threads:
+
+
+the thread is suspended with the ~~OpenThread/SuspendThread~~ functions;
+
+
+the thread context is retrieved using ~~GetThreadContext~~ ;
+
+
+the context’s instruction pointer is saved and modified to point to the shellcode
+(through ~~SetThreadContext~~ );
+
+
+the thread is resumed using ~~ResumeThread~~ .
+
+
+if one of the previous operations fails, the thread is resumed and the same actions
+are attempted on another thread.
+
+
+8
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Turla", "type": "ACTO"},
+        {"id": 2, "description": "Gazer backdoor", "type": "EXEF"},
+        {"id": 3, "description": "Security identifier (SID) of the current user", "type": "REGI"},
+        {"id": 4, "description": "Named pipe: \\\\.\\pipe\\Winsock2\\CatalogChangeListener-9313-a", "type": "TAMP"},
+        {"id": 5, "description": "Default named pipe: \\\\.\\pipe\\Winsock2\\CatalogChangeListener-FFFE-D", "type": "TAMP"},
+        {"id": 6, "description": "Remote process", "type": "APPS"},
+        {"id": 7, "description": "Shellcode", "type": "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "uses"},
+        {"source": 3, "target": 4, "rel_name": "generates"},
+        {"source": 4, "target": 6, "rel_name": "injects into"},
+        {"source": 7, "target": 6, "rel_name": "executes in"}
+    ]
+}

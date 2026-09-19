@@ -1,0 +1,28 @@
+Shellcode x86: stager
+In most of the analyzed samples, the dropper was configured to execute shellcode. The dropper
+saved the DLL and encrypted shellcode to disk. The shellcode name was always identical to that
+of the DLL, but had the extension .dll.crt. The shellcode is encrypted with the same algorithm as
+the payload in the dropper. The shellcode acts as a stager providing the interface for communi
+cating with C2 and for downloading modules. It can communicate with C2 via TCP and SSL. SSL
+is implemented via the mbed_tls library.
+Initial analysis of the shellcode revealed that, in addition to dynamically searching for API func
+tions, it runs one more operation that repeats the process of PE file address relocation. The
+structure of the relocation table is also identical to that found in the PE file.
+Figure 15. Shellcode relocations
+Since the process of shellcode address relocation repeats that of the PE file, we can assume
+that initially the malware is compiled into a PE file, and then the builder turns it into shellcode.
+Debugging information found inside the shellcode supports that assumption.
+Figure 16. Debugging information inside the shellcode
+API functions are searched for dynamically and addresses are relocated, after which the config
+uration hard-coded inside the shellcode is parsed. The configuration contains information about
+the C2 server address, protocol used, and connection type.
+Figure 17. Example of shellcode configuration
+Next the shellcode creates a connection to C2. A random packet header is created and sent to C2.
+In response the malware receives a network key, saves it, and then uses it every time when com
+municating with C2. Then the information about the infected computer is collected and sent to C2.
+Next three threads are launched. One is a heartbeat sending an empty packet to C2 every 54
+seconds. The other processes and executes commands from C2. As for the third thread, we could
+not figure out its purpose, because the lines implementing its functionality were removed from the
+code. All we can tell is that this thread was supposed to "wake up" every 54 seconds, just like the
+first one.
+9

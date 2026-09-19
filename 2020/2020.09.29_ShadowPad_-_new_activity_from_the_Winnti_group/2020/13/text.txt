@@ -1,0 +1,45 @@
+2.4. Python backdoor
+This backdoor we found on the server was in py2exe format. The backdoor is written in Python 2.7 and
+contains configuration variables in the beginning.
+16. media.kasperskycontenthub.com/wp-content/uploads/sites/43/2017/08/07172148/ShadowPad_technical_description_PDF.pdf
+26
+Three commands can be executed
+remotely:
+� CMDCMD: execute via cmd.exe
+�
+UPFILECMD: upload the file
+to the server
+� DOWNFILECMD: download
+the file from the server
+The ONLINECMD command is executed
+by the backdoor right after launch. This
+is a command for collecting system
+information and sending it to the server.
+Figure 56. Commands for collecting system information
+Figure 55. Backdoor configuration
+The backdoor has a function for gaining persistence via the registry:
+reg add "HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v
+"startup" /d "c:/Windows/system32/idles.exe
+After gaining persistence and collecting system information, the malware packs the data and uploads it
+to the C2 server. Interaction with the server is via TCP sockets:
+socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+Certain values are added in before the data is sent; then the data is compressed with ZLIB and encoded
+in Base64.
+Figure 57. Data packing algorithm
+In the code in Figure 55:
+� Flag is the value initialized when the backdoor starts.
+27
+Figure 58. Initializing the "flag" parameter
+�
+Key is the value from configuration changes.
+�
+Cmd is an executed config command.
+� Data is the collected data.
+�
+After the data is prepared, its length and the delimiter indicated in the config are added to the
+beginning, and then the data is sent to the server.
+Figure 59. Forming the final data packet
+Figure 60. Example of formed data
+After the initial system data is sent, the backdoor goes into a loop as it awaits a command from the
+server.
+Figure 61. Main loop

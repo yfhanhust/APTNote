@@ -1,0 +1,409 @@
+
+
+
+Sentence : Appendix
+We’ve included the sections below to expand on the details and context provided for 3ve’s three sub-operations in
+the main body of this document.
+3ve.1
+The first of 3ve’s three ad fraud sub-operations, 3ve.1,
+was a hybrid operation, and was itself composed of three
+main layers: an army of bots in multiple European data
+centers, a layer of exit nodes (the IP addresses that the
+ad requests appear to originate from) comprised of
+malware-infected user computers or stolen corporate IP
+space, and a command and control (C2) layer that directed
+the malware and ad fraud bots on every transaction.
+This sub-operation was primarily focused on video fraud,
+selling counterfeit video inventory to advertisers on
+counterfeited domains.
+This layered architecture allowed the operators to keep
+their bot software isolated, proxying all activity through
+both infected user computers and through IP space stolen
+from corporations via Border Gateway Protocol (BGP)
+hijacks. Acquiring IP addresses this way is significant
+because it constitutes a particularly blatant form of fraud,
+used to corrupt large groups of IPs by interfering directly
+with an exterior routing protocol. If one of these stolen
+IP addresses was detected as the source of fraudulent
+activity, it was easily burned and recycled, while the same
+bots continued running in the data centers behind it. The
+operation’s ability to continuously find new IPs through
+which to proxy gave it a layer of protection and isolation,
+avoiding any “single point of failure” that could allow us
+to easily eradicate it.
+The ad fraud bot operation was comprised of Miuref/Boaxxe
+infected-computers. This bot farm largely relied on Chrome
+and Internet Explorer. While the number of IPs hijacked from
+corporations ranged from 200,000 to 500,000 at any given
+time, the malware infection footprint appears to have
+remained at less than 5,000 infections across the globe.
+Operating as a proxy in user’s PCs
+Whenever the 3ve.1 binary was executed, it would start
+collecting specific information about the PC on which it
+was running. Among other things, the binary would read
+the Computer Name, Volume Serial Number, Machine GUID,
+the full path of the running process (in this case, c:\test\
+eve.exe), and time zone. Then, it would build a hash table
+of known programs that are typically used by analysts.
+Finally, it used the typical CreateToolhelp32Snapshot/
+Process32NextW to enumerate all running processes
+and cross-reference them with the hash table.
+3ve.1’s binary did the same thing with device drivers,
+checking for the presence of VMs, remote access
+software (LogMeIn), CD-ROM type, etc. If anything went
+wrong, it would sleep forever without executing any
+fraud-like requests. While running all these checks, it
+would also copy itself to other locations and drop a new
+binary file into C:\Users...\AppData\Local\
+VirtualStore\lsass.aaa.
+All this information would be appended to a big string, which
+was RSA-encrypted (with a hard-coded key) and sent to the
+server. To be clear, the first message included both the user
+info and the RC4 key, and was encrypted with an RSA public
+key. If the C2 confirmed that it was safe to start executing
+commands, the following messages would be quickly
+encrypted with RC4 using the previously generated RC4 key.
+The Hunt for 3ve 17
+pn: C:\Test\eve.exe
+un: davidcopperfield
+cn: DESKTOP-1Z8V3O1
+cpu: 1,1,Intel(R) Core(TM) i7-6600U CPU @ 2.60GHz
+sk: uwomanrx (RC4 Key used for future communication)
+Message sent and encrypted for 3ve.1 to start executing commands.
+3ve.1 messages before and after encryption and encoding.
+The Hunt for 3ve 18
+Network communication
+3ve.1 used three different sets of APIs to communicate with its C2 servers. The first request was done by
+instantiating an Internet.Explorer COM Application and using its Navigate2 method to generate a GET request
+to http://185.118.67.195 (the IP was hard-coded and encrypted inside the binary).
+CoCreateInstance that instantiated the Internet.Explorer CLSID and spawn a windowless iexplore.exe process.
+The above CoCreateInstance would instantiate the Internet.Explorer CLSID {0002DF01-0000-0000-C000-
+000000000046}, spawning a windowless iexplore.exe process, then would use its Navigate2 method to send the
+encrypted PC data to their C2 server.
+We were able to easily pinpoint the instantiated COM by searching the CLSID in the registry. The search returned quickly,
+showing us that it belonged to Internet Explorer.
+Instantiated COM registry location within Internet Explorer
+The Hunt for 3ve 19
+Right after the Navigate2, 3ve.1 used the Wininet API [ InternetConnectA / HttpSendRequestA ] to do the same request
+from its own process. However, at this stage, it would set different flags using the InternetSetOptionA — this was probably
+a measure used to bypass the local proxy. All these wininet calls were not visible in the PE import table because they were
+loaded at runtime via kernel32.dll LoadLibrary/GetProcAddress.
+The communication from this point on would be channeled exclusively through the low-level Windows Sockets 2 API.
+This both gave 3ve.1’s operators more control and bypassed the local proxy.
+3ve.1 C2 handshake
+The binary had several hard-coded (but encrypted) hostnames inside. For example, there was an array of servers named
+[d].winsrw.com where the first digit would change from 1 to 5. Once the malware was sure it had Internet access (by
+sending a couple of requests to microsoft.com), it would get the IPs of those servers using the gethostbyname function.
+Finally, it would connect to them using the Windows socket API.
+Then, 3ve.1 would send the same user/PC information to one of the winsrw.com servers, expecting to receive an “OK.”
+But the server is pretty selective, and checks several things before accepting: for example, Windows language/locale
+information should be English, and the IP must be in the US range.
+The pseudocode below describes better how this works — just keep in mind that both the request and response
+are always encrypted.
+Client (Malware)
+Socket->Connect(Get_IP(2.winsrw.com))
+Repeat Every 30”
+Socket->Send(PC_INFO)
+If (Response == “OK”)
+Start_Ad_Fraud (and stop checking every 30”)
+Server (C2 from *.winsrw.com)
+If (PC_INFO == REAL_PC AND IP_LOCATION == US)
+Response->”OK”
+Response->MORE_COMMANDS
+Else
+NO_REPLY
+Pseudocode describing 3ve.1’s C2 handshake
+As described above, the C2 replies back an OK if the user information matches what they consider a valid PC and
+if the IP is in the US.
+The Hunt for 3ve 20
+BGP hijacking
+The Internet is composed of many independent networks (referred to as “Autonomous Systems,” or ASs, each assigned a
+unique identifier called an ASN), all tied together via something called “Border Gateway Protocol” or (BGP). Through BGP,
+these networks are able to build a globally shared “routing table” that allows them to easily determine how any one IP
+address can connect to any other. The problem is that BGP was designed during a more innocent time for the Internet,
+when it was small and everybody trusted each other. While some improvements to security have been made over the
+years, it still primarily relies on trust — and the implied threat of being cut off if one misbehaves. But people who attempt
+to game this system won’t be cut off if no one notices or cares about their misconduct, and there are still a lot of unused
+and forgotten IP addresses out there that criminals might use to mask unscrupulous activity. This presents an opportunity
+for bad actors to do something known as “BGP hijacking.” One group of such actors came to our attention in early 2017.
+The BGP hijacking operation used by 3ve had been set up long before we started seeing it used for fraud on a non-trivial
+scale. Historical routing data shows the core AS “ALPHA” used in the beginning of the operation came online in 2013,
+while the low-volume, low-sophistication bot activity White Ops has seen only dates back to 2015. The routing setup
+was simple: just the core ALPHA AS and a few directly attached networks, connected via a single transit provider. We are
+uncertain whether the IP space they were using was legitimately obtained or not, but the goal of phase 1 seems to have
+been to establish some history for ALPHA before it started doing shady things.
+Initial 3ve.1 BGP hijacking operation structure
+In early March of 2017, ALPHA began to abuse its position of trust within BGP. They chose defunct ASs that had been
+inactive for quite some time and set them up behind their own AS. IP addresses were required to make this useful, so they
+found some IP networks that weren’t being used and began advertising them from the defunct (now zombie) ASs.
+ALPHA was very careful about which entities it decided to impersonate — many still had functional (though badly out of date)
+websites. In many cases, ALPHA chose ASs formerly used by Internet service or hosting providers, along with IPs used by
+companies that were from the same geographic region.
+The next stage of evolution came in late August. AS BRAVO came online (also in Eastern Europe), which had several transit
+providers, including the one serving AS ALPHA, connecting it to the Internet. This made it more resilient in case any of its
+transit providers were to bring down the hammer on its illegal activities. AS BRAVO used an even more complicated network
+setup — it had several defunct ASs attached to it, each of which in turn had several more defunct ASs attached through
+which to actually route IP addresses. This configuration made it look more like a legitimate network, and also increased
+the rate of “churn” of ASs and IPs so that it could respond to blocks faster. Use of AS ALPHA was slowly phased out as AS
+BRAVO ramped up.
+The Hunt for 3ve 21
+3ve.1 BGP hijacked IPs in current vs. ever in use
+Later stage structure of 3ve.1’s BGP hijacking operation
+The Hunt for 3ve 22
+Apparently frustrated by blocking, they began using a new technique, just in time for the end of 2017. Instead of relying only
+on defunct ASs, they started impersonating live, legitimately used ones as well. This works because it is perfectly fine
+for the same AS to have multiple “points of presence” on the Internet as long as it’s only advertising routing for some of
+its IP addresses at each point. With this change, attempting to identify defunct ASs and block all their IPs would result
+in collateral blocking. Further, phantom connections to well known transit providers were spoofed to further muddy the
+waters for automated analysis. They even appeared to be providing transit to some legitimate networks. Despite all the
+obfuscation, automated identification of this activity is still possible.
+3ve.2
+3ve.2 used malvertising and social engineering to infect approximately 700,000 Windows computers at any given time
+— a truly significant reach for any cybercriminal operation. The actual infection chain has been documented in detail by
+Kafeine and other Proofpoint staff. It is using social engineering to lure victims into downloading and executing fake Chrome,
+Firefox, or Flash updates. The 3ve sub-operation removed the need for data center-based browser farms, instead embedding
+the entire ad fraud component into malware executed by its victims’ infected computers. This approach greatly simplified
+the botnet’s data center operation by pushing complexity into the malware. 3ve.2 is responsible for the majority of 3ve’s total
+outbound network traffic.
+Counterfeit websites
+3ve.2’s main component was its browsing module, which was responsible for browsing counterfeit websites and
+subsequently executing the ad fraud activity. These sites, hosted on servers in data centers, are templated sites
+that mainly contain an ad space and its supporting ad libraries along with some scraped content from legitimate
+websites. To execute the ad fraud, 3ve.2 instructed its browser-bot army to visit these counterfeit sites, loading them
+in programmatically-driven browsers to generate artificial ad impressions. The ad fraud component was based on the
+Chrome Embedded Framework (CEF), which the botnet’s authors heavily customized to better mimic a typical Chrome
+instance. 3ve.2 hijacked domain name resolution (DNS) requests originating from the CEF, instructing the bot on the
+victim’s machine to visit 3ve-controlled counterfeit websites instead of the original domains. Hijacking DNS resolution
+for the CEF process keeps 3ve’s victims unaware of the malware on their computers. Since the DNS hijacking was
+isolated to the CEF requests the user’s regular browsing activity remained unaffected.
+We were able to identify three different sources of counterfeit websites (referenced as templates) that 3ve.2 visited. We
+believe 3ve.2 was able to monetize capacity by counterfeiting benign websites. Below are screenshots and JavaScript
+code snippets used to render the ads on each of those templates.
+The Hunt for 3ve 23
+3ve.2 Template A
+The top screenshot below shows an anonymized example of an original website while the bottom screenshot is the
+counterfeit equivalent for the same domain. The counterfeit page only includes a video ad and a few links below it.
+Original website
+Counterfeit website
+The Hunt for 3ve 24
+3ve.2 Template B
+This HTML template is arbitrarily defining the size of the player based on the current time.
+3ve.2 Template B code snippet
+The Hunt for 3ve 25
+3ve.2 Template C
+This template randomly decides where to place a video ad on the page by extracting arbitrary X, Y coordinates
+from the page URL.
+3ve.2 Template C code snippet
+The Hunt for 3ve 26
+Hidden Windows
+3ve.2 used hidden windows on a hidden desktop to conceal its activity on an infected user’s machine. It’s common for
+malware that needs to hide a window to use either hidden windows or a hidden desktop, but rarely both. The hidden
+desktop was discovered while analyzing a memory dump.
+This added a further level of obfuscation because Windows 7 does not support multiple desktops. The exception to this
+type of setup is through the use of the Windows API. The legitimate use for this feature is creating a new desktop for
+another user who wants to log in. We observed that when the malware created the new desktop, it didn’t create a new
+instance of explorer.exe. This meant that an analyst wouldn’t be able to easily access their tools, because there wouldn’t
+be a way to create processes on this desktop due to the absence of a running instance of Explorer.
+Fake Browsing Behavior
+To avoid detection, 3ve.2 exhibited a human-like behavior through mouse movements and clicks, occasionally blocked
+verification libraries (by leveraging two separate techniques), while also generating false, but seemingly organic, data.
+Mouse movements
+We’ve seen 3ve.2 scroll around the screen or move the mouse in a simplified “human” manner.
+Examples of mouse movements from 3ve.2
+The Hunt for 3ve 27
+Patching functions
+The malware also patched some functions that are usually implemented in native code. For example, it spoofed various
+items related to the environment such as the AudioContext values (see code used for AudioContext spoofing below). It also
+used JavaScript to find links on the page on which to click. These snippets of code were used to override the browser’s
+built in functionality, so that the C2 could control what the browser reports to the site. So instead of running a native code
+function from the JavaScript engine, the malware’s patched version is executed to let the bot look more organic.
+JavaScript code that patched properties such as maxChannelCount in the browser
+The Hunt for 3ve 28
+Playing media
+The malware contained an interesting code snippet, a few lines of JavaScript, that was used to play media on a page.
+The malware authors included a few try catch statements which loop through all of the elements on a page named either
+‘embed’, ‘object’, or ‘video’ and then tried to call play(), playVideo(), or start() on them. It did so to try to maximize the payout
+for each site visit by attempting to play the respective video ads.
+JavaScript to automatically play video ads
+The Hunt for 3ve 29
+Tag evasion
+3ve.2 used a regular expression matching technique for blocking unwanted assets on a page. This was done through a
+variable in the C2’s response named bbb_l_m (more details below). When a website was loaded, the malware looped through
+every URL in the site and passed each of them to a function that checked the URL against a regex to determine whether a
+resource should be blocked or allowed. For example, this technique was used to block the White Ops JavaScript tag.
+Function’s assembly to determine whether a resource should be blocked or allowed
+If the URL matched the regular expression, the function would return 1, and the URL being operated upon would be replaced
+with the string “none,” thereby blocking the resource from ever being downloaded or executed. Otherwise, If the URL didn’t
+match, the function returned 0 and the resource was not blocked.
+Another method of evasion that 3ve.2 used was a string blacklist based on the components of a resource found in the
+bbb_j_m C2 variable. If any of these strings were identified within a resource (e.g., JavaScript or HTML), the respective
+resource on the website 3ve.2 visited wouldn’t get rendered or executed. For example, bbb_j_m contained strings from the
+White Ops JavaScript tag, and strings related to crypto-jacking such as cryptonight, CoinHive, CryptonightWASMWrapper,
+and abortOnCannotGrowMemory. 3ve.2 prevented crypto-jacking scripts from executing because they might lead to
+inadvertent detection of the malware.if a user noticed noticed their computer was running slower, hotter or noisier (due
+to fans spinning up) than normal due to the cryptocurrency mining running in the background.
+Non-counterfeit domains browsing
+Finally, in addition to visiting counterfeit websites, 3ve.2 instructed residential bots to visit legitimate domains. This was
+likely done to participate in traffic-selling schemes, and to better blend in with organic traffic by gathering cookies from
+legitimate websites.
+C2 instructions
+3ve.2’s ad-fraud module requested new tasks from the command & control servers every few minutes. The following
+request sent from the bot to the servers provides details about the infected machine’s state. For example, it includes
+a unique bot id, a bot version, language, operating system version.
+3ve.2’s ad fraud task request (decrypted and anonymized; obtained via API hooking)
+The Hunt for 3ve 30
+The C2 replies with a list of tasks to perform in the next time slot. Each of these tasks instructs 3ve.2’s embedded
+browser to visit a given URL with a custom environment, which e.g. includes a fake user agent, screen resolution,
+plugins, and a regular expression of JavaScript sources to prevent from loading (mainly for blocking verification
+code and browser-based crypto mining).
+RESP:OK|http://example.com/|<>|http://example.com/|<>|0:00:00:00:00:00:00:00:00:
+00::||scrl_cfg:000000-00000-68:scrl_cfg|fcs_cfg:3000-2194:fcs_cfg||p_hhw:100:p_hhw|w_w_
+perc:5:w_w_perc|scrtype:2:scrtype|setcpu:1:setcpu|veryfast:93:veryfast|lowl_c:0:lowl
+ c | m i n m s : 4 4 : m i n m s | h s t _ c o u n t : 4 : h s t _ c o u n t | c h e c k j s c m d : 1 : c h e c k _ j s c m d | d o m s 
+spoof:coinhive.com>0||coin-hive.com>0||jsecoin.com>0||reasedoper.pw>0||mataharirama.
+xyz>0||listat.biz>0||lmodr.biz>0||minecrunch.co>0||minemytraffic.com>0||crypto-loot.com
+>0||2giga.link>0||ppoi.org>0||coinerra.com>0||coin-have.com>0||kisshentai.net>0||
+miner.pr0gramm.com>0||kiwifarms.net>0||anime.reactor.cc>0||joyreactor.cc>0||
+kissdoujin.com>0||minero.pw>0||coinnebula.com>0||afminer.com>0||coinblind.com>0||
+webmine .cz>0||monerominer.roc k s > 0 | | c d n . c l o u d c o i n s . c o > 0 | | c o i n l a b . b i z > 0 | |
+papoto.com>0||edgeno.de>0||jyhfuqoh.info>0||ads-miner.appspot.com>0||www.hashing.
+win>0||:doms_spoof||bbb_l_m:^http[^\?&]{1,128}/█████████{██}/(█████████████).js||
+:bbb_l_ m| bbb_j_m:cryptonight||CryptonightWASMWrapper||CoinHive||███████████████████
+||█████████████████||:bbb_j_m||force_use_cont_id::44::force_use_cont_id|hos crm:6.1:hos_
+crm|hfont_crm:Arial Greek.Arial Cyr.Leelawadee UI Semilight:hfont_crm|flash_p:plugins**
+pepflashplayer32_28_0_0_126.dll:flash_p|flash_v:28.0.0.126:flash_v|enable_ex_5:1:enable_ex_5
+|setua:Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.
+3239.84 Safari/537.36:setua|scr_data:1920x1080-1920x1040-1-5-0-1.50:scr_data|spf_c_dta:9
+:spf_c_dta|spf_s_dt:119:2:0.01:48000:spf_s_dt|srtds:,@d:1:0,c:2:1,g:3:0,g:4:2,
+g:5:3,@,#00000000000000000000:srtds|spf_r_dt:83.72.1:spf_r_dt|spf_cc_dt:
+4:spf_cc_dt|gl_dat:packe[...]==:gl_dat|jsshh:553000000:jsshh|mrysf:2.0:mrysf|sltd:
+4447:sltd|sbyd:0:sbyd||hook_l_mpg:1:hook_l_mpg|enable_ex_2:1:enable_ex_2|dsth:1:dsth||<>**
+3ve.2 tasking the embedded browser to visit a legitimate URL (plaintext extracted via API hooking; the real domain
+has been replaced with “example.com”). White Ops code is blocked (details have been redacted).
+As we described before, 3ve.2 would intermix browsing legitimate websites with counterfeit ones. 3ve.2 instructed the
+embedded browser to visit a redirector URL, which would issue an HTTP 302 toward the home page of the spoofed
+site, passing its IP address as a parameter. The embedded browser would update its DNS records to match the given IP
+with the spoofed site, which it would then visit. The spoofed site then either directly served the ad fraud payload in the
+response or would 302 redirect the browser again to the final ad fraud URL, which is a URL that existed on the legitimate
+version of the site. For spoofed news sources, this final ad fraud URL was usually the URL of a news article.
+The Hunt for 3ve 31
+Diagram: How 3ve.2 operates
+3ve.2 tasking the embedded browser to visit a spoofed site (plaintext extracted via API hooking)
+The Hunt for 3ve 32
+Additionally, 3ve.2’s ad fraud module would periodically send updates about the host’s available resources and
+anti-malware software. Every few hours, 3ve’s ad fraud module would also attempt to self update.
+3ve.2’s status update (plaintext extracted via API hooking)
+Parameters explained
+od_od: This parameter defines the domain to spoof. Spoofing is done by passing a domain name as the host header to an IP
+address unrelated to the domain.
+fd_fd: IP address to browse to.
+setcpu: A value used to patch the JavaScript environment. Specifically patched window.navigator.hardwareConcurrency
+value which returns the number of logical cores in the system. Has been observed to be set to 1, 2, or 4.
+scrl_cfg: Appears to be a “scroll config” however we have not determined exactly what the value will control.
+doms_spoof: This value is a long list of domain names delimited by >0|| which is not used in fraud operations. It is meant to
+throw off an analyst by making them think it’s being used for cryptojacking or by wasting their time if they choose to dive into
+this domain list.
+bbb_l_m: This is a regular expression used to block unwanted resources from being downloaded on a site. This value has
+been a static value during our analysis and will match the White Ops client tag format. This means that the vast majority of
+White Ops JS tags will be blocked before the HTTP GET is ever requested to our tag.
+bbb_j_m: This is a list of blacklisted strings. Any file containing these strings will not be executed or rendered.
+scr_data: Screen data (1366x768-1366x728-1-5-0-1.00) where 1366x768 is the spoofed resolution of the screen, 1366x728
+is the real resolution of the window, and 1.00 is the scale factor.
+setua: It contains the User-Agent string to use in the browsing session.
+spf_s_dt: This most likely stands for spoof sound data. An example of this would be 184:2:0.01:48000 where 2 is the channel
+count and 48000 is the sample rate.
+c_dir: Points to a cache directory within the browsers folder. Each browsing session appears to get a new cache directory.
+The Hunt for 3ve 33
+Geographic distribution
+3ve.2’s operators took great care in trying to prevent ad networks from noticing their illicit activity. This is why, for
+example, 3ve.2 malware only fully executed in countries where organic Internet users are likely to be browsing the
+same premium sites 3ve is counterfeiting, including the US, Canada, and the UK. 3ve’s victim population is shown
+in the figure below.
+Heat map of the residential computers infected with 3ve.2 botnet around the world
+—red indicating the highest concentration of computers, green the lowest
+The Hunt for 3ve 34
+Infected IPs and churn rate
+Number of IPs infected with the malware used by 3ve.2
+3ve.2 had roughly 700,000 infections at any given point in time that were actively generating ad fraud. These IPs would
+frequently change due to ISPs IP rotation (natural churn), new infections, and clean-ups. As a result, a third of those IPs
+would be replaced by new ones every 4 weeks.
+3ve.3
+The final 3ve-associated sub-operation was the least sophisticated of the three in terms of the approach it used for IP
+exit nodes. 3ve.3 used other data centers as proxies instead of residential computers, tunnelling fraudulent traffic out
+of anywhere between 15,000 and 20,000 IP addresses. Using data centers instead of computers made 3ve.3’s bot
+traffic more likely to be detected, but their strategy still offered its operators a good degree of agility by allowing them
+to find new data centers quickly when previously used data centers were blocked. We’ve found that this sub-operation’s
+architecture is similar to that of 3ve.1. The sub-operation was focused on a range of ad fraud approaches, including
+video, display, and click fraud.
+Despite its lack of sophistication relative to other 3ve sub-operations, 3ve.3 still had a fairly complex backend, relying
+on rogue DNS servers that rendered the content pages and resolved legitimate domains to the IP address of counterfeit,
+3ve-controlled sites. Additionally, 3ve.3 used sophisticated evasion techniques like tag evasion, similar to both 3ve.1
+and 3ve.2. However, 3ve.3’s key difference from the other sub-operations is in its exit node layer, which relied somewhat
+rudimentarily on data centers rather than residential computers. While this enabled them to look like tens of thousands
+of users viewing ads, it also made them far easier to detect.
+The Hunt for 3ve 35
+Output : 
+### Overview of 3ve Botnet Operations
+
+**3ve** is a sophisticated ad fraud botnet that has been active since at least 2016. It consists of multiple sub-operations, each with its own unique characteristics and methods of operation. The main goal of the 3ve botnet is to generate fraudulent ad revenue by simulating legitimate user interactions with online advertisements. This document provides a detailed analysis of **3ve.2** and **3ve.3**, two significant sub-operations within the 3ve ecosystem.
+
+### 3ve.2: The Sophisticated Residential Botnet
+
+#### Key Features:
+1. **Residential IP Addresses**: 
+   - 3ve.2 uses residential computers to generate fraudulent traffic, making it more difficult for ad networks to detect.
+   - The botnet infects approximately 700,000 IPs at any given time, with a significant churn rate due to ISP IP rotations, new infections, and clean-ups.
+
+2. **Geographic Distribution**:
+   - The botnet is primarily active in countries where organic Internet users are likely to browse premium sites, such as the US, Canada, and the UK.
+   - A heat map of infected residential computers shows a high concentration in these regions.
+
+3. **Operational Mechanism**:
+   - **Embedded Browser**: 3ve.2 uses an embedded browser to visit both legitimate and counterfeit websites.
+   - **DNS Manipulation**: The botnet updates DNS records to match spoofed site IPs, allowing it to redirect traffic to fraudulent content.
+   - **Ad Fraud Payload**: The final ad fraud URL is often a legitimate article on a news site, serving the fraudulent ad payload.
+
+4. **Evasion Techniques**:
+   - **Tag Evasion**: 3ve.2 blocks specific JavaScript tags (e.g., White Ops) using regular expressions and blacklisted strings.
+   - **Resource Updates**: The botnet periodically sends updates about available resources and anti-malware software, and attempts to self-update.
+
+5. **Tasking Parameters**:
+   - **od_od**: Domain to spoof by passing a domain name as the host header to an unrelated IP address.
+   - **fd_fd**: IP address to browse to.
+   - **setcpu**: Patched JavaScript environment value for `window.navigator.hardwareConcurrency`.
+   - **scrl_cfg**: Scroll configuration (exact function unknown).
+   - **doms_spoof**: List of domain names meant to mislead analysts.
+   - **bbb_l_m**: Regular expression to block unwanted resources.
+   - **bbb_j_m**: List of blacklisted strings.
+   - **scr_data**: Screen data with spoofed and real resolutions.
+   - **setua**: User-Agent string for the browsing session.
+   - **spf_s_dt**: Spoofed sound data.
+
+### 3ve.3: The Less Sophisticated Data Center Botnet
+
+#### Key Features:
+1. **Data Center IP Addresses**:
+   - 3ve.3 uses data centers as proxies, tunneling fraudulent traffic through between 15,000 and 20,000 IP addresses.
+   - This approach makes the bot traffic more detectable but offers agility in finding new data centers when old ones are blocked.
+
+2. **Operational Mechanism**:
+   - **Rogue DNS Servers**: 3ve.3 uses rogue DNS servers to render content pages and resolve legitimate domains to counterfeit, 3ve-controlled sites.
+   - **Ad Fraud Approaches**: The sub-operation focuses on various ad fraud methods, including video, display, and click fraud.
+
+3. **Evasion Techniques**:
+   - **Tag Evasion**: Similar to 3ve.1 and 3ve.2, 3ve.3 uses sophisticated evasion techniques to block specific JavaScript tags.
+   - **Backend Complexity**: Despite being less sophisticated than 3ve.2, 3ve.3 still has a complex backend infrastructure.
+
+4. **Key Differences**:
+   - **Exit Node Layer**: Unlike 3ve.2, which relies on residential computers, 3ve.3 uses data centers, making it easier to detect but also more agile in evading detection.
+
+### Conclusion
+
+Both 3ve.2 and 3ve.3 are part of a larger ad fraud ecosystem designed to generate illicit revenue by simulating legitimate user interactions with online advertisements. While 3ve.2 is more sophisticated and harder to detect due to its use of residential IP addresses, 3ve.3 offers agility through the use of data centers as proxies. Understanding the operational mechanisms and evasion techniques of these sub-operations is crucial for developing effective countermeasures against ad fraud.
+
+### References:
+- The Hunt for 3ve: A Detailed Analysis of the 3ve Botnet Ecosystem
+- Heat Map of Infected Residential Computers
+- Tasking Parameters and Evasion Techniques Documentation
+
+By comprehensively analyzing these aspects, security professionals can better protect online advertising platforms from fraudulent activities.

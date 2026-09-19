@@ -1,0 +1,68 @@
+OPC DA payload component
+The OPC DA payload component implements a client for the protocol
+described in the OPC Data Access specification. OPC (OLE for Process
+Control) is a software standard and specification that is based on Microsoft
+technologies such as OLE, COM, and DCOM. The Data Access (DA) part of
+the OPC specification allows real-time data exchange between distributed
+components, based on a client–server model.
+This component exists as a standalone malicious tool with the filename
+OPC.exe and a DLL, which implement both 61850 and OPC DA
+payload functionalities. This DLL is named, internally in PE export table,
+OPCClientDemo.dll, suggesting that the code of this component may be
+based on the open source project OPC Client .
+Figure 14. The PE export reveals the internal DLL name of the OPC DA payload.
+The OPC DA payload does not require any kind of configuration file.
+Once executed by the attacker, it enumerates all OPC servers using the
+ICatInformation::EnumClassesOfCategories method with CATID_
+OPCDAServer20 category identifier and IOPCServer::GetStatus to
+identify the ones running.
+Win32/Industroyer 12
+Next the component uses the IOPCBrowseServerAddressSpace
+interface to enumerate all OPC items on the server. Specifically, it looks for
+items that contain the following strings in their name:
+
+
+ctlSelOn
+
+
+ctlOperOn
+
+
+ctlSelOff
+
+
+ctlOperOff
+
+
+\Pos and stVal
+
+
+The names of these items may suggest that attackers are interested in
+OPC items provided by OPC servers that belong to solutions from ABB,
+such as their MicroSCADA range . Figure 15 demonstrates an example list of
+OPC items that contain names with similar strings. This list of OPC items is
+received by the OPC Process Objects List Tool from ABB.
+Figure 15. An example of OPC items names in IN field received using
+OPC Process Objects List Tool.
+The attackers use the string Abdul when they add a new OPC group.
+Possibly this string is used by the attackers as a slang term when referring
+to the ABB solutions.
+Figure 16. The disassembled code of the OPC DA component that uses the Abdul string.
+On the final step, the OPC DA payload attempts to change the state of
+discovered OPC items using the IOPCSyncIO interface by writing the 0x01
+value twice.
+Figure 17. Disassembled code of OPC DA payload that uses IOPCSyncIO interface.
+Win32/Industroyer 13
+The component writes the OPC server name, OPC item name state, quality
+code and value to the log file. The logged values are separated with the
+following headers:
+
+
+[*ServerName: %SERVERNAME%] [State: Before]
+
+
+[*ServerName: %SERVERNAME%] [State: After ON]
+
+
+[*ServerName: %SERVERNAME%] [State: After OFF]
+

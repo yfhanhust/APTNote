@@ -1,0 +1,59 @@
+
+
+
+Sentence : Network code
+Network communication is initialized after the network key is received from C2. To do that, the
+malware sends a random sequence of 12 bytes to C2. In response the malware also expects 12
+bytes, the zero offset of which must contain the same value (_DWORD) as prior to sending. If the
+check is successful, four bytes at offset 8 are taken from the response and decrypted with RC4.
+The key is four bytes sent previously, also located at offset 8. This result is the network key. The
+key is saved and then used to send data.
+All transmitted packets have the following structure.
+struct Packet{
+struct PacketHeader{
+_ DWORD key;
+_ WORD cmdId;
+_ WORD szPacketPayload;
+_ DWORD moduleId;
+};
+_ BYTE [max 0xF000] packetPayload;
+};
+A random four-byte key is generated for each packet. It is later used to encrypt part of the header,
+starting with the cmdld field. The same key is used to encrypt the packet payload. Encryption
+uses the RC4 algorithm. The key itself is encrypted by XOR with the network key and saved to the
+corresponding field of the packet header.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "C2", "type" : "CCSH"},
+        {"id": 2, "description": "Network key", "type" : "EXEF"},
+        {"id": 3, "description": "Random sequence of 12 bytes", "type" : "TAMP"},
+        {"id": 4, "description": "Response from C2", "type" : "DOCF"},
+        {"id": 5, "description": "Four bytes at offset 8", "type" : "EXEF"},
+        {"id": 6, "description": "RC4 algorithm", "type" : "APPS"},
+        {"id": 7, "description": "Packet structure", "type" : "TAMP"},
+        {"id": 8, "description": "PacketHeader structure", "type" : "TAMP"},
+        {"id": 9, "description": "_DWORD key", "type" : "EXEF"},
+        {"id": 10, "description": "_WORD cmdId", "type" : "EXEF"},
+        {"id": 11, "description": "_WORD szPacketPayload", "type" : "EXEF"},
+        {"id": 12, "description": "_DWORD moduleId", "type" : "EXEF"},
+        {"id": 13, "description": "packetPayload", "type" : "DOCF"},
+        {"id": 14, "description": "Random four-byte key for each packet", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "sends"},
+        {"source": 1, "target": 4, "rel_name" : "responds with"},
+        {"source": 5, "target": 2, "rel_name" : "used to decrypt"},
+        {"source": 6, "target": 5, "rel_name" : "uses for decryption"},
+        {"source": 7, "target": 8, "rel_name" : "contains"},
+        {"source": 8, "target": 9, "rel_name" : "includes"},
+        {"source": 8, "target": 10, "rel_name" : "includes"},
+        {"source": 8, "target": 11, "rel_name" : "includes"},
+        {"source": 8, "target": 12, "rel_name" : "includes"},
+        {"source": 7, "target": 13, "rel_name" : "contains"},
+        {"source": 14, "target": 10, "rel_name" : "encrypts"},
+        {"source": 14, "target": 13, "rel_name" : "encrypts"},
+        {"source": 6, "target": 14, "rel_name" : "uses for encryption"},
+        {"source": 2, "target": 14, "rel_name" : "used to XOR encrypt"}
+    ]
+}

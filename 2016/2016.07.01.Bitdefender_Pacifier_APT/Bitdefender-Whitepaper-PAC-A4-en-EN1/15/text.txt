@@ -1,0 +1,186 @@
+2016 attack wave
+I n May 2016 we have encountered a new wave of attacks. They came, at least in some known cases, as spear phishing emails containing
+various documents: topics like Oil conferences, international politics, budget calculations, simple guidelines on how to interview for a
+job in foreign affairs.
+The attackers moved away from using documents containing macro scripts to employing a zip archive containing a java-script file
+that would in turn drop a clean document and the actual malware. The archived file has a double extension, something like urgent
+document.doc.js. This method is probably more efficient, as the victim doesn’t have to enable macros in Word Viewer.
+Generally speaking, the components are slightly different from the 2015 variants but they achieve the same results. As a general
+rule, we observed that these variants tend to be stealthier than past years’ variants because malware is only injected in legitimate
+processes, so that no new main executable will be seen in the process list after injection. The components are outlined below.
+Document containing malicious macro script
+The new infected documents have a different structure, as seen in the picture. The clean document is
+encrypted directly in the infected document, not contained in the dropper as with previous versions. The
+macro from the infected document will decrypt and run the clean document and the dropper.
+At the end of the document there is a dword which contains the total size (document+dropper+4). In front
+of the encrypted document is a dword which represents its size. After the encrypted document there is one
+byte, the checksum.
+The encrypted dropper has the same structure. The checksum algorithm remains the same but the
+encryption is slightly different than before :
+```
+// decrypt
+for (key = 75, i = 0; i < size; i++)
+{
+buffer[i] = buffer[i] ^ key;
+key = (key ^ ((200 + i) % 256) ^ (i % 256);
+}
+```
+The Dropper
+The droppers are self-extracting Winrar archives. They do not contain the clean document any more. The
+component files are extracted to:
+    - %appdata%\Microsoft\VisualStudio\11.0\dws.exe
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\msi.dll
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\msi32.dll
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\msk.dll (optional)
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\msp.dll
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\mst.dll
+
+[16]
+White Paper
+    - %appdata%\Microsoft\VisualStudio\11.0\msi.exe (64 bit)
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\msi60.dll (64 bit)
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\msk60.dll (64 bit, optional)
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\msp60.dll (64 bit)
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\mst60.dll (64 bit)
+
+
+    - %appdata%\Microsoft\VisualStudio\11.0\msvci60.dll (64 bit)
+
+msk.dll and msk60.dll are not always present in which case their functionality is taken by another dll. After the files are dropped the
+file dws.exe is executed without any parameters.
+msp.dll
+Similar to the old msvcp.dll. Returns the PID of some processes. It has 3 important exports: p, p1, p2.
+ - p export has the functionality as the older variant, returns the PID of one of iexplore.exe, firefox.exe, chrome.exe, outlook.exe.
+
+
+ - p1 export returns the PID of dwm.exe (Windows Desktop Manager).
+
+
+ - p2 returns the PID of taskhostex.exe (Host Process for Windows Tasks) or sihost.exe (Shell Infrastructure Host). These are
+
+legitimate processes that can be found in Windows 8 and Windows 10. Some variants do not search for sihost.exe.
+ - Some variants also have another export kp which kills a process, but it’s never invoked.
+
+msp60.dll
+64 bit variant of msp.dll.
+msi.dll
+This is similar to the old msvci.dll. It has one export msvci with two parameters, a path to a file and a PID. It will inject the file from the
+path into the process with that PID. For 32 bit processes.
+msvci60.dll
+64 bit variant of msi.dll.
+msi.exe
+Similar to msi.dll, for 64 bit processes. It will look for 1 or 2 command line parameters.
+The first is a process PID. The second parameter can be anything and is just a flag for
+knowing what library to inject: 2 parameters – will inject msi60.dll, 1 parameter – will
+inject msk60.dll. The injection is done with the msvci export from msvci60.dll.
+dws.exe
+The starting module. If it was started with a parameter and the parameter is not a number (as an ascii string), it will create a process
+with the executable taken from the parameter; this looks like a reminiscent of the .lnk files functionality.
+If the parameter is a number, the number will be interpreted as a PID and it will check if the process with that PID is a 32/64 bit
+process. If it is a 64 bit process, dws.exe will create a new process with the command line “msi.exe PID”. If it is a 32 bit process, dws.
+exe will load msi.dll and call its export as msvci(“msvck”,pid). In this case (parameter as number received) the execution stops here.
+If the file msp.dll is not present it will delete all components of the trojan. Otherwise it will call from msp.dll the export p1 or p2 (only
+on Windows 8/10 or Server 2012) to get the PID of dwm.exe, taskhostex.exe or sihost.exe. If the returned PID is for a 64 bit process
+[17]
+White Paper
+will run “msi.exe PID 1”; two parameters are passed, the last one being dummy and used by msi.exe just to know to take a different
+path of execution. If the returned PID is for a 32 bit process, it will load msi.dll and call msvci(“msi32.dll”, PID). After this the program
+terminates (the older ntlm.exe would have stayed in a loop here).
+msi32.dll
+Code from this library will execute injected in dwm.exe, taskhostex.exe. Sets the same registry autorun key as the 2015 variants. It
+will also set a scheduled task:
+schtasks /create /SC DAILY /ST 12:00 /TN update /F /TR %appdata%\Microsoft\VisualStudio\11\dws.exe
+which will make sure that main module will start daily.
+Checks if msp.dll exists, if it does not, it will execute dws.exe without parameters, which in turn will self delete the Trojan. It uses
+from msp.dll the p export to get a PID. If that PID is a 32 bit process it will run “dws.exe PID” and if it is a 64 bit process it will run
+“msi.exe PID”. Those processes with parameters will inject the actual backdoor (msk.dll). It will stay in a loop and try to find targeted
+processes in order to inject in them. This variant of the Trojan is stealthier than the previous one in which ntlm.exe would stay in a
+loop and try to inject, in which case a suspicious process (ntlm.exe) would be visible.
+msi32.dll – with backdoor functionality
+In some droppers msi32.dll has another variant different enough to be described separately. In this case msi32.dll would contain
+backdoor functionality along the functionality described earlier. It will function in 2 ways (backdoor or earlier msi32.dll) based on the
+name of the process from which it runs. If the containing process is dwm.exe, taskhostex.exe or sihost.exe it will function like the
+usual msi32.dll and also will copy itself as msk.dll for later use as the backdoor. If the containing process is another process then it
+will function as the backdoor (identical to msk.dll).
+msi60.dll
+64 bit variant of msi32.dll.
+msk.dll
+The backdoor component, similar to the old msvck.dll, it has the same functionality. For selfdelete it will delete msp.dll. It also has a
+new backdoor command “st” which sets the time in milliseconds for Sleep, time value received from the C&C.
+msk60.dll
+64 bit variant of msk.dll.
+mst.dll
+Library used for communication with the C&C. Very similar to the old msvct.dll. Internet connection is checked with “go.microsoft.
+com” .
+mst60.dll
+64 bit variant of mst.dll.
+[18]
+White Paper
+Functionality diagram
+Functionality summary:
+
+
+The macro from the infected document will drop and open a dummy clean document and a dropper.
+
+
+The dropper will drop the component files in the folder %appdata%\Microsoft\VisualStudio\11\ and will open dws.exe without
+
+
+parameters.
+
+dws.exe will use the function p2 (only on Windows 8 or Windows Server 2012) or the function p1 from msp.dll. p1 will return the
+
+PID of dwm.exe, p2 will return the PID of taskhostex.exe.
+[19]
+White Paper
+
+dws.exe will load msi.dll and will call its export as msvci(“msi32.dll”, PID), with the PID returned from step 3. This will inject msi32.
+
+dll into dwm.exe or taskhostex.exe depending on the OS. After this dws.exe process terminates.
+
+a.  msi32.dll will add a run key in registry and a scheduled task, both will open dws.exe
+
+b.  msi32.dll will copy itself to msk.dll. This step is done only in some versions where msi32.dll has the backdoor functionality and
+the initial backdoor msk.dll is missing.
+
+
+msi32.dll will use the function p from msp.dll which will return the PID of one of iexplore.exe, outlook.exe, firefox.exe, chrome.exe.
+
+
+msi32.dll will create a new process with dws.exe with a parameter, the PID returned at step 6. If at step 6. the file msp.dll was not
+
+
+found (selfdelete from backdoor), it will create a new process with dws.exe but without parameters, which in turn will delete all
+components. msi32.dll will stay in a loop repeating from step 6 (the backdoor variant of msi32.dll will exit).
+
+dws.exe with a parameter will function differently and will call the export from msi.dll as msvci(“msk.dll”, PID), with the PID
+
+returned at step 6., received as a command line parameter. This will inject msk.dll in the specified process. After this dws.exe
+process terminates. At this step it does not matter if msk.dll is the msi32.dll variant or not.
+
+msk.dll is the backdoor program and will use exports from mst.dll to communicate with the C&C. In case that msk.dll is msi32.
+
+dll variant the selfdelete will be done here (start dws.exe) and not in step 7. because msi32.dll will no longer run in dwm.exe,
+taskhostex.exe or sihost.exe.
+Zip file containing malicious java-script
+In this variant victim is lured to double click on a file with double extension .doc.js this way java-script file gets executed, will
+decode a clean Word document and a malware executable file, both are embedded in java-script. Next, a windows task is created
+to run the malware, and clean document is opened. Malware execution follows as previously described.

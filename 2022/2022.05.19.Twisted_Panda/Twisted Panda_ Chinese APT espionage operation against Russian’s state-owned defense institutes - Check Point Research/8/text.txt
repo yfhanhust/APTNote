@@ -1,0 +1,74 @@
+Attribution
+SPINNER backdoor
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 17/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+As with any unknown malware sample, the SPINNER loader and backdoor analysis required CPR
+to determine whether it was a known malware sample or an entirely new malware family. At first
+glance, the payload looked similar to the PlugX/Hodur malware described by ESET in a recently
+published report on Chinese APT Mustang Panda. The first similarity is in the ID numbering of
+C&C commands: both malware use 2 bytes to specify the command category and 2 bytes for a
+specific command from this category. For example, the command 0x10010001 is used in the
+SPINNER variant to send the system information data, while Hodur malware uses the command
+group 0x1001 and command ID 0x1001 for the same action.
+In addition, some of the commands themselves overlap between the samples, such as those that list
+the logical drives, get detailed information about the files in a directory, or execute commands
+using cmd.exe. These functionalities are not unique and can usually be found in many backdoors.
+In this case, the two malware share an even greater and more surprising similarity. After opening
+the Hodur PlugX variant in the disassembler, it became apparent that Hodur — like SPINNER —
+was heavily obfuscated using Control Flow Flattening (CFF). However, Hodur’s CFF is different
+from SPINNER’s. Hodur’s CFF relies on a dispatcher that uses a certain register to decide which
+code block to jump to next, while in SPINNER the register is used as-is without any manipulation.
+In the PlugX variant, additional arithmetic operations are used on the register before it is checked
+by the dispatcher. To complete the obfuscation comparison, Hodur heavily obfuscates its API calls
+and strings, a step which is absent in SPINNER.
+Figure 13: Control flow flattening used in SPINNER variant (on the left) vs control flow flattening
+with arithmetic operations on the CFF register used in the Hodur variant (on the right).
+In terms of implementation, the malware samples are entirely different. Hodur is a multithreaded
+Windows Desktop application and communicates with the C&C through multiple threads, each
+with its own purpose, while SPINNER is a single-threaded Console application. Hodur’s
+enumeration method is more extensive than SPINNER’s, but it does not use Bot ID which
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 18/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+identifies a specific infected machine. The self-delete function in Hodur might be similar in its
+logic to SPINNER, but it uses a completely different set of commands to delete itself and its
+associated files. Hodur’s communication logic with the C&C is more complex, drawn from
+different parts of the code and from multiple threads, while SPINNER has only has one function
+that handles the commands.
+While the differences indicate these malware belong to different families, they share “best
+practices” similarities. Here are some examples of their similarities:
+Both use WS2_32 functions to retrieve the local computer IPv4 address
+They show interest in enumeration files in certain directories by looking for specific data
+such as the last access time
+Both enumerate the disk drives, searching thumb drives for interesting data
+They execute commands from the C&C through cmd.exe using a pipe, etc.
+It can be argued that those are just common techniques used by all backdoors, but it is not unlikely
+that these tools might have the same upstream source and therefore share many best practices and
+methods.
+Chinese-based activity
+The Tactics, Techniques, and Procedures (TTPs) of this operation enabled us to attribute it to
+Chinese APT activity. In general, Chinese groups are known to reuse and share tools between
+them. Without enough strong evidence, such as infrastructure-based connections, we couldn’t
+directly attribute this activity with high confidence to any specific Chinese threat actor. However,
+the Twisted Panda campaign bears multiple overlaps with advanced and long-standing Chinese
+cyberespionage actors:
+The control-flow obfuscations observed in SPINNER were previously used by the Chinese
+group APT10 and reappeared in a recent Mustang Panda espionage campaign:
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 19/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+Figure 14: Control-flow obfuscations in MustangPanda sample
+(698d1ade6defa07fb4e4c12a19ca309957fb9c40).
+APT group Mustang Panda was observed exploiting the invasion of Ukraine to target
+Russian entities around the same time as Twisted Panda.
+The infection flow relying on DLL side-loading is a favorite evasion technique used by
+multiple Chinese actors. Examples include the infamous PlugX malware (and its multiple
+variants, including the aforementioned Mustang Panda’ Hodur samples), the recently
+published APT10 global espionage campaign that used the VLC player for side-loading, and
+other APT10 campaigns.
+In addition to the similarities between SPINNER and Hodur that we previously mentioned,
+other practices like multi-layer in-memory loaders based on shellcodes and PEs, especially
+combined with dynamic API resolutions via hashes, are also a signature technique for many
+Chinese groups.
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 20/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+The victimology of the Twisted Panda campaign is consistent with Chinese long-term
+interests.

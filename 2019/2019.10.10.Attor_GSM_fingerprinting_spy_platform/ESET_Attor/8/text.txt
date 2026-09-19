@@ -1,0 +1,92 @@
+3 THE PLATFORM ARCHITECTURE
+In this paper, we focus on the newer version of Attor that has been active since 2018. This version
+consists of a dispatcher and loadable plugins, that use shared folders for synchronization, and provide
+functionality to each other.
+In the first step of a compromise, a dropper delivers the main dispatcher and a number of plugins, and
+then loads the dispatcher, which is a dynamic-link library.
+The dispatcher injects itself into almost all running processes and loads additional plugins within each of
+these processes. Attor avoids some system processes and Symantec products.
+A feature characteristic to Attor is that the plugins then choose in which of the processes to activate
+their payload. For example, a Screengrabber plugin only captures screenshots of the window of a
+process in which it is injected, which allows monitoring only processes that are of interest of the
+attackers (such as IM applications or web browsers).
+Attor has built-in mechanisms for adding new plugins, for updating itself, and for automatically
+exfiltrating collected data and log files.
+In subsequent sections, we explain how individual components of the platform contribute to these
+mechanisms, as is also illustrated in Figure 3.
+collected data Upload folder Plugins Updates Resources
+|ID 0x00 EXFILTRATION COMMAND AND CONTROLDispatcherLoads InstallsFTPPLUGINSID 0x06 127.0.0.1:5153PERSISTENCE SOCKS proxyID 0x10Installer/watchdog SOCKSID 0x0D 127.0.0.1:8045COLLECTION Tor clientID 0x01 ID 0x03 Uploads Downloadsdata commandsDevice monitor Audio recorderID 0x02 ID 0x07 ID 0x05 ID 0x06Screengrabber Key/clipboard logger File uploader Command dispatcherStores downloaded plugins,updates and other filesStore|Col2|EXFILTRATION|Col4|COMMAND AND CONTROL|Col6|
+|---|---|---|---|---|---|
+|ID 0x00DispatcherID 0x05File uploaderID 0x10Installer/watchdogID 0x01Device monitorID 0x03Audio recorderID 0x02ScreengrabberID 0x07Key/clipboard loggerID 0x06Command dispatcherID 0x0DTor clientID 0x06SOCKS proxy127.0.0.1:8045127.0.0.1:5153UploadsdataDownloadscommands~~FTP~~SOCKSPLUGINSEXFILTRATIONCOMMAND AND CONTROLPERSISTENCECOLLECTIONLoadsInstallsStoreStores downloaded plugins,updates and other ﬁles|ID 0x00DispatcherID 0x05File uploaderID 0x10Installer/watchdogID 0x01Device monitorID 0x03Audio recorderID 0x02ScreengrabberID 0x07Key/clipboard loggerID 0x06Command dispatcherID 0x0DTor clientID 0x06SOCKS proxy127.0.0.1:8045127.0.0.1:5153UploadsdataDownloadscommands~~FTP~~SOCKSPLUGINSEXFILTRATIONCOMMAND AND CONTROLPERSISTENCECOLLECTIONLoadsInstallsStoreStores downloaded plugins,updates and other ﬁles|ID 0x05File uploaderID 0x0Tor clientID 0x0SOCKS prUploadsdata|ID 0x05File uploaderID 0x0Tor clientID 0x0SOCKS prUploadsdata|ID 0x06Command dispatcher127.0.0.1:8045127.0.0.1:5153DownloadscommandsKS|ID 0x06Command dispatcher127.0.0.1:8045127.0.0.1:5153DownloadscommandsKS|
+||Store|Store|Store|Store|Store|
+Collected Loaded by the main module Executed and deleted Miscellaneous files
+data and logs with each execution by the main module
+Figure 3 // Attor’s architecture. Note that ID 0x06 represents a single plugin,
+but the functionality is split here into two parts for clarity.
+5 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+3.1 Persistence
+The Installer/watchdog plugin is responsible for ensuring Attor’s persistence, by scheduling a task that
+loads the dispatcher.
+In some versions of the malware, the dispatcher itself is responsible for this functionality, using one of
+two mechanisms depending on the privileges with which the malware was initially executed. Regardless
+of the persistence method, one of Attor’s threads monitors whether it is still installed on the system, and
+reinstalls it if not.
+The first technique used by the dispatcher is to create a logon script that loads the dispatcher DLL (using
+~~rundll32.exe~~ ) at each user logon. To achieve this, malware sets the ~~UserInitMprLogonScript~~ value
+under the HKEY_CURRENT_USER\Environment registry key.
+If running in a privileged context, it registers the dispatcher as a service, and installs it to be executed on
+each system start by adding the service name to the ~~netsvcs~~ group.
+Notably, Attor also instructs the service to be executed in Safe Mode and Safe Mode with Networking.
+This is achieved by creating a subkey for the malicious service under the SafeBoot registry keys:
+```
+    • HKEY_LOCAL_MACHINE\SYSTEM*ControlSet*\Control\SafeBoot\Minimal
+• HKEY_LOCAL_MACHINE\SYSTEM\*ControlSet*\Control\SafeBoot\Network
+
+```
+Attor then sets the default value of these subkeys to ~~Service~~, to indicate the malicious service should
+be loaded during a safe mode boot.
+Note: In the provided registry keys, ControlSet represents all registry subkeys with the “ControlSet” substring in
+their names, e.g. ControlSet001 or CurrentControlSet.
+3.2 Collection and exfiltration
+Several plugins provide espionage capabilities; we refer to them as the Device monitor,
+Screengrabber, Audio recorder and Key/clipboard logger plugins. These plugins store the collected
+data and log files in a central Upload folder.
+These plugins do not communicate with the C&C server themselves. Instead, it is the File uploader
+plugin that automatically uploads these files to the C&C server.
+The main module monitors if there is enough space on the disk where the Upload folder is located – if
+not, the plugins do not proceed with creating additional files, in order to avoid suspicion by the user.
+3.3 Network communication
+There are only two Attor components that communicate with the C&C server: the aforementioned File
+uploader, and the Command dispatcher that downloads commands and additional tools from the
+C&C server.
+Both plugins use FTP; files are uploaded to/downloaded from an FTP server that is protected by
+credentials hardcoded in the configuration. Passive FTP mode is used, where the client initiates both
+connections to the server.
+The malware uses the Tor: Onion Service Protocol, with the C&C server having a .onion address, so the
+communication must be enabled by a Tor client plugin and relayed using a SOCKS proxy plugin. In
+order to communicate with the C&C server, any plugin must first establish a connection with the Tor
+client (listening on the non-default localhost:8045) which is responsible for resolving the onion domain,
+choosing a circuit and encrypting data in layers.
+6 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+The Tor client plugin must communicate with the dispatcher, which implements the cryptographic
+functions. Furthermore, it communicates with the SOCKS proxy (listening on localhost:5153) that relays
+the communication between the Tor client and the remote server.
+In total, the infrastructure for C&C communication spans four Attor components – the dispatcher
+providing encryption functions, and three plugins implementing the FTP protocol, the Tor functionality
+and the actual network communication. This mechanism is illustrated in Figure 4.
+ID 0x06
+SOCKS proxy
+127.0.0.1:5153
+ID 0x0D
+Tor client
+127.0.0.1:8045
+ID 0x05
+File uploader
+ID 0x06
+Command dispatcher
+ID 0x00
+Dispatcher
+Proxy for Windows API
+and cryptographic functions
+Figure 4 // Four Attor components cooperate to enable communication with the C&C server
+7 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE

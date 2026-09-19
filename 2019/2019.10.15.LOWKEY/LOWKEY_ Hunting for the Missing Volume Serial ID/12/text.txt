@@ -1,0 +1,38 @@
+ProcTran.dll
+The component opens a TCP connection to the provided host and port, creates the named
+pipe \.\pipe\Microsoft Ole Object {30000-7100-12985-00000-00001} and forwards all received
+data from the pipe to the opened TCP connection. All received packets on the connection are
+forwarded to the named pipe. This allows interaction with the TCP connection over the named
+pipe.
+|Iden‐tifier|Argu‐ments|Description|
+|---|---|---|
+|0xC8|<cmd>|Provides a simple shell, that supports the following commands, dir, copy, move, del, sys‐teminfo and cd. These match the functionality of standard commands from a shell. This isthe only case where the  is actually used.|
+|0xC9||The argument is interpreted as a process id (PID). The backdoor injects UserFunction.dllinto the process, which is an interactive shell that forwards all input and output data toMicrosoft Ole Object {30000-7100-12985-00000-00000}. The backdoor will then forwardincoming data to the named pipe allowing for communication with the opened shell. If noPID is provided, the cmd.exe is launched as child process of the backdoor process withinput and output redirected to the named pipe Microsoft Ole Object {30000-7100-12985-00001-00001}|
+https://www.fireeye.com/blog/threat-research/2019/10/lowkey-hunting-for-the-missing-volume-serial-id.html 13/17
+10/16/2019 LOWKEY: Hunting for the Missing Volume Serial ID | FireEye Inc
+|0xCA||Writes data to a file. The first argument is the , the second argument is anoffset into the file|
+|---|---|---|
+|0xCB||Reads data from a ﬁle. The ﬁrst argument is the <ﬁle_name>, the second argument is anoffset into the ﬁle, the third argument is optional, and the exact purpose is unknown|
+|0xFA|-|Lists running processes, including the process name, PID, process owner and the exe‐cutable path|
+|0xFB||Kills the process with the provided process id (PID)|
+|0xFC||Copies the ﬁles CreationTime, LastAccessTime and LastWriteTime from the second ar‐gument and applies them to the ﬁrst argument. Both arguments are expected to be fullﬁle paths. The order of the arguments is a bit unusual, as one would usually apply the ac‐cess times from the second argument to the third|
+|0xFD|-|List running processes with additional details like the SessonId and the CommandLine byexecuting the WMI query SELECT Name,ProcessId,SessionId,CommandLine,Exe‐cutablePath FROM Win32_Process|
+|0xFE|-|Ping command, the malware responds with the following byte sequence 00 00 00 00 0065 00 00 00 00 00 00 06 00 00 00. Experiments with the backdoor revealed that the iden‐tiﬁer 0x65 seems to indicate a successful operation, whereas 0x66 indicates an error.|
+Table 6: C2 commands
+The commands listed in Table 7 are used to provide functionality of a TCP traffic relay. This
+allows operators to communicate through the backdoor with another host via TCP. This could be
+used for lateral movement in a network. For example, one instance of the backdoor could be used
+as a jump host and additional hosts in the target network could be reached via the TCP traffic
+relay. Note that the commands 0xD2, 0xD3 and 0xD6 listed in Table 7 can be used in the main
+backdoor thread, without having to use the ProcTran.dll.
+|Iden‐tifier|Argu‐ments|Description|
+|---|---|---|
+|0x105||The argument is interpreted as a process id (PID). The backdoor injects ProcTran.dll intothe process, which is a TCP trafﬁc relay component that forwards all input and outputdata to Microsoft Ole Object {30000-7100-12985-00000-00001}. The commands 0xD2,0xD3 and 0xD6 can then be used with the component.|
+|0xD2||Opens a connection to the provided host and port, the ﬁrst argument is the host, the sec‐ond the port. On success a header with the identiﬁer set to 0xD4 is returned (00 00 0000 00 D4 00 00 00 00 00 00 00 00 00 00). This effectively establishes a TCP trafﬁc relayallowing operators to communicate with another system through the backdooredmachine.|
+https://www.fireeye.com/blog/threat-research/2019/10/lowkey-hunting-for-the-missing-volume-serial-id.html 14/17
+10/16/2019 LOWKEY: Hunting for the Missing Volume Serial ID | FireEye Inc
+|0xD3||Receives and sends data over the connection opened by the 0xD2 command. Receiveddata is first RC4 decrypted with the key “CreateThread“ and then single-byte XOR de‐coded with 0x77. Data sent back is directly relayed without any additional encryption.|
+|---|---|---|
+|0xD6|-|Closes the socket connection that had been established by the 0xD2 command|
+|0xCF|-|Closes the named pipe Microsoft Ole Object {30000-7100-12985-00000-00001} that isused to communicate with the injected ProcTran.dll. This seems to terminate the threadin the targeted process by the 0x105 command|
+Table 7: C2 commands TCP relay

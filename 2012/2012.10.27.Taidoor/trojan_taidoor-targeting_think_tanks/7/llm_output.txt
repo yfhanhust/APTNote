@@ -1,0 +1,148 @@
+
+
+
+Sentence : Command-and-Control server
+Protocol
+Trojan.Taidoor communicates with the controlling server using the HTTP protocol with requests using the follow­
+ing format and detailed in table 1:
+```
+  http://[C&C _ SERVER]:[PORT]/[RANDOM].php?id=[RAND][ID][OPTIONAL]
+```
+|Table 1|Col2|
+|---|---|
+|HTTP communication format|HTTP communication format|
+|Variable|Description|
+|[C&C_SERVER]|Up to three configurable C&C servers|
+|[PORT]|Up to three configurable ports|
+|[RANDOM_PATH]|Five random, lower-case letters. Recreated every time Taidoor initializes or fails to contact its configured servers.|
+|[RAND]|Six-decimal, random number recreated for each request. The values are between 0-32767 (limited by RAND_MAX).|
+|[ID]|Twelve characters derived from MAC address of the compromised computer.|
+|[OPTIONAL]|Is "&ext=[FILENAME]", which may be present in requests, related to specific commands.|
+When the message body is present in a request or response, it is encrypted using RC4. The RC4 key is simply a
+string representation of the compromised computer’s adapter address (e.g. 01-27-89-AB-CD-EF). This means
+that the C&C server must be able to compute the RC4 key from the [ID] present in the HTTP request. Because
+such an [ID] is unique for each computer it could also be used by the controlling server for tracking purposes.
+Trojan.Taidoor uses an algorithm when generating the ID field. First it obtains a string representation of the
+adapter address. A default value of “01-01-01-01-01-01” is used if it fails to obtain the adapter address. It strips
+the “-” characters from the string and then increments the value of each character. If it encounters ‘9’ this value
+will be set to ‘0’. For example “01-27-89-AB-CD-EF” would convert to “123890BCDEFG”
+Trojan.Taidoor periodically queries the C&C server for commands by sending GET requests with an empty mes­
+sage body. This period is configurable by the attacker and is stored, along with the C&C information, in the
+data section. Values for this sleep interval has been seen as low as two and as high as 600 seconds. The server
+responds with RC4-encrypted commands in the message body. The first byte of decrypted message body is the
+command ID, followed by an optional parameter. Table 2 details the commands available to the attacker.
+|Table 2|Col2|Col3|Col4|
+|---|---|---|---|
+|Taidoor C&C commands|Taidoor C&C commands|Taidoor C&C commands|Taidoor C&C commands|
+|ID|Format|Command|Details|
+|2|DWORD|Set Delay|Period in milliseconds for the sleep time in between requests.|
+|3|STRING|ExecuteCommand|Command to be executed. The generated output is collected in a temporary file andsent in a separate POST request. The POST request does not contain any indicationabout the corresponding command.|
+|4|STRING|Download and Execute|The URL location to download a file, which is saved to the %Temp% folder and ex­ecuted.|
+|5|STRING|Download File|Path of the file to be created. The content of the file is downloaded using a separateGET request with [OPTIONAL] set to "&ext=[BASE64_ENCODED_FILENAME]"|
+|7|STRING|Upload File|Parameter is the path of the file to be uploaded. Content of the file is uploaded usingseparate POST request with [OPTIONAL] set to "&ext=[BASE64_ENCODED_FILE­NAME]"|
+|All other commands are IDs treated as pings.|All other commands are IDs treated as pings.|All other commands are IDs treated as pings.|**A strong indicator this back door is designed for human operators.|
+Live interactive session
+Our honeypots were able to capture some live, interactive sessions of the attackers in action. Table 3 presents
+logs of the activities of an attacker during one of these sessions on September 16, 2011. This is the first 60 sec­
+onds of the attacker in action, logged from 02:23:06 UTC.
+|Table 3|Col2|
+|---|---|
+|Example of attacker activities through back door|Example of attacker activities through back door|
+|Timeline|Commands Received|
+|2011-09-16 02:23:06 UTC: RECV2011-09-16 02:23:15 UTC: RECV2011-09-16 02:23:23 UTC: RECV2011-09-16 02:23:31 UTC: RECV2011-09-16 02:23:52 UTC: RECV2011-09-16 02:24:00 UTC: RECV2011-09-16 02:24:12 UTC: RECV2011-09-16 02:24:25 UTC: RECV2011-09-16 02:24:32 UTC: RECV|[Ping][Set sleep interval to 1 second]cmd /c net startcmd /c dir c:\docume~1\cmd /c dir “c:\docume~1\\recent” /odcmd /c dir c:\progra~1\cmd /c dir “c:\docume~1\\desktop” /odcmd /c netstat –ncmd /c net use|
+Before the attacker starts an interactive command shell, Taidoor is instructed to reduce the sleep interval to one
+second. This improves Trojan.Taidoor’s response time to subsequent commands sent by the attacker. Over the
+next 60 seconds the attacker will look for the following information about the compromised host:
+  - Currently running services.
+
+  - Contents of the “Documents and Settings” folder: What users are on the system?
+
+  - Contents of the “Recently Used Documents” item.
+
+  - Contents of the “Program Files” folder: What software is installed?
+
+  - Contents of the Desktop.
+
+  - A list of the currently open TCP/IP connections.
+
+  - A list of available network connections.
+
+The attacker initially searches for docu­
+ments and users of interest on the com­
+promised computer. If the user is not a
+target of interest, the attacker can search
+for other computers of higher value on the
+network using the shell or by downloading
+additional tools on to the compromised
+computer in order to assist in traversing
+the network. It is worth noting that this is
+not automated, but that an actual attacker
+sitting at the other end, typing these com­
+mands.
+Hacked third-party servers
+Some basic reconnaissance was done on
+the C&C servers used by Trojan.Taidoor.
+Many of the Taidoor C&C servers probed
+appeared to be compromised third-party
+servers, as opposed to leased servers
+commonly used as part of a C&C infra­
+structure. The servers are probably used
+in an effort to hide the true location of
+the attacker and they simply forward the
+malicious communication to another loca­
+tion. The highest concentrations of Trojan.
+Taidoor C&C servers are in the US and
+Taiwan, as shown in figure 11.
+Simple fingerprinting on these computers
+revealed that they were consistently run­
+ning a number of services. It is probable
+that such services were vulnerable to basic
+attacks, as several of the C&C servers had
+been compromised by third-party hackers
+prior to their use by the Taidoor attack­
+ers. The screenshot in figure 12 is from a
+cached Web page defacement of one par­
+ticular server. Such defacements are typi­
+cally performed by attackers with limited
+skill sets. This implies that the services on
+the computer were trivial to compromise
+or that it was poorly maintained, with little
+or no patching.
+Figure 11
+C&C servers by country
+Figure 12
+Previously hacked C&C server, as shown in a
+publicly accessible website
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Command-and-Control server", "type" : "CCSH"},
+        {"id": 2, "description": "HTTP protocol", "type" : "NETP"},
+        {"id": 3, "description": "Trojan.Taidoor", "type" : "EXEF"},
+        {"id": 4, "description": "[C&C_SERVER]", "type" : "CCSH"},
+        {"id": 5, "description": "[PORT]", "type" : "NETP"},
+        {"id": 6, "description": "[RANDOM_PATH]", "type" : "TPTH"},
+        {"id": 7, "description": "[RAND]", "type" : "IOCS"},
+        {"id": 8, "description": "[ID]", "type" : "MAC"},
+        {"id": 9, "description": "[OPTIONAL]", "type" : "TPTH"},
+        {"id": 10, "description": "%Temp% folder", "type" : "SYSP"},
+        {"id": 11, "description": "RC4 encryption", "type" : "EXEF"},
+        {"id": 12, "description": "MAC address of the compromised computer", "type" : "MAC"},
+        {"id": 13, "description": "Taidoor C&C commands", "type" : "TTPS"},
+        {"id": 14, "description": "US and Taiwan", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 3, "target": 1, "rel_name" : "communicates with"},
+        {"source": 3, "target": 2, "rel_name" : "uses protocol"},
+        {"source": 4, "target": 1, "rel_name" : "configurable C&C server for"},
+        {"source": 5, "target": 1, "rel_name" : "configurable port for"},
+        {"source": 6, "target": 3, "rel_name" : "random path generated by"},
+        {"source": 7, "target": 3, "rel_name" : "random number generated by"},
+        {"source": 8, "target": 3, "rel_name" : "ID derived from MAC address of compromised computer"},
+        {"source": 9, "target": 3, "rel_name" : "optional parameter in request"},
+        {"source": 10, "target": 3, "rel_name" : "file downloaded and executed to"},
+        {"source": 11, "target": 3, "rel_name" : "encryption method used by"},
+        {"source": 12, "target": 8, "rel_name" : "used to derive ID"},
+        {"source": 13, "target": 3, "rel_name" : "commands sent to"}
+    ]
+}

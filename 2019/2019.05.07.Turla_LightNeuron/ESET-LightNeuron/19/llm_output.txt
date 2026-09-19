@@ -1,0 +1,719 @@
+
+
+
+Sentence : 4. MALWARE
+Two main components comprise LightNeuron: a Transport Agent [18], registered in the Microsoft Exchange
+configuration, and a companion 64-bit Dynamic Link Library (DLL) containing most of the malicious code.
+4.1 Microsoft Exchange architecture
+Microsoft Exchange allows extending its functionalities using Transport Agents that can process and modify
+all email messages going through the mail server [18] . Transport Agents can be created by Microsoft,
+third-party vendors, or directly within an organization.
+They have many legitimate purposes, such as:
+   - Filtering spam
+
+
+   - Filtering malicious emails/attachments
+
+
+   - Adding a corporate signature at the end of every email
+
+The typical events handled by a Transport Agent occur when the mail server sends or receives an email.
+Before the event is actually executed, the Transport Agents are called and have the possibility to modify
+or block the email.
+Figure 6 shows the typical workflow in a Microsoft Exchange server. It also shows where the malicious
+Transport Agents are inserted in this flow.
+10 Turla LightNeuron One email away from remote code execution
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+Client
+Access
+Server
+Mailbox
+Server
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+i
+Figure 6 // Microsoft Exchange architecture
+(original picture: https://docs.microsoft.com/en-us/exchange/mail-flow-exchange-2013-help)
+In order to register a Transport Agent to a Microsoft Exchange Installation, one could modify the list
+of agents in ~~\TransportRoles\Agents\agents.confg~~ i . The PowerShell
+function ~~Install-TransportAgent~~ is another way to register a new Transport Agent.
+11 Turla LightNeuron One email away from remote code execution
+4.2 Malicious Transport Agent
+This component is responsible for communicating with Microsoft Exchange and with the main malicious DLL.
+To our knowledge, this is the first time a Transport Agent has been used for malicious purposes.
+Identification
+The malicious Transport Agent is a 32-bit Windows DLL developed in .NET. Our analysis is based on the sample
+with SHA-1 ~~3C851E239FBF67A03E0DAE8F63EEE702B330DB6C~~, apparently compiled on 26/10/2016.
+In Figure 7, you can see the seven different classes used by the malicious Transport Agent.
+~~Common_utl~~ is the class used to process the email and call the second DLL. ~~ContentFilterAgent~~
+and ~~SecurityInteropAgent~~ are, respectively, inheriting from the standard base classes ~~RoutingAgent~~
+and ~~SmtpReceiveAgent~~ ~~.~~
+Figure 7 // Classes implemented by the Transport Agent
+Installation
+The attackers drop this executable in the Exchange folder located in the Program Files folder. This first step
+requires Administrative privileges. Then, they execute the script in Figure 8 to register the DLL as a Transport
+Agent. This second step is required before the malware starts receiving events from Exchange.
+Figure 8 // PowerShell script to install the malicious Transport Agent
+12 Turla LightNeuron One email away from remote code execution
+Functions
+This Transport Agent implements two classes: ~~SmtpReceiveAgent~~ and ~~RoutingAgent~~ ~~.~~ These classes
+inherit from standard Microsoft Exchange classes, allowing them to receive events from the mail server.
+Figure 9 shows a part of the class implementing ~~SmtpReceiveAgent~~ ~~.~~
+Figure 9 // SmtpReceiveAgent implementation
+One of the events registered is ~~EndofData~~, which the server calls once it has received the entire email.
+This event’s callback then calls the ~~Process~~ function. The behavior is the same for all the callbacks.
+The class ~~common_utl~~ contains the ~~Process~~ function. As shown in Figure 10, it first logs the date and the
+sender of the email. Then, it calls the ~~CheckMessage~~ function that then calls the companion DLL to process
+email data.
+Finally, depending on the return value of ~~CheckMessage~~ ~~,~~ it does nothing, modifies the email, or blocks it.
+13 Turla LightNeuron One email away from remote code execution
+Figure 10 // Process function
+Figure 11 summarizes the behavior of the LightNeuron Transport Agent. A detailed explanation
+of the behavior of the companion DLL is available in the Backdoor section .
+14 Turla LightNeuron One email away from remote code execution
+External Email
+Internal Email
+Figure 11 // LightNeuron Transport Agent
+4.3 Companion Dynamic Link Library
+This second component implements most of the malicious functions that are needed
+by the Transport Agent.
+Identification
+The companion DLL is a 64-bit Windows DLL developed in C. Our analysis is based on the sample
+with SHA-1 ~~76EE1802A6C920CBEB3A1053A4EC03C71B7E46F8~~, apparently compiled on 02/09/2016.
+This DLL exports three functions:
+
+
+FL (aka ForLoading): return 777
+
+
+BLE (aka BinaryLogEx): Log input data in a log file
+
+
+SV (aka SimpleValidate): Process an email
+
+
+The exports’ full names were present in the oldest versions of the DLL, while in the most recent one,
+they were shortened.
+Initialization
+When the Transport Agent loads the DLL, the DLL’s main function performs various initialization tasks.
+First, it decrypts, using an XOR operation; most of the strings with the hardcoded key ~~0xA9~~ ~~.~~ Figure 12 shows
+some interesting strings once decrypted.
+15 Turla LightNeuron One email away from remote code execution
+Figure 12 // Some decrypted strings
+Then, it decrypts the configuration file stored in ~~%tmp%\winmail.dat~~ . Microsoft Outlook uses the same
+filename when people send messages from an incorrectly configured mail client [19] . We believe they choose
+this filename to hide their configuration file in plain sight as a Microsoft Exchange administrator might
+be accustomed to see many legitimate files named ~~winmail.dat~~ .
+The configuration is encrypted with AES-256, with the first 32 bytes of the file being the RSA-encrypted
+AES key. The 1024-bit RSA private key is hardcoded in the binary and it uses the mode PKCS1-v1_5
+for encryption.
+Figure 13 is an example of a decrypted configuration. Please note that we have redacted
+some confidential information.
+16 Turla LightNeuron One email away from remote code execution
+<Parameters>
+CONFIG_FILE_NAME: c:\Windows\ServiceProfiles\NetworkService\appdata\Local\Temp\msmocf.xml
+LOG_LEVEL:17
+DEBUG_LOG_FILE_NAME :c:\Windows\ServiceProfiles\NetworkService\appdata\Local\Temp\msmodl.
+```
+       dat
+   CRYPT_KEY: LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlHZk1BMEdDU3FHU0liM0RRRUJBUVVBQTRH
+   TkFEQ0JpUUtCZ1FDOG5zc2g2UDJpa29YMnpBOFg3dUpNcmxRWApkM21Pc3VvcWRpa1pzQ1l3TlJCNXc5RVl
+   jeHRQYVdubEc4L2hCeC9IMG05cnZyelFVamxCa3dieDY5L2tSclhVCmZ5MkE3RGk2NTZldlExMHZPVHlBcH
+   RualMvRWtBKzFUUGRPSTdkZWcrakNpaDFMNk5TNUJFTyszTTN0aGZrVzcKZVU2ZUdkcVZyeWdiOWV6amxRS
+   URBUUFCCi0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=
+
+   DECRYPT_KEY: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlDWFFJQkFBS0JnUURRTWdoRS
+   9sUlBpbGNNTXFqb1RSMDBJcU0wWkovalFuT2kwZzFTRXJ1dytaQ0tqUit0CmRZSHo1bUVNTXJmbS9uYnZkV
+   2hRQUxubERpSlNwOHRpa3VHdHdJajFrV09aQ0ppangvazhHWWdoNHZkZmtCSkcKbmlnQnJTMTliSktqMzh0
+   eElGVWI2NGQwK0hISlczdld1VVJFYUhwZjVFemdmQmdIZ1ZIN2NzaVE1UUlEQVFBQgpBb0dCQUlLMkJzOGF
+   SbUN4NERqK1RXR2JtS3cwMnZaMy9wSTJGRmV6UFQyOEdTN2hZTWc4RmhsWFgwRjc4STR5CkFaZjdSenpNSD
+   dPcTRRdFlObUJpaktUVXh1Nm5rYk5MajQxVWhYQks4YUl1S1oxa2lKUG5rY3RVUERWWjN5WmkKS1lKZ3lje
+   DI0SEozbXF3T05mZTczVElKcEsybDZFRkVDUDJkaTg5aHNZTFhsa2s1QWtFQTcwRGxlMDROMVBIeAozUzBj
+   WkhFQm9ZNnhyNElvUGJSQmZ2Wkd0NHEyZWs5ZjVldG1idjVvck54WnE4QUpzRkJsOWhBZFIxUE8rdUk5Ckl
+   0WnVGRzhvM3dKQkFON0VuZWpNQ05Td3FEdlhvSWxBMElFVkd5RlNIcHp1TDFBWW9FSFVhNXZpOFR0VC9KYV
+   kKN1pSSFNwNUxZeExLZkh6MGovWExBVFo5a2oxVDNkaWpDcnNDUUdlMk1RUC9kTjEvTjhJUndRSUZQcGpDM
+   jJGaQpRWUZsOXhKTFBhSm9mZXVOSnR2cTdBOW5Od2JmeWZzNmxyaVlVV3FWMTZ0SXVDdG5FT3RlR24rL0kr
+   OENRQnlsCjFGalh4RnIxek96Rk1oUDBqZHZMeHcxbDdpSG9UNVZSVldxaDBxVGRib0Jlc0tEOVViQTc2dEN
+   vaVRrbGFSVDQKcm5yQmZJcHhZNWtYYS9Rc0kza0NRUUMzeS9wVUdRK0J1MDhJczBmcTBSQmNmaG5zYXREen
+   djWjRZS0cwc0NXVgpxeXNjdTZBd3hvaGdjZEN2UGJiNDJYcnZIamFmbTZYYk05aXFnU0lqc0JuRgotLS0tL
+   UVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
+
+```
+LOG_OUTPUT :c:\Windows\ServiceProfiles\NetworkService\appdata\Local\Temp\
+MIN_SIZE_TO_ZIP:20000
+ZIP_FILE_NAME: c:\Windows\ServiceProfiles\NetworkService\appdata\Local\Temp\tmpE4BC
+```
+       CONFIG_UPDATE_INTERVAL:1800
+   DEBUG_LOG_CRYPT:0
+
+   STAT_INTERVAL:5
+
+```
+STAT_PATH: c:\Windows\ServiceProfiles\NetworkService\appdata\Local\Temp\tmpD48BC
+SEND_FROM:[redacted]noreply@[redacted]
+COMMAND_REPLY_SUBJECT: Email_confirmation
+COMMAND_REPLY_ATTACH_NAME: Letter; [redacted]; prnt01; Note; Instruction; List; Scanned;
+Untitled; report; filename; ATT00001; ticket; Form; Attachment; Information
+```
+       
+```
+Figure 13 // Partially redacted, decrypted configuration example
+The configuration does not necessarily specify all the possible parameters. Some parameters,
+such as CRYPT_KEY, have their default values hardcoded in the DLL, which could be used in case none
+is specified in the ~~winmail.dat~~ file.
+The different configuration parameters handled by the sample we analyzed are:
+   - COMMAND_REPLY_ATTACH_NAME
+
+
+   - COMMAND_REPLY_SUBJECT
+
+
+   - CONFIG_FILE_NAME
+
+
+   - CONFIG_UPDATE_INTERVAL
+
+
+   - CRYPT_KEY
+
+
+   - DEBUG_LOG_FILE_NAME
+
+
+   - DECRYPT_KEY
+
+
+   - LIMITS_MAILS_PER_SECOND
+
+
+   - LIMITS_MAILS_PER_SECOND_REFRESH_INTERVAL
+
+
+   - LIMITS_MEMORY_LOAD
+
+
+   - LIMITS_MEMORY_LOAD_REFRESH_INTERVAL
+
+
+   - LOG_LEVEL
+
+
+   - LOG_OUTPUT
+
+17 Turla LightNeuron One email away from remote code execution
+   - MIN_SIZE_TO_ZIP
+
+
+   - POSTFIX_INCOMING_PATH
+
+
+   - SEND_AT_NIGHT
+
+
+   - SEND_FILE
+
+
+   - SEND_FROM
+
+
+   - SEND_NEW_MAIL_LOCAL_RECIPIENT
+
+
+   - SEND_NEW_MAIL_LOGIN
+
+
+   - SEND_NEW_MAIL_MODE
+
+
+   - SEND_NEW_MAIL_PASS
+
+
+   - SEND_NEW_MAIL_PORT
+
+
+   - SEND_NEW_MAIL_SERVER
+
+
+   - SEND_TIME
+
+
+   - SEND_TO
+
+
+   - STAT_INTERVAL
+
+
+   - STAT_PATH
+
+
+   - TMP_ID_PATH
+
+
+   - USE_TEMPLATE
+
+
+   - ZIP_FILE_NAME
+
+While most of the parameter names are self-explanatory, an interesting one is CONFIG_FILE_NAME.
+This second configuration file contains the rules used to process the emails. We detail this behavior
+in the next section.
+Rules and handlers
+In our example, the rules are defined in ~~c:\Windows\ServiceProfles\NetworkService\appdata\~~ i
+~~Local\Temp\msmocf.xml~~ . This file is encrypted in a similar way as ~~winmail.dat~~ and the RSA private
+key is defined in the configuration parameter DECRYPT_KEY.
+Once decrypted, this is an XML file describing rules, as shown in Figure 14. It contains several class nodes,
+each one corresponding to a different function (aka handler) implemented in the DLL. Each class node
+contains a set of rules describing conditions using the logical operators AND and OR. In addition, each
+conditional node has three parameters:
+   - The field to which the condition applies
+
+
+   - The condition: ~~`cnt`~~ for contains and ~~`!cnt`~~ for does not contain
+
+   - The value that is compared to the field value
+
+Finally, at the end of the file is the mapping of the class names with the name of the functions in the DLL.
+18 Turla LightNeuron One email away from remote code execution
+```
+       
+
+       <and>
+
+         <or>
+
+           <To condition="cnt" value="email1@[redacted]" />
+           <From condition="cnt" value="email1@[redacted]" />
+           <To condition="cnt" value="email2@[redacted]" />
+           <From condition="cnt" value="email2@[redacted]" />
+           [...]
+         </or>
+
+         <and>
+
+           <To condition="!cnt" value="email3@[redacted]" />
+           <From condition="!cnt" value="email3@[redacted]" />
+           [...]
+         </and>
+       </and>
+     </rule>
+   </class>
+   <class name="command" metric="40" id="1" dllName="ZipMe" type="dll" include="1">
+     <rule metric="10" id="1" include="1">
+
+       <attachment_Content-Type condition="cnt" value="image/jpeg" />
+     </rule>
+   </class>
+
+   log:logHandler
+   zip:zipHandler
+   changeSubject:changeSubjectHandler
+   changeBody:changeBodyHandler
+   create:createHandler
+
+   command:commandHandler
+
+   block:blockHandler
+
+   replace:replaceHandler
+   stat:statHandler
+
+```
+Figure 14 // Redacted example of a rule file
+These rules are applied to every email processed by the DLL. Thus, the behavioral characteristics
+of LightNeuron reside in this configuration file.
+This configuration is highly flexible, allowing it to perform different actions depending on various fields
+of the email. For example, it is possible to collect all the emails sent by one particular email address.
+Moreover, the operators customize the rules for each victim. In the sample we analyzed, all the email
+addresses contained in the rules belonged to the targeted organization. In one case, they were monitoring
+around thirty different email addresses, which probably were the people about whom they were the most
+interested in collecting information.
+There are eleven different handlers implemented in the DLL and described in Table 1.
+~~Table 1~~ ~~Description of the handlers implemented in the DLL~~
+Handler name Description
+block Block the email
+changeBody Change the body of the email
+changeTo Change the recipient of the email
+changeSubject Change the subject of the email
+Parse the JPG/PDF attachment, decrypt and execute the commands. This is described in
+command
+detail in the Backdoor section
+create Create a new email
+log Log email attachment in LOG_OUTPUT
+19 Turla LightNeuron One email away from remote code execution
+Handler name Description
+replace Replace the attachment
+spam Re-create and re-send the email from the exchange server to bypass the spam filter
+stat Log From, Date, To, Subject in STAT_PATH in CSV format
+zip Encrypt the email with RSA and store it in the path specified by ZIP_FILE_NAME.
+All the handlers are implemented in the same way. In the arguments, there is the email in the form
+of a linked-list with the different fields parsed (From, To, body, etc.). The handler can modify this linked-list
+and will return a code corresponding to the action it performed, as listed in Table 2.
+~~Table 2~~ ~~Handler return codes and their descriptions~~
+Return Value Description
+0 No modification
+1 Email modified
+2 Block the email
+3 Error
+4 Contains .NET assembly
+Then, the Transport Agent interprets this return code to know if it should modify the email, block
+it or execute .NET assembly code.
+Figure 15 is the handler function for zip. Interestingly, it will dump, encrypt the email and store it on disk
+but does not compress it. We believe these files are sent back to the attackers using a backdoor command.
+Figure 15 // Decompilation output of the zip handler function
+Some handlers, such as changeSubject, were not used in the rules we analyzed. However, by creating a new
+set of rules, we were able to trigger this handler. The modification is easily noticed, as you can see in Figure 16.
+Other handlers, such as changeBody or changeTo, might be used to hide some information or to redirect emails.
+20 Turla LightNeuron One email away from remote code execution
+Figure 16 // Original email (on the left) and email after the call to changeSubject (on the right)
+Backdoor
+The command handler is actually the implementation of a backdoor controlled by email.
+It has the following properties:
+   - Depending on the rules, the commands are hidden in a PDF or a JPG attachment.
+
+
+   - It uses steganography to hide data in PDF documents or JPG pictures.
+
+   - The email is blocked so it will not be delivered to the final recipient.
+
+Although this may sound very similar to the Turla Outlook backdoor controlled by PDF attachments
+that we analyzed in 2018 [16], the format of the attachment is quite different. Thus, we believe a different
+programmer or team developed it.
+As shown in the configuration example, the rule to execute the command handler applies to every
+attachment of type image/jpeg going through the Exchange server. It is not very efficient, as most of the
+images do not contain commands. As an example, for one victim, the command handler processed around
+7000 pictures while only 178 actually contained commands for the backdoor.
+Every time the handler is called, it will first check whether the attachment is a PDF document or a JPG image,
+as shown in Figure 17.
+Figure 17 // Attachment type check (HexRays output)
+21 Turla LightNeuron One email away from remote code execution
+PDF
+In the case of a PDF document, the routine first checks for a signature by performing XOR operations
+with the data from offset 0x0B to offset 0x10. One way to satisfy this signature condition is by setting
+all the values from offset 0x0B to 0x10 to 0x00.
+If the previous signature is satisfied, the routine reads the offset of the blob of data containing the command,
+which we call the container, from offset 0x11. It also reads the size of the container from offset 0x15. Finally,
+it copies the container data. Figure 18 shows these operations.
+Figure 18 // Extraction of the container data from the PDF (HexRays output)
+A visualization in a hexadecimal editor of the different fields is shown Figure 19.
+Figure 19 // Representation in hexadecimal of a PDF containing a container
+This PDF, which was modified to embed a command, is still valid as you can see in Figure 20.
+Figure 20 // Modified PDF document with embeded commands for LightNeuron. Snake is another name for Turla.
+22 Turla LightNeuron One email away from remote code execution
+JPG
+In case of a JPG image, it first computes a signature using 16 bytes from the first quantization table.
+The quantization table is a part of the JPG format and contains data used during the compression of the picture.
+It performs several XOR operations on these 16 bytes and compares the result against a hardcoded
+signature, as shown in Figure 21.
+Figure 21 // Validation of the JPG signature (HexRays output)
+We can view these multiple XOR ( ) operations on the input, followed by a comparison, as a set
+of mathematical equations:
+input 0 input 4 = 250
+input 1 input 5 = 16
+input 2 input 6 = 82
+input 3 input 7 = 145
+input 0 input 10 = 40
+input 1 input 11 = 219
+input 2 input 12 = 213
+input 3 input 13 = 176
+Once we have the set of equations, we can easily solve it manually or use a SMT (Satisfiability Modulo
+Theories) solver such as Microsoft Z3 [20] to find out whether a solution exists and, if so, to find one possible
+solution. It turns out this set of equations is solvable and we use the solution to create a JPG image
+that can pass the check.
+If the previous equation is satisfied, it gets the length of the container from offset 0x0F of the quantization table.
+Finally, it extracts the container from the last Start of Scan section, another standard field of the JPG format.
+By modifying the quantization table, the resulting picture is also affected. However, the image is still valid,
+as shown in Figure 22.
+23 Turla LightNeuron One email away from remote code execution
+Figure 22 // Modified JPG picture with embedded commands for LightNeuron
+Container and command execution
+Regardless of the attachment type delivering it, the container format is strictly identical. The first four bytes
+are the size of the container and the following bytes are encrypted with AES-256 with a key hardcoded
+in the binary. Figure 23 shows an example of an encrypted container.
+Figure 23 // Hexadecimal dump of an encrypted container
+Once decrypted, we see the different fields used to store information about the commands to be executed.
+In Figure 24, we can see some of the most important fields:
+   - At offset 0x08, the email address to which the result of the command is sent.
+
+   - At offset 0x1D, the instruction code. It corresponds to a function in the DLL.
+
+   - At offset 0x25, the first argument. It will be passed to the function represented by the instruction code.
+
+Figure 24 // Hexadecimal dump of a decrypted container
+If an email containing this particular container, embedded in a JPG or in a PDF, is sent to a server compromised
+by LightNeuron, a calculator will be executed on the Microsoft Exchange server.
+In addition to the instruction code 0x04, which runs the executable given by the first argument,
+there are eight other instruction codes having up to three arguments. Table 2 describes the nine different
+backdoor instructions.
+24 Turla LightNeuron One email away from remote code execution
+~~Table 2~~ ~~List of instruction codes~~
+Instruction
+Description Arg 1 Arg 2 Arg 3
+Code
+Write a file.
+0x01 Exe path N/A File data
+Execute it if it is an executable.
+0x02 Delete a file File path N/A N/A
+Set to “1” to
+0x03 Exfiltrate a file File path N/A
+delete the file
+0x04 Execute a process (CreateProcess) Command line N/A N/A
+0x05 Execute a command line (cmd.exe /c) Command line N/A N/A
+0x06 Return 0 N/A N/A N/A
+0x07 Disable backdoor for N minutes. Minutes N/A N/A
+Exfiltrate a file (duplicate function of Set to “1” to
+0x09 File Path N/A
+0x03) delete the file
+0x65 No-op N/A N/A N/A
+The detailed structure, in C-like syntax, of the container is available Figure 25.
+```
+       struct encrypted_container {
+         int size; //clear text
+         container[]; //encrypted with AES-256
+       }
+   struct container { //Can contain multiple commands
+     int CmdId; //Unique ID to identify the container
+     int rcptl; //Recipient address length
+     char rcpt[rcptl]; //Recipient address (address to which the output data will be sent)
+     command[]; //list of commands
+   }
+
+   struct command {
+     int InstId; //Unique ID to identify this command
+     int InstrCode; //The instruction that will be executed
+     int fpl; //First parameter length
+     char fp[fpl]; //First parameter
+     int spl; //Second parameter length
+     char sp[spl]; //Second parameter
+     int bpl; //Third parameter length
+     char bp[bpl]; //Third parameter
+   }
+
+```
+Figure 25 // Structure of the command container (C-like syntax)
+When processing a container, the backdoor writes the ~~CmdId~~ value to a log file, located at the path ~~c:\Win­~~
+~~dows\ServiceProfles\NetworkService\AppData\Roaming\Microsoft\Windows\thumbcache_32.~~ i
+~~db~~ . The backdoor checks it just before processing a new container, to check whether this container
+has already been processed. This is an anti-replay mechanism, probably to avoid duplicate execution
+if the mail server somehow receives the same email multiple times.
+Finally, the command output is encrypted with AES and a PDF document or a JPG image is built using
+a format similar to that described earlier. Interestingly, it reuses the incoming PDF or JPG and replaces
+the command container with a container holding the output data. An email is then created using data
+25 Turla LightNeuron One email away from remote code execution
+from the configuration and the destination address provided in the incoming container. For instance,
+it uses the following fields from ~~winmail.dat~~ :
+SEND_FROM: [redacted]noreply@[redacted]
+COMMAND_REPLY_SUBJECT: Email_confirmation
+COMMAND_REPLY_ATTACH_NAME: Letter; [redacted]; prnt01; Note; Instruction; List; Scanned;
+Untitled; report; filename; ATT00001; ticket; Form; Attachment; Information
+To send the email, it simply drops it in the folder ~~<ExchangeInstallFolder>\TransportRoles\PickUp\~~
+and the filename starts with ~~msg~~ followed by the result of the ~~GetTickCount~~ function. According to the
+Microsoft documentation [21] :
+The Pickup and replay directories are used by the Transport service on Mailbox servers and Edge
+Transport servers to insert message files directly into the transport pipeline. Correctly formatted
+email message files that you copy to the Pickup or Replay directories are submitted for delivery.
+Moreover, Exchange does not perform any security check on the email sent via this folder [22] :
+Any security checks configured on a Receive connector, such as anti-spam, anti-malware, sender
+filtering, or recipient filtering actions, aren't performed on messages submitted through the Pickup
+directory or the Replay directory.
+Thus, security solutions will not see the data exfiltrated through LightNeuron, which makes this malware
+very stealthy.
+An example of an email containing the result of LightNeuron executing a command is shown in Figure 26.
+The recipient is reply@example.com, as specified in the incoming command container. The sender is noreply@
+example.com, which is the address we choose to use to replace the redacted one specified in the original
+configuration. The subject header and the attachment name were selected from the lists in the configura­
+tion and the incoming PDF was re-used to transport output data.
+Figure 26 // Example of an email generated by LightNeuron to send command output
+26 Turla LightNeuron One email away from remote code execution
+Miscellaneous
+Logging
+The companion DLL uses logging extensively. The log level can be customized in the configuration file,
+allowing logging only relevant information when the malware is implanted on a victim machine.
+The log files are encrypted with AES-256. Each log entry contained in the log files is encrypted separately
+and the thirty-two first bytes of each log file contain the key.
+Regardless of the log’s purpose, each log entry has the same format, as described in Figure 27 in C-like syntax.
+```
+       struct log_entry {
+         DWORD total_size;
+         QWORD unknown1; //AES encryption begins here
+         DWORD log_code;
+         DWORD hex_value;
+         DWORD unknown2;
+         DWORD data_size;
+         char data[data_size];
+       }
+```
+Figure 27 // Log entry structure in C-like syntax
+The most important fields are:
+   - The log code field: each different code corresponds to a different logging event. For example, the log code
+
+0x3C28 corresponds to the execution of a handler.
+   - The hex value field: Used when the data are numerical. For example, it can contain the Instruction
+
+Code executed by the backdoor.
+   - The data field: Used to store text data. For example, it can contain the subject of the email.
+
+The log file names vary across the different samples but for the sample we analyzed, we identified
+the following six log files:
+~~Table 3~~ ~~Description of the log files~~
+Component Path Description
+Transport Agent
+Transport Agent
+Companion DLL
+C:\Windows\serviceprofiles\network­
+service\appdata\Roaming\Microsoft\
+Windows\814ad43-58ab-2cd3-3e68-b82a8f402fd0
+C:\Windows\serviceprofiles\network­
+service\appdata\Roaming\Microsoft\
+Windows\42cf8a1-6e20-8c24-d35f-82c46d8b70ba
+C:\Windows\serviceprofiles\network­
+service\appdata\Roaming\Microsoft\
+Windows\36b1f4a-82b9-eb06-7c1e-90b4b2d5c27d
+Log the sender and the date of every
+email processed by the Exchange server
+Error log
+Log the date at each execution of the
+DLL main
+C:\Windows\ServiceProfiles\NetworkService\AppData\
+Companion DLL Log backdoor actions
+Roaming\Microsoft\thumbcache_idx.db
+C:\Windows\ServiceProfiles\NetworkService\appdata\
+Companion DLL Debug log
+Local\Temp\msmodl.dat
+C:\Windows\ServiceProfiles\NetworkService\AppData\
+Companion DLL
+Roaming\Microsoft\Windows\thumbcache_32.db
+Log the command id. Used to protect
+against replay attacks.
+27 Turla LightNeuron One email away from remote code execution
+Automatic exfiltration
+If the configuration parameters ~~SEND_TIME~~ and ~~SEND_AT_NIGHT~~ are set, a thread launched by the DLL main
+function will loop indefinitely. As shown in Figure 28, it first waits ~~SEND_TIME~~ seconds and then checks if the
+exfiltration should only occur during the night or during working hours. In the latter case, it checks whether
+the hour is between 17:00 and 09:00 and if it is true, it re-enters the sleep loop without exfiltrating any files.
+Figure 28 // Exfiltration loop with night check (HexRays output)
+The exfiltration function, shown in Figure 29, loops over the files that match the ~~SEND_FILE~~ specification.
+It is possible to include wildcards in the filename specification to match several different files. Then, for each
+file, it will send an email containing the file in either a JPG or a PDF attachment. The Backdoor section details
+the sending of the emails.
+Figure 29 // Exfiltration loop (HexRays output)
+Even though we did not see Turla make use of it in the wild, we believe this functionality might be used
+to exfiltrate automatically the emails archived by the zip handler, as this handler does not implement
+any exfiltration mechanism.
+28 Turla LightNeuron One email away from remote code execution
+4.4 Evolution
+Even without the earliest versions of LightNeuron, we noticed some development effort between
+the different versions we have seen:
+   - There was an effort to obfuscate function names in the .NET Transport Agent.
+
+   - Some Indicators of Compromise are different in each sample:
+
+
+  - Mutex names,
+
+   - Log file names,
+
+
+  - AES key used by the backdoor.
+
+
+   - The oldest versions only support JPG attachments for the C&C protocol, while the latest versions
+
+also support PDF documents.
+4.5 Linux variant
+In a previous section, we explained that most of the strings used by LightNeuron are encrypted. It turns
+out that some decrypted strings contain strings that make sense only in a Unix environment.
+Figure 30 shows some of these strings that refer to Unix. For example, ~~sendmail~~ is a common executable
+used to send an email on Linux. Thus, piping email content with ~~cat~~ to ~~sendmail~~ is actually a common way
+to send an email in a Linux environment. Further, Postfix is an alternative mail server to ~~sendmail~~ ~~.~~
+Figure 30 // Linux strings in the Windows DLL
+These Unix artefacts in the Windows malware could be explained by the possible sharing of code between
+Windows and Unix implementations.
+Hence, the presence of these strings suggests LightNeuron exists for Linux. That would not be surprising,
+given that many organizations have Linux mail servers.
+Output : 
+### Overview of Turla's LightNeuron Malware
+
+**LightNeuron** is a sophisticated piece of malware developed by the Turla group, known for its advanced and stealthy techniques in targeting and compromising email servers. The malware primarily targets Microsoft Exchange servers, allowing attackers to intercept, modify, and exfiltrate emails without detection.
+
+### Key Features and Functionality
+
+#### 1. **Transport Agent and Companion DLL**
+- **Transport Agent**: This component is installed on the Exchange server and processes incoming and outgoing emails.
+- **Companion DLL**: A helper library that performs various malicious activities, including logging, command execution, and data exfiltration.
+
+#### 2. **Customizable Configuration**
+- The malware's behavior can be highly customized through a configuration file, allowing attackers to tailor it to specific targets.
+- Key parameters include:
+  - `SEND_TIME` and `SEND_AT_NIGHT`: Control the timing of data exfiltration.
+  - `SEND_FILE`: Specifies files to be automatically exfiltrated.
+
+#### 3. **Logging Mechanism**
+- Extensive logging is used for debugging and monitoring.
+- Log files are encrypted with AES-256, ensuring that sensitive information remains protected.
+- Each log entry has a structured format, including fields such as `log_code`, `hex_value`, and `data`.
+
+#### 4. **Command and Control (C&C) Protocol**
+- Supports both JPG and PDF attachments for command execution and data exfiltration.
+- Commands are encrypted and embedded in these attachments to avoid detection.
+- The malware can execute a variety of commands, including running system commands, exfiltrating files, and modifying emails.
+
+#### 5. **Stealth Techniques**
+- **Anti-Replay Mechanism**: Prevents duplicate command execution by logging unique `CmdId` values.
+- **Pickup Folder Abuse**: Uses the Exchange Pickup folder to send emails without triggering security checks.
+- **Encrypted Communication**: Ensures that all communication between the malware and the C&C server is encrypted.
+
+#### 6. **Handlers and Exfiltration**
+- **Handlers**: Perform specific tasks such as logging, command execution, and data exfiltration.
+- **Exfiltration**: Data can be automatically exfiltrated based on configuration settings. The zip handler archives emails but does not implement exfiltration mechanisms, suggesting the need for manual or automatic exfiltration.
+
+### Evolution and Variants
+
+#### 1. **Development Effort**
+- Function names in the .NET Transport Agent have been obfuscated to evade detection.
+- Different samples have unique Indicators of Compromise (IoCs), such as mutex names, log file names, and AES keys.
+- Older versions supported only JPG attachments for C&C communication, while newer versions support both JPG and PDF.
+
+#### 2. **Linux Variant**
+- Decrypted strings in the Windows DLL suggest a possible Linux variant of LightNeuron.
+- These strings include references to Unix commands like `sendmail` and mail servers like Postfix, indicating that the malware may also target Linux-based email servers.
+
+### Impact and Mitigation
+
+#### 1. **Impact**
+- Compromises the integrity and confidentiality of emails.
+- Allows attackers to maintain persistence on the network by controlling the email infrastructure.
+- Can be used for espionage and data exfiltration.
+
+#### 2. **Mitigation**
+- Regularly update and patch Exchange servers.
+- Implement strong access controls and monitoring for email server activities.
+- Use intrusion detection systems (IDS) and security information and event management (SIEM) tools to detect suspicious behavior.
+- Conduct regular security audits and vulnerability assessments.
+
+### Conclusion
+
+Turla's LightNeuron malware is a highly sophisticated threat that leverages advanced techniques to compromise and control email servers. Understanding its features, evolution, and potential variants is crucial for organizations to develop effective defense strategies against such threats.

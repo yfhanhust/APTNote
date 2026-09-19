@@ -1,0 +1,80 @@
+IOCs & Technical Details
+Related infrastructure
+```
+   103.79.76[.]88
+103.79.77[.]178
+139.180.216[.]65
+```
+https://blog.sekoia.io/luckymouse-uses-a-backdoored-electron-app-to-target-macos/ 6/9
+8/15/22, 4:14 PM LuckyMouse uses a backdoored Electron app to target MacOS - SEKOIA.IO Blog
+RShell hashes
+```
+   8c3be245cbbe9206a5d146017c14b8f965ab7045268033d70811d5bcc4b796ec  rshell
+3a9e72b3810b320fa6826a1273732fee7a8e2b2e5c0fd95b8c36bbab970e830a  rshell
+```
+Compromised DMG images
+```
+   f6e0e5c9b9d43e008805644d937770b399f859cbba475ad837805d9adec13a2c  2.3.0.dmg
+   4742c1987fdd968d7f094dc5a3ea3e9b5340b47e5a61846ac6ac7ae03fc7288f  2.3.1.dmg
+   64e771c894616100202e83f3574f8accc8453138af6709367c99157e33bb613a  2.3.2.dmg
+   466981b6aa38ae35a2c0e21a2066b4e803cc0bf76409eeb605892604c20ccf3a  2.3.3.dmg
+```
+HyperBro implant
+Warning: dlpumgr32.exe is a legit file
+```
+   ef2f20d1016cd39ff44f1399c8aa5c1ff5bfd4850d611ba375fbeff7f7e3eaf6  dlpprem32.bin
+   22c3c2bf77a94ed5f207c00e240f558d6411308d237779ffb12e04bbe2c90356  dlpprem32.dll
+   07758c93ba33843a9c5603f900f2ad0231c64ec77f6bba6de83ed6e2902022e4  dlpumgr32.exe
+```
+YARA rules
+https://blog.sekoia.io/luckymouse-uses-a-backdoored-electron-app-to-target-macos/ 7/9
+8/15/22, 4:14 PM LuckyMouse uses a backdoored Electron app to target MacOS - SEKOIA.IO Blog
+```
+   rule apt_LuckyMouse_RShell_strings {
+meta:
+id = "89f18013-ea3e-440f-821e-cef102a43b7b"
+version = "1.0"
+malware = "RShell"
+intrusion_set = "LuckyMouse"
+   description = "Detects LuckyMouse RShell Mach-O implant"
+source = "SEKOIA"
+creation_date = "2022-08-05"
+classification = "TLP:GREEN"
+strings:
+   $ = { 64 69 72 00 70 61 74 68
+00 64 6F 77 6E 00 72 65
+61 64 00 75 70 6C 6F 61
+64 00 77 72 69 74 65 00
+64 65 6C }
+$ = { 6C 6F 67 69 6E 00 68 6F
+73 74 6E 61 6D 65 00 6C
+61 6E 00 75 73 65 72 6E
+61 6D 65 00 76 65 72 73
+69 6F 6E }
+condition:
+uint32be(0) == 0xCFFAEDFE and
+filesize < 300KB and
+all of them
+}
+rule apt_LuckyMouse_Compromised_ElectronApp {
+meta:
+id = "7702217d-771f-47af-8eaa-d5acf1e14f4d"
+version = "1.0"
+intrusion_set = "LuckyMouse"
+   description = "Detects compromised ElectronApp"
+source = "SEKOIA"
+creation_date = "2022-08-05"
+classification = "TLP:GREEN"
+strings:
+   $s = "module.exports=function(t){eval(function(p,a,c,k,e,r)"
+   condition:
+$s at 0 and filesize < 100KB
+   }
+```
+Suricata rule
+```
+   alert tcp $HOME_NET any -> $EXTERNAL_NET any (flow: from_client,
+   established;content:"|19 00 00 00 02 74 79 70 65 00 0a 00 00 00 6b 65 65 70 61 6c
+   69 76 65 00 00|";dsize:25;msg:"Detects a LuckyMouse RShell beaconing
+   packet";sid:XXXXXXXXX; rev:001; threshold: type limit, track by_src, seconds 500,
+   count 1;)

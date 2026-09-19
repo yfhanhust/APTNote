@@ -1,0 +1,68 @@
+
+
+
+Sentence : Operation Blockbuster: Loaders, Installers and Uninstallers Report 17
+With samples observed as far back at late 2013, IndiaCharlie, the installer for RomeoFoxtrot, is an interesting departure
+from the other India malware families with respect to the cryptography used to obfuscate API names dynamically
+loaded by the malware. Up until late 2015, when the developer(s) appeared to abandon dynamic API loading, the dynamic
+API loading functionality used a C++ implementation of AES to decrypt the names of API functions. This particular
+implementation of AES comes from a Code Project post from 2002. [2] The use of AES encryption is somewhat rare
+within the collection of families found within the Lazarus Group. That said, the use of AES by the Lazarus Group is not
+unprecedented, as the same AES library is used by RomeoFoxtrot and SierraJuliett-MikeOne. What makes the use of AES
+particularly interesting with regards to IndiaCharlie is the use of AES decryption for the deobfuscation of API names
+during the dynamic API loading phase.
+IndiaCharlie can operate as both a standalone installer/loader and as a standalone service executable. There are
+two variants of IndiaCharlie. Earlier versions, identified as IndiaCharlie-One, do not directly install a service for
+RomeoFoxtrot; rather, they merely drop and subsequently load the RomeoFoxtrot binary (as %SYSDIR%\backSched.dll ).
+In early 2015, the IndiaCharlie malware was observed mutating into a new variant, identified as IndiaCharlie-Two, that
+not only drops the RomeoFoxtrot binary, but also installs the dropped binary as a service before activating the service.
+The change in the variants’ methodologies corresponds to the changes in the RomeoFoxtrot functionality and the method
+by which RomeoFoxtrot initializes itself.
+Both IndiaCharlie variants have common components and a sequence of events that occur. They begin by determining
+if the flag –s is present on the command line when the executable is activated. If found, the –s flag causes IndiaCharlie
+to activate in standalone mode, a mode that has slightly different meaning depending on the variant in question. If
+the –s flag is missing, IndiaCharlie initializes as a service executable, which consists of establishing a ServiceMain
+callback functions before calling the Windows API function StartServiceCtrlDispatcherA to start a new
+service. When activated as a service, IndiaCharlie establishes the framework of a legitimate Windows service that goes
+from SERVICE_START_PENDING to SERVICE_RUNNING and finally to SERVICE_STOPPED . During the state changes,
+the same sequence of functions that are called in standalone mode are called. Ultimately, if IndiaCharlie is run as a
+standalone executable or a standalone service, the same sequence of installation/loading functions are called, making the
+use of the Windows service scaffolding largely unnecessary.
+The variants of IndiaCharlie share some common code attributes amongst themselves and the larger Lazarus malware
+collection. For instance, as part of the process that drops the payload malware to the victim’s hard drive, the full directory
+path to the drop site is verified and constructed if necessary using the function described in Section 4.3.4 of the Operation
+Blockbuster report. [3] Also, whenever the suicide script is necessary, IndiaCharlie uses the same method and text for the
+suicide script as IndiaGolf (see 6.2.7). The suicide script generation takes the form seen in Figure 4-1.
+2 George Anescu. “A C++ Implementation of the Rijndael Encryption/Decryption method” http://www.codeproject.com/Articles/1380/A-C-Implementation-of-the-Rijndael-Encryption-Decr 8 Nov. 2002
+3 http://www.operationblockbuster.com/wp-content/uploads/2016/02/Operation-Blockbuster-Report.pdf
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "IndiaCharlie", "type" : "APPS"},
+        {"id": 2, "description": "RomeoFoxtrot", "type" : "APPS"},
+        {"id": 3, "description": "%SYSDIR%\\backSched.dll", "type" : "DOCF"},
+        {"id": 4, "description": "Lazarus Group", "type" : "ACTO"},
+        {"id": 5, "description": "IndiaCharlie-One", "type" : "APPS"},
+        {"id": 6, "description": "IndiaCharlie-Two", "type" : "APPS"},
+        {"id": 7, "description": "AES encryption", "type" : "TTPS"},
+        {"id": 8, "description": "ServiceMain callback function", "type" : "OPPS"},
+        {"id": 9, "description": "StartServiceCtrlDispatcherA", "type" : "EXEF"},
+        {"id": 10, "description": "SERVICE_START_PENDING", "type" : "TAMP"},
+        {"id": 11, "description": "SERVICE_RUNNING", "type" : "TAMP"},
+        {"id": 12, "description": "SERVICE_STOPPED", "type" : "TAMP"},
+        {"id": 13, "description": "IndiaGolf", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "installs and loads"},
+        {"source": 1, "target": 4, "rel_name" : "associated with"},
+        {"source": 5, "target": 3, "rel_name" : "drops and loads"},
+        {"source": 6, "target": 3, "rel_name" : "drops and installs as service"},
+        {"source": 1, "target": 7, "rel_name" : "uses for API name deobfuscation"},
+        {"source": 1, "target": 8, "rel_name" : "establishes when run as service"},
+        {"source": 1, "target": 9, "rel_name" : "calls to start new service"},
+        {"source": 1, "target": 10, "rel_name" : "changes state to"},
+        {"source": 1, "target": 11, "rel_name" : "changes state to"},
+        {"source": 1, "target": 12, "rel_name" : "changes state to"},
+        {"source": 1, "target": 13, "rel_name" : "shares common code and methods with"}
+    ]
+}

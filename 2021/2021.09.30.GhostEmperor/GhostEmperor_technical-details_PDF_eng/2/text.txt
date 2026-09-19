@@ -1,0 +1,70 @@
+Stage 1: PowerShell Dropper
+The installation of the rootkit and the malicious service is started by a BAT file. The BAT file is usually created under the
+C:\Windows\debug or C:\Windows\debug\wia directory, along with a PowerShell script. The script is an installer encrypted
+using AES, and the BAT file runs it through the following set of command lines:
+```
+ PowerShell -ex Bypass C:\windows\debug\chrome.ps1 popmart123 >> C:\windows\debug\di.txt
+ ipconfig >> C:\windows\debug\di.txt
+```
+Error messages from the PowerShell script along with the victim’s network information are logged in a text file under
+the same directory. The BAT file also provides a decryption key as an argument for the PowerShell script, allowing the
+attackers to hinder analysis because without the decryption key, it is not possible to view the later stages of the infection.
+We managed to identify a total of eight keys used by the attackers:
+
+
+systeminfo
+
+
+systeminfo123
+
+
+wudi520
+
+
+1qaz2wsx
+
+
+88d6804e
+
+
+Oi3noe1z
+
+
+popmart123
+
+
+qpalzmLLL
+
+
+The decrypted script contains three encoded buffers. The first one is decoded and written to a DLL file, and a service is
+created to run it. The service is put in a group called ‘MsGroup’ or ‘AuthSvcGroup’. We identified three such DLL names, with
+a matching service name for each one:
+Service Name DLL Path
+MsMp4Hw C:\Windows\System32\msmp4dec.dll
+Msdecode C:\ProgramData\Microsoft\Network\Connections\msdecode.dll
+AuthSvc C:\Windows\System32\AuthSvc.dll
+2
+GhostEmperor’s infection chain and post-exploitation toolset: technical details
+The remaining two buffers in the script are AES encrypted. They are decoded by the PowerShell script and written to two
+registry keys that are later decrypted and loaded by the DLL:
+Encoded buffers in the decrypted PowerShell installer script
+We found four registry key names that were created by the different PowerShell installers and contained encrypted buffers:
+
+
+HKLM\Software\Microsoft\hiaudio
+
+
+HKLM\Software\Microsoft\midihelp
+
+
+HKLM\Software\Microsoft\data
+
+
+HKLM\Software\Microsoft\update
+
+
+In some cases, we also observed an uninstaller PowerShell script called uninstall.ps1 that is capable of self-killing and
+deleting all the artefacts previously created by the installer script. The uninstaller also requires a decryption key to run.
+Decrypted uninstaller script removing registry keys
+3
+GhostEmperor’s infection chain and post-exploitation toolset: technical details

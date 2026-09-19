@@ -1,0 +1,92 @@
+
+
+
+Sentence : Powershell Backdoor
+Starting from system.ps1 the attack-chain goes through two blocks of code that prepare the ground for
+the third block of code, containing the real powershell backdoor. Each block sets the variables
+necessary for the correct execution of the backdoor. Since the entire content is quite large we
+summarized the overall structure as follows:
+We can observe 3 blocks of code that seems to be obfuscated with using Invoke-Obfuscation.
+Each block presents this structure:
+iex | (code)
+First Block
+After the deobfuscation, the first block sets the following variables:�
+First Block Variables
+Second Block
+The second block like the first one after being deobfuscated, creates additional local variables,�
+environment variables and functions used by the backdoor:
+Second Block Variables
+Second Block Functions
+Third Block/Backdoor
+The third and final block is the backdoor and it’s responsible for:�
+Anti-Analysis Countermeasures
+Persistence
+Victim registration
+Network communications
+Command Execution
+The whole backdoor’s structure is quite simple simple and appears as follows:
+Third Block/Backdoor
+For the sake of brevity we will report only the most interesting functions.
+The backdoor implements an anti-analysis countermeasure that uses isDebugEnv to shutdown the
+machine if one of the following tools is found to be running:
+During the analysis, our victims received an updated version of isDebugEnv which extends the list to
+the following tools too:
+The function persistence takes care of lowering the security settings of Microsoft Excel and Word,
+creating a survival on reboot mechanism and hiding the VBS and PS1 by setting the file attributes�
+System and Hidden via the Windows utility attrib.exe.
+Persistence is obtained by adding an entry into (HKCU and HKLM) CurrentVersion\Run. The final�
+artifact will have a value named Windows Optimizations which resolves to: Wscript
+C:\Users\Public\Documents\System.Vbs. An second persistence is obtained by adding a Scheduled
+Task entry called Microsoft\WindowsOptimizationsService which executes Wscript
+C:\Users\Public\Documents\System.Vbs.
+function persist()
+The entire function and the system’s alterations can be easily summarized by checking the events in
+ReaQta-Hive:
+ReaQta-Hive Events
+On the next step the script looks for *.dat files, if none is found it sleeps up to one hour and then stores�
+the proxy URL in the registry and awaits until the function getKey() succeeds.
+The getKey() function retrieves a key that uniquely identifies the victim’s machine, if it does not exists it�
+invokes the register function. Registration is performed by collecting information about the running OS
+that will be sent to the attacker, the server will finally reply with a unique key (MD5) stored in�
+{username}.dat. By diving more in depth in the register function we can see that it gathers IP, OS ad
+User’s information, finally assembling the following string:�
+After the UniqueKey handling (Created or Found) stage the backdoor enters in the Main Loop that calls
+the getCommand() function. This function requests commands to the C2 and sends back the results by
+splitting them in chucks.
+The command evaluation is performed by using Invoke-Expression from powershell, such approach is
+simple and straightforward and it offers strong post-exploitation capabilities to the attacker, the scripts
+can now run as a remote powershell.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "system.ps1", "type" : "EXEF"},
+        {"id": 2, "description": "Powershell backdoor code blocks", "type" : "TAMP"},
+        {"id": 3, "description": "Invoke-Obfuscation", "type" : "TTPS"},
+        {"id": 4, "description": "isDebugEnv", "type" : "EXEF"},
+        {"id": 5, "description": "Microsoft Excel and Word security settings lowering", "type" : "TTPS"},
+        {"id": 6, "description": "attrib.exe", "type" : "APPS"},
+        {"id": 7, "description": "(HKCU and HKLM) CurrentVersion\\Run", "type" : "REGI"},
+        {"id": 8, "description": "Wscript C:\\Users\\Public\\Documents\\System.Vbs", "type" : "EXEF"},
+        {"id": 9, "description": "Microsoft\\WindowsOptimizationsService", "type" : "TTPS"},
+        {"id": 10, "description": "*.dat files", "type" : "DOCF"},
+        {"id": 11, "description": "Proxy URL in the registry", "type" : "REGI"},
+        {"id": 12, "description": "getKey() function", "type" : "TTPS"},
+        {"id": 13, "description": "register function", "type" : "TTPS"},
+        {"id": 14, "description": "{username}.dat", "type" : "DOCF"},
+        {"id": 15, "description": "C2 server", "type" : "CCSH"},
+        {"id": 16, "description": "getCommand() function", "type" : "TTPS"},
+        {"id": 17, "description": "Invoke-Expression from powershell", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "uses"},
+        {"source": 2, "target": 4, "rel_name" : "calls"},
+        {"source": 5, "target": 6, "rel_name" : "uses"},
+        {"source": 7, "target": 8, "rel_name" : "points to"},
+        {"source": 9, "target": 8, "rel_name" : "executes"},
+        {"source": 12, "target": 13, "rel_name" : "calls if not exists"},
+        {"source": 13, "target": 14, "rel_name" : "stores in"},
+        {"source": 15, "target": 16, "rel_name" : "requests from"},
+        {"source": 16, "target": 17, "rel_name" : "uses"}
+    ]
+}

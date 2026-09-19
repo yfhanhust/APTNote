@@ -1,0 +1,123 @@
+Code Injection Function
+This function first checks if the available physical memory on the system and the maximum amount of
+memory the Tildeb process can commit is less than 33554432 bytes (~33.55 Mb). If so, then no attempt
+at code injection happens, as the following pseudocode snippet shows:
+```
+GlobalMemoryStatus(&Buffer);
+if ( Buffer.dwAvailPhys + Buffer.dwAvailPageFile < 33554432 )
+{
+return -4; // error_code
+}
+```
+To get the process’ (‘injectee’) unique process ID, it uses the API NtQuerySystemInformation(), passing it
+the SystemInformationClass value from SystemProcessInformation . The targeted process is supposed to
+be running on the system already.
+It then attempts to get a handle to the process in question by requesting the following list of desired
+access rights (using the OpenProcess() API): PROCESS_CREATE_THREAD,
+PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, and
+PROCESS_QUERY_INFORMATION. If unsuccessful, it attempts to acquire them using either of two
+methods.
+Before attempting code injection, the implant compares the image base address of the module
+Kernel32.dll for the same process. One is retrieved via a pseudohandle to the process and the other via
+the actual process ID. If the base addresses do not match, code injection does not take place. It is
+unknown why the malware enforces such comparison, or under what scenario it is supposed to fail.
+The implant retrieves the image base address of the module Kernel32.dll through either of the following
+two methods:
+
+Using the API NtQuerySystemInformation(), passing it the SystemInformationClass value from
+
+ProcessBasicInformation, which returns the structure PROCESS_BASIC_INFORMATION. This
+is done by parsing the structures data members _PEB.Ldr 
+_PEB_LDR_DATA.InMemoryOrderModuleList  LDR_DATA_TABLE_ENTRY. DllBase.
+2. Using the API _NtQuerySystemInformation(), passing it the SystemInformationClass value from
+SystemModuleInformation , which returns the structure RTL_PROCESS_MODULES. This
+structure is not publicly documented by Microsoft in the MSDN library. However, the malware
+parses it to locate the ImageBase field.
+16
+The second method is only reachable if the process pseudohandle or ID value is zero, which is unclear in
+this context. Once all checks are passed, it injects the following code into the targeted process:
+```
+    injected_code  proc near
+push  esi
+push  edi
+mov   edi, [esp+8+PtrLoadLibraryA]
+lea   eax, [edi+8]
+push  eax        // fname_s (path to downloaded module)
+call  dword ptr [edi]  // LoadLibraryA
+
+mov   esi, eax
+
+test  esi, esi
+
+jz   short ret_zero
+push  esi
+call  dword ptr [edi+4] // FreeLibrary
+
+ret_zero:
+
+mov   eax, esi
+
+pop   edi
+pop   esi
+
+retn  4
+
+injected_code  endp
+
+```
+The code above is responsible for loading and freeing a library module downloaded from the server (as
+shown in control command 0x20) into the address space of the targeted process. Note that the addresses
+of the APIs LoadLibraryA() and FreeLibrary() are resolved dynamically prior to injection, and then their
+addresses are injected accordingly.
+Nothing stands out with respect to the code responsible for injection. It is done by committing a region of
+memory of size (injected code size (32) + 531 = 563 bytes) within the virtual address space of the
+targeted process, with the memory protection for the regions to be allocated set to
+PAGE_EXECUTE_READWRITE. Copying and starting the code into the targeted process is done via the
+standard APIs WriteProcessMemory(), CreateRemoteThread(), and WaitForSingleObject(hThread,
+0xFFFFFFFF) .
+The methods it tries in case Tildeb doesn’t have the specified access rights to the process object are as
+follows:
+
+It attempts to add the GENERIC_ALL (the right to read, write, and execute the object) access
+allowed Access Control Entry (ACE) to the security identifier of the account named Everyone on
+the system. Then, it tries to set/update the DACL_SECURITY_INFORMATION (discretionary
+access control list) for object SE_KERNEL_OBJECT of the targeted process with the new ACE,
+that is, GENERIC_ALL.
+
+If Tildeb is still unable to acquire those access rights after executing this step, it attempts to
+perform the same action on two other accounts that are Domain Users and the name of the user
+associated with the current thread.
+
+If all of the actions in the first step fails, the implant attempts to exploit an unknown escalation-of
+privileges (EoP) vulnerability in the driver win32k.sys . This feature targets very specific versions
+of win32k.sys . It checks for those versions by comparing the CRC-32 checksum of the file on the
+infected system against the following list of hardcoded checksums:
+
+17
+|Hardcoded CRC-32 ChecksumValues|Description|
+|---|---|
+|0x49FBEA88|Unknown|
+|0xE6C42541|MS Windows NT 4.0 (Service Pack 3)|
+|0xF86E4DDE|Unknown|
+|0x6ED91640x5CB13093|UnknownUnknown|
+|0x9CEE7C76|Unknown|
+|0x4DBBF9E20x9B93E1D1|UnknownUnknown|
+|0x3C862693|Unknown|
+|0x6C2CB34C0x8E1E220D|MS Windows NT 4.0 (Service Pack 6a)MS Windows NT 4.0 (Service Pack 6)|
+We were only able to map three of the checksums to their respective OS versions. Moreover, this
+EoP is attempted only on systems with specific locale (default country). The temporary file
+~debl00l.tmp is created in the same directory of the implant, and after exploitation. It includes the
+following information:
+```
+ver= 
+ccode=
+CRC=
+```
+18
+TREND MICRO [TM] RESEARCH
+Trend Micro, a global leader in cybersecurity, helps to make the world safe for exchanging digital information.
+Trend Micro Research is powered by experts who are passionate about discovering new threats, sharing key insights, and
+supporting efforts to stop cybercriminals. Our global team helps identify millions of threats daily, leads the industry in
+vulnerability disclosures, and publishes innovative research on new threats techniques. We continually work to anticipate new
+threats and deliver thought-provoking research.
+www.trendmicro.com

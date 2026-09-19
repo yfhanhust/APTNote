@@ -1,0 +1,69 @@
+Logging
+snoopy stores many debug messages in clear text.
+However, with the internal level of logging set to 0 (none), no debug messages are ever printed. Hence,
+these debug messages are only used in the testing phase of the malware.
+Some of the debug messages are in Chinese:
+
+
+远程路径太长! - The remote path is too long!
+
+
+远程文件不存在! - The remote file does not exist!
+
+
+远程内存空间 分配失 败! - Remote memory space allocation failed!
+
+
+远程路径不存在! - The remote path does not exist!
+
+
+远程文件已存在! - The remote file already exists!
+
+
+连接失败! - Connection failed!
+
+
+Cloud Snooper - SophosLabs Page 15 of 29
+Cloud Snooper - SophosLabs
+
+
+连接成功! - Connection succeeded!
+
+
+参数 错误! - Parameter error!
+
+
+Some messages reveal poor English grammar:
+
+
+view don't found
+
+
+view-shell: data do not belong to SHELL
+
+
+If the rootkit is patched so that it always logs debug messages, it will happily print them on screen:
+Some additional details on unused/broken 'rootkit' functionality
+The tool has an unused (never called) function kernel_load() to drop and load kernel module from its
+own file. If the module /proc/sys/rrootkit is missing, it drops /tmp/rrtkernel.ko and loads it with:
+```
+    insmod /tmp/rrtkernel.ko 2>/dev/null
+```
+Next, /tmp/rrtkernel.ko is unlinked, so it's used, temporarily, to drop and then load a kernel module.
+The function kernel_load() is never called though - there are no references leading to it.
+Apart from that, /tmp/rrtkernel.ko is written by reading its own binary file, starting from the file
+offset of nearly 2GB:
+where g_self_size is set to 0x72C9E41D :
+This code will not work - even if this function was called (it wasn't), it would have failed.
+Cloud Snooper - SophosLabs Page 16 of 29
+Cloud Snooper - SophosLabs
+It would appear the author was tossing around the idea of dropping and loading a kernel module from
+its own file. There are two unused variables 'prev self size mark' and 'post self size mark' which might
+indicate some experiments the author has attempted.
+The original intention is not clear. However, the presence of markers 'prev self size mark' and 'post self
+size mark' around the file offset variable is intriguing.
+The markers could be used to find the exact location of the offset in the binary:
+This way, an external patcher could find and modify the actual offset from where the kernel module
+could be read, saved, and loaded. For example, if it's set to the end of the snoopy binary, the kernel
+module can thus be read and loaded from the appended data.
+However, this feature wasn't implemented, and should, therefore, be considered experimental.

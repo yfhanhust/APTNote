@@ -1,0 +1,242 @@
+
+
+
+Sentence : DESCRIPTION
+iDefense analysts have identified a campaign likely to be targeting members of or
+those with affiliation or interest in the ASEAN Defence Minister’s Meeting (ADMM).
+iDefense assesses with high confidence that this campaign is associated with the
+threat group DRAGONFISH (also known as Lotus Blossom and Spring Dragon).
+MALWARE ANALYSIS
+Knowledge of DRAGONFISH's tactics, techniques, and procedures (TTPs) helps to
+better inform detection and response to attacks by this threat group.
+The sample iDefense identified is a malicious Microsoft Corp. Word document (see
+Exhibit 1) with the following properties:
+  - **MD5** : f12fc711529b48bcef52c5ca0a52335a
+
+
+  - **Author** : mary
+
+
+  - **Last Modified by** : mary
+
+
+  - **Created Time Stamp** : 2018:01:19 14:56:00 (Jan. 19, 2018, 2:56 p.m.)
+
+
+  - **Last Modified Time Stamp** : 2018:01:19 14:56:00 (JAn. 19, 2018, 2:56 p.m.)
+
+Copyright © 2018 Accenture Security. All rights reserved. 3
+THREAT ANALYSIS
+Exhibit 1 : Decoy Document
+The Word document, which includes information on ADMM-Plus members, has a
+malicious executable file embedded as an OLE object (see Exhibit 2).
+Exhibit 2 : Original Source Path
+The embedded file named a.b is dropped to the %temp% folder once the Word
+document is opened and is executed by exploiting the CVE-2017-11882 vulnerability.
+The payload is consequently moved to
+\AppData\Roaming\Microsoft\Windows\Caches\ as a file named NavShExt.dll and the
+executable a.b is deleted.
+This file NavShExt.dll is a PE32 dynamic-link library (DLL), and the filename suggests
+that the malware author intended to disguise the file as a legitimate Symantec Corp.
+anti-virus component called the Norton Security Shell Extension Module.
+The DLL has the following properties:
+  - MD5 Hash: **cd36bbd7f949cf017edba0e6aaadf28c**
+
+
+  - Compile Time: **2018-01-12 17:59:58 (Jan. 12, 2018, 5:59 p.m.)**
+
+
+  - Export Function: **Setting**
+
+Copyright © 2018 Accenture Security. All rights reserved. 4
+THREAT ANALYSIS
+The malware performs the following set of actions:
+
+
+Starts iexplore.exe (Internet Explorer) in a suspended state
+
+
+Injects NavShExt.dll into the iexplore.exe process and calls the DLL
+export Setting function
+
+
+The iexplore.exe process continues to run in the background
+
+
+Creates a mutex named donotbotherme (see Exhibit 3) to avoid having
+duplicated executions
+
+
+Creates a file named thumbcache_1CD60.db in
+
+
+AppData\Local\Microsoft\Windows\Explorer\ where the harvested data is
+stored
+
+Sends data to and downloads files and commands from the designated C2
+
+server
+
+
+Harvests extensive system information from the machine, such as the
+following:
+
+
+LAN and WAN IP addresses (for the latter, it uses the free IP address
+service ipaddress.com)
+
+
+Proxy information
+
+
+Installed software list
+
+
+Process enumeration via tasklist
+
+
+List of all the files on the user’s desktop
+
+
+
+
+Exhibit 3 : Mutex Creation
+Based on the currently available intelligence we also believe the malware is capable
+of providing the attacker with a remote shell on the host and can completely uninstall
+itself.
+Execution debug messages are stored in the %temp% folder in a file named
+FXSAPIDebugLogFile.tmp. Example messages include Client Start!, indicating a
+Copyright © 2018 Accenture Security. All rights reserved. 5
+THREAT ANALYSIS
+successful infection, or an error message such as [2018-1-25 13:35:22] Try All Addr
+Failed! Sleep For: 10.100000 Minutes!, indicating that the C2 sever cannot be reached
+and the malware will sleep for a fixed amount of time.
+Logs are encrypted using the following static AES key:
+Ss)4:WKsRr(3/VJrQq&2.UIqPp%1-THp.
+Of particular interest is an embedded, custom application in a .data section that is
+responsible for loading and executing executables and DLLs from inside the main
+binary. The application supports the following command-line options:
+  - runexe 1.exe /c command…
+
+
+  - rundll 1.dll, DllMain
+
+When attempting to find more information about this application, iDefense
+discovered a file with the MD5 hash cfa7954722d4277d26e96edc3289a4ce, which
+features the same application and was mentioned in a 2015 report titled Operation
+Lotus Blossom by the Unit42 team at partner organization Palo Alto Networks.
+Several observations detailed in this report on Elise variant C align with the findings
+disclosed above:
+  - Similar targeting of Southeast Asia
+
+
+  - Same export function name in the dropper DLL: Setting
+
+
+  - Identical custom application to load and execute EXEs or DLLs
+
+
+  - Heavy anti-virtual-machine features
+
+
+  - Similar obfuscation techniques used to exfiltrate data to C2 server (using
+
+base64-encoded cookie values)
+In contrast to the earlier campaigns, debug paths are completely stripped.
+Persistence is achieved using the Run Registry key with the value name IAStorD:
+  - HKCU\Software\Microsoft\Windows\CurrentVersion\Run\IAStorD
+
+As mentioned earlier, two hidden DLLs can be discovered that are additionally
+injected into iexplore.exe and have the export functions named DePatchEntry
+or EvilEntry. These DLLs provide additional loading and other anti-analysis
+functionalities.
+The malware attempts to spoof the host and query non-existing domains, such as the
+following:
+  - 3qyo4o7.7r7i3[.]info
+
+
+  - dtdf5vu.nt7yq[.]info
+
+
+  - j.4tc3ldw.g9ml.www0[.]org
+
+
+  - 38qmk6.0to9[.]info
+
+
+  - ubkv1t.ec0[.]com
+
+Copyright © 2018 Accenture Security. All rights reserved. 6
+THREAT ANALYSIS
+  - 7g91xhp.envuy3[.]net
+
+
+  - l.hovux.eln9wj7.7gpj[.]org
+
+
+  - w.7sytdjc.wroi.cxy[.]com
+
+This is likely done to throw off malware analysts or network administrators. The real
+C2 server, 103.236.150[.]14, is actually hardcoded (see Exhibit 4).
+Exhibit 4 : Real C2 Server Hardcoded in the Malware
+Copyright © 2018 Accenture Security. All rights reserved. 7
+THREAT ANALYSIS
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "iDefense analysts", "type" : "ACTO"},
+        {"id": 2, "description": "ASEAN Defence Minister’s Meeting (ADMM)", "type" : "TAMP"},
+        {"id": 3, "description": "DRAGONFISH (also known as Lotus Blossom and Spring Dragon)", "type" : "ACTO"},
+        {"id": 4, "description": "Malicious Microsoft Corp. Word document", "type" : "DOCF"},
+        {"id": 5, "description": "f12fc711529b48bcef52c5ca0a52335a", "type" : "IOCS"},
+        {"id": 6, "description": "mary (Author)", "type" : "ACTO"},
+        {"id": 7, "description": "a.b (Malicious executable file)", "type" : "EXEF"},
+        {"id": 8, "description": "%temp% folder", "type" : "SYSP"},
+        {"id": 9, "description": "CVE-2017-11882", "type" : "CVES"},
+        {"id": 10, "description": "\\AppData\\Roaming\\Microsoft\\Windows\\Caches\\NavShExt.dll", "type" : "SYSP"},
+        {"id": 11, "description": "cd36bbd7f949cf017edba0e6aaadf28c", "type" : "IOCS"},
+        {"id": 12, "description": "iexplore.exe (Internet Explorer)", "type" : "APPS"},
+        {"id": 13, "description": "donotbotherme mutex", "type" : "TAMP"},
+        {"id": 14, "description": "\\AppData\\Local\\Microsoft\\Windows\\Explorer\\thumbcache_1CD60.db", "type" : "DOCF"},
+        {"id": 15, "description": "C2 server", "type" : "CCSH"},
+        {"id": 16, "description": "ipaddress.com", "type" : "URLS"},
+        {"id": 17, "description": "%temp%\\FXSAPIDebugLogFile.tmp", "type" : "DOCF"},
+        {"id": 18, "description": "Ss)4:WKsRr(3/VJrQq&2.UIqPp%1-THp (AES key)", "type" : "TAMP"},
+        {"id": 19, "description": "cfa7954722d4277d26e96edc3289a4ce", "type" : "IOCS"},
+        {"id": 20, "description": "Operation Lotus Blossom by Unit42 team at Palo Alto Networks", "type" : "DOCF"},
+        {"id": 21, "description": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\IAStorD (Registry key)", "type" : "REGI"},
+        {"id": 22, "description": "3qyo4o7.7r7i3[.]info", "type" : "CCSH"},
+        {"id": 23, "description": "dtdf5vu.nt7yq[.]info", "type" : "CCSH"},
+        {"id": 24, "description": "j.4tc3ldw.g9ml.www0[.]org", "type" : "CCSH"},
+        {"id": 25, "description": "38qmk6.0to9[.]info", "type" : "CCSH"},
+        {"id": 26, "description": "ubkv1t.ec0[.]com", "type" : "CCSH"},
+        {"id": 27, "description": "7g91xhp.envuy3[.]net", "type" : "CCSH"},
+        {"id": 28, "description": "l.hovux.eln9wj7.7gpj[.]org", "type" : "CCSH"},
+        {"id": 29, "description": "w.7sytdjc.wroi.cxy[.]com", "type" : "CCSH"},
+        {"id": 30, "description": "103.236.150[.]14 (Real C2 server)", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "attributed to"},
+        {"source": 4, "target": 7, "rel_name" : "contains"},
+        {"source": 4, "target": 8, "rel_name" : "drops to"},
+        {"source": 9, "target": 4, "rel_name" : "exploits in"},
+        {"source": 7, "target": 10, "rel_name" : "moves as"},
+        {"source": 7, "target": 8, "rel_name" : "executed from"},
+        {"source": 7, "target": 12, "rel_name" : "injected into"},
+        {"source": 12, "target": 10, "rel_name" : "calls export function of"},
+        {"source": 12, "target": 13, "rel_name" : "creates mutex"},
+        {"source": 12, "target": 14, "rel_name" : "creates file in"},
+        {"source": 10, "target": 15, "rel_name" : "sends data to and downloads from"},
+        {"source": 17, "target": 8, "rel_name" : "stores debug messages in"},
+        {"source": 21, "target": 13, "rel_name" : "uses for persistence"},
+        {"source": 15, "target": 22, "rel_name" : "queries non-existing domain"},
+        {"source": 15, "target": 23, "rel_name" : "queries non-existing domain"},
+        {"source": 15, "target": 24, "rel_name" : "queries non-existing domain"},
+        {"source": 15, "target": 25, "rel_name" : "queries non-existing domain"},
+        {"source": 15, "target": 26, "rel_name" : "queries non-existing domain"},
+        {"source": 15, "target": 27, "rel_name" : "queries non-existing domain"},
+        {"source": 15, "target": 28, "rel_name" : "queries non-existing domain"},
+        {"source": 15, "target": 29, "rel_name" : "queries non-existing domain"},
+        {"source": 30, "target": 15, "rel_name" : "is real C2 server"}
+    ]
+}

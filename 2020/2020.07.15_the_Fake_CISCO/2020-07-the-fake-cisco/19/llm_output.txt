@@ -1,0 +1,118 @@
+
+
+
+Sentence : 2.8 Bootloader analysis
+Further analysis required obtaining software images of corresponding versions from the official sources.
+However, first the software versions needed to be identified. This could be done via the file name of the installed
+application image. Furthermore, the following bootloader image versions were present on the counterfeit units
+at hand:
+
+
+Counterfeit A (operational):
+
+
+Counterfeit B (inoperable):
+
+
+The version strings appeared unique enough to allow a search for them within the uncompressed data sections
+of the images at hand; see appendix 6.2 regarding the file format of the software image. In fact, they were
+included as one monolithic image, likely directly copied to Flash in parts, starting from offset 0x7EE0000, taking
+care to preserve inventory data. Bootloader images extracted from genuine software updates could then be
+directly compared with their counterparts obtained from Flash content extracted directly from the units.
+The c2960x-universalk9-mz.150-2.EX5.bin software image obtained from Counterfeit A did not contain
+embedded bootloaders, so a search was conducted by grabbing multiple official images and matching version
+numbers found in there. The c2960x-universalk9-mz.152-2.E.bin image provided the correct versions.
+Checking the bootloader images obtained from Counterfeit A:
+
+Two changes were made to HBOOT: the first one to 8 bytes inside the code section, and the second which
+
+was considerably larger, appearing appended to the HBOOT image
+
+
+Signature 1 data was intact
+
+
+12 bytes modified right before the BROM code
+
+
+BROM code was intact
+
+
+Signature 2 data was different
+
+
+Extra data is present around the code block at 0x7FFF000, as highlighted before
+
+
+At this point, the process in place for verification of each software piece was not known. However, it was evident
+that some tampering with HBOOT had taken place. To understand these modifications and their significance
+within the context of the system, it is important to consider what was known about the System-on-Chip and the
+way it booted up. The collected reference data is summarized in appendix 6.1.
+F-Secure.com | © F-Secure LABS 20
+PUBLIC
+Assuming the PowerPC core started executing at 0xFFFFFFFC, the Flash ROM could be safely placed at the upper
+addresses so that the last 4 bytes in Flash, where we assumed the unconditional branch instruction was, map
+starting at 0xFFFFFFFC.
+After loading the last 1 megabyte or so of Flash into IDA Pro in the manner described above, we could start
+exploring the code. The assumption made above regarding Flash mapping is validated by the fact that IDA Pro
+could explore the code and create references automatically.
+The branch instruction at 0xFFFFFFFC transferred control to the small blob of PowerPC instructions at
+0xFFFFF000. This piece of code appeared to perform some basic initialization activities and passed control
+further to BROM.
+Judging by the contents of text strings included, BROM appeared to authenticate and start HBOOT and
+provided a rudimentary set of commands to rescue the system from the state where HBOOT could be started.
+While we were not as interested in the details of the command system, the image authentication functionality
+was important to understand.
+This functionality could be located easily by finding references to the tell-tale string Image passed digital
+signature verification that was being printed on the serial console when image authentication succeeded.
+The function referencing this string together with the companion failure message took 6 parameters, most
+important of which were the base address of HBOOT and the signature 1 address. This meant signature 1 was in
+fact the HBOOT signature.
+By repeating the search and analysis on the HBOOT image, a similar function was identified that was used for
+the same purpose of image authentication. This function was used to authenticate the application software
+image; the process also showed up in console output. However, another use of the same function was made to
+authenticate BROM code when it was being copied over to the Flash memory. Careful inspection of the
+parameters being passed revealed that the BROM signature was located 0x2400 bytes before the image end,
+which was exactly where signature 2 was located. We could therefore conclude that signature 2 authenticated
+BROM code.
+Further inspection of the signature verification implementation in both BROM and HBOOT showed the use of
+some functions related to "SlimPro", as evident by corresponding error messages referenced by those functions:
+The answer to the question of what this component might be came from various materials published by the
+vendor. The SLIMpro was a separate computing unit integrated into the System-on-Chip and was responsible
+for system-related security operations. The strings presented above confirmed this information. Further
+information on the SoC can be found in appendix 6.1.
+With a clear overview of what was verified, when, and how, a prominent question arose: how did BROM report
+successful verification of the modified HBOOT code? Answering this required a review of what was already
+known, and a deeper dive into the modifications performed on the hardware of the Counterfeit A unit. But first,
+the changes done to HBOOT and their purpose were investigated.
+F-Secure.com | © F-Secure LABS 21
+PUBLIC
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "c2960x-universalk9-mz.150-2.EX5.bin", "type" : "DOCF"},
+        {"id": 2, "description": "Counterfeit A (operational)", "type" : "TAMP"},
+        {"id": 3, "description": "c2960x-universalk9-mz.152-2.E.bin", "type" : "DOCF"},
+        {"id": 4, "description": "HBOOT (Bootloader)", "type" : "EXEF"},
+        {"id": 5, "description": "BROM code", "type" : "EXEF"},
+        {"id": 6, "description": "Signature 1 data", "type" : "REGI"},
+        {"id": 7, "description": "Signature 2 data", "type" : "REGI"},
+        {"id": 8, "description": "0x7EE0000 (Flash memory offset)", "type" : "SYSP"},
+        {"id": 9, "description": "0x7FFF000 (Flash memory offset)", "type" : "SYSP"},
+        {"id": 10, "description": "0xFFFFFFFC (Start address for PowerPC core execution)", "type" : "NETP"},
+        {"id": 11, "description": "IDA Pro", "type" : "APPS"},
+        {"id": 12, "description": "SLIMpro (Security unit in SoC)", "type" : "MTCP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "contains"},
+        {"source": 3, "target": 4, "rel_name" : "contains"},
+        {"source": 4, "target": 6, "rel_name" : "uses for verification"},
+        {"source": 5, "target": 7, "rel_name" : "uses for verification"},
+        {"source": 2, "target": 4, "rel_name" : "modified in"},
+        {"source": 8, "target": 4, "rel_name" : "stored at"},
+        {"source": 9, "target": 4, "rel_name" : "surrounded by extra data"},
+        {"source": 10, "target": 5, "rel_name" : "executes starting from"},
+        {"source": 11, "target": 5, "rel_name" : "analyzed using"},
+        {"source": 12, "target": 4, "rel_name" : "authenticates"}
+    ]
+}

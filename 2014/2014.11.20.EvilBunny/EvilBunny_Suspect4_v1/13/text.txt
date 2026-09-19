@@ -1,0 +1,73 @@
+2.6 LUA ENGINE INTEGRATION
+Suspect #4 incorporates an interpreter for Lua 5.1, LuaSocket 2.0.2 and C/Invoke Lua
+bindings. Lua is a lightweight programming language designed as a scripting language
+which can be embedded into applications, providing a C API for doing so. C bindings are
+provided through C/Invoke and enable Lua scripts to perform callbacks to C/C++ code.
+This constellation can be found in many video game engines to provide polymorphic
+behavior in games. Engine and game play features are injected through Lua scripts, which
+instrument the game engine code.
+The Lua interpreter is very small, compiled roughly 180kB, thus can easily be integrated in
+an application. The C/Invoke bindings enable Lua to be completely independent from the
+C/C++ application, so injected scripts can be pure Lua code.
+page | 17
+Illustration 8: A small portion of Lua callback functions
+A script, if delivered to one of the hearer threads, will be provided through the
+corresponding net.cap-file of the hearer along with a C&C command. If a script is included
+in the data read from the net.cap-file, this is indicated by the start sentinel '<$'. Likewise,
+the end of a script is indicated by '$>'.
+Illustration 9: Command and script execution go hand in hand
+Command execution goes hand in hand with Lua script execution, thus is dependent of the
+four hearer threads. The work flow for each hearer per execution loop in the main thread is
+as follows:
+
+
+Read and decrypt content from according net.cap-file
+
+
+See if an entry of the C&C command list can be found in the decrypted data
+
+
+page | 18
+
+
+If so, execute the command
+
+
+Hand the data over to the Lua
+
+
+interpreter thread
+
+See if a Lua script can be located,
+
+searching for start and end
+sentinel
+
+If so, start Lua thread and execute
+
+script
+
+If more than one script can be
+
+found start more Lua threads
+recursively
+Illustration 10: Command and script execution in detail
+After starting the Lua thread requests a value from Windows registry named 'EnableLua'
+under SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System. This key name
+stands for enable limited user account. When set to zero this key effectively disables UAC
+(User Account Control). The malware only requests the key value but does not change it.
+The value is later used by a callback function named 'popenWin' to decide on a way how a
+sub process should be started. Options are via WMIC using wmic.exe, Microsoft CScript
+engine using cscript.exe or directly via spawning a command line through cmd.exe.
+However, spawning sub processes is not the only feature which comes with Lua. The Lua
+interpreter is a powerful code base which enables suspect #4 to change functionality on
+the fly, as different scripts are downloaded and executed. The scripts define the
+functionality as they perform callbacks to the C/C++ code in the malware binary. The
+potential of the Lua interpreter can be investigated on the project homepage [4].
+Like command execution, Lua script execution also returns a status message which is
+extended by a time stamp and forwarded to one of the C&C servers, as well as written to
+the backfile log in Perflib_Perfdat_dmpbX.dat. Likewise, the Lua threads log their activity
+to Perflib_Perfdata_41X.dat/42X.dat.
+Due to the absence of C&C servers which hold the Lua scripts for the bot's Lua interpreter
+the true nature of this feature remains unclear.
+page | 19

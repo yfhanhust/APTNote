@@ -1,0 +1,212 @@
+BITS Downloaders
+```
+The downloader is the application that is dropped by the “EFI dropper” module. When executed, it creates a BITS Job with
+display name “test” of type BG_JOB_TYPE_UPLOAD. It creates a mutex to ensure only one instance is being executed.
+10
+MosaicRegressor: Lurking in the Shadows of UEFI
+Mutex name: “FindFirstFile Message Bi”
+Enumerates all BITS jobs. For a job whose display name contains the substrings “first_tf” or “second_tf” and overall display
+name is five or six characters (this never happens since the conditions are contradictory), it cancels the job, effectively
+interrupting the transfer and removing temporary files. Then the module follows its business logic in a separate thread while
+running an empty window message loop in the startup thread.
+Main thread
+The program contains four blocks of data encrypted with a simple one-byte XOR algorithm. Three of those blocks contain
+URL strings and the fourth contains a unique string, “D22”.
+It builds an identification string following the format: %Computer name%-D22_32 or 64
+The 32 or 64 suffix is chosen based on system identification. The system is supposed to be 64 if the program is able to
+locate the file or directory named %WINDIR%\SysWOW64
+The program then follows into an infinite C&C communication loop. It delays for a hardcoded period of 20 minutes between
+each attempt.
+C&C Communication
+The module compiles a final URL string following the format: URL from the decrypted buffer/identification string/on.z
+It then attempts to download the contents of that URL to the file %TEMP%\on.dat using its BITS transfer routine. The
+contents of the file areignored and the file is deleted immediately after transfer. This initial download is used to determine
+the valid C&C server. The module iterates through all three URLs hardcoded in its body and uses the first one that responds
+without error for further communication.
+In case any of the C&C servers provided a valid response, the program sends another download request for: URL of the
+valid C&C server/identification string/BeFileA.z The downloaded contents are then saved to: %TEMP%\BeFileA.dll
+It also tries to fetch the file using the URL: URL of the valid C&C server/identification string/BeFileC.z and save it to:
+%TEMP%\BeFileC.dll
+The file “BeFileA.dll” is downloaded only once during the duration of the program’s instance and is loaded in a separate thread.
+The attempts to download the file “BeFileC.dll” occur in every communication period. The file is loaded in the same thread.
+BITS Transfer
+The program creates a new BITS job. For a download job it names the job “first_tf” and for the upload tasks it uses the
+name “second_tf”. Other versions use slightly different strings as job names but they all start with “first” and “second”
+correspondingly, and are always identical to the names of the jobs that are cancelled during the startup. The job is started
+with the priority setting “BG_JOB_PRIORITY_FOREGROUND”. It also toggles the security options “BG_SSL_IGNORE_
+CERT_CN_INVALID”, “BG_SSL_IGNORE_CERT_DATE_INVALID”, “BG_SSL_IGNORE_UNKNOWN_CA”, to accept invalid
+HTTPS certificates.
+It then waits for up to about five minutes for the BITS job to complete, also extending the wait if the actual transfer is in
+progress.
+11
+MosaicRegressor: Lurking in the Shadows of UEFI
+Loading the DLL modules
+The module expects the files provided by the C&C server to be PE DLLs. They are loaded normally using the LoadLibrary
+API function. Each DLL may have one or more exported functions named “CallA”, “CallB”, “CallC”, “CallD”, “CallE”.
+All exported functions are supposed to have the same ABI: cdecl calling convention, five arguments all passed by pointers.
+Following the execution of each function the program delays for one second and then processes the results returned in
+these arguments. Depending on the data returned by the exported function, the program may then download or upload
+arbitrary files from/to arbitrary URLs using its BITS transfer routine. Also, depending on the returned data, it may delete or
+leave the DLLs file on disk.
+Then it checks if a corresponding “dat” file exists in the %TEMP%directory. In case the file exists it uploads it to the C&C
+server using the BITS transfer routine, the same URL except the last component is identical to the actual filename. The
+“dat” file is deleted if the upload succeeds.
+BITS Downloader, extended
+This module is similar to the “BITS Downloader” and appears to be based on the same code. The differences follow. It uses a
+different mutex name: “set instance state”.
+After starting the C&C communication thread, the program sets the registry value HKEY_CURRENT_USER\Software\
+Microsoft\Windows\CurrentVersion\Run, value name qwinstd, to the location of its own executable. It also overwrites
+the value if it is not equal to the location of the executable. This ensures the program’s automatic startup. Also the program
+sets up a timer callback routine to be called every second. The routine looks for the file %APPDATA%\Microsoft\Internet
+Explorer\usk.rs. When such a file is found it acts as a kill switch: the file deleted, the BITS Jobs are cancelled and the
+program exits.
+Instead of the %TEMP% directory this version uses the directory %APPDATA%\Microsoft\Internet Explorer to store its
+temporary files.
+12
+MosaicRegressor: Lurking in the Shadows of UEFI
+System information
+The module creates a text file %APPDATA%\Microsoft\Internet Explorer\%Computername%.dat and fills it with system
+information. Note the non-ASCII symbols 0xA3 and 0xBE used in the string literals. These were replaced with a colon
+character (See “Language artifacts”).
+```
+Host Infomation:
+EXE ID: %Unique ID, see table%
+Host Name: %Computername%
+Current User Name: %USERNAME%
+PRIVILEGE: %User privilege%
+OS: Windows NT %Major%.%Minor%\t%Service pack string%\t%Product type%\tSystemMetrics:
+%Build number for Windows 5.2%\tSuiteMask hex: %Suite mask%
+OS BITS: %32 or 64%
+Host Power ON Time: %04d-%02d-%02d %02d:%02d
+Power ON Time: %d Hours %2d Minutes %2d Seconds orPower ON Time: %2d Minutes %2d Seconds
+=======================================================================================
+=================
+Installed Programe List 32:
+*the following list is the contents of registry keys from HKLM\SOFTWARE\Microsoft\Windows\
+CurrentVersion\Uninstall*
+%Item number% %Registry key last write timestamp in format %04d-%02d-%02d %02d:%02d%
+%Display Name%
+*optional, when the program determines that it is running on a 64-bit OS, it disables
+64/32 registry reflection and enumerates the installed program list again, generating a
+similar list with a header “Installed Programe List 64”*
+```
+Remarks. The %User privilege% string is produced using the NetUserGetInfo API for the current user. Depending on
+the returned result, it can be one of the strings: “Administrator”, “User”, “Guest”, “ACCESS_DENIED”, “COMPUTER_
+NAME_ERROR”, “USER_NAME_ERROR”. The %Product type% string is one of “VER_NT_SERVER”,“VER_NT_DOMAIN_
+CONTROLLER”, “VER_NT_WORKSTATION”
+Once the report file is ready, the program creates a BITS job to upload it to the C&C server. The upload location follows the
+format: URL of the C&C server/%Computername%.dat The file is deleted if the upload succeeds.
+13
+MosaicRegressor: Lurking in the Shadows of UEFI
+Payload
+When finished with uploading the system information report, the program then attempts to fetch the payload from the
+C&C server. The business logic is similar to the one of the “BITS Downloader”, with the following differences:
+Files that are downloaded and executed in separate threads:
+FileA.dll fetched from %C&C URL%/%Computername%/FileA.z
+FileB.dll fetched from %C&C URL%/%Computername%/FileB.z
+Files that are downloaded and executed in the current thread:
+FileC.dll fetched from %C&C URL%/%Computername%/FileC.z
+FileD.dll fetched from %C&C URL%/%Computername%/FileD.z
+Each DLL may have one or more exported functions named “CallA”, “CallB”, “CallC”, “CallD”, “CallE”, “CallF”, “CallG”, “CallH”,
+“CallI”, “CallJ”, “CallK”, “CallL”. Once finished, the program may delete the DLL file depending on the returned value.
+C&C URL:
+Unique IDs (“EXE ID” in the report):
+C&C communication period: 15 minutes
+14
+MosaicRegressor: Lurking in the Shadows of UEFI
+Language artifacts
+Many strings contain the sequence 0xA3, 0xBE (hexadecimal). This is an invalid sequence for a UTF8 string and the LATIN1
+encoding translates these symbols to a pound sign followed by a “masculine ordinal indicator” (“£º”).
+Дanguage artifacts
+An attempt to iterate over all available iconv symbol tables trying to convert to UTF-8 produces possible candidates that
+produce a more meaningful conversion for this byte sequence:
+```
+CN-GB//, “ : ” # EF BC 9A
+CP936//, “ : ” # EF BC 9A
+CP949//, “ : ” # EF BC 9A
+CSEUCKR//, “ : ” # EF BC 9A
+CSGB2312//, “ : ” # EF BC 9A
+EUC-CN//, “ : ” # EF BC 9A
+EUC-KR//, “ : ” # EF BC 9A
+EUCCN//, “ : ” # EF BC 9A
+EUCKR//, “ : ” # EF BC 9A
+GB2312//, “ : ” # EF BC 9A
+GB13000//, “ : ” # EF BC 9A
+GB18030//, “ : ” # EF BC 9A
+GBK//, “ : ” # EF BC 9A
+ISIRI-3342//, “!:” # 21 3A
+ISIRI3342//, “!:” # 21 3A
+MS936//, “ : ” # EF BC 9A
+MSCP949//, “ : ” # EF BC 9A
+OSF0004000A//, “ : ” # EF BC 9A
+OSF100203B5//, “ : ” # EF BC 9A
+UHC//, “ : ” # EF BC 9A
+WINDOWS-936//, “ : ” # EF BC 9A
+```
+Given the context of the string preceding the symbol and line feed symbols following it, the best match is the “FULLWIDTH
+COLON” Unicode character translated from one of the Chinese or Korean code pages (CP936 and CP949).
+15
+MosaicRegressor: Lurking in the Shadows of UEFI
+BITS Downloader, extended, MSVC 10 version
+This module is similar to the “BITS Downloader, extended” but was compiled with a more recent version of Visual Studio and
+bears minor differences.
+Mutex name used: “foregrounduu state”
+Payloads downloaded and executed: “FileA.z”(“FileA.dll”), “FileB.z”(“FileB.dll”) and “FileC.z”(“FileC.dll”)
+Exported function names executed from the payload DLLs: “CallA”, “CallB”, “CallC”, “CallD”, “CallE”.
+BITS Downloader, “HHDump.dll”
+This module is a DLL version of a “BITS Downloader”. The library provides one exported function “SetFormName” that is
+empty; all the business logic is implemented in the DllMain function.
+The DllMain function, when executed with the reason code of DLL_PROCESS_ATTACH, checks if the filename of the host
+process is equal to “vc9play.exe”. It then spawns its main thread if the filename matches.
+C&C URL https://43.252.228.84/quest
+16
+MosaicRegressor: Lurking in the Shadows of UEFI
+Load.rem
+The module checks for the presence of the file %APPDATA%\Microsoft\Windows\load.rem. If the file is present it follows in
+a new thread: it copies it to %APPDATA%\Microsoft\Windows\SendTo\load.dll, then loads the copy as a regular DLL and
+calls its function exported with the name “Load”, if present. The copy is deleted if the module fails to load it as a DLL.
+Main thread
+The module enumerates and cancels BITS jobs if their names contain a substring “first job” or “second job” and the length
+of the name is either 9 or 10. This is an improvement over the original “BITS Downloader” that checked for a contradictory
+condition that never becomes true.
+The module creates a directory if it doesn’t exist: %APPDATA%\Microsoft\Network. Due to a bug, it will not attempt to
+create the directory if a file exists with the same name, failing later when the directory is required. This directory is then
+used to store any temporary files, instead of %TEMP% in the original “BITS Downloader”.
+Files that are downloaded and executed in separate threads:
+DFileA.dll fetched from %C&C URL%/%Computername%/DFileA.z
+DFileD.dll fetched from %C&C URL%/%Computername%/DFileD.z
+Files that are downloaded and executed in the current thread:
+DFileC.dll fetched from %C&C URL%/%Computername%/DFileC.z
+Exported function names executed from the payload DLLs: “CallA”, “CallB”, “CallC”, “CallD”, “CallE”, “CallF”, “CallG”, “CallH”,
+“CallI”, “CallJ”, “CallK”, “CallL”, “CallM”, “CallN”, “CallO”, “CallP”, “Final”.
+The signature of the function called “Final” is different from the rest: it takes 21 arguments that not only contain those
+passed to other functions but also the return values of the previous (Call…) functions called.
+C&C communication period: 30 minutes
+Remarks. “vc9play.exe” may refer to the component of software called “Virtual CD 9”.
+BITS Downloader, “cryptui.sep”
+17
+MosaicRegressor: Lurking in the Shadows of UEFI
+This module is supposed to be loaded by the payload of a BITS Downloader named “FileA.dll” and is in turn another variation
+of a BITS Downloader. It is very similar to “HHDump.dll”. The following description includes only the differences.
+The library provides one exported function with the name “RetrievePKCS7FromCA”. The DllMain function is empty and the
+module doesn’t have any checks for the name of the current executable.
+The payload is loaded in the same way as “HHDump.dll”; the only difference is an additional optional call to the function
+exported with the name “CallQ” after the call to the function named “Final”.
+C&C communication period: 15 minutes
+BITS Downloader, 64-bit
+This executable is based on the codebase of the “BITS Downloader” but also contains pieces of boilerplate code that later
+appeared in “BITS Downloader, extended”. It is worth noting that the part of the code that checks for, and cancels, the BITS
+job by name uses the same name lengths as the first “BITS Downloader” (5 and 6) but the correct substring literals “first”
+and “second”.
+This version does not create any mutex.
+C&C communication period: 15 minutes
+This version uses the directory %APPDATA%\Microsoft\Internet Explorer to store its temporary files.
+The module creates a text file %APPDATA%\Microsoft\Internet Explorer\%Computername%.dat and writes a
+hardcoded string in there:
+LINE
+The file is then uploaded to the C&C server using the same code that uploads the system information report in “BITS
+Downloader, extended”.
+The names of payloads, filenames and exported function names that are executed from the payload DLLs is identical to the
+one of “BITS Downloader, extended”.
+18
+MosaicRegressor: Lurking in the Shadows of UEFI

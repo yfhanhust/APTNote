@@ -1,0 +1,99 @@
+
+
+
+Sentence : Analysis
+Why do adversaries use Rundll32?
+Like many of the most prevalent ATT&CK techniques, Rundll32 is a native
+Windows process that’s installed by default on nearly every Microsoft computer
+dating back to Windows 95. It is a functionally necessary component of the
+Windows operating system that can’t be simply blocked or disabled. This
+necessity and ubiquity makes Rundll32 an attractive target for adversaries
+intent on blending in.
+From a practical standpoint, Rundll32 enables the execution of native dynamic
+link libraries (DLL). Executing malicious code as a DLL allows an adversary
+to keep their malware from appearing directly in a process tree, as a directly
+executed EXE would. Additionally, adversaries are known to abuse export
+functionality in legitimate DLLs, including those that can facilitate connection
+to network resources to bypass proxies and evade detection. Under certain
+conditions, particularly if you lack controls for blocking DLL loads, the execution
+of malicious code through Rundll32 can bypass application controls.
+Beyond DLLs, Rundll32 can also execute JavaScript via the
+RunHtmlApplication function .
+How do adversaries use Rundll32?
+Adversaries abuse Rundll32 in a wide variety of ways, so we’ll limit our focus to
+variations we encounter regularly.
+Adversaries often leverage Rundll32 to load code from DLLs within world
+writable directories (e.g., the Windows temp directory), a pattern of behavior
+that you might see from legitimate enterprise software as well as not-so-legit
+tools like Cobalt Strike.
+As we’ve covered on the Red Canary blog, adversaries use Rundll32 to load the
+l [T1218.001: Rundll32]
+22
+2021 Threat Detection Report
+legitimate ~~comsvcs.dll~~, which calls the ~~MiniDump~~ function, allowing adversaries
+to dump the memory of certain processes. We’ve observed adversaries
+leveraging this technique to retrieve cached credentials from ~~lsass.exe~~, which is
+illustrated below.
+~~DllRegisterServer~~ is a legitimate function of Rundll32 that is used for a variety of
+innocuous reasons. However, we’ve also seen several threats—from droppers for
+Qbot, Dridex, and others to ransomware such as Egregor and Maze—leverage it
+as a mechanism to bypass application controls. The following illustrates
+a generic example of an adversary using ~~DllRegisterServer~~ to bypass
+application controls.
+Another detectable example we encounter frequently with Rundll32 involves
+Cobalt Strike, which leverages the ~~StartW~~ function to load DLLs from the
+command line. The use of that export function is a telltale sign you are dealing
+with Cobalt Strike. The following is an example of what that might look like:
+In what might be an example of a malicious scheduled task, we’ve also observed
+backdoors that leverage ~~taskeng.exe~~ to spawn Rundll32 and execute malicious
+code.
+l [T1218.001: Rundll32]
+23
+2021 Threat Detection Report
+Last and perhaps least frequently, we observe a decent amount of USB worm
+activity wherein Rundll32 executes in conjunction with a command line
+containing non-alphanumeric or otherwise unusual command-line characters.
+We most frequently see this with Gamarue, as in the example below.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Rundll32", "type" : "EXEF"},
+        {"id": 2, "description": "Windows operating system", "type" : "OPPS"},
+        {"id": 3, "description": "dynamic link libraries (DLL)", "type" : "TAMP"},
+        {"id": 4, "description": "malicious code as a DLL", "type" : "EXEF"},
+        {"id": 5, "description": "JavaScript via RunHtmlApplication function", "type" : "APPS"},
+        {"id": 6, "description": "world writable directories (e.g., the Windows temp directory)", "type" : "SYSP"},
+        {"id": 7, "description": "comsvcs.dll", "type" : "EXEF"},
+        {"id": 8, "description": "MiniDump function", "type" : "TAMP"},
+        {"id": 9, "description": "lsass.exe", "type" : "EXEF"},
+        {"id": 10, "description": "DllRegisterServer function of Rundll32", "type" : "TAMP"},
+        {"id": 11, "description": "Qbot malware", "type" : "ACTO"},
+        {"id": 12, "description": "Dridex malware", "type" : "ACTO"},
+        {"id": 13, "description": "Egregor ransomware", "type" : "ACTO"},
+        {"id": 14, "description": "Maze ransomware", "type" : "ACTO"},
+        {"id": 15, "description": "Cobalt Strike tool", "type" : "APPS"},
+        {"id": 16, "description": "StartW function", "type" : "TAMP"},
+        {"id": 17, "description": "taskeng.exe", "type" : "EXEF"},
+        {"id": 18, "description": "malicious scheduled task", "type" : "TAMP"},
+        {"id": 19, "description": "USB worm activity", "type" : "ACTO"},
+        {"id": 20, "description": "Gamarue malware", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "enables execution of"},
+        {"source": 4, "target": 1, "rel_name" : "executed by"},
+        {"source": 5, "target": 1, "rel_name" : "can execute"},
+        {"source": 6, "target": 3, "rel_name" : "contains"},
+        {"source": 7, "target": 8, "rel_name" : "calls"},
+        {"source": 9, "target": 8, "rel_name" : "memory dumped from"},
+        {"source": 10, "target": 1, "rel_name" : "function of"},
+        {"source": 11, "target": 10, "rel_name" : "uses"},
+        {"source": 12, "target": 10, "rel_name" : "uses"},
+        {"source": 13, "target": 10, "rel_name" : "uses"},
+        {"source": 14, "target": 10, "rel_name" : "uses"},
+        {"source": 15, "target": 16, "rel_name" : "uses"},
+        {"source": 15, "target": 3, "rel_name" : "loads"},
+        {"source": 17, "target": 1, "rel_name" : "spawns"},
+        {"source": 18, "target": 17, "rel_name" : "uses"},
+        {"source": 19, "target": 1, "rel_name" : "uses"}
+    ]
+}

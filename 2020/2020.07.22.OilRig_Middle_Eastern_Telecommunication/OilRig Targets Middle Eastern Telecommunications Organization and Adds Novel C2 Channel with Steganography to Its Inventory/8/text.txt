@@ -1,0 +1,79 @@
+Hiding Data with Steganography
+The payload will receive data from and exfiltrate data to the C2 within email attachments,
+specifically within the BMP images that use steganography to hide the data within the
+image. The method with which the payload extracts data from the BMP image to receive
+data from the C2 is the same as its method for hiding data to exfiltrate. While we did not
+observe the C2 using this method to send commands, we were able to analyze the payload
+to determine how it would send messages and exfiltrate data from the system.
+To send data using this C2 channel, the payload will read the following image available on
+a default install of Windows:
+C:\ProgramData\Microsoft\User Account Pictures\guest.bmp
+Depending on the version of Windows, the “guest.bmp” image differs in size and
+contents.The image from Windows 7 is 128×128 pixels and contains an image of a
+suitcase, while the Windows 10 image is 448×448 pixels and contains a generic user icon.
+Figure 9 shows the two images extracted from default installations of Windows 7 and 10
+with the latter scaled down in size.
+Figure 9. The “guest.bmp” image from
+Windows 7 on the left and Windows 10 on the
+right
+The payload determines the height, width and
+color depth of the image and calculates how
+many images it will need to modify to send the
+entirety of the data:
+(length of data)/(width*(height-1))
+https://unit42.paloaltonetworks.com/oilrig-novel-c2-channel-steganography/ 10/18
+7/23/2020 OilRig Targets Middle Eastern Telecommunications Organization and Adds Novel C2 Channel with Steganography to Its Inventory
+It uses the modulo operator to check if there is data that does not fit in the previous image
+and will add one to the required image count if leftover data exists. The payload then
+iterates through the data by grabbing a substring of the data that will fit within the image.
+To explain how the payload hides data within this image, we must first briefly explain the
+BMP file format. The BMP file format includes file headers and an array of values used to
+store the red, green and blue color values of each pixel in the image. The format of each
+color value in the array of color values varies depending on the color depth, as 24-bit BMP
+images will use 3-byte values that are used to specify the intensities of red, blue and green
+colors for each pixel in the image, while 32-bit images use 4-byte values. The RDAT
+payload can support both 24- and 32-bit images. Since both “guest.bmp” images from
+Windows 7 and 10 are 24-bit images, we observed the payload using the 3-byte color
+values for each pixel to hide data. The payload will modify each pixel’s 3-bytes to transmit
+one byte of exfiltrated data. By spreading the data byte over the 3-bytes for each pixel, the
+impact on the original image is minor and difficult to visualize. Figure 10 compares the
+original image from Windows 7 and the modified image carrying the hidden data.
+Figure 10. Original “guest.bmp” image from
+Windows 7 on the left and the modified carrier
+image on the right
+Figure 10 shows how difficult it is to see the
+hidden data embedded within the BMP image.
+We zoomed in on the 29 pixels modified to
+carry the data to visualize the differences and
+found that they differed slightly in color, as
+seen in the comparison in Figure 11. All the pixels in the two images are different.
+However, some of the differences in color are more obvious than others.
+Figure 11. This zoomed-in view shows the original pixels on top and pixels carrying 29-
+bytes of data on the bottom
+To hide the data within the image, the payload will check the color depth of the
+“guest.bmp” image for either 24- or 32-bit depth, which allows the payload to determine
+how many bytes per pixel it will need to spread the bits of the hidden data across. For
+instance, a 24-bit BMP image like “guest.bmp” from Windows 7, seen in Figure 10 above,
+will have three bytes per pixel in the image that represents the red, green and blue values
+for that pixel. Using this 24-bit image, the payload will spread the 8-bits of the data byte
+across these three bytes, specifically by setting the least significant bit values in the pixel
+bytes to the bit values of the data byte.
+https://unit42.paloaltonetworks.com/oilrig-novel-c2-channel-steganography/ 11/18
+7/23/2020 OilRig Targets Middle Eastern Telecommunications Organization and Adds Novel C2 Channel with Steganography to Its Inventory
+Let’s use the example data 8,54351-1616479009,0 from a beacon sent from the payload to
+the C2, which it will encode using base64 to OCw1NDM1MS0xNjE2NDc5MDA5LDA=,
+append the @ symbol and embed within a BMP image. The O ASCII character has a
+hexadecimal value of 0x4f, which is 01001111 in base2. The 8-bits of this base2
+representation are then used to set specific bits within the 3-bytes for each pixel:
+Data bits 0 and 1 replacing the first pixel byte’s bits 1 and 0.
+Data bits 2, 3 and 4 replacing the second pixel byte’s bits 2, 1 and 0.
+Data bits 5, 6 and 7 replacing the third pixel byte’s bits 2, 1 and 0.
+Using this logic, the payload will read the pixel bytes from the “guest.bmp” image, which
+is 0xe4, 0xdf and 0xb9 and replace the following bits using the base2 of 010 011 11 for O:
+Replace bits 2, 1 and 0 within 0xe4 with 010, which results in 0xe2.
+Replace bits 2, 1 and 0 within 0xdf with 110, which results in 0xde.
+Replace bits 1 and 0 within 0xb9 with 11, which results in 0xbb.
+Figure 12 below shows how these bit replacements occur and how the replacements
+ultimately change the values of the pixel’s bytes.
+Figure 12. Visual explanation of the bit replacement performed on each pixel to hide
+data in the BMP images

@@ -1,0 +1,34 @@
+Delivery Document
+As mentioned in a recent ISC diary entry
+(https://isc.sans.edu/forums/diary/Simple+but+Effective+Malicious+XLS+Sheet/23305/), the macro gets
+the contents of cells in column 170 in rows 2227 to 2248 to obtain the base64 encoded payload, which
+can be seen in the following screenshot:
+Figure 3 Delivery Document showing base64 encoded payload
+The macro prepends the string —–BEGIN CERTIFICATE—– to the beginning of the base64 encoded
+payload and appends —–END CERTIFICATE—– to the end of the data. The macro then writes this data to
+a text file in the C:\Programdata folder using a random filename with the .txt extension. The macro
+then uses the command certutil ­decode to decode the contents of this text file and outputs the
+decoded content to a randomly named file with a .exe extension in the C:\Programdata folder. The
+macro sleeps for two seconds and then executes the newly dropped executable.
+The newly dropped executable is a loader Trojan responsible for installing and running the payload of this
+attack. We performed a more detailed analysis on this loader Trojan, which readers can view in this
+report’s appendix. Upon execution, the loader will decrypt the embedded payload (DLL) using a custom
+algorithm, decompress it and save it to the following file:
+%LOCALAPPDATA%\cdnver.dll
+The loader will then create the batch file %LOCALAPPDATA%\cdnver.bat, which it will write the
+following:
+start rundll32.exe “C:\Users\user\AppData\Local\cdnver.dll”,#1
+The loader Trojan uses this batch file to run the embedded DLL payload. For persistence, the loader will
+write the path to this batch file to the following registry key, which will run the batch file each time the user
+logs into the system:
+HKCU\Environment\UserInitMprLogonScript
+The cdnver.dll payload installed by the loader executable is a variant of the SofacyCarberp
+(https://researchcenter.paloaltonetworks.com/tag/carberp/) payload, which is used extensively by the
+Sofacy threat group. Overall, SofacyCarberp does initial reconnaissance by gathering system information
+and sending it to the C2 server prior to downloading additional tools to the system. This variant of
+SofacyCarberp was configured to use the following domain as its C2 server:
+cdnverify[.]net
+The loader and the SofacyCarberp sample delivered in this attack is similar to samples we have analyzed
+in the past but contains marked differences. These differences include a new hashing algorithm to resolve
+API functions and to find running browser processes for injection, as well as changes to the C2
+communication mechanisms as explained in detail within the appendix.

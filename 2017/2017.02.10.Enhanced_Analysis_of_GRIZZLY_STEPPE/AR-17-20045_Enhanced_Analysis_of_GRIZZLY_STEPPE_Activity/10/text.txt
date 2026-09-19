@@ -1,0 +1,176 @@
+APPENDIX B: APT29
+This section details six implants associated with APT29 actors. Included are YARA rules as well as
+SNORT signatures. Please note that despite being sound production rules, there is still the chance for
+False Positives. In addition, these will complement additional analysis and should not be used as the sole
+source of attribution.
+The following YARA rules detect IMPLANT 7, with rule naming convention.
+IMPLANT 7 Rules:
+Rule IMPLANT_7_v1
+{
+strings:
+$MZ = "MZ"
+$STR1 = { 8A 44 0A 03 32 C3 0F B6 C0 66 89 04 4E 41 3B CF 72 EE }
+$STR2 = { F3 0F 6F 04 08 66 0F EF C1 F3 0F 7F 04 11 83 C1 10 3B CF 72 EB }
+condition:
+$MZ at 0 and ($STR1 or $STR2)
+}
+Network Indicators for Implant 7
+alert tcp any any -> any 80 (content:".php?";
+pcre:"/\/(?:index|status|captha|json|css|ajax|js).php\?(?:id|item|mode|page|status|s|f|t|k|l|m|n|b|v|c|app|js|css|
+im|code|search)=[a-z09]{0,26}\&(?:id|item|mode|page|status|s|f|t|k|l|m|n|b|v|c|app|js|css|im|code|search)=[a-z0-9]{0,26} HTTP/";
+msg:"Cache_DLL beacon GET 2 arg"; sid:1234;)
+alert tcp any any -> any 80 (content:".php?";
+pcre:"/\/(?:index|status|captha|json|css|ajax|js).php\?(?:id|item|mode|page|status|s|f|t|k|l|m|n|b|v|c|app|js|css|
+im|code|search)=[a-z0
+42 of 56 42 of 56 TLP:WHITE
+9]{0,26}\&(?:id|item|mode|page|status|s|f|t|k|l|m|n|b|v|c|app|js|css|im|code|search)=[a-z09]{0,26}\&(?:id|item|mode|page|status|s|f|t|k|l|m|n|b|v|c|app|js|css|im|code|search)=[a-z0-9]{0,26} HTTP/";
+msg:"Cache_DLL beacon GET 3 arg"; sid:1234;)
+alert tcp any any -> any 80 (content:".php?";
+pcre:"/\/(?:index|status|captha|json|css|ajax|js).php\?(?:id|item|mode|page|status|s|f|t|k|l|m|n|b|v|c|app|js|css|
+im|code|search)=[a-z09]{0,26}\&(?:id|item|mode|page|status|s|f|t|k|l|m|n|b|v|c|app|js|css|im|code|search)=[a-z09]{0,26}\&(?:id|item|mode|page|status|s|f|t|k|l|m|n|b|v|c|app|js|css|im|code|search)=[a-z09]{0,26}\&(?:id|item|mode|page|status|s|f|t|k|l|m|n|b|v|c|app|js|css|im|code|search)=[a-z0-9]{0,26} HTTP/";
+msg:"Cache_DLL beacon GET 4 arg"; sid:1234;)
+The following YARA rules detect HAMMERTOSS / HammerDuke, referred to as IMPLANT 8 with rule
+naming convention.
+IMPLANT 8 Rules:
+rule IMPLANT_8_v1
+{
+strings:
+$DOTNET = "mscorlib" ascii
+$REF_URL = "https://www.google.com/url?sa=" wide
+$REF_var_1 = "&rct=" wide
+$REF_var_2 = "&q=&esrc=" wide
+$REF_var_3 = "&source=" wide
+$REF_var_4 = "&cd=" wide
+$REF_var_5 = "&ved=" wide
+$REF_var_6 = "&url=" wide
+$REF_var_7 = "&ei=" wide
+$REF_var_8 = "&usg=" wide
+43 of 56 43 of 56 TLP:WHITE
+$REF_var_9 = "&bvm=" wide
+$REF_value_1 = "QFj" wide
+$REF_value_2 = "bv.81" wide
+condition:
+(uint16(0) == 0x5A4D) and ($DOTNET) and ($REF_URL) and (3 of ($REF_var)) and (1 of
+($REF_value))
+}
+Rule IMPLANT_8_v2
+{
+strings:
+$DOTNET= "mscorlib" ascii
+$XOR = {61 20 AA 00 00 00 61}
+condition:
+(uint16(0) == 0x5A4D) and all of them
+}
+Network Indicator for Implant 8
+alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"MAL_REFERER";
+flow:established,to_server; content:"GET"; http_method; content:"&bvm=bv.81"; fast_pattern;
+http_header; content:",d."; distance:6; within:3; http_header; content:"|0D 0A|"; distance:3;within:2;
+http_header; content:!"Cookie|3A 20|"; http_header;
+pcre:"/https:\/\/www.google.com\/url\?sa=t&rct=j&q=&esrc=s&source=web&cd=(?:[09]|10|11)&ved=0C[A-L]{2}QFjA[A-L]&url=[^&]{1,512}&ei=[A-Za-z0-9]{20,22}&usg=[A-Za-z09_]{34}&bvm=bv.81[1-7]{6}\,d.[A-Za-z0-9_]{3}\x0d\x0a/D";sid:1234;rev:2;)
+alert tcp any any -> any any (msg: "evil_twitter_callback"; content:"GET /api/asyncTwitter.php
+HTTP/1.1";)
+44 of 56 44 of 56 TLP:WHITE
+The following YARA rules detect OnionDuke, referred to as IMPLANT 9 with rule naming convention.
+IMPLANT 9 Rules:
+Rule IMPLANT_9_v1
+{
+strings:
+$STR1 = { 8B 03 8A 54 01 03 32 55 FF 41 88 54 39 FF 3B CE 72 EE }
+$STR2 = { 8B C8 83 E1 03 8A 54 19 08 8B 4D 08 32 54 01 04 40 88 54 38 FF 3B C6 72 E7 }
+$STR3 = { 8B 55 F8 8B C8 83 E1 03 8A 4C 11 08 8B 55 FC 32 0C 10 8B 17 88 4C 02 04 40 3B 06
+72 E3 }
+condition:
+(uint16(0) == 0x5A4D or uint16(0)) and all of them
+}
+The following Yara rule detects CozyDuke, CozyCar, CozyBear, referred to as IMPLANT 10 with rule
+naming convention.
+IMPLANT 10 Rules:
+Rule IMPLANT_10_v1
+{
+strings:
+$MZ = "MZ"
+$STR1 = {33 ?? 83 F2 ?? 81 e2 ff 00 00 00}
+$STR2 = {0f be 14 01 33 d0 ?? f2 [1-4] 81 e2 ff 00 00 00 66 89 [6] 40 83 f8 ?? 72}
+condition:
+45 of 56 45 of 56 TLP:WHITE
+$MZ at 0 and ($STR1 or $STR2)
+}
+Rule IMPLANT_10_v2
+{
+strings:
+$MZ = "MZ"
+$xor = { 34 ?? 66 33 C1 48 FF C1 }
+$nop = { 66 66 66 66 66 66 0f 1f 84 00 00 00 00 00}
+condition:
+$MZ at 0 and $xor and $nop
+}
+Network Indicators for IMPLANT 10
+alert tcp any any -> any 80 (content:"=650&";
+pcre:"/=11&[^&]{1,7}?=2[^&]{6,12}&[^&]{1,7}?=410&[^&]{1,7}?=650&[^&]{1,7}?=51
+HTTP\/1.1/"; msg:"CozyCar"; sid:1;)
+alert tcp any any -> any 80 (content:".php? HTTP"; content:"=12&"; distance:0;
+pcre:"/=12&[^&=]{1,7}?=2[^&=]{12,16}?==[^&=]{18,26}?==/"; msg:"CozyCarv2"; sid:1234;)
+The following YARA rules detect MiniDuke, referred to as IMPLANT 11 with rule naming convention.
+IMPLANT 11 Rules:
+Rule IMPLANT_11_v1
+{
+46 of 56 46 of 56 TLP:WHITE
+strings:
+$STR1 = {63 74 00 00} // ct
+$STR2 = {72 6F 74 65} // rote
+$STR3 = {75 61 6C 50} // triV
+$STR4 = {56 69 72 74} // Plau
+$STR5 = { e8 00 00 00 00 }
+$STR6 = { 64 FF 35 00 00 00 00 }
+$STR7 = {D2 C0}
+$STR8 =
+/\x63\x74\x00\x00.{3,20}\x72\x6F\x74\x65.{3,20}\x75\x61\x6C\x50.{3,20}\x56\x69\x72\x74/
+condition:
+(uint16(0) == 0x5A4D) and #STR5 > 4 and all of them
+}
+Network Indicators for IMPLANT 11
+alert tcp any any -> any 25 (msg:"MiniDuke-string1_slide_1_1 - new"; content:"IUgyYll";
+pcre:"/IUgyYll(\x0d\x0a)??t(\x0d\x0a)??L(\x0d\x0a)??l(\x0d\x0a)??N(\x0d\x0a)??3(\x0d\x0a)??Q/";)
+alert tcp any any -> any 25 (msg:"MiniDuke-string1_slide_1_2 - new"; content:"ltLlN3Q";
+pcre:"/I(\x0d\x0a)??U(\x0d\x0a)??g(\x0d\x0a)??y(\x0d\x0a)??Y(\x0d\x0a)??l(\x0d\x0a)??ltLlN3Q/";)
+alert tcp any any -> any 25 (msg:"MiniDuke-string1_slide_2_1 - new"; content:"FIMmJZ";
+pcre:"/FIMmJZ(\x0d\x0a)??b(\x0d\x0a)??S(\x0d\x0a)??5(\x0d\x0a)??T(\x0d\x0a)??d(\x0d\x0a)??0/";)
+alert tcp any any -> any 25 (msg:"MiniDuke-string1_slide_2_2 - new"; content:"bS5Td0";
+pcre:"/F(\x0d\x0a)??I(\x0d\x0a)??M(\x0d\x0a)??m(\x0d\x0a)??J(\x0d\x0a)??Z(\x0d\x0a)??bS5Td0/";)
+alert tcp any any -> any 25 (msg:"MiniDuke-string1_slide_3_1 - new"; content:"hSDJiWW";
+pcre:"/hSDJiWW(\x0d\x0a)??0(\x0d\x0a)??u(\x0d\x0a)??U(\x0d\x0a)??3(\x0d\x0a)??d(\x0d\x0a)??A/";)
+47 of 56 47 of 56 TLP:WHITE
+alert tcp any any -> any 25 (msg:"MiniDuke-string1_slide_3_2 - new"; content:"W0uU3dA";
+pcre:"/h(\x0d\x0a)??S(\x0d\x0a)??D(\x0d\x0a)??J(\x0d\x0a)??i(\x0d\x0a)??W(\x0d\x0a)??W0uU3dA/";)
+alert tcp any any -> any 25 (msg:"MiniDuke-string2_slide_1_1 - new"; content:"QDM0Zlo";
+pcre:"/QDM0Zlo(\x0d\x0a)??3(\x0d\x0a)??R(\x0d\x0a)??V(\x0d\x0a)??t(\x0d\x0a)??w(\x0d\x0a)??X/";)
+alert tcp any any -> any 25 (msg:"MiniDuke-string2_slide_1_2 - new"; content:"o3RVtwX";
+pcre:"/Q(\x0d\x0a)??D(\x0d\x0a)??M(\x0d\x0a)??0(\x0d\x0a)??Z(\x0d\x0a)??l(\x0d\x0a)??o3RVtwX/";)
+alert tcp any any -> any 25 (msg:"MiniDuke-string2_slide_2_1 - new"; content:"AzNGZa";
+pcre:"/AzNGZa(\x0d\x0a)??N(\x0d\x0a)??0(\x0d\x0a)??V(\x0d\x0a)??b(\x0d\x0a)??c(\x0d\x0a)??F/";)
+alert tcp any any -> any 25 (msg:"MiniDuke-string2_slide_2_2 - new"; content:"N0VbcF";
+pcre:"/A(\x0d\x0a)??z(\x0d\x0a)??N(\x0d\x0a)??G(\x0d\x0a)??Z(\x0d\x0a)??a(\x0d\x0a)??N0VbcF/";)
+alert tcp any any -> any 25 (msg:"MiniDuke-string2_slide_3_1 - new"; content:"AMzRmWj";
+pcre:"/AMzRmWj(\x0d\x0a)??d(\x0d\x0a)??F(\x0d\x0a)??W(\x0d\x0a)??3(\x0d\x0a)??B(\x0d\x0a)??c/";
+)
+alert tcp any any -> any 25 (msg:"MiniDuke-string2_slide_3_2 - new"; content:"jdFW3Bc";
+pcre:"/A(\x0d\x0a)??M(\x0d\x0a)??z(\x0d\x0a)??R(\x0d\x0a)??m(\x0d\x0a)??W(\x0d\x0a)??jdFW3Bc/";
+)
+The following YARA rules detect CosmicDuke, referred to as IMPLANT 12 with rule naming
+convention.
+IMPLANT 12 Rules:
+Rule IMPLANT_12_v1
+48 of 56 48 of 56 TLP:WHITE
+{
+strings:
+$FUNC = {a1 [3-5] 33 c5 89 [2-3] 56 57 83 [4-6] 64}
+condition:
+(uint16(0) == 0x5A4D) and $FUNC
+}
+Network Indicators for IMPLANT 12
+alert tcp any any -> any 80 (msg:"CosmicDuke HTTP Beacon"; content:"&BranchID=";
+pcre:"/\?(?:m|mgn)\&Auth\=[a-zA-Z0-9]{8}\&Session\=/"; )
+alert tcp any any -> any 80 (msg:"CosmicDuke Webdav Exfil"; content:"PUT /catalog/outgoing/wd";
+pcre:"/PUT \/catalog\/outgoing\/wd[a-zA-Z0-9]{44}.bin/";)
+alert tcp any any -> any 21 (msg:"CosmicDuke FTP Exfil"; content:"STOR fp"; pcre:"/STOR fp[a-zAZ0-9]{44}.bin/"; )
+49 of 56 49 of 56 TLP:WHITE

@@ -1,0 +1,36 @@
+Listening for Commands
+We analyzed RGDoor samples and found that the “RegisterModule” function does very little other than calling the
+IHttpModuleRegistrationInfo::SetRequestNotifications method. According to MSDN (https://msdn.microsoft.com/enus/library/ms693045(v=vs.90).aspx), the SetRequestNotifications function has the following prototype, which allows a
+developer to configure the module to handle GET requests (dwRequestNotifications) and/or POST requests
+(dwPostRequestNotifications):
+SetRequestNotifications(
+IN IHttpModuleFactory * pModuleFactory,
+IN DWORD        dwRequestNotifications,
+IN DWORD        dwPostRequestNotifications
+)
+In RGDoor, the code calls this function with arguments that ignore inbound HTTP GET requests, but act on all HTTP POST
+requests seen by the IIS server, even POST requests issued over HTTPS. RGDoor calls this function with the following
+arguments, the third of which (dwPostRequestNotifications) is set to “RQ_BEGIN_REQUEST”, which is an event triggered
+immediately after IIS receives the POST request:
+SetRequestNotifications(pModuleFactory,0,RQ_BEGIN_REQUEST)
+RGDoor is notified immediately when the IIS server receives an inbound HTTP POST request. RGDoor parses these POST
+requests, specifically looking for the HTTP “Cookie” field by accessing the HTTP header with the following function call:
+pHttpContext­>GetRequest()­>GetHeader(“Cookie”,NULL)
+After accessing the cookie field, RGDoor parses this field by looking for the string “RGSESSIONID=”, which is the basis for
+the name RGDoor. If present, the code uses the two-bytes immediately following the “RGSESSIONID=” string as a
+decryption key, specifically treating the two character bytes as a single hexadecimal byte. For instance, the two-byte key of
+“00” would represent the hexadecimal value of 0x00, where “FF” would represent 0xff, and so on. The key is followed by a
+Base64 encoded string that contains ciphertext. The following represents the structure of the cookie filed in inbound
+RGDoor requests:
+RGSESSIONID=[two­bytes for key][Base64 encoded ciphertext]
+RGDoor decodes the Base64 encoded string and then decrypts the decoded string using a custom algorithm. The custom
+algorithm iterates through the ciphertext using the ‘pxor’ instruction to XOR each byte of ciphertext with the single-byte
+hexadecimal value from the two-byte character key provided in the cookie field.
+The code will parse the cleartext looking for one of three commands: “cmd$”, “upload$” and “download$”. The code treats
+the string immediately following the command as the command’s argument. Table 1 provides the arguments and further
+details on the three commands.
+|cmd$[command toexecute]|Uses “popen” to run the specifiedcommand. It enters a loop that calls“fgets” to get the command results. Theloop finishes when a call to “feof”designates the end of the commandresults, which are relayed back to the actorvia the HTTP response.|
+|---|---|
+|upload$[path to ﬁle]|Gets the length of uploaded data bychecking the “Content-Length” ﬁeld withinthe HTTP request. Uses theIHttpRequest::GetRemainingEntityBytesand IHttpRequest::ReadEntityBodymethods to obtain base64 encoded datawithin the body of the HTTP POST request.The code decrypts the decoded data usingthe XOR algorithm and writes the data tothe speciﬁed ﬁle. It will respond to thisrequest with either “write done ⧵r⧵n” or“can’t open ﬁle: “.|
+|download$[path toﬁle]|Reads a speciﬁed ﬁle and encrypts it withthe XOR algorithm, Base64 encodes theciphertext and sends the data back to theactor via the HTTP response.|
+Table 1 Commands available within RGDoor

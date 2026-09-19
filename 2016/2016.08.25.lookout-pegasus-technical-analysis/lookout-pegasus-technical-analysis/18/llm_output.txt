@@ -1,0 +1,60 @@
+
+
+
+Sentence : Persistence: JSC Privilege Escalation
+Pegasus implements its persistence mechanism through the use of a developer tool called “jsc” that is part of the iOS
+environment. Jsc is intended to allow users to execute javascript using the webkit engine outside the context of a web
+browser. [6] In this case, a memory corruption issue in the tool is used by Pegasus to attain persistence.
+As part of the installation process for persistence, the daemon rtbuddyd is replaced by a copy of jsc (which is a signed
+binary and allowed to run code). On device reboot rtbuddyd will run and load --early-boot, which is a link to the
+com.apple.itunesstored.2.cstore file. The com.apple.itunesstored.2.csstore file is structured similarly to the exploit
+for CVE-2016-4655. This loads shellcode which is used to re-exploit the kernel each time that the system is rebooted and start
+the running daemons. The execution flow of this code is:
+
+
+Run the jsc script calling --early-boot
+
+
+Run the exploit that maps the kernel base
+
+
+Run the kernel exploit
+
+
+Spawn the main running daemons of Pegasus: systemd, watchdogd
+
+
+TECHNICAL ANALYSIS OF PEGASUS SPYWARE | 13
+As Citizen Lab mentioned in their report, Pegasus puts its own protection above all else. From the manual, as quoted by
+Citizen Lab:
+In general, we understand that it is more important that the source will not be exposed and the target will suspect
+nothing than keeping the agent alive and working.
+To this end, Pegasus has a large number of features that enable it to maintain its secrecy. It constantly monitors the phone
+for status and disables any other access to the phone by previous/other jailbreaking software. Pegasus also contains a
+complex self-destruct mechanism which completely removes it from the phone.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "JSC", "type" : "EXEF"},
+        {"id": 2, "description": "Pegasus", "type" : "ACTO"},
+        {"id": 3, "description": "iOS environment", "type" : "OPPS"},
+        {"id": 4, "description": "memory corruption issue in jsc", "type" : "CVES"},
+        {"id": 5, "description": "rtbuddyd daemon", "type" : "APPS"},
+        {"id": 6, "description": "com.apple.itunesstored.2.cstore file", "type" : "DOCF"},
+        {"id": 7, "description": "CVE-2016-4655", "type" : "CVES"},
+        {"id": 8, "description": "kernel base", "type" : "SYSP"},
+        {"id": 9, "description": "systemd daemon", "type" : "APPS"},
+        {"id": 10, "description": "watchdogd daemon", "type" : "APPS"},
+        {"id": 11, "description": "shellcode", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "uses for persistence"},
+        {"source": 4, "target": 1, "rel_name" : "exploits"},
+        {"source": 5, "target": 1, "rel_name" : "replaced by"},
+        {"source": 6, "target": 5, "rel_name" : "linked to as --early-boot"},
+        {"source": 7, "target": 6, "rel_name" : "similar exploit structure"},
+        {"source": 11, "target": 8, "rel_name" : "loads and maps"},
+        {"source": 2, "target": 9, "rel_name" : "spawns as part of running daemons"},
+        {"source": 2, "target": 10, "rel_name" : "spawns as part of running daemons"}
+    ]
+}

@@ -1,0 +1,67 @@
+Macro-enabled Word document templates
+Between January and March 2022, we observed Yellow Garuda using Microsoft Word
+document droppers which use remote template injection to obtain and execute a malicious
+macro. This is the first time we have observed the threat actor deploying macros or using
+remote template injection as part of its attack sequence.
+https://www.pwc.com/gx/en/issues/cybersecurity/cyber-threat-intelligence/old-cat-new-tricks.html 8/18
+7/26/22, 11:03 AM Old cat, new tricks, bad habits
+|SHA-256|Filename|
+|---|---|
+|41b37de3256a5d1577bbed4a04a61bd7bc119258266d2b8f10a9bb7ae7c0d4ec|Turkey_inj.docx10|
+|725bdf594baa21edf1f3820b0daf393267066717832452598c617552a004e5da|Turkey.docx|
+|01ca3f6dc5da4b98915dd8d6c19289dcb21b0691df1bb320650c3eb0db3f214c|Iran- Talibanrelations.docx|
+|57cc5e44fd84d98942c45799f367db78adc36a5424b7f8d9319346f945f64a72|NY.docx|
+|a8c062846411d3fb8ceb0b2fe34389c4910a4887cd39552d30e6a03a02f4cc78|Details-of-Complaint.docx|
+Table 2 – Details of Microsoft Word document droppers (DOCX)
+The document lures we observed covered a variety of themes including nuclear energy and
+weapons related to Turkey, US shipping ports and Iran’s relationship to the Taliban and as
+such, we assess they were likely used to target a variety of unrelated entities. Many of these
+lures, used material sourced from legitimate English-language websites, including news
+and media sites. It is not unusual for threat actors to make use of current affairs as a means
+to catch the attention of potential victims and the themes are not necessarily indicative of
+specific targeting.
+Figure 7 – Example of lure content
+https://www.pwc.com/gx/en/issues/cybersecurity/cyber-threat-intelligence/old-cat-new-tricks.html 9/18
+7/26/22, 11:03 AM Old cat, new tricks, bad habits
+The initial Microsoft Word document (DOCX) is hosted on a third party service such as
+Dropbox or Amazon Web Services (AWS). Yellow Garuda is known to extensively employ
+social engineering as part of its attacks, therefore it is highly likely phishing was used to
+coerce a potential victim to download and open the document.
+Once opened, a form of remote template injection takes place where the document reaches
+out to a URL to download a file with a DOTM extension (a macro-enabled template file).
+The URL is specified within the relationship component word/_rels/settings.xml.rels of
+the initial document as indicated by the ‘Target’ value in Figure 8. The documents we
+analysed reached out to files hosted on either Microsoft OneDrive or on dedicated threat
+actor-controlled infrastructure, as can be seen below.
+Figure 8 – URL visible in word/_rels/settings.xml.rels
+We were able to access several examples of this second stage macro-enabled template file.
+These differed in functionality and form, however they all maintained persistence by
+replacing the victim’s default Microsoft Word template, meaning that the malicious
+template (and macro) will open whenever Microsoft Word is opened by the victim.
+|SHA-256|Filename|
+|---|---|
+|c45bffb5fe7056075b966608e6b6bf82102f722b5c5d8a9c55631e155819d995|DocTemplate.dotm|
+|dd28806d63f628dbc670caaa67379da368e62fa9edfbdfd37d3a91354df08e1c|DocTemplate.dotm|
+|c0d5043b57a96ec00debd3f24e09612bcbc38a7fb5255ff905411459e70a6bb4|Details.dotm|
+|28de2ccff30a4f198670b66b6f9a0ce5f5f9b7f889c2f5e6a4e365dea1c89d53|Arabic.dotm|
+Table 3 – Details of malicious template files (DOTM)
+11
+In some cases, we observed the macro code creating a reverse shell using code almost 11
+identical to that found in open source on a GitHub repository . In other cases, the 12 13
+template files were password protected meaning that the victim is required to specify the
+password in order for the attack sequence to proceed. This would need to be passed over to
+the victim via a phishing email or some other form of social engineering. The template files
+also contained RC4-encrypted strings (both within the macro and lure document) for
+which the decryption key needed to be obtained as the response to a HTTP GET request to
+12 13
+https://www.pwc.com/gx/en/issues/cybersecurity/cyber-threat-intelligence/old-cat-new-tricks.html 10/18
+7/26/22, 11:03 AM Old cat, new tricks, bad habits
+an Amazon S3 bucket. These steps were likely designed to thwart analysis attempts if the
+password cannot be obtained to open the document, or the infrastructure hosting the
+decryption key is no longer active.
+Files dropped by the macros shared similar filenames to recent Yellow Garuda activity
+observed by Check Point . The PowerShell backdoor known as CharmPower was observed 14
+to read data from a file called ni.txt, located in %AppData%, whose contents are sent to the
+command and control server along with basic information about the victim’s machine. This
+aligns with our observations that ni.txt is used to house a hardcoded identifier and could
+indicate that a version of CharmPower is deployed at a later stage of the attack sequence.

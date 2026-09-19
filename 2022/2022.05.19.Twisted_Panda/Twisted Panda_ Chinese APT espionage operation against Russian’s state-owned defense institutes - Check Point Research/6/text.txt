@@ -1,0 +1,75 @@
+SPINNER backdoor: technical analysis
+The payload uses two compiler-level obfuscations:
+Control flow flattening: alters the code flow making it non-linear
+Opaque predicates : defines unused logic and causes the binary to perform needless
+calculations
+Both methods make it difficult to analyze the payload, but together, they make the analysis painful,
+time-consuming, and tedious. These two types of obfuscations were previously spotted being used
+together in samples attributed to the Chinese-speaking group Stone Panda (APT10) and Mustang
+Panda.
+Figure 8: Opaque predicate and control flow flattening code obfuscations in the SPINNER sample.
+When the SPINNER backdoor starts to run, it creates a mutex called MSR__112 to ensure there
+is only one instance of the payload running at a time. The payload also expands the persistence
+previously created by the loader. It creates a new registry key OfficeInit under
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 8/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run that points to the
+cmdl32.exe path.
+Next, it sets up its own configuration, which contains the following fields:
+struct malware_config {
+std::string full_c2_url;
+std::string host_name;
+std::string c2_uri;
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 9/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+DWORD use_https;
+DWORD port;
+DWORD sleep_time;
+}
+The full_c2_url is decrypted using XOR decryption with the key 0x50 . After decryption,
+the function InternetCrackUrlA is used to crack a URL into its component parts: the
+c2_url_without_scheme, c2_uri, port and use_https fields .
+Next, the backdoor starts its main loop by checking if it’s the first run and therefore system
+fingerprinting has not yet occurred. If the answer is no, the backdoor creates a random 16-byte Bot
+ID and saves it to the file %TEMP%\\OfficeInit\\init.ini . It then collects data about the
+infected system and creates a string containing the following data:
+Bot ID
+Computer name
+Local IP
+Windows version
+Username
+Sleep time retrieved from the malware config
+Process ID
+NULL appended at the end of the string
+When it has the string containing all the gathered data, the backdoor prepares a packet to be sent to
+the C&C server, constructed in the following way:
+Offset Field
+0x0 16 null bytes
+0x10 4-byte command ID – 0x10010001
+0x14 4 null bytes
+0x18 System information string length
+0x1C System information string
+Next, the backdoor generates a random 8-byte RC4 key that is used to encrypt the entire packet.
+The final packet has this structure:
+Offset Field
+0x0 8-byte randomly generated RC4 key
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 10/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+0x8 Packet data size
+0xC Packet data
+The packet is sent through the HTTP/S depending on the URL retrieved from the malware
+configuration. Similar to the request, the response from the C&C server is encrypted with RC4 and
+has the same structure containing the key, size, and data. The C&C response can contain one of the
+following commands:
+Command
+ID
+Action
+0x10030001 Exit Process
+0x10010002 Self-update – Write data to the INIT file and create another instance of
+the cmdl32.exe using CreateProcessW .
+0x10010001 Collect system information and send the data back to the C&C
+Judging by the supported commands, this version of the SPINNER backdoor has only basic
+capabilities to enumerate the host system. Its main purpose is to run additional payloads received
+from the C&C server. While we were not able to get other payloads, based on other findings
+described later in the research, we believe that selected victims likely received the full backdoor
+with additional capabilities.

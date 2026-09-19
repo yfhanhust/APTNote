@@ -1,0 +1,176 @@
+
+
+
+Sentence : Hunting queries
+Microsoft 365 Defender
+Microsoft 365 Defender customers can run the following queries to find related activity in
+their networks:
+Network activity with Flax Typhoon network infrastructure
+https://www.microsoft.com/en-us/security/blog/2023/08/24/flax-typhoon-using-legitimate-software-to-quietly-access-taiwanese-organizations/ 7/12
+6/25/24, 2:53 PM Flax Typhoon using legitimate software to quietly access Taiwanese organizations | Microsoft Security Blog
+```
+    let ipAddressTimes = datatable(ip: string, startDate: datetime, endDate:
+datetime)
+
+[
+
+"101.33.205.106", datetime("2022-11-07"), datetime("2022-11-08"),
+
+"39.98.208.61", datetime("2023-07-28"), datetime("2023-08-12"),
+
+"45.195.149.224", datetime("2023-01-04"), datetime("2023-03-29"),
+
+"122.10.89.230", datetime("2023-01-12"), datetime("2023-01-13"),
+
+"45.204.1.248", datetime("2023-02-23"), datetime("2023-05-09"),
+
+"45.204.1.247", datetime("2023-07-24"), datetime("2023-08-10"),
+
+"45.88.192.118", datetime("2022-11-07"), datetime("2022-11-08"),
+
+"154.19.187.92", datetime("2022-12-01"), datetime("2022-12-02"),
+
+"134.122.188.20", datetime("2023-06-13"), datetime("2023-06-20"),
+
+"104.238.149.146", datetime("2023-07-13"), datetime("2023-07-14"),
+
+"139.180.158.51", datetime("2022-08-30"), datetime("2023-07-27"),
+
+"137.220.36.87", datetime("2023-02-23"), datetime("2023-08-04"),
+
+"192.253.235.107", datetime("2023-06-06"), datetime("2023-06-07")
+
+];
+
+let RemoteIPFiltered = DeviceNetworkEvents
+
+| join kind=inner (ipAddressTimes) on $left.RemoteIP == $right.ip
+
+| where Timestamp between (startDate .. endDate);
+
+let LocalIPFiltered = DeviceNetworkEvents
+
+| join kind=inner (ipAddressTimes) on $left.LocalIP == $right.ip
+
+| where Timestamp between (startDate .. endDate);
+
+union RemoteIPFiltered, LocalIPFiltered
+
+```
+SoftEther VPN bridge launched by SQL Server process
+https://www.microsoft.com/en-us/security/blog/2023/08/24/flax-typhoon-using-legitimate-software-to-quietly-access-taiwanese-organizations/ 8/12
+6/25/24, 2:53 PM Flax Typhoon using legitimate software to quietly access Taiwanese organizations | Microsoft Security Blog
+```
+    DeviceProcessEvents
+| where ProcessVersionInfoOriginalFileName == "vpnbridge.exe" or
+
+ProcessVersionInfoFileDescription == "SoftEther VPN"
+
+| where InitiatingProcessParentFileName == "sqlservr.exe"
+
+```
+SoftEther VPN bridge renamed to “conhost.exe” or “dllhost.exe”
+```
+    DeviceProcessEvents
+| where ProcessVersionInfoOriginalFileName == "vpnbridge.exe" or
+
+ProcessVersionInfoFileDescription == "SoftEther VPN"
+
+| where ProcessCommandLine has_any ("conhost.exe", "dllhost.exe") or
+
+FolderPath has_any ("mssql", "conhost.exe", "dllhost.exe")
+
+```
+Certutil launched by SQL Server process
+```
+    DeviceProcessEvents
+| where ProcessCommandLine has_all ("certutil", "-urlcache")
+
+| where InitiatingProcessFileName has_any ("sqlservr.exe",
+
+"sqlagent.exe", "sqlps.exe", "launchpad.exe", "sqldumper.exe")
+
+```
+File downloaded by MSSQLSERVER account using certutil
+```
+    DeviceFileEvents
+| where InitiatingProcessAccountName == "MSSQLSERVER"
+
+| where InitiatingProcessFileName == "certutil.exe"
+
+```
+File renamed to “conhost.exe” or “dllhost.exe”, downloaded using certutil
+```
+    DeviceFileEvents
+| where InitiatingProcessFileName == "certutil.exe"
+
+| where FileName in ("conhost.exe", "dllhost.exe")
+
+```
+https://www.microsoft.com/en-us/security/blog/2023/08/24/flax-typhoon-using-legitimate-software-to-quietly-access-taiwanese-organizations/ 9/12
+6/25/24, 2:53 PM Flax Typhoon using legitimate software to quietly access Taiwanese organizations | Microsoft Security Blog
+Network connection made by SoftEther VPN bridge renamed to “conhost.exe” or
+“dllhost.exe”
+```
+    DeviceNetworkEvents
+| where InitiatingProcessVersionInfoOriginalFileName == "vpnbridge.exe"
+
+or InitiatingProcessVersionInfoProductName == "SoftEther VPN"
+
+| where InitiatingProcessFileName == "conhost.exe"
+
+```
+Network connection made by MSSQLSERVER account, using SoftEther VPN bridge
+```
+    DeviceNetworkEvents
+| where InitiatingProcessVersionInfoOriginalFileName == "vpnbridge.exe"
+
+or InitiatingProcessVersionInfoProductName == "SoftEther VPN"
+
+| where InitiatingProcessAccountName == "MSSQLSERVER"
+
+```
+Microsoft Sentinel
+Microsoft Sentinel customers can use the TI Mapping analytics (a series of analytics all
+prefixed with ‘TI map’) to automatically match the malicious domain indicators mentioned
+in this blog post with data in their workspace. If the TI Map analytics are not currently
+deployed, customers can install the Threat Intelligence solution from the Microsoft
+Sentinel Content Hub to have the analytics rule deployed in their Sentinel workspace.
+More details on the Content Hub can be found here:
+https://learn.microsoft.com/azure/sentinel/sentinel-solutions-deploy.
+Microsoft Sentinel also has a range of detection and threat hunting content that
+customers can use to detect the post exploitation activity detailed in this blog in addition
+to Microsoft 365 Defender detections list above.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Microsoft 365 Defender", "type" : "APPS"},
+        {"id": 2, "description": "Flax Typhoon", "type" : "ACTO"},
+        {"id": 3, "description": "SoftEther VPN bridge", "type" : "EXEF"},
+        {"id": 4, "description": "SQL Server process", "type" : "APPS"},
+        {"id": 5, "description": "conhost.exe", "type" : "EXEF"},
+        {"id": 6, "description": "dllhost.exe", "type" : "EXEF"},
+        {"id": 7, "description": "certutil.exe", "type" : "EXEF"},
+        {"id": 8, "description": "MSSQLSERVER account", "type" : "ACTO"},
+        {"id": 9, "description": "Microsoft Sentinel", "type" : "APPS"},
+        {"id": 10, "description": "TI Mapping analytics", "type" : "TTPS"},
+        {"id": 11, "description": "Threat Intelligence solution", "type" : "APPS"},
+        {"id": 12, "description": "Content Hub", "type" : "URLS"},
+        {"id": 13, "description": "https://www.microsoft.com/en-us/security/blog/2023/08/24/flax-typhoon-using-legitimate-software-to-quietly-access-taiwanese-organizations/", "type" : "URLS"},
+        {"id": 14, "description": "https://learn.microsoft.com/azure/sentinel/sentinel-solutions-deploy", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "uses"},
+        {"source": 4, "target": 3, "rel_name" : "launches"},
+        {"source": 3, "target": 5, "rel_name" : "renamed to"},
+        {"source": 3, "target": 6, "rel_name" : "renamed to"},
+        {"source": 4, "target": 7, "rel_name" : "launches"},
+        {"source": 8, "target": 7, "rel_name" : "uses"},
+        {"source": 7, "target": 5, "rel_name" : "downloads and renames to"},
+        {"source": 7, "target": 6, "rel_name" : "downloads and renames to"},
+        {"source": 9, "target": 10, "rel_name" : "uses"},
+        {"source": 10, "target": 12, "rel_name" : "can be found in"},
+        {"source": 13, "target": 2, "rel_name" : "describes"},
+        {"source": 14, "target": 9, "rel_name" : "provides information for"}
+    ]
+}

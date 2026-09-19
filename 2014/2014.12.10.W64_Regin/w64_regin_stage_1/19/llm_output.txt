@@ -1,0 +1,74 @@
+
+
+
+Sentence : W64/Regin, Stage #1 9
+Once the correct disk has been identified, the malware proceeds to obtain a handle to it and starts looking for its payload.
+On infected systems, the payload will be stored in the gap area between the end of the partition that is physically farthest
+from the beginning of the disk and the end of the disk itself. To move to the right location, the malware needs to have an
+understanding of those low-level structures that allow calculating start and end offsets of the various partitions; examples
+of these structures are MBR, EBR and GPT. Some systems and partitions are not supported, like those that implement
+logical disk management (LDM).
+Once the malware has identified the correct location on the disk, it will attempt to find a marker structure at the
+beginning of the gap space. The format of this structure is presented in Listing 4. The field Id of MarkerStructure is
+matched against OPERATION_TYPE_LOAD’s operand to partially ensure the validity of the block. Once this has been
+verified, a ddSize number of bytes is read; the CRC32 of the read bytes is calculated and its value matched against the value
+of the field CRC32 contained in the marker structure. If both checks are successful, then the buffer is considered valid, and
+is made available to the virtual machine for further processing.
+Listing 4: Marker structure for Regin’s 64-bit stage #1 payload
+/  -  size of (MarkerStruct ) = 0xC   - /
+typedef struct MarkerStruct {
+DWORD ddId ;
+DWORD ddSize ;
+DWORD ddCRC32 ;
+}   MarkerStruct ;
+OPERATION_TYPE_DECRYPT
+The payload that the malware needs to retrieve and load might need to be decrypted. In order to support this scenario,
+the virtual machine that handles the retrieval and transformation of the payload into a PE file image provides an
+OPERATION_TYPE_DECRYPT opcode. The pseudo-code for the decryption algorithm is provided in Listing 5.
+Listing 5: Reconstructed C version of the decryption routine
+bool __fastcall DecryptBuffer (BYTE    - pdbKey, BYTE *   - pdbBuffer, DWORD ddBufferLength,
+BYTE                  -                  - ppdbBufferOut, DWORD                  - pddBufferOutLen,
+bool *                   - pbSuccess )
+{
+bool bResult ;  // r10@1
+DWORD ddInitialBackOffset ; // eax@7
+unsigned __int64 i ; // r8@9
+BYTE      - pdbRoundKey ; // rsi@10
+unsigned int ddInnerCounter ; // ebp@12
+DWORD p8ByteBlockIterator ; // edi@12
+char dbOffsetsLowByte ; // cl@14
+BYTE      - pByteToDecrypt ; // rdx@14
+__int64 ddInKeyCounter ; // rax@14
+bResult = 0 ;
+Continues overleaf
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "W64/Regin", "type" : "EXEF"},
+        {"id": 2, "description": "disk", "type" : "MTCP"},
+        {"id": 3, "description": "partition", "type" : "MTCP"},
+        {"id": 4, "description": "gap area between the end of the partition and the end of the disk", "type" : "MTCP"},
+        {"id": 5, "description": "MBR", "type" : "TAMP"},
+        {"id": 6, "description": "EBR", "type" : "TAMP"},
+        {"id": 7, "description": "GPT", "type" : "TAMP"},
+        {"id": 8, "description": "LDM (Logical Disk Management)", "type" : "TAMP"},
+        {"id": 9, "description": "MarkerStructure", "type" : "TAMP"},
+        {"id": 10, "description": "OPERATION_TYPE_LOAD’s operand", "type" : "TAMP"},
+        {"id": 11, "description": "ddSize number of bytes", "type" : "TAMP"},
+        {"id": 12, "description": "CRC32", "type" : "TAMP"},
+        {"id": 13, "description": "virtual machine", "type" : "EXEF"},
+        {"id": 14, "description": "PE file image", "type" : "DOCF"},
+        {"id": 15, "description": "OPERATION_TYPE_DECRYPT", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "operates on"},
+        {"source": 2, "target": 3, "rel_name" : "contains"},
+        {"source": 2, "target": 4, "rel_name" : "has gap area in"},
+        {"source": 1, "target": 9, "rel_name" : "searches for"},
+        {"source": 9, "target": 10, "rel_name" : "matches against"},
+        {"source": 1, "target": 11, "rel_name" : "reads"},
+        {"source": 1, "target": 12, "rel_name" : "calculates and matches"},
+        {"source": 13, "target": 14, "rel_name" : "transforms into"},
+        {"source": 15, "target": 1, "rel_name" : "supports"}
+    ]
+}

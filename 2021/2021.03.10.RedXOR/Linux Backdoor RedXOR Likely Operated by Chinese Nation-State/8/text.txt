@@ -1,0 +1,21 @@
+Communication with the C2
+The malware communicates with the C2 server over a TCP socket. The traffic is made to
+look like HTTP traffic. Figure 11 shows a pseudo-code representation of the function
+used by the malware to prepare data that is to be sent to the C2 server. First, it fills the
+buffer with null bytes. The request body is XORed against a key. The malware uses the
+buffer length as the key. This value is also passed into the function as the “total_length”
+argument.
+Figure 11: Function for preparing data to be sent to the C2 server
+The same logic is used to decrypt the response body from the C2 server. From the
+response, the malware extracts “JSESSIONID”, “Content-Length”, “Total-Length” and
+the response body. The data is added to a struct with the following layout:
+0x0 JSESSIONID as int
+0x8 Content-Length as long
+0x10 Total-Length as long
+0x18 Response body
+https://www.intezer.com/blog/malware-analysis/new-linux-backdoor-redxor-likely-operated-by-chinese-nation-state-actor/ 11/19
+3/12/2021 Linux Backdoor RedXOR Likely Operated by Chinese Nation-State
+The content length is the length of the response body but also used as the key. The total
+length value is used as a constant which is added to the key in each iteration. The
+JSESSIONID value holds the command ID for the job the C2 wants the malware to
+perform.

@@ -1,0 +1,411 @@
+
+
+
+Sentence : 2.2. Malware
+The Crouching Yeti group has different tools of choice for their operations. This section
+describes them from a technical perspective.
+2.2.1 The Havex Loader
+1. Description
+The main functionality of this component is to download and load additional DLL modules into
+the memory. These are stored on compromised websites that act as C&C servers. In order to
+do that, the malware injects itself into the EXPLORER.EXE process, sends a GET/POST request
+to the PHP script on the compromised website, then reads the HTML document returned by the
+script, looking for a base64 encrypted data between the two "havex" strings in the comment tag
+<!--havexhavex--> and writes this data it to a %TEMP%\<tmp>.xmd file (filename is generated
+by GetTempFilename function).
+In the meantime, another routine is constantly checking the %TEMP% folder for all *.xmd files. For
+each file it finds, it decompresses the content, decrypts (if encrypted) and loads into the memory
+as the DLL.
+In order to run on each system boot, malware copies itself to: <path>\TMPprovider0XX.dll
+and creates the autorun registry key.
+All samples of this component contain a statically linked bzip2 library. Versions >= 01B also
+contain an RSAeuro library, used to encrypt log files and decrypt downloadable modules. Public
+keys for encryption are hardcoded in the binary and/or stored in the configuration section. In
+some cases, these keys are written to the registry values.
+In total, we identified 124 different samples of Havex loaders, belonging to 27 different versions.
+As of June 2014, the latest version number we have is 044.
+2. C&C communication
+The URL addresses of the C&C servers (which are indeed compromised websites) are either
+hardcoded in the binary, or - in versions => 038 - specified in the configuration section inside the
+ICT resource. This resource is compressed with bzip2 and encrypted with XOR.
+There are usually 2-4 URLs per binary, different for each malware version and sometimes also
+different between samples of the same version.
+Malware sends a GET request (versions < 017) or POST request to the first available URL. The
+request contents depends on the malware version and it may include such information as
+unique bot id, malware version number, OS version number, and some other data from
+configuration, as well as the harvested information logged into the *.yls file (if any). Then the
+malware searches the HTML code of each returned page for havex markers and saves the data
+between the markers into a temporary file.
+3. Downloadable modules - common characteristics
+These modules are hosted between the havex markers in the HTML code of compromised
+websites. The module code is usually XORed with ”1312312” then compressed with BZIP2 and
+finally base64 encoded. Once downloaded into the %TEMP%\*.xmd file by the main Havex DLL,
+the code is decoded, decompressed, saved into the temporary DLL file and loaded into the
+memory.
+The modules perform a variety of different actions, including collecting information about the
+victim’s system and other machines in the local network, harvesting passwords, listing
+documents, etc. In order to do that, some of the modules make use of additional 3rd stage 3rd
+party executables.
+Each module contains configuration information stored in an encrypted and compressed form
+inside a resource. Configuration data includes 29-byte UID (unique ID), a 1024-bit RSA Public
+key (base64 encoded) and other necessary info (like file paths, etc.). All harvested data is
+compressed, encrypted and written into the %TEMP%\*.yls files, which are then sent to the
+C&C by the main Havex/Sysmain module.
+The “yls” files are encrypted with the 3DES crypto algorithm using a random 192-bit key (168 bit
+effective). The 3DES key is encrypted using the public RSA 1024 key and therefore never
+transferred in plain text to attackers.
+In-depth analysis of the cryptography used by log files is presented in Appendix 2
+4. List of known modules
+OPC scanner
+This module is designed to collect detailed data about the OPC servers running in the local
+network and save them to a %TEMP%\{rand}.yls file. To query the OPC servers, it uses the
+following interfaces:
+
+
+IID_IOPCEnumGUID
+
+
+IID_IOPCServerList
+
+
+IID_IOPCServerList2
+
+
+IID_IOPCServer
+
+
+IID_IOPCBrowsr
+
+
+IID_IOPCBrowseServerAddressSpace
+
+
+IID_IOPCItemProperties
+
+
+CATID_OPCDAServer10
+
+
+CATID_OPCDAServer20
+
+
+CATID_OPCDAServer30
+
+
+Sysinfo module
+This module collects basic information about the system it's running on, and saves it to the
+%TEMP%\{rand}.yls file. Harvested data includes:
+
+
+Unique system ID
+
+
+OS version
+
+
+Username
+
+
+Computer name
+
+
+Country
+
+
+Language
+
+
+Current IP
+
+
+List of drives
+
+
+Default Browser
+
+
+Running Processes
+
+
+Proxy Setting
+
+
+User Agent
+
+
+Email Name
+
+
+BIOS version and date
+
+
+Lists of files and folders (non-recursive) from Desktop, My Documents and Program
+Files folders and root directories on all drives.
+
+
+Contact stealer module
+This module collects contact details stored in all outlook.nk2 files and writes them to the
+%TEMP%\{rand}.yls file.
+Outlook.nk2 is the file where Outlook (version since 2007) keeps contact details in order to use
+them with the AutoComplete feature.
+Password stealer module
+This module uses the embedded BrowserPasswordDecryptor 2.0 tool
+(hxxp://securityxploded.com/browser-password-decryptor.php) to dump login credentials stored
+by the password managers of various browsers. Decrypted passwords are saved into the
+%TEMP%\~tmp1237.txt file, which is then copied by the parent module into an encrypted
+*.tmp.yls file.
+List of browsers supported by the tool (from the product’s website):
+
+
+Firefox
+
+
+Internet Explorer
+
+
+Google Chrome
+
+
+Google Chrome Canary/SXS
+
+
+CoolNovo Browser
+
+
+Opera Browser
+
+
+Apple Safari
+
+
+Comodo Dragon Browser
+
+
+SeaMonkey Browser
+
+
+SRWare Iron Browser
+
+
+Flock Browser
+
+
+Network scanner module
+This module is designed to scan the local network and look for all hosts listening on ports
+related to OPC/SCADA software. Information about these hosts is then saved to the
+%TEMP%\~tracedscn.yls file.
+|Port number|Software that uses this port|
+|---|---|
+|port 44818|Rslinx|
+|port 502|Modbus|
+|port 102|Siemens PLC|
+|port 11234|Measuresoft ScadaPro|
+|port 12401|7-Technologies IGSS SCADA|
+In-depth analysis of the Havex loader and its related modules is presented in Appendix 2.
+2.2.2 The Ddex Loader
+1. Description
+This component is a simple downloader with a functionality similar to the Havex component.
+It sends requests to the PHP script at the C&C (compromised website) and looks for specific
+data in the returned HTML code.
+It writes the data (some ASCII strings) from between <I6></I6> tags to the file in
+%TEMP%\Low\~task.tmp and the data (binary data XORed with 0x0A) from between <B6></B6>
+tags into the %TEMP%\Low\~ldXXXX.TMP file.
+Then it decrypts the ldXXXX.TMP file and loads it into memory.
+Based on the compilation times, we may assume that this loader was used to download and run
+modules before it was replaced by Havex.
+The Ddex loader is analyzed in more detail in Appendix 4.
+2.2.3 The Sysmain backdoor
+1. Description
+This malware can be described as a classical RAT ( Remote Access Trojan ), since it gives the
+attacker a wide range of opportunities to control and interact with the victim machine.
+The autonomous part of Sysmain installs and registers itself to be persistent in the system.
+Then it gathers general information about the victim system, like
+
+
+User- and computer names
+
+
+Locale information
+
+
+Network- and drive status
+
+
+Default browsers
+
+
+Running processes
+
+
+File listing from the user profile directory.
+
+
+When ready, this data is submitted to one of the C&C-servers. After that, it checks periodically
+for new commands from C&C (pulling via HTTP).
+With a set of 11 commands, the malware is able to:
+
+
+Execute shell-commands
+
+
+Launch additional executables or libraries (sent by the attacker)
+
+
+Collect arbitrary files for later exfiltration
+
+
+Examine the victim’s file system.
+
+
+There are also commands used for maintenance purposes. Among others, there are commands
+to change the pubkey for C&C-communication or delete its traces in the registry.
+2. C&C communication
+It receives its commands from one of four static command-and-control servers. Every variant of
+this malware has its own set of servers.
+As usual, the attackers are using webservers - most likely compromised ones - as part of their
+C&C-infrastructure. To communicate with the C&C-server, the Trojan makes use of asymmetric
+encryption with a hardcoded pair of private and public keys.
+Another public key is used to encrypt files, which are collected in a local dropzone on the
+victim’s file system. The files in that dropzone will be submitted to the attacker later, all in one
+go.
+Appendix 3 provides in-depth analysis of the Sysmain backdoor.
+2.2.4 The ClientX backdoor
+1. Description
+This component is written in .NET and is very similar to The Sysmain backdoor.
+The settings of the RAT are stored in the registry as BASE64 encoded values.
+The RAT gets its commands by sending a request to a PHP script on the C&C (compromised
+server) as usual, and looks for specific data in the returned HTML code. The data in this case is
+stored between the havexhavex tags, it is then decrypted and decoded (base64).
+The RAT supports 13 commands including:
+Screen capture
+Trojan Update
+Loading DLLs
+Starting executables
+Running shell commands
+Listing directories
+Each time a command (task) is executed, the result of that command is stored in the registry
+under a subkey named “done” or “doneEXT”.
+The results (which are called “answers” by the authors) are then POSTED to the C&C server.
+The ClientX backdoor is analyzed in depth in Appendix 5.
+2.2.5 The Karagany Backdoor
+1. Description
+Karagany is a simple backdoor that connects to the C&C and keeps waiting for commands. It
+can download and run additional executables, load/delete modules, read file content, reboot the
+computer, update itself and remove all components.
+Besides backdoor functionality, it also extracts credentials from Internet Explorer’s password
+manager to the prx.jpg file and injects a small DLL into the processes of web browsers. This
+DLL keeps listening to outgoing network traffic and looking for basic access authentication
+details sent over unencrypted HTTP. Affected browsers include Internet Explorer, Firefox,
+Mozilla and Opera.
+When executed, it copies itself to the folder under %APPDATA% and creates a .lnk file in the
+%STARTUP% directory. The folder name and filename are chosen from a list of strings hardcoded
+in the binary:
+|Folder name|File name|
+|---|---|
+|Microsoft WCF services|SearchIndexer|
+|Broker services|ImeBroker|
+|Flash Utilities|fsutil|
+|Media Center Programs;|PnPutil|
+|Policy Definitions|BdeUISrv|
+|Microsoft Web Tools|WinSAT|
+|Reference Assemblies|pwNative|
+|---|---|
+|Analysis Services|SnippingTool|
+|InstallShield Information|DFDWizard|
+|IIS SQL Server|PrintBrmEngine|
+|Diagnostics;|WbemMonitor|
+|NTAPI Perfomance|dxpserver|
+|WPF Platform|PowerMng|
+It also creates the C:\ProgramData\Mail\MailAg\ folder, where the information harvested by
+downloaded modules will be stored.
+After checking if a connection to the Internet is up, it sends an initial POST request to the C&C
+server. Known parameters used in C&C communication are:
+
+
+&identifiant=<victim_uid>, which is calculated based on system version, system
+install date, username and system metrics
+
+
+&version=<bot_version_nr>
+
+
+&fichier=<file_content>
+
+
+2. List of known modules:
+Screenshot module
+This module is used to drop and run the DuckLink CmdCapture tool - a 3rd party freeware
+AutoIt application for capturing screenshots (hxxp://www.ducklink.com/).
+A screenshot of the desktop is saved into the C:\ProgramData\Mail\MailAg\scs.jpg file.
+Additionally, other system information - such as the date and time of capture, computer name,
+username, cpu architecture, os version, IP address, logon domain and logon server, desktop
+details (height, width, depth, refresh rate) and environmental variables - are logged in
+C:\ProgramData\Mail\MailAg\scs.txt file.
+Module listing documents and other files
+This module is used to list all files and documents with specified extensions, or which have
+names containing specified strings in the C:\ProgramData\Mail\MailAg\fls.txt file.
+Saved information includes path, size and modification time.
+File matching patterns:
+|pass.|.rtf|.xls|.pdf|
+|---|---|---|---|
+|*secret*.*|*.pst|*.doc|*.vmdk|
+|*.pgp|*.p12|*.mdb|*.tc|
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Crouching Yeti group", "type": "ACTO"},
+        {"id": 2, "description": "Havex Loader", "type": "EXEF"},
+        {"id": 3, "description": "compromised websites (C&C servers)", "type": "CCSH"},
+        {"id": 4, "description": "%TEMP%\\<tmp>.xmd file", "type": "DOCF"},
+        {"id": 5, "description": "<path>\\TMPprovider0XX.dll", "type": "DOCF"},
+        {"id": 6, "description": "autorun registry key", "type": "REGI"},
+        {"id": 7, "description": "bzip2 library", "type": "LIBR"},
+        {"id": 8, "description": "RSAeuro library", "type": "LIBR"},
+        {"id": 9, "description": "*.yls file", "type": "DOCF"},
+        {"id": 10, "description": "%TEMP%\\*.xmd files", "type": "DOCF"},
+        {"id": 11, "description": "PHP script on the compromised website", "type": "EXEF"},
+        {"id": 12, "description": "BrowserPasswordDecryptor 2.0 tool", "type": "EXEF"},
+        {"id": 13, "description": "%TEMP%\\~tmp1237.txt file", "type": "DOCF"},
+        {"id": 14, "description": "%TEMP%\\~tracedscn.yls file", "type": "DOCF"},
+        {"id": 15, "description": "Ddex Loader", "type": "EXEF"},
+        {"id": 16, "description": "%TEMP%\\Low\\~task.tmp file", "type": "DOCF"},
+        {"id": 17, "description": "%TEMP%\\Low\\~ldXXXX.TMP file", "type": "DOCF"},
+        {"id": 18, "description": "Sysmain backdoor", "type": "EXEF"},
+        {"id": 19, "description": "C&C-servers (static)", "type": "CCSH"},
+        {"id": 20, "description": "%APPDATA%\\<folder_name>\\<file_name>", "type": "DOCF"},
+        {"id": 21, "description": "%STARTUP%\\<filename>.lnk file", "type": "DOCF"},
+        {"id": 22, "description": "C:\\ProgramData\\Mail\\MailAg\\ folder", "type": "DOCF"},
+        {"id": 23, "description": "prx.jpg file (credentials)", "type": "DOCF"},
+        {"id": 24, "description": "DuckLink CmdCapture tool", "type": "EXEF"},
+        {"id": 25, "description": "C:\\ProgramData\\Mail\\MailAg\\scs.jpg file", "type": "DOCF"},
+        {"id": 26, "description": "C:\\ProgramData\\Mail\\MailAg\\scs.txt file", "type": "DOCF"},
+        {"id": 27, "description": "C:\\ProgramData\\Mail\\MailAg\\fls.txt file", "type": "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "label": "uses"},
+        {"source": 2, "target": 3, "label": "communicates with"},
+        {"source": 2, "target": 4, "label": "writes to"},
+        {"source": 2, "target": 5, "label": "copies itself to"},
+        {"source": 2, "target": 6, "label": "registers in"},
+        {"source": 2, "target": 7, "label": "uses"},
+        {"source": 2, "target": 8, "label": "uses"},
+        {"source": 2, "target": 9, "label": "writes to"},
+        {"source": 2, "target": 10, "label": "reads from"},
+        {"source": 2, "target": 11, "label": "requests data from"},
+        {"source": 2, "target": 12, "label": "uses"},
+        {"source": 2, "target": 13, "label": "writes to"},
+        {"source": 2, "target": 14, "label": "writes to"},
+        {"source": 15, "target": 3, "label": "communicates with"},
+        {"source": 15, "target": 16, "label": "writes to"},
+        {"source": 15, "target": 17, "label": "writes to"},
+        {"source": 18, "target": 3, "label": "communicates with"},
+        {"source": 18, "target": 20, "label": "copies itself to"},
+        {"source": 18, "target": 21, "label": "creates"},
+        {"source": 18, "target": 22, "label": "creates"},
+        {"source": 18, "target": 23, "label": "writes credentials to"},
+        {"source": 18, "target": 24, "label": "uses"},
+        {"source": 18, "target": 25, "label": "saves screenshot to"},
+        {"source": 18, "target": 26, "label": "logs system information in"},
+        {"source": 18, "target": 27, "label": "lists files and writes to"}
+    ]
+}

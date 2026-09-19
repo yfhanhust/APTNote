@@ -1,0 +1,63 @@
+27 VFS RC5 decryption algorithm
+This algorithm is used throughout the code and is referenced as RC5 in the document, although the implemen­
+tation and the way the cipher is invoked is specific to Regin.
+The implementation in C++ follows:
+```
+ void RC5Decrypt(uint8_t rc5Key, uint8_t data, size_t len)
+ {
+       uint8_t  iv[8];
+       rc5_ctx_t  ctx;
+       uint8_t*  encrypted;
+       size_t  encryptedLen;
+   rc5_init(rc5Key, 128, 20, &ctx);
+   memcpy(iv, data, 8);
+   encrypted = data + 8;
+   encryptedLen = len - 8;
+   if ( encryptedLen % 8 )
+
+   {
+     uint8_t  ivLocal[8];
+
+```
+if ( encryptedLen < 8)
+```
+          memcpy(ivLocal, iv, 8);
+     else
+
+      memcpy(ivLocal, encrypted + encryptedLen - (encryptedLen % 8) - 8, 8);
+     rc5_enc(ivLocal, &ctx);
+
+```
+for (size_t idx = 0; idx < (encryptedLen % 8); idx++)
+```
+          encrypted[idx + encryptedLen - (encryptedLen % 8)] ^= ivLocal[idx];
+   }
+   if ( encryptedLen / 8 > 1 )
+
+   {
+     for (ssize_t blockIdx = (encryptedLen / 8) - 1; blockIdx > 0; blockIdx--)
+     {
+     rc5_dec(encrypted + blockIdx*8, &ctx);
+
+```
+for (size_t idx = 0; idx < 8; idx++)
+```
+         encrypted[blockIdx8 + idx] ^= encrypted[(blockIdx-1)8 + idx];
+     }
+
+   }
+   if ( encryptedLen / 8 > 0 )
+
+   {
+
+   rc5_dec(encrypted, &ctx);
+
+```
+for (size_t idx = 0; idx < 8; idx++)
+```
+       encrypted[idx] ^= iv[idx];
+   }
+
+```
+}
+TLP: GREEN Contact: intelreports@kaspersky.com

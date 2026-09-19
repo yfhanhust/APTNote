@@ -1,0 +1,129 @@
+
+
+
+Sentence : Convert webpages to pdf online with PDFmyURL
+word document (NIC-Cyber Security SOP.doc). The pdf document was a legitimate document which attackers
+might have downloaded from (http://meity.gov.in/sites/upload_files/dit/files/Plan_Report_on_Cyber_Security.pdf).
+The word document attached in the email contained malicious macro code which when enabled, drops a malware
+backdoor, executes it and then sends the system information to the command and control server (C2 Server) and
+its also downloads additional components.
+From the email (and the attachments shown in the below screenshot) it looks like the goal of the attackers was to
+infect and take control of the systems of Cyber Security officers who are responsible for managing and
+implementing security controls on the Government network.
+The email header consisted of ORCPT (Original-Recipient) header, which had reference to what appears to be a
+mailer list associated with Indian Ministry of External Affairs, this indicates that the attackers probably wanted to
+Convert webpages to pdf online with PDFmyURL
+infect the users connected with Indian Ministry of External Affairs either to spy or to take control of their systems.
+Analysis of Word Document Containing Malicious Macro Code
+Once the victim opens the attached word document it prompts the user to enable macro as shown below and the
+document also contains instruction on how to enable the macros.
+Convert webpages to pdf online with PDFmyURL
+If the victim enables the macro content, the malicious code drops the malware sample and exectutes it and it also
+shows a decoy document containing the instructions and guidelines related to cyber security. This is to make the
+user believe that is it indeed a document related to cyber security. Below are some of the screen shots showing
+the document that will shown to the user once the macro is enabled.
+Convert webpages to pdf online with PDFmyURL
+The malicious macro code was reverse engineered to understand its capabilities. The macro code is heavily
+obfuscated (uses obscure variable/function names to make analysis harder) as shown below.
+The macro code first calls multiple functions to decode the executable content and then it drops the malicious
+executable (WINWORD.exe) in the Startup directory and then executes the dropped file as shown in the below
+screen shots.
+Convert webpages to pdf online with PDFmyURL
+Convert webpages to pdf online with PDFmyURL
+Once the dropped file is executed by macro code it connects to the command and control server(c2 server) and
+to conceal the data sent by the malware, it communicates on port 443 (https) as shown below. The network traffic
+pattern will be discussed in detail later.
+Analysis of the Dropped Executable (WINWORD.exe)
+Convert webpages to pdf online with PDFmyURL
+The dropped file was analyzed in an isolated environment (without actually allowing it to connect to the c2 server).
+This section contains the behavioral analysis of the dropped executable (WINWORD.exe).
+The malware when executed creates additional files on the file system, It downloads these files by contacting the
+C2 server and saves it on the disk. Since the malware was not allowed to contact the C2 server its not clear about
+the functionality of these files. The below screen shots show WINWORD.exe creating an exectuable, VB script and
+VBE files. The malware uses WScript.exe to execute the VB scripts.
+As mentioned above, malware once executed makes an https connection to the C2 server as shown below.
+C2 Communication Pattern
+Convert webpages to pdf online with PDFmyURL
+Upon execution malware makes an https connection to the url hxxps://webmail[.]duia[.]in/webmail.php. The https
+connection was intercepted and different network communications were determined.
+In the first communication it collects and sends the system information of the infected system to the attacker in
+the user-agent field. The user-agent field contains information about the computer name, username and if the
+AntiVirus software is installed or not. The malware sends some information in the post data as well, the post data
+gives the information about the action that malware will perform. In the below screen shot notice the system
+information sent in the user-agent field and also from the post data it can be deduced that the malware
+downloads an exe file.
+Malware uses similar network communication pattern to download additional files (vbs, vbe, cmd, sc, ext, a3x etc).
+Once downloaded these files are saved in either “%LocalAppData%\Temp\WindowsUpdates” folder or in
+“%Temp%\WindowsUpdates” folder. During analysis it was determined that the malware used these filenames
+(MS015-0012.exe, MS015-0012.vbs, MS015-0012.vbe etc.) to reside in these directories. Below screen shots shows
+some of the network communication made by the malware to download files.
+Convert webpages to pdf online with PDFmyURL
+C2 Domain Information
+This section contains details of the C2 domain (webmail[.]duia[.]in). Attackers used the DynamicDNS hostname
+( duia is a Dynamic DNS provider ) to host the C2 server, this allows the attacker to quickly change the IP address in
+real time if the malware C2 server infrastructure is unavailable. The C2 domain currently resolves to an IP address
+shown below and the same domain was associated with another IP address previously. Both the IP addresses are
+associated with hosting providers as shown in the screen shot below
+Convert webpages to pdf online with PDFmyURL
+Convert webpages to pdf online with PDFmyURL
+Indicators Of Compromise
+Convert webpages to pdf online with PDFmyURL
+The indicators are provided below, so that they can be used by the organizations (Government, Public and
+Private organizations) to detect and investigate this attack campaign.
+Dropped Malware Sample:
+4dc28faeb77550174b936d9ba97d4679 (WINWORD.exe)
+Network Indicators Associated with C2:
+webmail[.]duia[.]in
+hxxps://webmail[.]duia[.]in/webmail.php
+95[.]23[.]26[.]28
+185[.]100[.]86[.]174
+Host Indicators:
+Filenames in the “%Temp%\WindowsUpdates” folder: MS015-0012.exe, MS015-0012.vbs, MS015-0012.vbe
+Filename WINWORD.exe in the Startup directory
+Conclusion
+Attackers in this case made every attempt to launch a clever attack campaign by spoofing email address of
+Ministry of Defence, they also tried to trick the users to believe the email was sent from NIC’s incident response
+team. To make the attack less suspicious they also used a legitimate PDF document in the attachment and used
+the name of the top NIC offical in the email signature. The attackers also hosted the C2 server in a Dynamic DNS
+provider network. We believe that such attacker groups are likely working to gain long-term access into Indian
+Government networks. With India rapidly moving towards digitization and cashless transactions we believe that
+more such cyber attacks will continue to target Government, Defence, NGOs and financial institutions.
+Convert webpages to pdf online with PDFmyURL
+Convert webpages to pdf online with PDFmyURL
+Convert webpages to pdf online with PDFmyURL
+Convert webpages to pdf online with PDFmyURL
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "word document (NIC-Cyber Security SOP.doc)", "type": "DOCF"},
+        {"id": 2, "description": "http://meity.gov.in/sites/upload_files/dit/files/Plan_Report_on_Cyber_Security.pdf", "type": "URLS"},
+        {"id": 3, "description": "email", "type": "MAIL"},
+        {"id": 4, "description": "malicious macro code", "type": "EXEF"},
+        {"id": 5, "description": "malware backdoor", "type": "EXEF"},
+        {"id": 6, "description": "C2 Server", "type": "CCSH"},
+        {"id": 7, "description": "Indian Ministry of External Affairs", "type": "COUN"},
+        {"id": 8, "description": "WINWORD.exe (malicious executable)", "type": "EXEF"},
+        {"id": 9, "description": "%LocalAppData%\\Temp\\WindowsUpdates folder", "type": "SYSP"},
+        {"id": 10, "description": "%Temp%\\WindowsUpdates folder", "type": "SYSP"},
+        {"id": 11, "description": "MS015-0012.exe", "type": "EXEF"},
+        {"id": 12, "description": "MS015-0012.vbs", "type": "EXEF"},
+        {"id": 13, "description": "MS015-0012.vbe", "type": "EXEF"},
+        {"id": 14, "description": "95.23.26.28", "type": "CCSH"},
+        {"id": 15, "description": "185.100.86.174", "type": "CCSH"},
+        {"id": 16, "description": "hxxps://webmail[.]duia[.]in/webmail.php", "type": "URLS"},
+        {"id": 17, "description": "webmail[.]duia[.]in", "type": "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name": "attached in"},
+        {"source": 4, "target": 5, "rel_name": "drops and executes"},
+        {"source": 5, "target": 6, "rel_name": "sends system information to"},
+        {"source": 5, "target": 8, "rel_name": "drops"},
+        {"source": 3, "target": 7, "rel_name": "spoofs email address of"},
+        {"source": 4, "target": 8, "rel_name": "executes and uses to contact C2"},
+        {"source": 8, "target": 9, "rel_name": "downloads files to"},
+        {"source": 8, "target": 10, "rel_name": "downloads files to"},
+        {"source": 8, "target": 6, "rel_name": "connects to C2 via https on port 443"},
+        {"source": 8, "target": 16, "rel_name": "communicates with C2 at URL"},
+        {"source": 16, "target": 17, "rel_name": "resolves to domain"}
+    ]
+}

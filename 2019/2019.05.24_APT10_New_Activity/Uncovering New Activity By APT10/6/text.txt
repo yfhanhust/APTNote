@@ -1,0 +1,61 @@
+Payloads
+Modified Quasar RAT
+The injected shellcode reflective loads in-memory an executable it reconstructs from
+data which is bundled with it. The reflective load code is obfuscated, as function calls are
+made by dynamically resolving their addresses according to hashed values.
+The executable tries to run conhost.exe from C:\Users\Public\Documents and in case it
+doesn’t exists it turns to ffca[.]caibi379[.]com to download it. The code that sends the
+HTTP request seems to be buggy. While wininet!InternetOpenW (the unicode version of
+the function) is used, an ascii value is provided as the User-Agent, so instead of
+“RookIE/1.0” the request headers will include inconsistent and meaningless values as
+can be seen in Figure 3.
+https://blog.ensilo.com/uncovering-new-activity-by-apt10 4/11
+5/28/2019 Uncovering New Activity By APT10
+Figure 3: .NET downloader’s HTTP request
+In our analysis the conhost.exe that was downloaded is itself another downloader written
+in .NET and disguised as a legitimate system executable.
+This extremely simplified downloader contains only the capability of downloading and
+executing a base-64 encoded executable from the hardcoded address using a simple
+System.Net.WebClient HTTP request: ffca[.]caibi379[.]com/rwjh/qtinfo.txt .
+The downloaded payload is a modified Quasar RAT. This version contains an addition of
+SharpSploit to extract passwords from the victim machine using the framework’s built-in
+mimikatz capabilities.
+Figure 4: Quasar Assembly information
+https://blog.ensilo.com/uncovering-new-activity-by-apt10 5/11
+5/28/2019 Uncovering New Activity By APT10
+Figure 5: Embedded SharpSploit code
+Examining the sample’s configuration, we found the following:
+C&C server: cahe.microsofts.org:443
+Mutex name: “QSR_MUTEX_rSifQNOVTwHrsBs2nd”
+A self-signed certificate issued to “MSGQ Server CA” (as seen in Figure 6)
+https://blog.ensilo.com/uncovering-new-activity-by-apt10 6/11
+5/28/2019 Uncovering New Activity By APT10
+Figure 6: Quasar's embedded certificate
+PlugX
+Following the injection to svchost.exe by the loader, the shellcode decrypts another part
+of itself and use RtlDecompressBuffer API to further unpack the PlugX DLL. The DOS
+and NT headers magic values, MZ and PE respectively, were replaced with VX, a typical
+behavior for PlugX payloads. This is meant to prevent from security products and
+automated tools to identify the executable headers when performing memory scans.
+Like previous versions of PlugX, it collects information about the infected machine such
+as the computer name, username, OS version, RAM usage, network interfaces and
+resources.
+In an attempt to generate noise around allocation and release of memory by the
+malware, the authors wrapped it with dummy calls to GetForegroundWindow API
+function, as can be seen in Figure 7.
+https://blog.ensilo.com/uncovering-new-activity-by-apt10 7/11
+5/28/2019 Uncovering New Activity By APT10
+Figure 7: Dummy calls to GetForegroundWindow
+This sample shares some similarities to the Paranoid PlugX variant. It goes a long way
+to completely remove any sign of McAfee’s email proxy service from the infected
+machine. Besides killing the process, it also makes sure to delete any related keys in the
+registry, and recursively deletes any related files and directories on the machine. The
+same behavior was observed by in the paranoid variant as part of a VBScript the
+dropper runs.
+Typically, APT10 tends to employ a namesquatting scheme in their domains that aims to
+confuse the observer by posing as a legitimate domain. In the configuration bundled to
+the samples we found the following:
+The sample in the first loader communicates with update[.]microsoft s [.]org with
+DNS over TCP.
+The sample in the second loader communicates with update[.]kaspr es k s y[.]com
+over HTTPS.

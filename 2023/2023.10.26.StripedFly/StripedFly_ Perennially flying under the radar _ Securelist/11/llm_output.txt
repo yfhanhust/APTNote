@@ -1,0 +1,210 @@
+
+
+
+Sentence : Functionality modules
+Reverse proxy
+The module grants access to the victim’s network and allows the execution of remote
+actions on behalf of the victim.
+Miscellaneous command handler
+The module encompasses a range of commands designed to interact with the victim’s file
+systems, capture screenshots, retrieve system versions, and obtain the active X11
+display on Linux (the default is WinSta0 on Windows). It also includes a command
+capable of executing shellcode received from the C2 server.
+Credential harvester
+The module operates a dedicated thread that runs periodic scans every two hours. During
+these scans, it collects a range of sensitive information from all active users. This
+information includes website login usernames and passwords, as well as personal autofill
+data such as name, address, phone number, company, and job title. It also captures
+known Wi-Fi network names and the associated passwords, as well as SSH, FTP, and
+WebDav credentials from popular software clients such as FileZilla, Cyberduck, and
+WinSCP.
+It’s worth noting that web browser support for credential harvesting extends beyond wellknown browsers such as Chrome, Firefox, and Internet Explorer, and includes such
+lesser-known browsers as Nichrome, Xpom, RockMelt, Vivaldi, SaMonkey, Epic Privacy,
+and Brave.
+In the Linux version, it also gathers OpenSSH keys stored in $HOME/.ssh, compiles a list
+of known hosts from $HOME/.ssh/known_hosts, and includes functionality to retrieve
+secrets from the Libsecret vault. However, this particular functionality is currently broken
+because there is no dlopen API implementation in the linked musl libc library.
+Repeatable tasks
+The module boasts a few built-in functional tasks that can be executed either once or on
+a repeatable scheduled basis, with the condition that specific windows must be visible for
+these tasks to proceed.
+The following are brief descriptions of the tasks:
+Take a screenshot and get a list of windows that are visible at that moment.
+Execute a process with a given command line, redirect its output, and filter it using
+regular expressions.
+Record the microphone input.
+https://securelist.com/stripedfly-perennially-flying-under-the-radar/110903/ 8/15
+1/16/24, 3:20 PM StripedFly: Perennially flying under the radar | Securelist
+The task involves gathering a list of files with specific extensions, such as those
+related to images, documents, sounds, videos, archives, databases, certificates,
+source code files, and other critical user data files. This process scans all local
+drives and network shares, with the exception of system folders. This is the only
+task that works in the Linux version of the malware.
+Recon module
+This module compiles extensive system information and transmits it to the C2 server
+upon connection. The data collected includes a wide range of details, including operating
+system version, computer name, list of hardware MAC addresses, current username for
+Windows systems, /etc/passwd file for Linux systems, IP address of the machine, IP
+address of the currently connected TOR network exit node, system startup time, malware
+uptime, time and time zone, total and available memory amount, user administrative
+privileges, and specific Windows-related information such as the UI language and
+keyboard layouts, presence of antivirus software, NetBIOS name, DNS domain, owner’s
+Windows license details, and the presence of the PowerShell command interpreter.
+SMBv1 and SSH infectors
+There are two modules dedicated to the penetration capabilities of the malware, which
+make up the core worming functionality.
+The SSH infector springs into action once the credential harvester module completes its
+tasks. It filters the results for SSH keys and credentials and, if any are found, activates a
+dedicated thread. This thread operates with random timeouts ranging from 10 minutes to
+two hours and initiates the penetration process. First, it retrieves delta.dat and delta.img
+either from the cache or directly from bitbucket[.]org . It then proceeds to verify the
+integrity of these files and dynamically loads the libeay, zlib and libssh2 libraries from
+delta.img . The next step is to attempt to connect to the remote SSH server. If the
+connection is successful, it invokes and parses the output of the /bin/sh -c ‘uname -nmo’
+command. If the remote system is supported, the malware uploads its binary to the
+remote /tmp folder under a random name and executes it with the command /bin/sh -c
+‘cat > %s; chmod +x %s; nohup sh -c “%s; rm %s” &>/dev/null’ . This approach
+ensures compatibility with x86, amd64, arm, aarch64 Linux CPU architectures, as well as
+Cygwin x86 and amd64 remote hosts using a generated MZ-PE loader.
+The SMBv1 infection module serves as the primary penetration tool for Windows victims,
+using a custom EternalBlue exploit. Upon initial execution, it immediately disables the
+SMBv1 protocol by modifying the
+HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters registry key
+on the victim’s system. It then launches two dedicated threads to perform periodic
+worming routines.
+https://securelist.com/stripedfly-perennially-flying-under-the-radar/110903/ 9/15
+1/16/24, 3:20 PM StripedFly: Perennially flying under the radar | Securelist
+The first thread is responsible for inspecting the network adapter’s IP address and subnet
+mask. It then attempts to cause infections within the entire LAN subnet. In contrast, the
+second thread periodically attempts to select a random internet IP address, with the
+following exclusions:
+Bogon networks like 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8,
+172.16.0.0/12, 192.168.0.0/16, 198.18.0.0/15, 224.0.0.0/4, 240.0.0.0/4
+169.255.0.0/16 – mostly South Africa. This may be a bug; the authors probably
+meant 169.254.0.0/16 – the missing part of the bogon networks list
+3.0.0.0/8, 15.0.0.0/8, 16.0.0.0/8, 56.0.0.0/8 – Amazon, HP, US Post and more
+6.0.0.0/8, 55.0.0.0/8 – United States Army Information Systems Command HQ
+(USAISC)
+7.0.0.0/8, 11.0.0.0/8, 21.0.0.0/8, 22.0.0.0/8, 26.0.0.0/8, 28.0.0.0/8, 29.0.0.0/8,
+30.0.0.0/8, 33.0.0.0/8, 214.0.0.0/8, 215.0.0.0/8 – US Department of Defense
+Network Information Center (DNIC).
+Supported Windows versions include Windows Vista, Windows 7, Windows Server 2008
+R2, Windows 8, Windows Server 2012, and Windows 10 up to build 14392.
+Monero cryptocurrency mining module
+The icing on the cake is the Monero mining module. It operates in a separate process and
+skillfully disguises itself as a chrome.exe process located in the
+Google\Chrome\Application\Services directory, which can be found in either the
+common or local AppData directory. This deceptive facade even includes alterations to
+the version information and process icon of the masqueraded executable. Periodically,
+the malware functionality within the main module monitors the puppet mining process and
+restarts it if necessary. It also dutifully reports hash rate, work time, discovered nonces,
+and error statistics to the C2 server.
+DNS resolutions for pool servers are cleverly concealed behind DNS over HTTPS
+requests to the Cloudflare DoH (DNS over HTTPS) service, adding an extra layer of
+stealth to its operations.
+We strongly suspect that this module is the primary reason for the malware’s ability to
+evade detection for an extended period. Its existence is primarily driven by the need for
+effective masquerading. It’s worth noting that the Monero coin, which this module mines,
+peaked at $542.33 on January 9, 2018, after hovering around $10 in 2017. As of 2023, it
+is trading at around $150. While this module is certainly profitable, it’s not necessarily the
+most lucrative use of such malware. Hunting for unencrypted binary wallets or wallet
+credentials, for example, could yield significantly higher profits.
+Furthermore, the presence of unencrypted strings related to mining within the malware
+code provides additional evidence of its potential secondary purpose.
+https://securelist.com/stripedfly-perennially-flying-under-the-radar/110903/ 10/15
+1/16/24, 3:20 PM StripedFly: Perennially flying under the radar | Securelist
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Reverse proxy module", "type" : "TTPS"},
+        {"id": 2, "description": "C2 server", "type" : "CCSH"},
+        {"id": 3, "description": "Victim’s network", "type" : "NETP"},
+        {"id": 4, "description": "Miscellaneous command handler module", "type" : "TTPS"},
+        {"id": 5, "description": "File systems", "type" : "STOR"},
+        {"id": 6, "description": "X11 display on Linux (WinSta0 on Windows)", "type" : "SYSP"},
+        {"id": 7, "description": "Credential harvester module", "type" : "TTPS"},
+        {"id": 8, "description": "Website login usernames and passwords", "type" : "IOCS"},
+        {"id": 9, "description": "Personal autofill data (name, address, phone number, company, job title)", "type" : "IOCS"},
+        {"id": 10, "description": "Wi-Fi network names and associated passwords", "type" : "IOCS"},
+        {"id": 11, "description": "SSH, FTP, WebDav credentials from software clients (FileZilla, Cyberduck, WinSCP)", "type" : "IOCS"},
+        {"id": 12, "description": "Web browser support for credential harvesting (Chrome, Firefox, Internet Explorer, Nichrome, Xpom, RockMelt, Vivaldi, SaMonkey, Epic Privacy, Brave)", "type" : "APPS"},
+        {"id": 13, "description": "$HOME/.ssh", "type" : "SYSP"},
+        {"id": 14, "description": "$HOME/.ssh/known_hosts", "type" : "IOCS"},
+        {"id": 15, "description": "Libsecret vault", "type" : "APPS"},
+        {"id": 16, "description": "musl libc library", "type" : "LIBR"},
+        {"id": 17, "description": "Repeatable tasks module", "type" : "TTPS"},
+        {"id": 18, "description": "Screenshot and list of visible windows task", "type" : "TTPS"},
+        {"id": 19, "description": "Process execution with command line redirection and filtering task", "type" : "TTPS"},
+        {"id": 20, "description": "Microphone recording task", "type" : "TTPS"},
+        {"id": 21, "description": "File gathering task (images, documents, sounds, videos, archives, databases, certificates, source code files, and other critical user data files)", "type" : "TTPS"},
+        {"id": 22, "description": "Recon module", "type" : "TTPS"},
+        {"id": 23, "description": "Operating system version", "type" : "IOCS"},
+        {"id": 24, "description": "Computer name", "type" : "IOCS"},
+        {"id": 25, "description": "List of hardware MAC addresses", "type" : "MAC"},
+        {"id": 26, "description": "Current username for Windows systems", "type" : "IOCS"},
+        {"id": 27, "description": "/etc/passwd file for Linux systems", "type" : "SYSP"},
+        {"id": 28, "description": "IP address of the machine", "type" : "NETP"},
+        {"id": 29, "description": "IP address of the currently connected TOR network exit node", "type" : "NETP"},
+        {"id": 30, "description": "System startup time", "type" : "IOCS"},
+        {"id": 31, "description": "Malware uptime", "type" : "IOCS"},
+        {"id": 32, "description": "Time and time zone", "type" : "IOCS"},
+        {"id": 33, "description": "Total and available memory amount", "type" : "IOCS"},
+        {"id": 34, "description": "User administrative privileges", "type" : "IOCS"},
+        {"id": 35, "description": "UI language and keyboard layouts for Windows systems", "type" : "IOCS"},
+        {"id": 36, "description": "Presence of antivirus software", "type" : "IOCS"},
+        {"id": 37, "description": "NetBIOS name", "type" : "IOCS"},
+        {"id": 38, "description": "DNS domain", "type" : "DNSS"},
+        {"id": 39, "description": "Owner’s Windows license details", "type" : "IOCS"},
+        {"id": 40, "description": "Presence of the PowerShell command interpreter", "type" : "APPS"},
+        {"id": 41, "description": "SMBv1 and SSH infectors module", "type" : "TTPS"},
+        {"id": 42, "description": "delta network (0.0.0.0/8, 10.0.0.0/8, etc.)", "type" : "NETP"},
+        {"id": 43, "description": "Monero cryptocurrency mining module", "type" : "TTPS"},
+        {"id": 44, "description": "chrome.exe process (masqueraded)", "type" : "EXE"},
+        {"id": 45, "description": "Google\Chrome\Application\Services directory", "type" : "SYSP"},
+        {"id": 46, "description": "Common or local AppData directory", "type" : "SYSP"},
+        {"id": 47, "description": "Cloudflare DoH service", "type" : "DNSS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "description": "Reverse proxy module interacts with the victim’s network"},
+        {"source": 1, "target": 2, "description": "Reverse proxy module communicates with the C2 server"},
+        {"source": 4, "target": 5, "description": "Miscellaneous command handler module accesses file systems"},
+        {"source": 4, "target": 6, "description": "Miscellaneous command handler module interacts with X11 display on Linux (WinSta0 on Windows)"},
+        {"source": 7, "target": 8, "description": "Credential harvester module collects website login usernames and passwords"},
+        {"source": 7, "target": 9, "description": "Credential harvester module collects personal autofill data"},
+        {"source": 7, "target": 10, "description": "Credential harvester module collects Wi-Fi network names and associated passwords"},
+        {"source": 7, "target": 11, "description": "Credential harvester module collects SSH, FTP, WebDav credentials from software clients"},
+        {"source": 7, "target": 12, "description": "Credential harvester module supports web browsers for credential harvesting"},
+        {"source": 7, "target": 13, "description": "Credential harvester module accesses $HOME/.ssh directory"},
+        {"source": 7, "target": 14, "description": "Credential harvester module collects known hosts from $HOME/.ssh/known_hosts"},
+        {"source": 7, "target": 15, "description": "Credential harvester module interacts with Libsecret vault"},
+        {"source": 17, "target": 18, "description": "Repeatable tasks module includes screenshot and list of visible windows task"},
+        {"source": 17, "target": 19, "description": "Repeatable tasks module includes process execution with command line redirection and filtering task"},
+        {"source": 17, "target": 20, "description": "Repeatable tasks module includes microphone recording task"},
+        {"source": 17, "target": 21, "description": "Repeatable tasks module includes file gathering task"},
+        {"source": 22, "target": 23, "description": "Recon module collects operating system version"},
+        {"source": 22, "target": 24, "description": "Recon module collects computer name"},
+        {"source": 22, "target": 25, "description": "Recon module collects list of hardware MAC addresses"},
+        {"source": 22, "target": 26, "description": "Recon module collects current username for Windows systems"},
+        {"source": 22, "target": 27, "description": "Recon module collects /etc/passwd file for Linux systems"},
+        {"source": 22, "target": 28, "description": "Recon module collects IP address of the machine"},
+        {"source": 22, "target": 29, "description": "Recon module collects IP address of the currently connected TOR network exit node"},
+        {"source": 22, "target": 30, "description": "Recon module collects system startup time"},
+        {"source": 22, "target": 31, "description": "Recon module collects malware uptime"},
+        {"source": 22, "target": 32, "description": "Recon module collects time and time zone"},
+        {"source": 22, "target": 33, "description": "Recon module collects total and available memory amount"},
+        {"source": 22, "target": 34, "description": "Recon module collects user administrative privileges"},
+        {"source": 22, "target": 35, "description": "Recon module collects UI language and keyboard layouts for Windows systems"},
+        {"source": 22, "target": 36, "description": "Recon module collects presence of antivirus software"},
+        {"source": 22, "target": 37, "description": "Recon module collects NetBIOS name"},
+        {"source": 22, "target": 38, "description": "Recon module collects DNS domain"},
+        {"source": 22, "target": 39, "description": "Recon module collects owner’s Windows license details"},
+        {"source": 22, "target": 40, "description": "Recon module checks presence of the PowerShell command interpreter"},
+        {"source": 41, "target": 42, "description": "SMBv1 and SSH infectors module excludes delta network IP addresses"},
+        {"source": 43, "target": 44, "description": "Monero cryptocurrency mining module masquerades as chrome.exe process"},
+        {"source": 43, "target": 45, "description": "Monero cryptocurrency mining module is located in the Google\Chrome\Application\Services directory"},
+        {"source": 43, "target": 46, "description": "Monero cryptocurrency mining module can be found in either common or local AppData directory"},
+        {"source": 43, "target": 2, "description": "Monero cryptocurrency mining module reports to the C2 server"},
+        {"source": 43, "target": 47, "description": "Monero cryptocurrency mining module uses Cloudflare DoH service for DNS resolutions"}
+    ]
+}

@@ -1,0 +1,110 @@
+MALWARE INFORMATION T ROJ /R E R OL .A
+One of the favorite methods used by the Pitty Tiger group to infect users is to use a Microsoft Office
+Word document which exploits a specific vulnerability.
+The payload infecting the system is malware known as “Troj/ReRol.A”. It is generally the first step of
+the initial compromise for Pitty Tiger campaigns.
+Exploitation
+Microsoft Office Word decoy “test document” used by the Pitty Tiger group
+Installation
+When successfully triggered, the exploit infects the host by dropping and executing a file named
+“svohost.exe” [2] in the temporary folder of the currently logged-in user:
+1 MD5 hash: e70c0479cdb9aa031a263740365e7939
+2 MD5 hash: 1752aacc08ee0acd58405e9bc10b0dbb
+Public release
+Threat Intelligence
+“The Eye of the Tiger” Page : 12/58
+Copyright © 2014 Airbus Defence & Space - All rights reserved
+Operation Pitty Tiger – “The Eye of the Tiger”
+```
+         C:\DOCUME~1\USER\LOCALS~1\Temp\svohost.exe
+```
+This binary is “Troj/ReRol.A” according to Sophos naming convention [1] . It immediately triggers
+alarms on our sandbox:
+Creation of a copy of the Pitty Tiger malware in a user folder in our sandbox
+The malware initiates a communication to time.windows.com to check for connectivity, and then
+communicates with the c&c server at mac.avstore.com.tw .
+1 http://www.sophos.com/en-us/threat-center/threat-analyses/viruses-and-spyware/Troj~Rerol-
+A/detailed-analysis.aspx
+Public release
+Threat Intelligence
+“The Eye of the Tiger” Page : 13/58
+Copyright © 2014 Airbus Defence & Space - All rights reserved
+Operation Pitty Tiger – “The Eye of the Tiger”
+The payload of this malware is used to collect information on the newly infected host, and send it
+back to the c&c server. It can also download and execute binaries.
+Command & Control
+The data sent in the POST request has a 0x11 bytes header consisting of a fixed-value byte (0xc3)
+followed by a 0x10 bytes encryption key. The data following the header is encrypted using RC4 with
+the previous key. Once the data is deciphered, the last byte of the clear text should also be 0xc3.
+We have been able to decrypt the communications and confirmed what is transmitted to the c&c
+server.
+Public release
+Threat Intelligence
+“The Eye of the Tiger” Page : 14/58
+Copyright © 2014 Airbus Defence & Space - All rights reserved
+Operation Pitty Tiger – “The Eye of the Tiger”
+Here is an anonymized sample of communication showing information collected by the malware:
+execute on the machine.
+The c&c part consists of two files:
+
+
+dr.asp : an ASP frontend instantiating a control, setting some variables, and passing the
+payload.
+
+
+JHttpSrv.dll : a controller which should be registered via “regsvr32”. It exposes 4 methods
+which can be called by the ASP script:
+
+
+o SetIP(strIP): sets the bot IP address
+o AddKeyword(strKeyword, strFilePath): binds a keyword to a binary on the server
+o Work(lpByteArray, nDataLength): deciphers the payload, looks for the registered
+keywords, and writes it to a logfile
+o ResponseBinary(): sends back the binary matching a specific a keyword
+Public release
+Threat Intelligence
+“The Eye of the Tiger” Page : 15/58
+Copyright © 2014 Airbus Defence & Space - All rights reserved
+Operation Pitty Tiger – “The Eye of the Tiger”
+The dr.asp registers the following keywords:
+  - “SysType :32bit” to the binary “32.exe”
+
+  - “SysType :64bit” to the binary “64.exe”
+
+These two binaries were no longer available on the server. However, we found various files which
+could have been used as “32.exe” in the past:
+  - 3200.exe
+
+  - 322.exe
+
+  - 32m.exe
+
+  - 32mm.exe
+
+The 322.exe file is a legitimate, Chinese, calc.exe tool. It might have been used by the attackers to
+perform tests.
+Alarms in our sandbox system, triggered by the PittyTiger malware
+The binary drops two files in “C:\Windows\System32”:
+1 MD5 hash : be18418cafdb9f86303f7e419a389cc9
+Public release
+Threat Intelligence
+“The Eye of the Tiger” Page : 16/58
+Copyright © 2014 Airbus Defence & Space - All rights reserved
+Operation Pitty Tiger – “The Eye of the Tiger”
+Sample communication from PittyTiger RAT
+Public release
+Threat Intelligence
+“The Eye of the Tiger” Page : 17/58
+Copyright © 2014 Airbus Defence & Space - All rights reserved
+Operation Pitty Tiger – “The Eye of the Tiger”
+Command & Control
+All the requests sent to the c&c contains the string “/FC001/” followed by the bot id. This id consists
+of the infected computer name followed by a dash and the lower word of the disk serial id.
+The data sent is simply encoded using base64, there is no cipher at all. The hello packet, once
+decoded, looks like the following:
+Pitty Tiger RAT – controller part
+Public release
+Threat Intelligence
+“The Eye of the Tiger” Page : 18/58
+Copyright © 2014 Airbus Defence & Space - All rights reserved
+Operation Pitty Tiger – “The Eye of the Tiger”

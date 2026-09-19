@@ -1,0 +1,66 @@
+
+
+
+Sentence : Altserialization Insecure Deserialization
+The threat actor leveraged a second vulnerability involving insecure deserialization to exploit IIS servers. This section
+describes that process.
+ASP.NET allows web applications to store user sessions to be used later once the user returns and interacts with the
+application. This works by saving a serialized .NET session object to a MSSQL database and assigning it a unique
+cookie which is given to the user when browsing the application. Once the user browses again with the cookie the
+session state is loaded and deserialized. A crafted serialized object which is written to the database could lead to
+remote code execution on a web application server once the implanted cookie is passed in an HTTP request.
+This technique was used by TG1021 in order to move laterally between IIS servers within an environment. An initial IIS
+server was compromised using one of the deserialization vulnerabilities listed above. From there the threat actor was
+able to conduct reconnaissance activities on a targeted ASP.NET session state MSSQL server and execute the exploit,
+as illustrated below and in Figure 3 :
+
+
+After gathering information on the environment, a malicious serialized object was written to the database.
+
+
+The threat actor sent an HTTP GET request using the crafted ASP.NET session state cookie.
+
+
+The target IIS web server loaded and deserialized the matching session state object correlating to the planted
+
+
+cookie.
+
+
+The deserialization process is exploited by the crafted object in order to compile an in-memory web shell.
+
+
+Immediately after the web shell was created the threat actor accessed it to reflectively load the malicious
+
+
+NodeIISWeb malware on the compromised asset.
+6
+Figure 3 : Altserialization exploit attack flow
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "The threat actor", "type" : "ACTO"},
+        {"id": 2, "description": "IIS servers", "type" : "APPS"},
+        {"id": 3, "description": ".NET session object", "type" : "DOCF"},
+        {"id": 4, "description": "MSSQL database", "type" : "APPS"},
+        {"id": 5, "description": "cookie", "type" : "TAMP"},
+        {"id": 6, "description": "HTTP request", "type" : "NETP"},
+        {"id": 7, "description": "TG1021", "type" : "ACTO"},
+        {"id": 8, "description": "ASP.NET session state MSSQL server", "type" : "APPS"},
+        {"id": 9, "description": "HTTP GET request", "type" : "NETP"},
+        {"id": 10, "description": "web shell", "type" : "EXEF"},
+        {"id": 11, "description": "NodeIISWeb malware", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "exploited"},
+        {"source": 3, "target": 4, "rel_name" : "stored in"},
+        {"source": 5, "target": 3, "rel_name" : "correlates to"},
+        {"source": 1, "target": 6, "rel_name" : "sent"},
+        {"source": 7, "target": 8, "rel_name" : "conducted reconnaissance on"},
+        {"source": 7, "target": 9, "rel_name" : "sent"},
+        {"source": 2, "target": 3, "rel_name" : "loaded and deserialized"},
+        {"source": 10, "target": 2, "rel_name" : "created on"},
+        {"source": 7, "target": 10, "rel_name" : "accessed"},
+        {"source": 7, "target": 11, "rel_name" : "reflectively loaded"}
+    ]
+}

@@ -1,0 +1,211 @@
+
+
+
+Sentence : Network Communications
+6/19
+Figure 3. Stager communication flow.
+Before communicating with the C2 server, the shellcode flushes the host’s DNS cache by
+performing the following:
+
+
+Loads module dnsapi.dll
+
+
+Calls API DnsFlushResolverCache
+
+
+When this API is called, all domains resolved are cleared from the host’s DNS cache, not
+just the target C2 server. This forces the host to resolve the current IP associated with the
+C2 domain, ensuring that communication continues as network infrastructure becomes
+compromised or unavailable. It also implies the developers own the domain and can
+update the IP.
+The stager begins by computing 10 bytes of data to send to the C2 server. These 10 bytes
+make up a challenge request packet. The stager sends the challenge request to the C2 and
+waits for a challenge response. When received and properly decrypted, the stager checks
+for magic values or signature bytes at specific offsets. If this check fails, the network
+connection is aborted. This check ensures trusted communication with the intended C2
+server and initiates the download of the payload.
+I. Stager Generates Challenge Request Packet
+The stager computes a 10-byte challenge request containing information for the C2, to
+include the size of the data (being the session keys) to be received next. The challenge
+request and session keys are sent to the C2 simultaneously. Example request:
+26BCFCCE738A211F3763
+II. C2 Server Decrypts Challenge Request Packet
+The C2 decrypts the challenge request packet using the following steps:
+
+First byte will be XORed with the second byte, second byte with third byte…until byte
+10, followed by:
+
+7/19
+A. Byte 7 is updated from the result of ( byte 7 XORed with byte 3 ).
+B. Byte 2 is updated from the result of ( byte 2 XORed with byte 0 ).
+C. Byte 8 is updated from the result of ( byte 8 XORed with byte 0 ).
+D. Byte 9 is updated from the result of ( byte 9 XORed with byte 5 ).
+
+Final value is XORed with key 0x3FDA5F9AD85D50C77E6A
+
+The challenge request decrypts to the following (represented as hex bytes):
+Figure 4. Decrypted request challenge.
+The last four bytes of the decrypted request packet inform the C2 server of the size of the
+expected network traffic to follow. As shown above, the value is 0x20, or 32 bytes. These
+32 bytes make up the session keys used by the C2 server to encrypt a server challenge
+response and encrypt the payload.
+Example of session keys received by the C2 server:
+Session key 1–> 8C931D4F764B0661C26D77239EB454CA
+Session key 2–> 7A4DD0AA6C3F37CDBDAFA4CBD6B27697
+The challenge request packet and session keys are computed for each beacon and
+therefore would always be unique.
+III. C2 Authenticates With the Stager
+The C2 uses the session keys to build the RC4 state box and as an XOR key for encryption
+and decryption.
+*It should be noted that the use of session key 2 is not yet fully understood, and it did not
+appear to be used to communicate with the stager.
+
+The pre-session key is computed using session key 1 (first 16 bytes) as follows:
+
+Pre-Session Key = session key 1 XOR
+0X6162636465666768696A6B6C6D6E6F00
+
+Using the computed pre-session key from step 1, the C2 server builds the RC4 Key
+Scheduling Algorithm (KSA). It is computed as follows:
+
+a. Build the RC4 KSA using the following inputs to the below function:
+data = 16-byte key 0x0C2F65194FF37B2D63D34635C7B205E4
+key = 16-byte computed pre-session key from step 1
+Example RC4 (modified) KSA routine:
+8/19
+def rc4_KSA(data, key):
+x = 0
+box = range(258)
+box[256] = 0
+box[257] = 0
+for i in range(256):
+x = (x + box[i] + ord(key[i % len(key)])) % 256
+box[i], box[x] = box[x], box[i]
+return box
+*Note about the input parameter “data” for the KSA routine: It is the XOR result of the
+two 16-byte keys shown neon green in Figure 2. Shellcode Configuration Structure.
+
+Construct 10-byte server challenge response header using the hex values shown in
+Figure 5.
+
+Figure 5. Server Command Challenge Header
+
+Encrypt server challenge response header from step 3:
+
+a. XOR 10-byte server challenge with key 0x33836E6B3FAA6AC464DA and perform the
+following:
+i. Byte 7 is updated from the result of ( byte 7 XORed with byte 3 ).
+ii. Byte 2 is updated from the result of ( byte 2 XORed with byte 0 ).
+iii. Byte 8 is updated from the result of ( byte 8 XORed with byte 0 ).
+iv. Byte 9 is updated from the result of ( byte 9 XORed with byte 5 ).
+b. Encrypted server challenge response header = result of 4(a)
+
+Compute final authentication key:
+
+a. XOR the following values:
+i. 0x0C2F65194FF37B2D63D34635C7B205E4
+ii. Value computed from step 1, i.e. Pre-Session Key
+*The 16-byte value in 5.a.i is the same input parameter used in the KSA algorithm in step
+2. The stager expects this key from the C2 otherwise the session is aborted.
+9/19
+The values generated in steps 4 and 5 make up the complete server challenge response. At
+this point, the C2 sends the server challenge response to the stager, completing the
+authentication process.
+IV. C2 Encrypts and Transmits Payload
+Next, the C2 prepares to send a command to the stager. BendyBear only supports one
+type of command: payload download.
+
+Build a 10-byte command header using the hex values shown in Figure 6.
+
+Figure 6. Updated server command challenge header.
+The only change to the header is the fixed signature value from 0x40 to 0x43.
+
+Encrypt the command header from step 1:
+
+The following is an example of a RC4 modified routine that can be used. The first
+argument, box, would be the S-Box computed in step III.2 and the second argument, data,
+would be the command header from step 1.
+def rc4_Mod_Crypt(box, data):
+x = box[256]
+y = box[257]
+c = 0
+out = []
+for char in data:
+x = (x + 1) % 256
+y = (y + box[x]) % 256
+box[x], box[y] = box[y], box[x]
+z = ( (box[x] + box[y] )&0xff ) % 256
+al = rol( box[z],4,8 )
+out.append( chr( ord( data[c] ) ^ al ) )
+box[z] = al
+c+=1
+box[256] = x
+box[257] = y
+return ”.join(out)
+10/19
+
+
+Obtain the size of the payload and encrypt that value using the same RC4 algorithm as
+in step 2. The size of the payload should be the total decrypted size of the payload.
+
+
+Encrypt and send the payload to the stager in chunks:
+
+
+a. Read 4,086 bytes from the payload. This is the maximum chunk size that the stager will
+accept.
+b. Build a command header (step 1 above) and update the following fields:
+i. Header size = size of payload chunk.
+ii. Command = 1.
+c. Send the updated 10-byte command header to the stager.
+d. Send the encrypted payload chunk.
+e. Repeat steps a – d until payload is sent.
+Figure 7 shows an example of one payload chunk that is sent to the stager.
+Figure 7. Encrypted payload header and data.
+Upon receiving each chunk, the stager strips the command header and decrypts the
+payload chunk in memory.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "dnsapi.dll", "type" : "APPS"},
+        {"id": 2, "description": "DnsFlushResolverCache API", "type" : "TTPS"},
+        {"id": 3, "description": "C2 server", "type" : "CCSH"},
+        {"id": 4, "description": "10 bytes of data (challenge request packet)", "type" : "DOCF"},
+        {"id": 5, "description": "Magic values or signature bytes at specific offsets", "type" : "TAMP"},
+        {"id": 6, "description": "26BCFCCE738A211F3763 (example challenge request)", "type" : "DOCF"},
+        {"id": 7, "description": "0x3FDA5F9AD85D50C77E6A (XOR key)", "type" : "TAMP"},
+        {"id": 8, "description": "Session key 1", "type" : "DOCF"},
+        {"id": 9, "description": "Session key 2", "type" : "DOCF"},
+        {"id": 10, "description": "Pre-Session Key (session key 1 XOR 0X6162636465666768696A6B6C6D6E6F00)", "type" : "DOCF"},
+        {"id": 11, "description": "RC4 Key Scheduling Algorithm (KSA) routine", "type" : "TTPS"},
+        {"id": 12, "description": "16-byte key 0x0C2F65194FF37B2D63D34635C7B205E4 (input parameter for KSA)", "type" : "TAMP"},
+        {"id": 13, "description": "10-byte server challenge response header", "type" : "DOCF"},
+        {"id": 14, "description": "0x33836E6B3FAA6AC464DA (XOR key for server challenge)", "type" : "TAMP"},
+        {"id": 15, "description": "Final authentication key", "type" : "DOCF"},
+        {"id": 16, "description": "10-byte command header for payload download", "type" : "DOCF"},
+        {"id": 17, "description": "Payload size", "type" : "TAMP"},
+        {"id": 18, "description": "4,086 bytes (maximum chunk size)", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loads and calls"},
+        {"source": 2, "target": 3, "rel_name" : "clears DNS cache for"},
+        {"source": 4, "target": 3, "rel_name" : "sent to"},
+        {"source": 5, "target": 4, "rel_name" : "checked in"},
+        {"source": 6, "target": 4, "rel_name" : "example of"},
+        {"source": 7, "target": 6, "rel_name" : "XORed with"},
+        {"source": 8, "target": 3, "rel_name" : "used by C2 to build RC4 state box and XOR key"},
+        {"source": 9, "target": 3, "rel_name" : "used by C2 (not fully understood)"},
+        {"source": 10, "target": 8, "rel_name" : "computed from"},
+        {"source": 10, "target": 12, "rel_name" : "XORed with"},
+        {"source": 11, "target": 10, "rel_name" : "uses as input"},
+        {"source": 11, "target": 12, "rel_name" : "uses as input"},
+        {"source": 13, "target": 3, "rel_name" : "constructed by C2 and sent to stager"},
+        {"source": 14, "target": 13, "rel_name" : "XORed with"},
+        {"source": 15, "target": 10, "rel_name" : "computed from"},
+        {"source": 15, "target": 12, "rel_name" : "XORed with"},
+        {"source": 16, "target": 3, "rel_name" : "built by C2 and sent to stager"},
+        {"source": 17, "target": 3, "rel_name" : "encrypted by C2 using RC4 algorithm"},
+        {"source": 18, "target": 16, "rel_name" : "maximum chunk size for"}
+    ]
+}

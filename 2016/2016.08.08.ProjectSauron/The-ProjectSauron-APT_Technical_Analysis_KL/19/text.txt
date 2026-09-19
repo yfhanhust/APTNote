@@ -1,0 +1,48 @@
+Shadow filesystem exfiltration tool (“MyTrampoline”)
+|MD5|Size|Format|Bits|Linker|
+|---|---|---|---|---|
+|5DDD5294655E9EB3B9B2071DC2E503B1|27136|DLL|32|11.0|
+The module is designed for hidden data transfer between air-gapped and internet-connected networks.
+For any inquiries, contact intelreports@kaspersky.com Page 28 of 33
+The ProjectSauron APT. Technical analysis
+It operates within one hardcoded directory, “c:\System Volume Information{774476DF-C00F-4e3a-BF4A6D8618CFA532}\”
+It reads all files from the subdirectory “07”, tries to decrypt each file with RSA2048+AES. If the decrypted
+data matches the magic signature and the format of the default blob then it is started.
+The module creates an invisible window with class name by mask "DMWndClassX%d", where “%d” is a
+number starting from 7 and waits for the message “WM_DEVICECHANGE” with parameter
+“DBT_DEVICEARRIBAL” indicating that a new disk volume appeared.
+For every new volume, it retrieves the partition layout and tries to read the first 512 bytes located right after
+the first disk partition that was recognized by the OS. If the data starts with magic four bytes FF 09 12 34 then
+it is treated as a special file system (“ shadow file system ”).
+The shadow file system is separated in two “partitions”: the first one is treated as a write-only partition for
+storing files collected from the local system; the files from the second partition are extracted, copied to the
+local storage and removed from their source location.
+The module reads all files from its local subdirectories “00” and “04”, copies them to the shadow file system
+and deletes their local copies.
+The files are renamed by prepending a string that is selected based on their location:
+
+
+00/ → p_
+
+
+04/ → z_
+
+
+All the files located in the shadow filesystem's second partition are enumerated, extracted from the storage
+and “deleted” from the shadow FS. Each file's name is matched against a list of prefixes and if the prefix is
+known then the file is written to the local storage.
+The destination directory is selected based on the filename prefix:
+
+
+p_ → 06/
+
+
+z_ → 05/
+
+
+b_ → 01/
+
+
+There is a known configuration of the core platform that specifically looks for files in the directories populated
+by the “mytrampoline” module and pushes these files to a remote repository, providing a communication
+channel for airgapped computers .

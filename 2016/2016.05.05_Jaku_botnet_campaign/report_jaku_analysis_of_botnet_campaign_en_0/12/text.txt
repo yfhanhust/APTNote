@@ -1,0 +1,164 @@
+MALWARE STAGE 2 – C3PRO-RACCOON
+C3PRO-RACCOON is another one of the second stage components (fake PNG) that is hosted on a C2 server
+with the small amount of targeted victims. This C2 data set is suspected of being a targeted set of victims and
+is referred to within the JAKU analysis as RACCOON.
+The C3PRO- RACCOON malware initially communicates with a specific C2 server over DNS. Kaspersky have
+already blogged about this same malware family when it was hosted on the KCNA North Korean news site in
+early 2015:
+```
+SHA1: c28bdea5e823cbca16d22a318ff29a338fcf0379
+```
+C3PRO - RACCOON Behaviour. This malware sample is another self-extractor, which drops the usual start.bat
+and end.bat files along with the Trojan component and a utility to add a new Windows task:
+```
+start.bat
+end.bat
+drmanidd32.dll (C3PRO-RACCOON trojan)
+SetTaskPathDl.exe (C# utility to add a new Windows task)
+Microsoft.Win32.TaskScheduler.dll (legitimate file used by SetTaskPathDl.exe for task scheduler stuff)
+```
+The file start.bat is executed which results in SetTaskPathDl.exe being invoked with the following arguments:
+```
+%temp%\SetTaskPathDl.exe drmanidd32.dll Adobe Update SecuUpdates.dll
+```
+This results in drmanidd32.dll being moved to %appdata%\Adobe\Update\SecuUpdates.dll and a Windows
+task created to execute the following command upon user logon:
+```
+C:\WINDOWS\system32\rundll32.exe %appdata%\Adobe\Update\SecuUpdates.dll,start now
+```
+Once executed, SecuUpdates.dll generates DNS traffic, which is the C2 channel communication:
+The malware resolves a specific C2 DNS name and uses the returned IP as a DNS server for resolving the
+CNAME of pWrpqMoqqipJiiwGBgaoxueIyMaG56g.e.q, which results in a resolution of LS4.com at IP
+231.157.250.149.
+The pWrpqMoqqipJiiwGBgaoxueIyMaG56g string is a base64 encoded, encrypted version of
+"+MICROSOFT_000C29DB249C" which is a '+' followed by the current computer name, "_" and then the MAC
+address of the primary network adapter.
+TLP-WHITE |  30
+Here is the encryption routine in assembly:
+```
+loop:
+mov   al, buffer[ecx]  ; buffer contains string to encrypt (i.e. "+MICROSOFT_000C29DB249C")
+add   al, 3       ; Add a value of 3 to the current 8-bit char value
+movzx  eax, al      ; Clear eax, replace with lower 8-bit val (this is pointless, poor coding)
+xor   eax, 3       ; XOR 32-bit value of eax (which is just 8-bit al, effectively) by 3
+mov   edx, eax      ; Save eax in edx
+shr   edx, 3       ; Shift edx right by 3 bits
+shl   al, 5       ; Shift 8-bit eax value left by 5 bits
+or   dl, al       ; OR 8-bit edx against 8-bit eax
+mov   buffer[ecx], dl  ; Copy new value (stored in dl) into current index of buffer
+inc   ecx        ; Increase buffer index
+cmp   ecx, edi      ; Check if we're done yet
+jl   short loop
+```
+This routine is poorly coded, as 32-bit values are not required. Alternatively, the author introduced an error in
+the left shift. Regardless, once corrected and optimised, the routine look like this:
+```
+loop:
+mov   al, buffer[ecx]  ; buffer contains string to encrypt (i.e. "+MICROSOFT_000C29DB249C")
+add   al, 3       ; Add a value of 3 to the current char value
+xor   al, 3       ; XOR char value by 3
+mov   dl, al       ; Copy char value (into dl)
+shr   dl, 3       ; Shift char value right by 3 bits (truncate)
+shl   al, 5       ; Shift the same char value (in al) left by 5 bits (truncate)
+or   dl, al       ; OR both char values
+mov   buffer[ecx], dl  ; Copy new value (stored in dl) into current index of buffer
+inc   ecx        ; Increase buffer index
+cmp   ecx, edi      ; Check if we're done yet
+jl   short loop
+```
+Or the same, more complete routine in C:
+```
+void encode(char *buffer)
+{
+for (int i = 0; i < strlen(buffer); i++)
+{
+unsigned char a = buffer[i];
+unsigned char b;
+a += 3;
+a ^= 3;
+b = a;
+b >>= 3;
+a <<= 5;
+b |= a;
+buffer[i] = b;
+}
+}
+```
+TLP-WHITE |  31
+DNS Command Channel. The DNS requests containing the encrypted system name and MAC address
+happen regularly (~2 minutes), with the IP of LS4.com changing each time. The malware translates LS4.com
+into LS4=, base64 decodes it and then decrypts it using the reverse of the algorithm above. The result of this
+is the string "go", and the malware also understands the following commands:
+|COMMAND PURPOSE NOTES|Col2|Col3|
+|---|---|---|
+|go|This just means "OK - no action to take"|Takes 0 parameters|
+|ti|Change wait/sleep time between DNS C2 attempts|Takes 1 parameter (sleep time inminutes)|
+|sh|Not implemented by author|This routine does nothing and appears tobe a placeholder for a future routine|
+|fs|Start UDT based C2 module|Takes 2 parameters (port, server)|
+|ts|Start secondary C2 module|Takes 2 parameters (port, server)|
+|dl|Inject a DLL into a process via remote thread inexplorer.exe|Takes 2 parameters (DLL filename,process name without .exe)|
+|du|Unload DLL from_current process_ via remote threadin explorer.exe|Takes 2 parameters (first param must be0, second is DLL filename)|
+|de|Securely delete file (write/read 4 times, rename900 times, truncate to 0 size, then delete)|Takes 1 parameter (file to delete)|
+|cm|Execute command-line utility (%COMSPEC%) withparameter and send results to C2 over DNS|Takes 1 parameter (command toexecute)|
+|cu|Send computer information to C2 over DNS|Takes 2 parameters (port - ignored,server)|
+|ex|Execute command via WinExec but do not sendback the results to C2 server|Takes 1 parameter (command toexecute)|
+A "parameter" here is a part of the CNAME separated by a ".". For example, "LS4.test.com" would be the
+command, "go" with 1 parameter "test"..
+The "secondary" C2 module receives commands over TCP and a custom protocol. The data structures are
+defined below:
+```
+// This is the client hello packet structure (actually not really a structure, just a 4 byte value)
+typedef struct clienthello_s
+{
+uint32 client_magic; // Must be 0xDF1B697A
+} clienthello_t;
+// This is the encryption key structure for packet encryption & decryption
+typedef struct keyheader_s
+{
+byte subkey;
+byte xorkey;
+byte rolkey;
+byte _align; // Unused, just here for alignment
+} keyheader_t;
+// This is the full structure for anything received from the server
+typedef struct servercmd_s
+{
+uint32   server_magic;  // Must be 0xA37CE092
+keyheader_t hdr;      // Encryption keys
+```
+TLP-WHITE |  32
+```
+long    cmdlen;     // Length of command buffer (encrypted)
+char    cmdbuf[512];  // Command buffer (encrypted)
+} servercmd_t;
+// This is used by the file upload & download routines
+typedef struct filetransfer_s
+{
+long    filesize;    // Size of file (encrypted)
+byte    filedata[];   // File contents (encrypted)
+} filetransfer_t;
+```
+The "UDT" C2 module receives commands over UDP and the UDT library protocol. The data structures used
+by the malware are similar to the ones above, but without magic values or encryption keys. Instead, the
+encryption keys are static. The UDT C2 module only supports a subset of the commands that the secondary
+C2 module does.
+The command set supported by the secondary and UDT C2 modules is the same as in Kaspersky’s analysis
+of the KCNA malware. However, our analysis of the KCNA malware and C3PRO-RACCOON revealed some
+additional functionality and small differences in what Kaspersky reported.
+The full list of commands used by the secondary and UDT modules can be seen in the table below:
+|COMMAND PURPOSE|Col2|
+|---|---|
+|get|Encrypt and send specified file|
+|_got|Encrypt and send specified file and then securely delete it from disk|
+|_cmd|Execute command-line utility (%COMSPEC%) with parameter and send results to C2|
+|_exe|Execute parameter via WinExec API|
+|_quit|Exit the C2 thread|
+|_inf|Grab system information, save it to file, encrypt it, send it to C2 and then securely delete it.  Operating system version  Username  Computer name  System drive  Local time  All connected drives and properties  Network adapter properties  Disk free space  All installed programs|
+|_dll|Inject a DLL into a process via remote thread in explorer.exe|
+|_put|Receive, decrypt, and write a buffer to disk at a specified file location|
+|_del|Securely delete specified file using John Underhill's "Secure File Shredder" code|
+|_dir|Send a directory listing for path specified|
+|_prc|Send a full running process list to C2|
+|_cap|Take a screenshot, save it to file, encrypt it, send it to C2 and then securely delete it|
+|_dlu|Unload DLL from_current process only via remote thread in explorer.exe|
+TLP-WHITE |  33

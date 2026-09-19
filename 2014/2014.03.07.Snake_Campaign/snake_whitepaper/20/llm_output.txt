@@ -1,0 +1,118 @@
+
+
+
+Sentence : VIRTUAL FILE VOLUMES
+The driver creates virtual file volumes for encrypted storage of its files and configuration data:
+• \.\Hd1
+• \.\Hd2
+The volumes are mounted from the virtual file systems RawDisk1 and RawDisk2.
+The first partition is created with the following steps:
+
+
+the driver creates a 100Mb (0x6400000 bytes) file %windows%\$NtUninstallQ817473$\hotfix.dat by calling
+IoCreateFile() API
+
+
+then it creates a section object with the flags SEC_COMMIT and SEC_NOCACHE (0x18000000) by calling
+ZwCreateSection(); the flags mean the file is mapped into memory, the entire range of pages will be committed
+
+
+next, it maps a view of the created section into the virtual address space by calling ZwMapViewOfSection()
+
+
+finally, it creates device \Device\RawDisk1 from the section map and mounts it as \.\Hd1
+
+
+The hook installed by the rootkit on IofCallDriver() API provides on-the-fly data encryption/decryption whenever that data is
+written to or read from the volume. The encryption algorithm is based on CAST-128, with the hard-coded key stored in the rootkit
+body.
+As a result, whenever the data is saved into the volume Hd1, it will be scrambled on-the-fly, and reflected in the persistent storage
+file hotfix.dat, which is physically located within the rootkit’s ‘home’ directory:
+Z:\WINDOWS\$NtuninstallQ817473$>dir
+Volume in drive Z has no label.
+Volume Serial Number is 2479-98AC
+Directory of Z:\WINDOWS\$NtuninstallQ817473$
+13/02/2014 04:47 PM       .
+13/02/2014 04:47 PM       ..
+03/02/2014 01:57 PM      210,944 fdisk.sys
+13/02/2014 04:47 PM    104,857,600 hotfix.dat
+2 File(s)  105,068,544 bytes
+2 Dir(s)  8,406,433,792 bytes free
+Analysis of the hotfix.dat file contents reveals it’s a fully encrypted file with flat entropy. Thus, it is not possible to reveal the
+contents of the Snake’s volume by accessing the contents of this file (unless the encryption is broken, that is).
+Enlisting the contents of the created volume is possible, along with creating files on it:
+C:>echo Test > \.\Hd1\Test.txt
+C:>type \.\Hd1\Test.txt
+Test
+C:>dir \.\Hd1\
+Volume in drive \.\Hd1 has no label.
+Volume Serial Number is BA9B-99E8
+Directory of \.\Hd1
+14/02/2014 02:22 PM         7 Test.txt
+1 File(s)       7 bytes
+0 Dir(s)        0 bytes free
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 20
+However, as soon as IofCallDriver() hook is removed, the same ‘ dir ’ command will fail, as with no hook the rootkit cannot
+decrypt the scrambled volume:
+C:>dir \.\Hd1\
+Incorrect function.
+The second volume \.\Hd2 is not mapped to a file, so when a computer is switched off, its contents is lost. Thus, it could be
+used as a temporary or a cache storage. The data stored in \.\Hd2 is encrypted the same way the first volume’s data.
+Both volumes appear to be set up as FAT volumes.
+An attempt to read the data from these volumes with the code below:
+This will produce the following results:
+For \.\Hd1:
+For \.\Hd2:
+The ability to keep its data on TrueCrypt-like volumes provides Snake with a powerful ability to exchange data with the usermode
+DLL, as these volumes are accessible both from usermode and kernel mode.
+Static analysis of the code reveals that the Snake driver uses virtual volumes to store its data and additional files on it.
+For example, it stores its message queue in a file called:
+.\Hd1\queue
+The message queue indicates an asynchronous communication model between kernel mode driver and a usermode DLL,
+e.g. to pass commands, configuration parameters, binary images of additional Snake components.
+Other files that may also be found on the virtual volume are: klog, conlog, dump, rkng_inst.exe,
+where rkng_inst.exe could be the name of the original dropper, and other log files could potentially contain executed command
+outputs, intercepted keystrokes, and other output logs.
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 21
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "\\.\Hd1", "type" : "SYSP"},
+        {"id": 2, "description": "\\.\Hd2", "type" : "SYSP"},
+        {"id": 3, "description": "RawDisk1", "type" : "DOCF"},
+        {"id": 4, "description": "RawDisk2", "type" : "DOCF"},
+        {"id": 5, "description": "%windows%\$NtUninstallQ817473$\hotfix.dat", "type" : "DOCF"},
+        {"id": 6, "description": "\\Device\\RawDisk1", "type" : "SYSP"},
+        {"id": 7, "description": "Z:\WINDOWS\$NtuninstallQ817473$", "type" : "SYSP"},
+        {"id": 8, "description": "fdisk.sys", "type" : "DOCF"},
+        {"id": 9, "description": "hotfix.dat", "type" : "DOCF"},
+        {"id": 10, "description": "\\.\Hd1\Test.txt", "type" : "DOCF"},
+        {"id": 11, "description": ".\Hd1\queue", "type" : "DOCF"},
+        {"id": 12, "description": ".\Hd1\klog", "type" : "DOCF"},
+        {"id": 13, "description": ".\Hd1\conlog", "type" : "DOCF"},
+        {"id": 14, "description": ".\Hd1\dump", "type" : "DOCF"},
+        {"id": 15, "description": ".\Hd1\rkng_inst.exe", "type" : "EXEF"},
+        {"id": 16, "description": "IofCallDriver() API", "type" : "APPS"},
+        {"id": 17, "description": "IoCreateFile() API", "type" : "APPS"},
+        {"id": 18, "description": "ZwCreateSection()", "type" : "APPS"},
+        {"id": 19, "description": "ZwMapViewOfSection()", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "mounted from"},
+        {"source": 2, "target": 4, "rel_name" : "mounted from"},
+        {"source": 5, "target": 7, "rel_name" : "located in"},
+        {"source": 6, "target": 1, "rel_name" : "maps to"},
+        {"source": 9, "target": 7, "rel_name" : "located in"},
+        {"source": 8, "target": 7, "rel_name" : "located in"},
+        {"source": 10, "target": 1, "rel_name" : "created on"},
+        {"source": 11, "target": 1, "rel_name" : "stored on"},
+        {"source": 12, "target": 1, "rel_name" : "stored on"},
+        {"source": 13, "target": 1, "rel_name" : "stored on"},
+        {"source": 14, "target": 1, "rel_name" : "stored on"},
+        {"source": 15, "target": 1, "rel_name" : "stored on"},
+        {"source": 16, "target": 9, "rel_name" : "encrypts/decrypts data in"},
+        {"source": 17, "target": 5, "rel_name" : "creates file"},
+        {"source": 18, "target": 6, "rel_name" : "creates section object for"},
+        {"source": 19, "target": 6, "rel_name" : "maps view of"}
+    ]
+}

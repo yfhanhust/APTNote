@@ -1,0 +1,84 @@
+
+
+
+Sentence : Operation Blockbuster: Loaders, Installers and Uninstallers Report 40
+
+
+Serial number and file system type of the primary hard drive
+
+
+Victim’s local time
+
+
+If any of the following applications are present on the victim’s machine based on registry keys within HKCU and
+
+
+HKLM: SecureCRT, Terminal Services, RealVNC, TightVNC, UltraVNC, Radmin, mRemote, TeamViewer, FileZilla,
+pcAnyware, Remote Desktop.
+The list of processes (along with their related information) and the information that IndiaIndia gathers about a victim’s
+system are saved together in a single file located in the %TEMP% directory before being compressed with Zlib, encrypted,
+and uploaded to one of the 10 C2 servers.
+Communication between IndiaIndia and one of its configured C2 server begins by IndiaIndia randomly selecting from
+the list of 10 possible C2 servers. If a connection to the first selected C2 server fails, IndiaIndia waits 2 minutes before
+attempting to try to connect to another randomly selected C2 server. After a successful connection to a C2 server,
+IndiaIndia performs a handshake to establish a communication channel between itself and the C2 server. The handshake
+consists of generating a random buffer, calculating the CRC32 value of the buffer, further encrypting the buffer using
+a series of XOR operations, and then transmitting the size of the buffer, the buffer itself (prior to encryption), and the
+CRC32 value of the unencrypted buffer. If the C2 server responses with the CRC32 value of the encrypted buffer, the
+handshake is successful. The unencrypted buffer’s contents become the encryption key for all future communication
+between the C2 server and IndiaIndia.
+After the transmission of the victim’s system information file to the C2 server, the C2 server responds with a 64-bit value
+representing the unique identifier for the victim’s machine. The uploaded file is deleted using a secure deletion function
+that simply overwrites the contents with random data prior to calling the DeleteFile API. The unique identifier is
+converted to a string by means of the ui64toa function and used as the name for a named mutex. The named mutex is
+used by IndiaIndia, and later IndiaKilo, to determine exclusivity on the victim’s machine.
+Task #5 establishes a service for the binary that IndiaIndia ultimately drops by generating a service name, display
+name, and description by combing through the list of existing services and randomly picking components of the service
+description. With the service information generated, Task 5 calls CreateService to generate a new service with the
+path to the service’s binary set to %SystemRoot%\system32\svchost.exe -k .
+As mentioned previously, IndiaIndia uses the exact same method and format for embedding binaries within itself. Novetta
+only observed IndiaIndia dropped IndiaKilo binaries, but the framework is generic enough to allow IndiaIndia to drop
+any binary that operates as a svchost-based service. Task 6 is responsible for dropping the embedded payload binary to the
+victim’s machine.
+While IndiaIndia has already installed a new service for the dropped binary (Task 5), it is still necessary to establish
+registry keys to support the service and tie it together with svchost.exe. Task 7 performs this operation by generating
+a new service entry under HKLM\SYSTEM\CurrentControlSet\Services\ . The registry entry
+contains the path to the dropped binary (from Task 6) and little more else.
+With the payload (IndiaKilo) dropped and the service configured, the remaining task for IndiaIndia prior to clean up is the
+activation of the payload binary on the victim’s computer. IndiaIndia calls StartService to activate the newly installed
+service and thereby activate the next step of the infection.
+The final act of IndiaIndia is the generation and execution of a suicide script named dvi.bat . IndiaIndia generates the
+suicide script using a single wsprintfA call with the format string seen in Figure 10-1. The suicide script and its method
+of generation is identical to that found employed by IndiaHotel.
+```
+  @echo off\r\n:L1\r\ndel /a \"%s\"\r\nif exist \"%s\" goto L1\r\ndel /a \"%s\"\r\n
+```
+Figure 10-1: wsprintfA Format String used to Generate IndiaIndia’s Suicide Script
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Operation Blockbuster", "type" : "TTPS"},
+        {"id": 2, "description": "%TEMP% directory", "type" : "SYSP"},
+        {"id": 3, "description": "Zlib", "type" : "APPS"},
+        {"id": 4, "description": "10 C2 servers", "type" : "CCSH"},
+        {"id": 5, "description": "IndiaIndia", "type" : "ACTO"},
+        {"id": 6, "description": "HKCU and HKLM registry keys", "type" : "REGI"},
+        {"id": 7, "description": "SecureCRT, Terminal Services, RealVNC, TightVNC, UltraVNC, Radmin, mRemote, TeamViewer, FileZilla, pcAnyware, Remote Desktop", "type" : "APPS"},
+        {"id": 8, "description": "%SystemRoot%\\system32\\svchost.exe -k", "type" : "EXEF"},
+        {"id": 9, "description": "IndiaKilo", "type" : "ACTO"},
+        {"id": 10, "description": "dvi.bat", "type" : "DOCF"},
+        {"id": 11, "description": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 5, "target": 2, "rel_name" : "saves to"},
+        {"source": 2, "target": 3, "rel_name" : "compressed with"},
+        {"source": 3, "target": 4, "rel_name" : "uploaded to"},
+        {"source": 5, "target": 6, "rel_name" : "checks for applications in"},
+        {"source": 6, "target": 7, "rel_name" : "contains applications"},
+        {"source": 5, "target": 4, "rel_name" : "communicates with"},
+        {"source": 5, "target": 8, "rel_name" : "creates service for binary using path"},
+        {"source": 5, "target": 9, "rel_name" : "drops payload"},
+        {"source": 5, "target": 10, "rel_name" : "generates and executes suicide script"},
+        {"source": 5, "target": 11, "rel_name" : "creates registry entry under"}
+    ]
+}

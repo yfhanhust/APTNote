@@ -1,0 +1,94 @@
+
+
+
+Sentence : In-Memory Evasion
+With our new hypervisor-based sandbox, we were able to detect the decrypted Cobalt
+Strike SMB beacon in memory. This beacon loader even uses some in-memory evasion
+features that create a strange sort of chimeric file. While it’s actually a DLL, the “MZ''
+magic PE bytes and subsequent DOS header are overwritten with a small loader shellcode
+as shown in Figure 1.
+Figure 1. Disassembled Cobalt Strike beacon loader shellcode.
+The shellcode loader jumps to the exported function DllCanUnloadNow, which prepares
+the SMB beacon module in memory. To do this, it first loads the Windows pla.dll library
+and zeroes out a chunk of bytes inside its code section (.text). It then writes the beacon
+file into this blob and fixes the import address table, thus creating an executable memory
+module.
+During the analysis of the file, we could figure out some of the in-memory evasion
+features that were used, as shown in Table 1.
+Evasion
+feature Description
+allocator Set how beacon's ReflectiveLoader allocates memory
+for the agent. Options are: HeapAlloc, MapViewOfFile
+and VirtualAlloc.
+cleanup Ask beacon to attempt to free memory associated with
+the reflective DLL package that initialized it.
+Used in
+our
+sample
+No
+Yes
+https://unit42.paloaltonetworks.com/cobalt-strike-memory-analysis/ 4/19
+12/7/22, 9:10 AM Blowing Cobalt Strike Out of the Water With Memory Analysis
+magic_mz_x64 Override the first bytes (MZ header included) of
+beacon's reflective DLL. Valid x86 instructions are
+required. Follow instructions that change CPU state with
+instructions that undo the change.
+magic_pe Override the PE character marker used by beacon's
+ReflectiveLoader with another value.
+module_x64 Ask the x86 reflective loader to load the specified library
+and overwrite its space instead of allocating memory
+with VirtualAlloc.
+obfuscate Obfuscate the reflective DLL’s import table, overwrite
+unused header content, and ask ReflectiveLoader to
+copy beacon to new memory without its DLL headers.
+sleep_mask Obfuscate beacon and its heap, in-memory, prior to
+sleeping.
+smartinject Use embedded function pointer hints to bootstrap
+beacon agent without walking kernel32 Export Address
+Table (EAT).
+stomppe Ask ReflectiveLoader to stomp MZ, PE and e_lfanew
+values after it loads beacon payload.
+userwx Ask ReflectiveLoader to use or avoid read, write or
+execute (RWX) permissions for Beacon DLL in memory.
+Table 1. Cobalt Strike evasion techniques that were used.
+Yes
+No
+Yes
+Yes
+No
+No
+No
+No
+To sum up, the beacon loader and the beacon itself are the same file. Parts of the PE
+header are used for a shellcode that jumps to an exported function, which in turn creates
+a module of itself inside a Windows DLL. Finally, the shellcode jumps to the entry point
+of the beacon module to execute it in memory.
+As discussed, there is no way for us to detect this beacon of our KoboldLoader sample
+successfully unless we can peer inside memory during execution.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cobalt Strike SMB beacon", "type" : "EXEF"},
+        {"id": 2, "description": "DLL file (with MZ header overwritten)", "type" : "DOCF"},
+        {"id": 3, "description": "pla.dll library", "type" : "APPS"},
+        {"id": 4, "description": "Windows DLL (used as a module)", "type" : "APPS"},
+        {"id": 5, "description": "DllCanUnloadNow function", "type" : "EXEF"},
+        {"id": 6, "description": "ReflectiveLoader", "type" : "TTPS"},
+        {"id": 7, "description": "HeapAlloc", "type" : "APPS"},
+        {"id": 8, "description": "MapViewOfFile", "type" : "APPS"},
+        {"id": 9, "description": "VirtualAlloc", "type" : "APPS"},
+        {"id": 10, "description": "kernel32 Export Address Table (EAT)", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "overwrites PE header with"},
+        {"source": 2, "target": 5, "rel_name" : "jumps to function"},
+        {"source": 5, "target": 4, "rel_name" : "prepares module in memory of"},
+        {"source": 3, "target": 5, "rel_name" : "loads library used by"},
+        {"source": 5, "target": 2, "rel_name" : "writes beacon file into"},
+        {"source": 6, "target": 1, "rel_name" : "uses for allocation of"},
+        {"source": 7, "target": 6, "rel_name" : "option for allocator in"},
+        {"source": 8, "target": 6, "rel_name" : "option for allocator in"},
+        {"source": 9, "target": 6, "rel_name" : "option for allocator in"},
+        {"source": 6, "target": 10, "rel_name" : "bypasses using"}
+    ]
+}

@@ -1,0 +1,116 @@
+
+
+
+Sentence : Vminst for Lateral Movement
+Vminst (a60a32f21ac1a2ec33135a650aa8dc71) is a lateral movement tool used to infect hosts in the network
+using previously stolen credentials. It Injects Cobalt Strike into memory of infected hosts.
+The binary implements ServiceMain and is intended to be installed as a service named “sdrsrv.” When it
+functions as a service, it injects Cobalt Strike beacon into its own process (which is 32-bit “svchost”) or creates
+a new 32-bit “rundll32” process and injects the beacon into the new process. The injection method depends
+on the parameter received when the service was created.
+It is configured to open a new “rundll32” process in suspend-mode and create a remote thread which executes
+a Cobalt Strike beacon or shellcode.
+The binary has the option to run and load itself in memory. It also has the option to be executed through its
+exported function "v," which gets a base64 string parameter built as follows:
+Base-64-Encode(“/mv /OptionalCommand”)
+OptionalCommand can be one of the following:
+
+help   - prints usage instructions:
+
+[*] /help V160\n
+Get : Create Service and run beacon over self thread\n
+[*] /get ip (use current token)\n
+[*] /get ip domain user pass\n
+[*] /get ip user pass\n
+New : Create Service and run beacon over new rundll32.exe thread\n
+[*] /new ip (use current token)\n
+[*] /new ip domain user pass\n
+[*] /new ip user pass\n
+[*] /new ip user pass\n
+Del : Delete service and related dlls from remote host
+[*] /del ip domain user pass\n
+[*] /del ip user pass\n
+[*] /del ip\n
+Run : Run a new beacon !\n
+[*] /run [no arguments]
+
+del   - stops and deletes the service “sdrsrv,” and deletes the following files:
+
+\ [IP or computer name (Can be Localhost)]\C$\Users\public\vminst.tmp
+\ [IP or computer name (Can be Localhost)]\C$\Windows\Temp\vminst.tmp
+\ [IP or computer name (Can be Localhost)]\C$\Windows\vminst.tmp
+
+
+scan   - sends “]ok[” to the parent of its parent process.
+
+
+info   - sends “]ok[” to the parent of its parent process.
+
+
+run   - injects a beacon into a new “rundll32” process.
+
+
+get   - gets an IP address, installs and starts the “sdrsrv” service in the remote hosts.
+
+
+new   - gets IP address, deletes the old vminst from install path, and installs the “sdrsrv” service in the
+
+
+remote hosts. Then, starts the service with parameter “NEW_THREAD” that runs the service. This
+command is likely used for updating the implant.
+The attacker uses vminst.tmp to spread across the organization. Using the command “rundll32 vminst.tmp,v
+/mv /get ip-segment credentials” it enumerates the segments and tries to connect to the hosts through SMB
+(“GetFileAttributes” to network path), installing the “sdrsrv” service in each host it can access.
+Page 31 of 48
+©All rights reserved to ClearSky cyber security and Trend Micro, 2017
+Indicators of Compromise
+File name:
+vminst.tmp
+md5:
+A60A32F21AC1A2EC33135A650AA8DC71
+Services:
+sdrsrv
+Registry Keys:
+HKLM\System\CurrentControlSet\Services\sdrsrv
+Path:
+\ [IP or computer name (Can be Localhost)]\C$\Users\public[File]
+\ [IP or computer name (Can be Localhost)]\C$\Windows\Temp[File]
+\ [IP or computer name (Can be Localhost)]\C$\Windows[File]
+File, one of:
+vminst.tmp - The malware
+l.tmp - Log file from last V command
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Vminst", "type" : "EXEF"},
+        {"id": 2, "description": "a60a32f21ac1a2ec33135a650aa8dc71", "type" : "IOCS"},
+        {"id": 3, "description": "Cobalt Strike", "type" : "EXEF"},
+        {"id": 4, "description": "svchost (32-bit)", "type" : "APPS"},
+        {"id": 5, "description": "rundll32 (32-bit)", "type" : "APPS"},
+        {"id": 6, "description": "sdrsrv", "type" : "REGI"},
+        {"id": 7, "description": "\\ [IP or computer name (Can be Localhost)]\\C$\\Users\\public\\vminst.tmp", "type" : "SYSP"},
+        {"id": 8, "description": "\\ [IP or computer name (Can be Localhost)]\\C$\\Windows\\Temp\\vminst.tmp", "type" : "SYSP"},
+        {"id": 9, "description": "\\ [IP or computer name (Can be Localhost)]\\C$\\Windows\\vminst.tmp", "type" : "SYSP"},
+        {"id": 10, "description": "vminst.tmp", "type" : "DOCF"},
+        {"id": 11, "description": "l.tmp", "type" : "DOCF"},
+        {"id": 12, "description": "HKLM\\System\\CurrentControlSet\\Services\\sdrsrv", "type" : "REGI"},
+        {"id": 13, "description": "SMB", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has_hash"},
+        {"source": 1, "target": 3, "rel_name" : "injects"},
+        {"source": 1, "target": 6, "rel_name" : "installs_as_service"},
+        {"source": 1, "target": 4, "rel_name" : "injects_into"},
+        {"source": 1, "target": 5, "rel_name" : "creates_and_injects_into"},
+        {"source": 1, "target": 7, "rel_name" : "writes_to_path"},
+        {"source": 1, "target": 8, "rel_name" : "writes_to_path"},
+        {"source": 1, "target": 9, "rel_name" : "writes_to_path"},
+        {"source": 10, "target": 1, "rel_name" : "is_used_by"},
+        {"source": 10, "target": 7, "rel_name" : "written_to_path"},
+        {"source": 10, "target": 8, "rel_name" : "written_to_path"},
+        {"source": 10, "target": 9, "rel_name" : "written_to_path"},
+        {"source": 11, "target": 10, "rel_name" : "is_log_of"},
+        {"source": 12, "target": 6, "rel_name" : "registry_key_for_service"},
+        {"source": 1, "target": 13, "rel_name" : "uses_protocol"}
+    ]
+}

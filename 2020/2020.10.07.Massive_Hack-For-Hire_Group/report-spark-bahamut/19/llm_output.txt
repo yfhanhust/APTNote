@@ -1,0 +1,220 @@
+
+
+
+Sentence : Tradecraft: Windows Jedi Math Tricks
+While a good portion of the BAHAMUT tradecraft is focused on drawing targets into position for
+credential harvesting, the group is known to deploy malware for Android, iOS, MacOS, and Windows.
+In prior research, including research conducted by Cylance (acquired by BlackBerry in 2019), it has
+been noted that the Windows malware employed by the group is typically open-source, but heavily
+obfuscated. In other research, we’ve seen discussion of BAHAMUT malware that was previously
+associated with various other APT groups. The use of malware in this way reflects the group’s
+dedication to operational security and evasion of attribution by security researchers. If analysts
+rely solely on the signatures of publicly available malware and open-source exploits, the hand of
+the operator can remain hidden among an impossibly long list of suspects.
+In this section, BlackBerry explores some of the intricacies of BAHAMUT’s current (or recent)
+Windows malware. While only a few representative samples are explored in detail in this paper, the
+analysis reflects an understanding built upon the review of several hundred more.
+Many of the recent BAHAMUT Windows samples BlackBerry identified use an interesting string
+encoding method that takes advantage of floating-point calculations. These calculations are
+performed on the x87 math co-processor and require a deeper understanding of what exactly
+those eight extra memory registers do. BlackBerry had not observed floating-point calculations
+used in decoding/decryption functions in malware frequently in the past. In order to proceed with
+the analysis of these samples, BlackBerry reimplemented the function into an easy to understand
+Python3 prototype below:
+Figure 24: Python snippet to decode strings in recent BAHAMUT downloaders
+Having a grasp now of this unique encoding method, BlackBerry then searched for and identified
+the following recent Windows-related domains and IP addresses. BlackBerry was able to uncover
+Windows samples which communicated with or were downloaded from the following domains
+and IP addresses:
+Table 5: Recent BAHAMUT Windows-based Indicators
+BlackBerry identified a couple of different varieties of downloaders, all programmed in different
+languages. One of them was programmed in BAHAMUT’s much-favored Visual Basic 6. While VB6
+is generally thought of as one of the most simplistic languages in which to program, it is also one
+of the most time consuming to fully reverse engineer. That’s because it provides the programmer
+the option of compiling the code natively, which was exactly what BAHAMUT did. Let’s consider
+one representative hash:
+89757d680aade313afa6a2c6274c5034e5099fa70b55782e023f0c7db23d5e9f
+The sample was first served from the URL “http://optusiy[.]com/nfgdo/dachost.jpeg” and
+communicated to the URL “http://signtabo[.]com/shdgfhf/rhfdshf.php.” Strings were readily decoded
+from these samples using the function provided above.
+This piece of malware was a simple downloader which checked the site for additional payloads
+to retrieve and execute. BAHAMUT then deployed backdoors and file harvesting tools that
+communicated with or were delivered from the above domains. The encoding method employed
+in them was slightly different but could be readily decoded with the following function:
+Figure 25: Python snippet to decode strings
+BlackBerry identified approximately 24 samples which used this particular encoding method. Slightly
+more than a dozen of those used a protocol similar to previous BAHAMUT samples and directly
+communicated to BAHAMUT-controlled domains, many of which contained various randomly named
+web paths and PHP pages:
+       - http://airfitgym[.]com/ldfjfew/pfhee.php
+
+      - http://airfitgym[.]com/wgdejwqefyhek3db/wwurd7edg63hujbsdj.php
+
+
+       - http://citrusquad[.]com/bhdsgfj/hegfd.php
+
+
+       - http://citrusquad[.]com/effgubojkbf/pjkdfhjferfrds.php
+
+
+      - http://citrusquad[.]com/oewfugjfae/tdsbhmfvtehg.php
+
+
+      - http://citrusquad[.]com/ohdfgfe/ddshfhd.php
+
+
+       - http://citrusquad[.]com/udfdjdfffw/hftsdhfhnkrn.php
+
+
+       - http://citrusquad[.]com/usefjdfws/hesgfjghbf.php
+
+
+      - http://citrusquad[.]com/xrsadgh/whfsoprtw.php
+
+
+       - http://regditogo[.]com/isgdhbdfs/dfdsfjkfgcsd.php
+
+
+       - http://regditogo[.]com/xejdfsfe/kgsghxuy.php
+
+
+       - http://regditogo[.]com/ytydfhbvfy/ugfbfdjna.php
+
+
+      - http://signtabo[.]com/ksahdugevfdjevshbsyavyvwe/xjgfysebdsfredg.php
+
+
+       - http://tierradom[.]com/ljdjkfhufe/ohsdffjjdgf.php
+
+BlackBerry examined one of these samples more closely, focusing on some interesting strings that
+showed the YouTube [™] site may have been utilized for communicating with the backdoor. Initially,
+we inferred this by strings present in the malware. Later, we confirmed it through code analysis.
+Here’s an example:
+08e65f09e41da3bc211a77ced8af657bde00d7a2b93d77446f29b6c8c3262ccd
+The file was programmed in Visual Basic 6 and utilized six different timers to perform various tasks.
+Table 6: Details of a recent VB6 BAHAMUT backdoor
+There was additional functionality to determine if someone was attempting to analyze the backdoor
+that was associated with Timer3. This caught BlackBerry’s attention because its purpose appeared
+to be to simply alert BAHAMUT to the fact that an analyst was trying to examine one of its files.
+BlackBerry even observed evidence of BAHAMUT reacting to such notice and subsequently changing
+tack. The backdoor attempted to determine whether any of the following process names were active
+on the victim system via CreateToolhelp32Snapshot:
+
+
+hexeditor
+
+
+hworks
+
+
+ida
+
+
+ollydbg
+
+
+pexplorer
+
+
+windbg
+
+
+wireshark
+
+
+Note that all the names above reference tools commonly used in forensic or malware analysis. If
+one of the process names was identified, the malware would communicate those details back to
+the C2 encoded within the URL parameters passed to the PHP page.
+BlackBerry discerned the presence of several encoded strings within the backdoors that invoked
+YouTube functions, including finding and watching specific videos:
+http://www.youtube[.]com/get_video.php?video_id=; and http://www.youtube[.]
+com/watch?v=
+After thorough analysis, BlackBerry was unable to confirm if YouTube was used for any C2 function.
+Instead, it appeared more likely that the backdoors could be instructed to view certain videos to
+artificially inflate view counts. BlackBerry assesses with medium confidence that the YouTube
+functions of recent BAHAMUT samples may have been designed to legitimize the “fake” assets
+they also cultivated and deployed. BlackBerry had not found any YouTube videos involved in this
+scheme at the time of writing.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BAHAMUT", "type" : "ACTO"},
+        {"id": 2, "description": "Windows", "type" : "OPPS"},
+        {"id": 3, "description": "Android", "type" : "OPPS"},
+        {"id": 4, "description": "iOS", "type" : "OPPS"},
+        {"id": 5, "description": "MacOS", "type" : "OPPS"},
+        {"id": 6, "description": "Cylance (acquired by BlackBerry in 2019)", "type" : "ACTO"},
+        {"id": 7, "description": "BlackBerry", "type" : "ACTO"},
+        {"id": 8, "description": "Visual Basic 6", "type" : "APPS"},
+        {"id": 9, "description": "Python3 prototype", "type" : "TAMP"},
+        {"id": 10, "description": "x87 math co-processor", "type" : "MTCP"},
+        {"id": 11, "description": "8 extra memory registers", "type" : "TAMP"},
+        {"id": 12, "description": "http://optusiy[.]com/nfgdo/dachost.jpeg", "type" : "URLS"},
+        {"id": 13, "description": "http://signtabo[.]com/shdgfhf/rhfdshf.php", "type" : "URLS"},
+        {"id": 14, "description": "89757d680aade313afa6a2c6274c5034e5099fa70b55782e023f0c7db23d5e9f", "type" : "IOCS"},
+        {"id": 15, "description": "http://airfitgym[.]com/ldfjfew/pfhee.php", "type" : "URLS"},
+        {"id": 16, "description": "http://airfitgym[.]com/wgdejwqefyhek3db/wwurd7edg63hujbsdj.php", "type" : "URLS"},
+        {"id": 17, "description": "http://citrusquad[.]com/bhdsgfj/hegfd.php", "type" : "URLS"},
+        {"id": 18, "description": "http://citrusquad[.]com/effgubojkbf/pjkdfhjferfrds.php", "type" : "URLS"},
+        {"id": 19, "description": "http://citrusquad[.]com/oewfugjfae/tdsbhmfvtehg.php", "type" : "URLS"},
+        {"id": 20, "description": "http://citrusquad[.]com/ohdfgfe/ddshfhd.php", "type" : "URLS"},
+        {"id": 21, "description": "http://citrusquad[.]com/udfdjdfffw/hftsdhfhnkrn.php", "type" : "URLS"},
+        {"id": 22, "description": "http://citrusquad[.]com/usefjdfws/hesgfjghbf.php", "type" : "URLS"},
+        {"id": 23, "description": "http://citrusquad[.]com/xrsadgh/whfsoprtw.php", "type" : "URLS"},
+        {"id": 24, "description": "http://regditogo[.]com/isgdhbdfs/dfdsfjkfgcsd.php", "type" : "URLS"},
+        {"id": 25, "description": "http://regditogo[.]com/xejdfsfe/kgsghxuy.php", "type" : "URLS"},
+        {"id": 26, "description": "http://regditogo[.]com/ytydfhbvfy/ugfbfdjna.php", "type" : "URLS"},
+        {"id": 27, "description": "http://signtabo[.]com/ksahdugevfdjevshbsyavyvwe/xjgfysebdsfredg.php", "type" : "URLS"},
+        {"id": 28, "description": "http://tierradom[.]com/ljdjkfhufe/ohsdffjjdgf.php", "type" : "URLS"},
+        {"id": 29, "description": "08e65f09e41da3bc211a77ced8af657bde00d7a2b93d77446f29b6c8c3262ccd", "type" : "IOCS"},
+        {"id": 30, "description": "CreateToolhelp32Snapshot", "type" : "TTPS"},
+        {"id": 31, "description": "hexeditor", "type" : "APPS"},
+        {"id": 32, "description": "hworks", "type" : "APPS"},
+        {"id": 33, "description": "ida", "type" : "APPS"},
+        {"id": 34, "description": "ollydbg", "type" : "APPS"},
+        {"id": 35, "description": "pexplorer", "type" : "APPS"},
+        {"id": 36, "description": "windbg", "type" : "APPS"},
+        {"id": 37, "description": "wireshark", "type" : "APPS"},
+        {"id": 38, "description": "http://www.youtube[.]com/get_video.php?video_id=", "type" : "URLS"},
+        {"id": 39, "description": "http://www.youtube[.]com/watch?v=", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "targets"},
+        {"source": 1, "target": 3, "rel_name" : "targets"},
+        {"source": 1, "target": 4, "rel_name" : "targets"},
+        {"source": 1, "target": 5, "rel_name" : "targets"},
+        {"source": 7, "target": 9, "rel_name" : "uses"},
+        {"source": 7, "target": 8, "rel_name" : "analyzes"},
+        {"source": 7, "target": 10, "rel_name" : "observes"},
+        {"source": 7, "target": 12, "rel_name" : "downloads from"},
+        {"source": 7, "target": 13, "rel_name" : "communicates with"},
+        {"source": 7, "target": 14, "rel_name" : "analyzes"},
+        {"source": 14, "target": 12, "rel_name" : "downloaded from"},
+        {"source": 14, "target": 13, "rel_name" : "communicates with"},
+        {"source": 7, "target": 15, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 16, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 17, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 18, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 19, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 20, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 21, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 22, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 23, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 24, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 25, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 26, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 27, "rel_name" : "uses C2 URL"},
+        {"source": 7, "target": 28, "rel_name" : "uses C2 URL"},
+        {"source": 14, "target": 8, "rel_name" : "uses"},
+        {"source": 29, "target": 30, "rel_name" : "detects analysis tools"},
+        {"source": 29, "target": 31, "rel_name" : "detects process"},
+        {"source": 29, "target": 32, "rel_name" : "detects process"},
+        {"source": 29, "target": 33, "rel_name" : "detects process"},
+        {"source": 29, "target": 34, "rel_name" : "detects process"},
+        {"source": 29, "target": 35, "rel_name" : "detects process"},
+        {"source": 29, "target": 36, "rel_name" : "detects process"},
+        {"source": 29, "target": 37, "rel_name" : "detects process"},
+        {"source": 29, "target": 38, "rel_name" : "uses YouTube function"},
+        {"source": 29, "target": 39, "rel_name" : "uses YouTube function"}
+    ]
+}

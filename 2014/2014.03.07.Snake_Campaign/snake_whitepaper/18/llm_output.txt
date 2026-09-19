@@ -1,0 +1,53 @@
+
+
+
+Sentence : NDIS PROTOCOL DRIVER
+The Snake rootkit registers itself as Network Driver Interface Specification (NDIS) protocol driver.
+Intercepting Network Data Whenever the underlying miniport driver
+receives data from the network, it calls NDIS
+by invoking a data receive indication function
+NdisMIndicateReceiveNetBufferLists()
+NdisMIndicateReceiveNetBufferLists().
+When that happens, NDIS invokes Snake’s hook function
+(ProtocolReceiveNetBufferLists) to process the
+received data.
+To send the data back, the protocol driver defines the data
+in a list of NET_BUFFER_LIST structures, and then passes
+them to NDIS by calling NdisSendNetBufferLists().
+NDIS, in turn, calls the miniport driver’s
+MiniportSendNetBufferLists() function to forward
+the data to an underlying miniport driver.
+ProtocolReceiveNetBufferLists()
+Sending Network Data
+|MiniportDriver|Col2|
+|---|---|
+|MiniportDriver|MiniportDriver|
+|||
+|MiniportSendNetBufferLists()|Col2|
+|---|---|
+|NDISMiniportDriver|NDISMiniportDriver|
+|NDIS|MiniportDriver|
+NdisSendNetBufferLists()
+Being able to fully manipulate traffic at 3 different levels (NDIS protocol driver, TDI Driver, and WPF callout driver), Snake is able to
+‘inject’ the traffic into existing communications to reach out to external components, and at the same time parse all incoming traffic
+to detect traffic addressed to itself:
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 17
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Snake rootkit", "type" : "EXEF"},
+        {"id": 2, "description": "NDIS protocol driver", "type" : "NETP"},
+        {"id": 3, "description": "miniport driver", "type" : "NETP"},
+        {"id": 4, "description": "NdisMIndicateReceiveNetBufferLists()", "type" : "EXEF"},
+        {"id": 5, "description": "ProtocolReceiveNetBufferLists", "type" : "EXEF"},
+        {"id": 6, "description": "NdisSendNetBufferLists()", "type" : "EXEF"},
+        {"id": 7, "description": "MiniportSendNetBufferLists()", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "registers as"},
+        {"source": 3, "target": 4, "rel_name" : "calls"},
+        {"source": 4, "target": 5, "rel_name" : "invokes"},
+        {"source": 1, "target": 6, "rel_name" : "defines and passes data to NDIS using"},
+        {"source": 6, "target": 7, "rel_name" : "calls"}
+    ]
+}

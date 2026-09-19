@@ -1,0 +1,59 @@
+
+
+
+Sentence : Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 23
+Commands from the C2 server come in the form of command files. RomeoDelta downloads data from the C2 server and
+saves the data to a temporary file beginning with FXSAPI in the %TEMP% directory. The structure of the command file is
+identical to the structure of the DeltaCharlie command files, where bytes 4 through 132 contain a RSA encrypted data blob
+that once decrypted with a public key (Figure 6-1) reveals the MD5 value of the data that follows the 132 [nd] byte. The RSA
+functionality that RomeoDelta employs is the exact same code found in SierraJuliett-MikeOne. Only the public keys differ
+between the two families.
+23805C8DB86385D315F2D4E43072EF0B432333834A2058DD5AFD0637D3681D5B79463AB2BA15ECE38BEB680B
+64C884F15AC2D8FDF4CB463634B4EB2725398C7AC51DA787526C5FDA235DA913C0C7E04B1A405BFEA4F63568
+E5B25B3D2636F4D50996BD1D2390EFDFEF636BB901D9C1C7128033CF0FE951AEBD303F3967527FD6
+Figure 6-1: RomeoDelta’s Public Key
+The data that follows the encrypted MD5 value is encrypted with RC4 using the password BAISEO%$2fas9vQsfvx%$ .
+After decryption, the decrypted data is loaded into a buffer and the command file is deleted. An acknowledgment of the
+decryption is sent to the C2 server by RomeoDelta before the command within the command file is handled.
+RomeoDelta supports a limited set of commands as identified in Table 6-1.
+|COMMAND ID|DESCRIPTION|
+|---|---|
+|0x58692AB8|Uploads victim’s system information to C2 server|
+|0x58692AB9|Open a listening port on the victim’s machine, sends the port number to the C2 server, waits up to 10seconds for the C2 server to successfully connect to the port. C2 server responds with the status of theconnect-back test.|
+|0x58692ABA|Writes the embedded file within the command file to the victim’s hard drive (in the%TEMP% directory witha name starting withgbl_) and executes the file via a call toCreateProcess.|
+|0x58692ABB|Opens a listening port (using the same technique as command 0x58692AB9) and performs a connect-backtest. If the resulting response code from the C2 server is0x611, either writes the file contained within theoriginal command file or downloads a file from the URL specified in the command file. After the file is onthe victim’s hard drive (in the%TEMP% directory with a name starting withgbl_), executes the file via acall toCreateProcess.|
+|0x58692ABC|Updates the 3rd DWORD in the configuration with a value specified in the command file.|
+|0x58692ABD|Updates the C2 server addresses within the configuration file via the values specified in the command file.|
+|0x58692ABE|Archives (in ZIP format) the specified directory, encrypts the ZIP file (saved asMSI{random}.LOG), anduploads the file to the C2 server. This command is not available in earlier versions of RomeoDelta.|
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RomeoDelta", "type" : "ACTO"},
+        {"id": 2, "description": "%TEMP% directory", "type" : "SYSP"},
+        {"id": 3, "description": "C2 server", "type" : "CCSH"},
+        {"id": 4, "description": "FXSAPI temporary file", "type" : "DOCF"},
+        {"id": 5, "description": "DeltaCharlie command files", "type" : "DOCF"},
+        {"id": 6, "description": "RSA encrypted data blob", "type" : "EXEF"},
+        {"id": 7, "description": "MD5 value of the data that follows the 132nd byte", "type" : "IOCS"},
+        {"id": 8, "description": "SierraJuliett-MikeOne", "type" : "ACTO"},
+        {"id": 9, "description": "Public Key (RomeoDelta’s Public Key)", "type" : "EXEF"},
+        {"id": 10, "description": "RC4 password: BAISEO%$2fas9vQsfvx%$", "type" : "EXEF"},
+        {"id": 11, "description": "Command file", "type" : "DOCF"},
+        {"id": 12, "description": "%TEMP% directory (for gbl_ files)", "type" : "SYSP"},
+        {"id": 13, "description": "gbl_ file", "type" : "DOCF"},
+        {"id": 14, "description": "URL specified in the command file", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "saves to"},
+        {"source": 1, "target": 3, "rel_name" : "communicates with"},
+        {"source": 1, "target": 4, "rel_name" : "downloads and saves as"},
+        {"source": 6, "rel_name" : "contains", "target": 7},
+        {"source": 8, "rel_name" : "shares code with", "target": 1},
+        {"source": 9, "rel_name" : "uses", "target": 1},
+        {"source": 10, "rel_name" : "uses for decryption", "target": 1},
+        {"source": 3, "rel_name" : "sends command files to", "target": 1},
+        {"source": 11, "rel_name" : "deletes after decryption", "target": 1},
+        {"source": 12, "rel_name" : "writes and executes file in", "target": 13},
+        {"source": 11, "rel_name" : "may contain URL to download from", "target": 14}
+    ]
+}

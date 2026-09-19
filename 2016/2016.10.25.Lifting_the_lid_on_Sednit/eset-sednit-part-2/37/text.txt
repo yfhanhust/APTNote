@@ -1,0 +1,44 @@
+En Route with Sednit
+Then comes the serialized ~~ModuleMsg~~ object followed by an 11-byte value named ~~DATA_TOKEN~~ ~~,~~ both
+RC4-encrypted. The ~~DATA_TOKEN~~ value is hardcoded in the source code and probably serves to check
+the integrity of the message during decryption by the C&C server. The key used for RC4-encryption
+is the concatenation of a hardcoded 50-byte value and a pseudo-randomly generated 4-byte value,
+named ~~register~~ and appended to the encrypted data.
+The exact same 50-byte value is used to form an RC4-key, also with
+a “register”, in Downdelph and Seduploader.
+As shown in Figure 5, the resulting buffer is written into a file maintained by the ~~LocalStorage~~
+object. The encrypted data are then retrieved from this file and sent to the C&C server
+by the ~~ChannelController::sendDataToServer()~~ method, through the currently selected
+channel (channel implementation will be described in the next section).
+Communications Loop
+As shown in Figure 5, ~~AgentKernel::run()~~ then enters in an infinite loop relaying communications
+between the modules and the C&C server:
+
+It fetches ~~ModuleMsg~~ objects from the modules, which are then transmitted to the C&C server
+
+by the process previously described for the initial report. For example, the ~~RemoteKeylogger~~
+module regularly sends a message containing the captured keystrokes to the C&C server.
+
+It retrieves ~~CryptRawPacket~~ objects sent by the C&C server from a C++ vector dubbed ~~_get_~~
+~~questions~~ and filled by the ~~ChannelController::getDataFromServer()~~ method. Those
+objects are decrypted and deserialized into ~~ModuleMsg~~ objects, which are then transmitted
+to the intended module. For example, the C&C server can send a message with the command
+~~START~~ for the ~~RemoteKeylogger~~ module, which then begins its keylogging activity.
+
+Accepted Commands
+The kernel accepts 12 different commands from the C&C server, as listed in Table 2. In practice these
+commands are integer values corresponding to macros defined in the source code.
+~~Table 2.~~ ~~AgentKernel~~ ~~accepted commands~~
+Name Integer Purpose
+Value
+~~GET_AGENT_INFO~~ 1 Reports IDs and settings of modules and channels to the C&C server
+~~PING_REQUEST~~ 2 Reports IDs of modules to the C&C server
+~~CHANGE_PING_TIMEOUT~~ 31 Sets the parameter defining the amount of time to wait before initially
+contacting the C&C server to the given value
+~~CHANGE_STEP_TIME~~ 32 Sets the parameter defining the amount of time to wait between
+two attempts to reach the C&C server to the given value
+~~SET_PARAMETERS~~ 33 Saves the two previous parameters current values into the ~~LocalStorage~~
+SQLite3 database, such that those values will be re-used at next startup
+~~CHANGE_CHANNEL~~ 41 Changes the currently selected channel to the channel identified
+by the given ID (see next section for details on the channels)
+60

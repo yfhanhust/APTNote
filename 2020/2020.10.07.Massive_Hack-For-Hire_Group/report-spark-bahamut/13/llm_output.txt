@@ -1,0 +1,66 @@
+
+
+
+Sentence : Flying Under the Radar
+A variety of modifications were made to the APKs we found, and most had limited to no detection
+in a commonly used malware repository. In most cases the APK files were comprised of completely
+legitimate code and well-known Android libraries which helped cloak the underlying activity from
+common static detection methods.
+Nearly all of the identified samples from the Play Store employed AES in CBC mode for encrypting
+their network traffic with the C2 server. A couple of the applications additionally used an AES cipher
+in ECB mode for string encryption. If network callback strings were not directly AES encrypted within
+the code, they were simply stored in hex, encoded, within the application itself, or as a hex-encoded
+string inside of the resource section. The Android “resources.arsc” file can be readily processed by
+existing tools, “androguard” and “apktool” (available at https://github.com/androguard/androguard
+and https://github.com/iBotPeaches/Apktool), into an XML document that is much easier to analyze.
+We also observed that BAHAMUT individually constructed every network callback within all the
+applications by appending the final destination location onto one or more base URLs.
+Similarly, for five of the seven externally hosted applications, BAHAMUT used the default Java
+Blowfish encryption cipher to encrypt strings. By default, this would utilize Blowfish in ECB mode
+with PKCS5 padding. BlackBerry observed three different keys employed by the group: “K&M9B#)
+O/R\=P@hB”, “K&M9B#)O/R\x07=P%hA”, and “9;_R%@c`gZxL9M{j”. These allowed us to assess
+with high confidence that we were on the right track given the similarities across disparate samples.
+It also appeared that these externally hosted applications were capable of loading additional
+functionality via DEX files if directed to by the C2 server.
+Figure 20: Python snippet to decrypt Blowfish encrypted strings
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "APKs", "type" : "APPS"},
+        {"id": 2, "description": "malware repository", "type" : "STOR"},
+        {"id": 3, "description": "Play Store", "type" : "STOR"},
+        {"id": 4, "description": "AES in CBC mode", "type" : "TTPS"},
+        {"id": 5, "description": "C2 server", "type" : "CCSH"},
+        {"id": 6, "description": "AES cipher in ECB mode", "type" : "TTPS"},
+        {"id": 7, "description": "hex-encoded strings", "type" : "DOCF"},
+        {"id": 8, "description": "resources.arsc file", "type" : "DOCF"},
+        {"id": 9, "description": "androguard", "type" : "APPS"},
+        {"id": 10, "description": "apktool", "type" : "APPS"},
+        {"id": 11, "description": "XML document", "type" : "DOCF"},
+        {"id": 12, "description": "BAHAMUT", "type" : "ACTO"},
+        {"id": 13, "description": "network callback strings", "type" : "DOCF"},
+        {"id": 14, "description": "base URLs", "type" : "URLS"},
+        {"id": 15, "description": "Java Blowfish encryption cipher", "type" : "TTPS"},
+        {"id": 16, "description": "Blowfish in ECB mode with PKCS5 padding", "type" : "TTPS"},
+        {"id": 17, "description": "encryption keys (K&M9B#) O/R\\=P@hB, K&M9B#)O/R\\x07=P%hA, 9;_R%@c`gZxL9M{j)", "type" : "TTPS"},
+        {"id": 18, "description": "DEX files", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "undetected in"},
+        {"source": 1, "target": 3, "rel_name" : "hosted on"},
+        {"source": 1, "target": 4, "rel_name" : "used for encryption with"},
+        {"source": 1, "target": 5, "rel_name" : "communicates with"},
+        {"source": 1, "target": 6, "rel_name" : "used for string encryption"},
+        {"source": 1, "target": 7, "rel_name" : "stored in"},
+        {"source": 1, "target": 8, "rel_name" : "contains"},
+        {"source": 8, "description": "processed by", "type" : "APPS", "target": 9},
+        {"source": 8, "description": "processed by", "type" : "APPS", "target": 10},
+        {"source": 8, "target": 11, "rel_name" : "converted to"},
+        {"source": 12, "target": 13, "rel_name" : "constructed"},
+        {"source": 14, "target": 13, "rel_name" : "appended to"},
+        {"source": 1, "target": 15, "rel_name" : "used for encryption with"},
+        {"source": 15, "target": 16, "rel_name" : "operates in mode"},
+        {"source": 17, "target": 15, "rel_name" : "used as key in"},
+        {"source": 5, "target": 18, "rel_name" : "can direct loading of"}
+    ]
+}

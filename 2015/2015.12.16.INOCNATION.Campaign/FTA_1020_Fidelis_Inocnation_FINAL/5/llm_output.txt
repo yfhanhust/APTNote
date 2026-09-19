@@ -1,0 +1,77 @@
+
+
+
+Sentence : RAT Installer
+(MD5: 4F4BF27B738FF8F2A89D1BC487B054A8)
+During reverse engineering of the RAT Installer we observed that the file implemented an anti-behavioral analysis technique. This technique
+compared the mouse/cursor pointer’s screen position coordinates at two different points in time (5000 milliseconds). The author is using routine
+to detect whether the malware has been executed without a user being present, which is typically done during sandbox analysis. This technique
+will defeat less sophisticated sandboxes that do not implement simulation actions, such as mouse movement or mouse clicks during runtime
+analysis.
+©Fidelis Cybersecurity 4 WWW.FIDELISSECURITY.COM
+TA#1020_FIDELIS_INOCNATION_1512
+Figure 7 - Simple Sandbox Detection Check via Mouse Movement
+The RAT Installer contains an obfuscated malicious DLL payload, which it rebuilds and installs. The embedded file (MD5:
+75D3D1F23628122A64A2F1B7EF33F5CF), later written to disk as adobe.dat, is obfuscated with a double XOR loop with keys 0x2C and
+0x7B (this is mathematically equivalent to a single XOR loop with the byte key 0x57). Once this DLL is de-obfuscated, we observed another
+common anti-behavioral analysis technique used to try and extend the longevity of the loaded payload’s usage. The malware is
+missing an appropriate MZ header. The first two hexadecimal bytes of the payload data are 0x9B 0x8A, but they should start with
+0x4D 0x5A, the bytes for the ASCII characters “MZ”. This is a method attackers can use to confuse virus detection engines looking for
+malicious code as an effort to detect or disinfect the data in memory. Virus detection engines generally hook API calls in User mode
+or Kernel mode that are used for file input/output, such as the WriteFile API call. If an intact executable is found within the memory
+buffer the binary is sent off for behavioral analysis by the detection engine. In order to prevent detonation on hosts other than that
+of the intended victim, the malware author has purposely mangled the first two bytes of the RAT Implant. After writing the payload
+implant code the first two bytes of the file are corrected from 0x9B 0x8A to 0x4D 0x5A and the malware is entrenched into the system.
+Figure 8 – Two WriteFile API calls. The First to Write the Payload File and Then the Second to Correct the First to Bytes to MZ.
+©Fidelis Cybersecurity 5 WWW.FIDELISSECURITY.COM
+TA#1020_FIDELIS_INOCNATION_1512
+Figure 9 - Registry Entrenchment Entry
+The RAT Installer also sets the entrenchment/persistence mechanism for the payload malware. While this is a trivial persistence method, the
+malware Payload DLL has the ability to reference this registry key during the un-install routine, which will be described later.
+Finally, just before exit the RAT Installer lauches a new process with a similar argument string to, “cmd /c ping 127.0.0.1&del “%TEMP%\
+Center111940519.exe”&regsvr32 /s “%AppData%\adobe\adobe.dat””. Within this command several things are happening:
+
+A ping to local host acts as a command to sleep for four seconds
+Delete itself, the RAT Installer file, Center111940519.exe
+Execute the Implant DLL Payload file
+
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RAT Installer", "type": "EXEF"},
+        {"id": 2, "description": "4F4BF27B738FF8F2A89D1BC487B054A8", "type": "IOCS"},
+        {"id": 3, "description": "anti-behavioral analysis technique", "type": "TTPS"},
+        {"id": 4, "description": "mouse/cursor pointer’s screen position coordinates", "type": "TTPS"},
+        {"id": 5, "description": "DLL payload", "type": "EXEF"},
+        {"id": 6, "description": "75D3D1F23628122A64A2F1B7EF33F5CF", "type": "IOCS"},
+        {"id": 7, "description": "adobe.dat", "type": "DOCF"},
+        {"id": 8, "description": "double XOR loop with keys 0x2C and 0x7B", "type": "TTPS"},
+        {"id": 9, "description": "WriteFile API call", "type": "TTPS"},
+        {"id": 10, "description": "MZ header", "type": "TTPS"},
+        {"id": 11, "description": "0x9B 0x8A", "type": "TTPS"},
+        {"id": 12, "description": "0x4D 0x5A", "type": "TTPS"},
+        {"id": 13, "description": "Registry entrenchment entry", "type": "REGI"},
+        {"id": 14, "description": "%TEMP%\\Center111940519.exe", "type": "SYSP"},
+        {"id": 15, "description": "%AppData%\\adobe\\adobe.dat", "type": "SYSP"},
+        {"id": 16, "description": "cmd /c ping 127.0.0.1&del “%TEMP%\\Center111940519.exe”&regsvr32 /s “%AppData%\\adobe\\adobe.dat”", "type": "EXEF"},
+        {"id": 17, "description": "127.0.0.1", "type": "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "has MD5 hash"},
+        {"source": 1, "target": 3, "rel_name": "implements"},
+        {"source": 3, "target": 4, "rel_name": "uses"},
+        {"source": 1, "target": 5, "rel_name": "contains"},
+        {"source": 5, "target": 6, "rel_name": "has MD5 hash"},
+        {"source": 5, "target": 7, "rel_name": "writes to disk as"},
+        {"source": 5, "target": 8, "rel_name": "obfuscated with"},
+        {"source": 5, "target": 9, "rel_name": "uses"},
+        {"source": 5, "target": 10, "rel_name": "missing"},
+        {"source": 5, "target": 11, "rel_name": "starts with"},
+        {"source": 5, "target": 12, "rel_name": "corrects to"},
+        {"source": 1, "target": 13, "rel_name": "sets"},
+        {"source": 1, "target": 14, "rel_name": "deletes"},
+        {"source": 1, "target": 15, "rel_name": "registers"},
+        {"source": 1, "target": 16, "rel_name": "launches"},
+        {"source": 16, "target": 17, "rel_name": "pings"}
+    ]
+}

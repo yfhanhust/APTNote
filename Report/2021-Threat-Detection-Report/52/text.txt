@@ -1,0 +1,129 @@
+Detection
+Collection requirements
+Windows event logs
+For Windows systems, the Microsoft-Windows-Task-Scheduler/Operational log
+is a good source for monitoring the creation, modification, deletion, and use
+of scheduled tasks. Event IDs 106 and 140 record when a new scheduled task is
+created or updated, respectively, along with the name of the task. For creation
+events, the user context is captured. Event ID 141 in this same log source will
+capture deletion of scheduled tasks.
+Other logging options require enabling Object Access auditing and creating
+specific Security Access Control Lists (SACL). When enabled, the Windows
+Security Event Log will collect Event IDs 4698, 4699, 4700, and 4701 for
+scheduled task creation, deletion, enabling, and disabling events, respectively.
+Process and command-line monitoring
+Enabling process auditing, including the capturing of command-line arguments
+via Group Policy, can also provide significant visibility into scheduled task
+creation and modification events.
+Forwarding these events to a SIEM or other log aggregation system and
+regularly reviewing the events through automation can facilitate detection of
+suspicious activity.
+l [T1053.005: Scheduled Task]
+44
+2021 Threat Detection Report
+Other sources
+Another option for collecting information about existing scheduled tasks on
+Windows is the PowerShell ~~Get-ScheduledTask~~ cmdlet. If PowerShell remoting
+is enabled in the environment, this cmdlet can be run against remote systems
+to collect scheduled tasks in a somewhat scalable manner. Similarly, you can
+gather a great deal of information directly from ~~schtasks.exe~~ by running the
+following command:
+```
+             schtasks.exe /query /fo csv /v
+```
+Detection opportunities
+We commonly observe the following binaries in malicious scheduled
+task execution:
+• ~~cmd.exe~~
+• ~~powershell.exe~~
+• ~~regsvr32.exe~~
+• ~~rundll32.exe~~
+For defenders and hunt teams, if you find one malicious scheduled task in
+your environment, consider using properties of that event—task name, start
+time, task run, etc.—as elements in your hunt or even detection logic. Use
+available tooling to collect scheduled tasks from across your enterprise and
+search for specific properties that match the known malicious scheduled
+task (i.e., recurring start times of unusual scheduled tasks across endpoints).
+Understanding what is normal in your environment is a tremendous boon for
+identifying suspicious scheduled task activity.
+~~Tasknames~~ and ~~Taskruns~~
+Two elements of scheduled tasks that may lend themselves to threat hunting
+and/or detection are ~~taskname~~ and ~~taskrun~~ ~~,~~ which are passed arguments to the
+~~/TN~~ and ~~/TR~~ flags respectively,
+~~Tasknames~~ vary widely in our data set. Though Blue Mockingbird dominated
+our dataset with the taskname ~~Windows Problems Collection~~ ~~,~~ other threat
+actors and malware families commonly use GUIDs, as is the case with QBot, or
+l [T1053.005: Scheduled Task]
+45
+2021 Threat Detection Report
+names that attempt to blend in with seemingly legitimate system activity (e.g.,
+~~AdobeFlashSync~~, ~~setup service management~~, ~~WindowsServerUpdateService~~,
+etc.). Random strings between seven and nine characters are also common.
+It’s worth looking out for scheduled task executions containing the ~~tasknames~~
+or ~~/TN~~ value and any of the above examples. These won’t always be malicious,
+but with some baselining, you should be able to sort normal and benign from
+unusual and suspicious.
+~~Taskrun~~ values, on the other hand, specify what should be executed at the
+scheduled time. Expect attackers to try and blend in here as well, with LOLBINs
+or by naming their on-disk malware to resemble legitimate system utilities. Blue
+Mockingbird dominated once again, with more than 2,000 scheduled tasks with
+a ~~taskrun~~ value of ~~regsvr32.exe /s c:\windows\system32\wercplsupporte.~~
+~~dll~~ ~~.~~ Searching for execution of scheduled tasks with ~~wercplsupporte.dll~~ in the
+~~taskrun~~ is a viable method of detecting Blue Mockingbird, but don’t confuse the
+above DLL with the legitimate ~~wercplsupporte.dll~~ in the same directory.
+Of all the properties in a scheduled task, ~~taskrun~~ is probably the most critical
+to scrutinize. If you see a strange binary, investigate it. Any ~~taskrun~~ value that
+points to a script deserves a closer look, as adversaries may modify an existing
+benign script by adding malicious code to it. Building automation to return
+cryptographic hashes of these scripts and monitoring them for changes may be
+useful in detection efforts.
+Scheduling tasks without ~~schtask.exe~~
+Adversaries can create or modify tasks without calling ~~schtasks.exe~~ or
+~~taskschd.msc~~ directly with the help of COM objects. Therefore, monitoring
+for file creation and modification events in ~~*\Windows\System32\Tasks and *~~
+~~Windows\SysWow64\Tasks~~ directories may provide added value in identifying
+interesting activity. This may be particularly useful on critical systems where
+scheduled tasks should be relatively static.
+Unusual module loads
+Monitoring for image loads—specifically of ~~\Windows\System32\taskschd.dll~~ by
+processes that wouldn’t normally load that DLL like Excel or Word—may indicate
+that a macro is creating or modifying a scheduled task.
+Weeding out false positives
+Any detection strategy should start with a baseline understanding of what is
+in your environment normally. Current Windows systems commonly include
+l [T1053.005: Scheduled Task]
+Bohlmann
+I N C I D E N T
+H A N D L E R
+Tyler has been working in information
+technology since 2012. He started his
+career as a desktop support technician
+working for small MSPs. He then studied
+penetration testing, which got him
+interested in information security. At
+Red Canary, Tyler helps customers
+understand threats within their
+environment and how to leverage their
+EDR platform to improve their security
+program.
+Jason Killam
+D E T EC T I O N
+E N G I N E E R
+Jason works on Red Canary’s Cyber
+Incident Response Team (CIRT) as
+a detection engineer. Prior to that,
+Jason worked as an incident responder
+for security teams in the financial
+sector. Outside of work, he obsesses
+over space, rockets, posting malware
+indicators on twitter, and building
+lego sets.
+46
+2021 Threat Detection Report
+more than 100 scheduled tasks by default. As more software packages are
+installed, they may create additional scheduled tasks for regular updates and
+other reasons. Knowing what these tasks are, their normal schedules, and their
+~~taskrun~~ values will be essential to filtering them out of the review process.
+l [T1053.005: Scheduled Task]
+2021 Threat Detection Report
+T E C H N I Q U E T 1 0 0 3

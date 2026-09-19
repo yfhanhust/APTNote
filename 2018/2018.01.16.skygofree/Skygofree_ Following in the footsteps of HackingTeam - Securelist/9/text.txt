@@ -1,0 +1,126 @@
+Windows
+We have found multiple components that form an entire spyware system
+for the Windows platform.
+Name MD5 Purpose
+Main
+msconf.exe 55fb01048b6287eadcbd9a0f86d21adf
+network.exe f673bb1d519138ced7659484c0b66c5b
+system.exe d3baa45ed342fbc5a56d974d36d5f73f
+module,
+reverse shell
+Sending
+exfiltrated
+data
+Surrounding
+sound
+recording
+by mic
+update.exe 395f9f87df728134b5e3c1ca4d48e9fa Keylogging
+Screenshot
+wow.exe 16311b16fd48c1c87c6476a455093e7a
+capturing
+Skype call
+skype_sync2.exe 6bcc3559d7405f25ea403317353d905f
+recording to
+MP3
+All modules, except skype_sync2.exe, are written in Python and packed to
+binary files via the Py2exe tool. This sort of conversion allows Python
+code to be run in a Windows environment without pre-installed Python
+binaries.
+msconf.exe is the main module that provides control of the implant and
+reverse shell feature. It opens a socket on the victim’s machine and
+connects with a server-side component of the implant located at
+54.67.109.199:6500. Before connecting with the socket, it creates a
+malware environment in ‘APPDATA/myupd’ and creates a sqlite3 database
+there – ‘myupd_tmp\mng.db’:
+CREATE TABLE MANAGE(ID INT PRIMARY KEY NOT
+NULL,Send INT NOT NULL, Keylogg INT NOT
+NULL,Screenshot INT NOT NULL,Audio INT NOT NULL);
+INSERT INTO MANAGE
+(ID,Send,Keylogg,Screenshot,Audio) VALUES (1, 1, 1, 1, 0 )
+Finally, the malware modifies the
+‘Software\Microsoft\Windows\CurrentVersion\Run’ registry key to enable
+autostart of the main module.
+The code contains multiple comments in Italian, here is the most
+noteworthy example:
+“Receive commands from the remote server, here you can set the key
+commands to command the virus”
+Here are the available commands:
+Name Description
+Change current directory to
+cd
+specified
+quit Close the socket
+Execute received command via
+nggexe
+Python’s subprocess.Popen()
+without outputs
+Upload specified file to the specified
+ngguploads
+URL
+nggdownloads
+nggfilesystem
+Download content from the
+specified URLs and save to specified
+file
+Dump file structure of the C: path,
+save it to the file in json format and
+zip it
+nggstart_screen
+nggstop_screen
+Enable/disable screenshot module.
+When enabled, it makes a
+screenshot every 25 seconds
+nggstart_key
+Enable/disable keylogging module
+nggstop_key
+nggstart_rec
+nggstop_rec
+Enable/disable surrounding sounds
+recording module
+Send components status to the C&C
+ngg_status
+socket
+any other
+Execute received command via
+Python’s subprocess.Popen(), output
+result will be sent to the C&C
+socket.
+All modules set hidden attributes to their files:
+Module Paths Exfiltrated data format
+%Y%m%d
+msconf.exe %APPDATA%/myupd/gen/
+%H%M%S_filesystem.zip (file
+structure dump)
+%d%m%Y%H%M%S.wav
+system.exe %APPDATA%/myupd/aud/
+(surrounding sounds)
+%APPDATA%/myupd_tmp/txt/
+update.exe
+%APPDATA%/myupd/txt/
+%Y%m%d-%H%M%S.txt
+(keylogging)
+%Y%m%d-%H%M%S.jpg
+wow.exe %APPDATA%/myupd/scr/
+(screenshots)
+%APPDATA%/myupd_tmp/skype/
+skype_sync2.exe
+%APPDATA%/myupd/skype/
+yyyyMMddHHmmss_in.mp3
+yyyyMMddHHmmss_out.mp3
+(skype calls records)
+Moreover, we found one module written in .Net – skype_sync2.exe. The
+main purpose of this module is to exfiltrate Skype call recordings. Just like
+the previous modules, it contains multiple strings in Italian.
+After launch, it downloads a codec for MP3 encoding directly from the
+C&C server:
+http://54.67.109.199/skype_resource/libmp3lame.dll
+The skype_sync2.exe module has a compilation timestamp – Feb 06 2017
+and the following PDB string:
+\vmware-host\Shared
+Folders\dati\Backup\Projects\REcodin_2\REcodin_2\obj\x86\Release\REc
+odin_2.pdb
+network.exe is a module for submitting all exfiltrated data to the server. In
+the observed version of the implant it doesn’t have an interface to work
+with the skype_sync2.exe module.
+network.exe submitting to the server code snippet

@@ -1,0 +1,30 @@
+Hunting for the files from the Iranian hack
+With Amnpardaz’s threat database as our starting point, we searched for files with similar names and functionality. The search led us to dozens of files, all uploaded from the same two sources located in
+Iran. Even though we weren’t able to find all the mentioned artifacts, we recovered most of the execution flow as described in Amnpardaz’s report.
+The execution flow is heavily based on multiple layers of archives and Batch scripts. When detonated, they:
+https://research.checkpoint.com/2021/indra-hackers-behind-recent-attacks-on-iran/ 3/27
+8/16/2021 Indra — Hackers Behind Recent Attacks on Iran - Check Point Research
+Attempt to evade anti-virus detection
+Destroy the boot configuration data
+Run the final payloads that aim to lock and completely wipe the computers in the network.
+The execution flow of the attacks against targets in Iran
+The execution starts with pushing a scheduled task from the AD to all the machines via group policy. The task name is Microsoft\Windows\Power Efficiency Diagnostics\AnalyzeAll and it
+mimics the AnalyzeSystem task performed by Windows Power Efficiency Diagnostics report tool. The subsequent chain of .bat files and archives is intended to perform the following operations:
+Filter the target machines : setup.bat first checks if the hostname of the machine is one of the following: PIS-APP, PIS-MOB, WSUSPROXY or PIS-DB . If so, it stops the execution and
+deletes the folder containing the malicious script from this machine. PIS in the hostnames stands for Passenger Information System, which is usually responsible among others for updating the
+platform boards with actual data, so attackers made sure their message to the Iranian public will be displayed properly.
+Download the malicious files onto the machine : the same batch file downloads a cab archive named env.cab from a remote address in the internal network:
+\\railways.ir\sysvol\railways.ir\scripts\env.cab . The use of specific hostnames and internal paths indicates the attacker had prior knowledge of the environment.
+Extract and run additional tools : update.bat, which was extracted and started by setup.bat, uses the password hackemall to extract the next stages: cache.bat, msrun.bat and
+bcd.bat .
+Disconnect the machine from all networks : the cache.bat script disables all the network adapters on the machine with the following command: powershell -Command "Get-WmiObject -
+class Win32_NetworkAdapter | ForEach { If ($.NetEnabled) { $.Disable() } }" > NUL
+Perform Anti-AV checks : the same cache.bat script also checks if Kaspersky Antivirus is installed on the machine and if not, it adds all the files and folders related to the attack to the
+Windows Defender exclusion list and proceeds with the execution.
+https://research.checkpoint.com/2021/indra-hackers-behind-recent-attacks-on-iran/ 4/27
+8/16/2021 Indra — Hackers Behind Recent Attacks on Iran - Check Point Research
+Corrupt the boot : bcd.bat is used in order to harm the boot process. First, it tries to override the boot file with new content and then deletes the different boot identifiers using Windows
+built-in BCDEdit tool: for /F "tokens=2" %%j in ('%comspec% /c "bcdedit -v | findstr identifier"') do bcdedit /delete %%j /f
+Remove all the traces : the same bcd.bat in addition to boot override also removes Security, System and Application Event Viewer logs from the system using wevtutil.
+Unleash the main payload : The msrun.bat script is responsible for unleashing the Wiper. It moves wiper-related files to “C:\temp” and creates a scheduled task named mstask to execute
+the wiper only once at 23:55:00.

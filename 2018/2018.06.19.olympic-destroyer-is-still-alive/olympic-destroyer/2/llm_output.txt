@@ -1,0 +1,73 @@
+
+
+
+Sentence : Infection Analysis
+In reality the infection procedure is a bit more complex and relies on multiple different
+technologies, mixing VBA code, Powershell, MS HTA, with JScript inside and more
+Powershell. Let’s take a look at this more closely to let incident responders and security
+researchers recognize such an attack at any time in the future.
+One of the recent documents that we discovered had the following properties:
+MD5: 0e7b32d23fbd6d62a593c234bafa2311
+SHA1: ff59cb2b4a198d1e6438e020bb11602bd7d2510d
+File Type: Microsoft Office Word
+Last saved date: 2018-05-14 15:32:17 (GMT)
+Known file name: Spiez CONVERGENCE.doc
+The embedded macro is heavily obfuscated. It has a randomly-generated variable and function
+name.
+Obfuscated VBA macro
+2/14
+Its purpose is to execute a Powershell command. This VBA code was obfuscated with the
+same technique used in the original Olympic Destroyer spear-phishing campaign.
+It starts a new obfuscated Powershell scriptlet via the command line. The obfuscator is using
+array-based rearranging to mutate original code, and protects all commands and strings such
+as the command and control (C2) server address.
+There is one known obfuscation tool used to produce such an effect: Invoke-Obfuscation.
+Obfuscated commandline Powershell scriptlet
+This script disables Powershell script logging to avoid leaving traces:
+It has an inline implementation of the RC4 routine in Powershell, which is used to decrypt
+additional payload downloaded from Microsoft OneDrive. The decryption relies on a hardcoded
+32-byte ASCII hexadecimal alphabet key. This is a familiar technique used in other Olympic
+Destroyer spear-phishing documents in the past and in Powershell backdoors found in the
+infrastructure of Olympic Destroyer’s victims located in Pyeongchang.
+3/14
+[/caption]
+The second stage payload downloaded is an HTA file that also executes a Powershell script.
+Downloaded access.log.txt
+This file has a similar structure to the Powershell script executed by the macro in spear
+phishing attachments. After deobfuscating it, we can see that this script also disables
+Powershell logging and downloads the next stage payload from the same server address. It
+also uses RC4 with a pre-defined key:
+4/14
+The final payload is the Powershell Empire agent. Below we partially provide the http stager
+scriptlet for the downloaded Empire agent.
+Powershell Empire is a post-exploitation free and open-source framework written in Python
+and Powershell that allows fileless control of the compromised hosts, has modular architecture
+and relies on encrypted communication. This framework is widely used by penetration-testing
+companies in legitimate security tests for lateral movement and information gathering.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "0e7b32d23fbd6d62a593c234bafa2311", "type" : "IOCS"},
+        {"id": 2, "description": "ff59cb2b4a198d1e6438e020bb11602bd7d2510d", "type" : "IOCS"},
+        {"id": 3, "description": "Microsoft Office Word document", "type" : "DOCF"},
+        {"id": 4, "description": "Spiez CONVERGENCE.doc", "type" : "DOCF"},
+        {"id": 5, "description": "VBA macro", "type" : "EXEF"},
+        {"id": 6, "description": "Powershell command", "type" : "EXEF"},
+        {"id": 7, "description": "Invoke-Obfuscation", "type" : "APPS"},
+        {"id": 8, "description": "C2 server address", "type" : "CCSH"},
+        {"id": 9, "description": "RC4 routine in Powershell", "type" : "EXEF"},
+        {"id": 10, "description": "Microsoft OneDrive", "type" : "CCSH"},
+        {"id": 11, "description": "access.log.txt", "type" : "DOCF"},
+        {"id": 12, "description": "HTA file", "type" : "DOCF"},
+        {"id": 13, "description": "Powershell Empire agent", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "has_filename"},
+        {"source": 5, "target": 6, "rel_name" : "executes"},
+        {"source": 6, "target": 8, "rel_name" : "connects_to"},
+        {"source": 9, "target": 10, "rel_name" : "downloads_from"},
+        {"source": 12, "target": 11, "rel_name" : "downloads"},
+        {"source": 12, "target": 8, "rel_name" : "connects_to"},
+        {"source": 13, "target": 8, "rel_name" : "controls"}
+    ]
+}

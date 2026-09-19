@@ -1,0 +1,79 @@
+Variant B
+The second variant (B) of Elise has compile timestamps dating back to July 2012.
+Variant B has a configuration data structure size of 324 bytes. It is often delivered via
+a file exploiting a client-side vulnerability, such as CVE-2012-0158.
+When originally installed on a victim machine, the client-side exploit shellcode will
+drop two files — an executable file and a DLL. The executable is then run in a newly
+spawned process. This executable file loads the second exported function of the
+DLL via the function’s ordinal value. This exported function is commonly called either
+‘CsOptionsHandle’ or ‘ESHandle’.
+When this function is called, this Elise variant will begin by decrypting its 324-byte
+configuration structure. The following Python code may be used to decrypt and parse
+this configuration:
+print “Command and Control  : %s” % c1
+print “Command and Control  : %s” % c2
+print “Command and Control  : %s” % c3
+print “Command and Control  : %s” % c4
+print “Command and Control  : %s” % c5
+print “Unknown Bool Value 2  : %s” % unknown_bool2
+print “Unknown Unidoce String : %s” % unknown _string.replace(“\
+x00”,’’)
+fh = open(sys.argv[1], ‘rb’)
+data = fh.read()
+fh.close()
+parse_config(decrypt(data))
+As we can see, this variant of Elise uses the same encryption/decryption routine
+for its configuration data as variant A. The malware proceeds to create one of the
+following files that will be used to store this configuration data:
+
+
+%APPDATA%\Microsoft\IMJP8_1\8S3N0PW7.dat
+
+
+%APPDATA%\Microsoft\IMJP8_1\26TXNK4F.dat
+
+
+One of the more interesting features of this variant is its ability to detect either a
+VMware [®] or VirtualPC virtual environment, as we see below.
+FIGURE 17 + Elise Variant B virtual environment check.
+Should the malware detect it is running within either of these environments, it will
+not perform any malicious activity going forward. Otherwise, it proceeds to configure
+persistence across reboots by setting the following registry key:
+
+HKCU\Software\Microsoft\Windows\CurrentVersion\Run\imejp : [self]
+
+When initially run, Elise variant B will also execute the following commands on the
+victim machine:
+
+
+ipconfig /all
+
+
+net start
+
+
+dir C:\progra~1
+
+
+systeminfo
+
+
+These command strings are obfuscated within the malware, using the following
+algorithm:
+char decrypt_string(char encrypted, int size)
+{
+int i;
+char *result;
+for ( i = 0; i < size; ++i )
+{
+result = &encrypted[i];
+*result ^= 0x1Bu;
+}
+return result;
+}
+Exfiltration for variant B uses the same technique used in variant ‘A’. Base64-encoded
+cookie values are used to exfiltrate data, as seen below.
+The structure of this base64-decoded data remains the same as well. The following
+structure is used in variant ‘B’.
+FIGURE 18 + Elise Variant B POST Request
+FIGURE 19 + Elise Variant B Data Encoding

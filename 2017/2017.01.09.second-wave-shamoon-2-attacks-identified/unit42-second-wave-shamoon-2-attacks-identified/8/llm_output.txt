@@ -1,0 +1,145 @@
+
+
+
+Sentence : Destruction
+Much like the initial attacks, the lack of an operational C2 server suggests that the threat
+actor’s sole intention for carrying out this Shamoon 2 attack was to destroy data and
+systems. Without an operational C2, the actor would be unable to issue a command to set a
+custom “kill time” when the Disttrack payload would begin wiping systems, which would force
+the payload to rely on its hardcoded “kill time”. The hardcoded date suggests that this attack
+was set to begin wiping systems on November 29, 2016 at 1:30 AM local Saudi Arabia time.
+Unlike the previous Shamoon attacks that occurred on a holiday and over a weekend, this kill
+time occurred during the work week, as November 29, 2016 was a Tuesday. However, it
+appears this attack attempted to maximize its impact by occurring very early in the morning
+before the majority of the organization’s staff were on site. This aligns with the Shamoon�
+actors conducting their attacks off-hours to increase the efficacy of the attack by increasing�
+the timeframe of detection and response.
+When Disttrack observes the system clock exceeding the “kill time”, it will save its wiper
+component to the system using one of the following randomly chosen filenames:�
+• pdwmtphw.exe
+• caiaw00a.exe
+• sdwprint.exe
+• caiaw00d.exe
+• kyiaw002.exe
+• sdwscdrv.exe
+• briaw00a.exe
+• saiaw002.exe
+• _mvscdsc.exe
+• hdvmp32.exe
+• _s3wcap32.exe
+• hpiaw001.exe
+• lxiaw004.exe
+• cniaw001.exe
+• lxiaw006.exe
+• caiaw00f.exe
+• newtvsc.exe
+When executed, the wiper component will extract a kernel driver from its resource section and
+decrypt it with a 172-byte XOR key. The wiper saves the kernel driver (SHA256:
+5a826b4fa10891cf63aae832fc645ce680a483b915c608ca26cedbb173b1b80a) to the
+“Windows\System32\Drivers” folder in a file named “vdsk911.sys”. The wiper then uses this�
+file to create a kernel driver service named “vdsk911”, as seen in Figure 2.�
+Figure 2 RawDisk kernel driver service created by Disttrack wiper
+The kernel driver is the 64-bit version of the commercial RawDisk driver by EldoS
+Corporation, which is the exact same file as the “drdisk.sys” driver extracted from the�
+Disttrack 64-bit payload in the ‘X509’ resource in the first reported Shamoon 2 attack. The�
+Disttrack payload will use this kernel driver to access the master boot record (MBR), partition
+tables and files and folders on the system to overwrite them with the same image of the�
+deceased Syrian boy as in the previous Shamoon 2 attack.
+During our analysis, we again observed the wiper setting the system time to a random date
+between August 1 and August 20, 2012, as seen in Figure 3. As mentioned in our previous
+blog, the reason the wiper sets the system time to this random date in August 2012 is due to
+a temporary license key needed to use the RawDisk kernel driver. The temporary license key
+used in this attack is the exact same as the first attack.�
+Figure 3 Wiper changing the system date to a random date in August 2012
+Since our original blog, we’ve successfully decrypted the license key, which can be seen in
+Figure 4. The expiration date in the temporary license key is an 8-byte field (highlighted by the�
+orange box) that corresponds to Microsoft’s FILETIME structure, which represents the
+number of 100-nanosecond intervals since January 1, 1601 (UTC). In the temporary license
+key used in all of the Shamoon related attacks, the expiration date was set to August 30,
+2012 at 8:34:29 UTC, which is the reason the wiper sets the system time to a random day
+between August 1 and August 20, 2012. Also, we found that the temporary license key was
+registered to “binnatova@bsunanotechnology.com”. We are unsure how this email address is
+involved with Shamoon, as it was likely compromised back in 2012 and used by the actor to
+obtain the temporary license for RawDisk.
+Figure 4 RawDisk temporary license decrypted showing August 2012 expiration date
+After the MBR, partition tables and files are overwritten, the wiper issues the command of�
+“shutdown -r -f -t 2” to reboot the system, which is the same command as used in the first�
+Shamoon 2 attack. Figure 5 shows the dialog box that pops up as a result of this command,
+which will be followed by a system reboot.
+Figure 5 The shutdown dialog box opened just before reboot of a Windows 7 system wiped
+by Disttrack
+The purpose of rebooting the system remains the same, as the portions of the hard disk and
+filesystem needed to successfully boot the system were overwritten with a JPEG image, the�
+system is no longer able to start up. Figure 6 shows the result of this reboot in an analysis
+virtual machine, as the operating system could no longer be found.
+Figure 6 System unable to find its operating system�
+The operating system fails to load as the MBR is overwritten with a JPEG image. As seen in
+Figure 7, sector 0 of the physical hard disk, which normally stores the master boot record now
+contains the beginning of a JPEG file marked by the “JFIF” magic bytes in the two orange�
+boxes.
+Figure 7 Hexdump of sector 0 of the physical showing the MBR overwritten with a JPEG file�
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Shamoon 2 attack", "type" : "TTPS"},
+        {"id": 2, "description": "C2 server", "type" : "CCSH"},
+        {"id": 3, "description": "Disttrack payload", "type" : "EXEF"},
+        {"id": 4, "description": "hardcoded “kill time”", "type" : "TTPS"},
+        {"id": 5, "description": "November 29, 2016 at 1:30 AM local Saudi Arabia time", "type" : "TAMP"},
+        {"id": 6, "description": "pdwmtphw.exe", "type" : "EXEF"},
+        {"id": 7, "description": "caia*.exe (various)", "type" : "EXEF"},
+        {"id": 8, "description": "sdwprint.exe", "type" : "EXEF"},
+        {"id": 9, "description": "_mvscdsc.exe", "type" : "EXEF"},
+        {"id": 10, "description": "hdvmp32.exe", "type" : "EXEF"},
+        {"id": 11, "description": "_s3wcap32.exe", "type" : "EXEF"},
+        {"id": 12, "description": "hpiaw001.exe", "type" : "EXEF"},
+        {"id": 13, "description": "lxiaw004.exe", "type" : "EXEF"},
+        {"id": 14, "description": "cniaw001.exe", "type" : "EXEF"},
+        {"id": 15, "description": "lxiaw006.exe", "type" : "EXEF"},
+        {"id": 16, "description": "caiaw00f.exe", "type" : "EXEF"},
+        {"id": 17, "description": "newtvsc.exe", "type" : "EXEF"},
+        {"id": 18, "description": "vdsk911.sys", "type" : "EXEF"},
+        {"id": 19, "description": "Windows\System32\Drivers folder", "type" : "SYSP"},
+        {"id": 20, "description": "vdsk911 kernel driver service", "type" : "TTPS"},
+        {"id": 21, "description": "drdisk.sys (64-bit)", "type" : "EXEF"},
+        {"id": 22, "description": "RawDisk driver by EldoS Corporation", "type" : "APPS"},
+        {"id": 23, "description": "master boot record (MBR)", "type" : "TAMP"},
+        {"id": 24, "description": "partition tables", "type" : "TAMP"},
+        {"id": 25, "description": "JPEG image of the deceased Syrian boy", "type" : "DOCF"},
+        {"id": 26, "description": "binnatova@bsunanotechnology.com", "type" : "MAIL"},
+        {"id": 27, "description": "temporary license key for RawDisk", "type" : "TAMP"},
+        {"id": 28, "description": "August 30, 2012 at 8:34:29 UTC", "type" : "TAMP"},
+        {"id": 29, "description": "shutdown -r -f -t 2 command", "type" : "TTPS"},
+        {"id": 30, "description": "JFIF magic bytes in sector 0 of the physical hard disk", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "deploys"},
+        {"source": 3, "target": 4, "rel_name" : "contains"},
+        {"source": 4, "target": 5, "rel_name" : "set to"},
+        {"source": 3, "target": 6, "rel_name" : "saves as"},
+        {"source": 3, "target": 7, "rel_name" : "saves as"},
+        {"source": 3, "target": 8, "rel_name" : "saves as"},
+        {"source": 3, "target": 9, "rel_name" : "saves as"},
+        {"source": 3, "target": 10, "rel_name" : "saves as"},
+        {"source": 3, "target": 11, "rel_name" : "saves as"},
+        {"source": 3, "target": 12, "rel_name" : "saves as"},
+        {"source": 3, "target": 13, "rel_name" : "saves as"},
+        {"source": 3, "target": 14, "rel_name" : "saves as"},
+        {"source": 3, "target": 15, "rel_name" : "saves as"},
+        {"source": 3, "target": 16, "rel_name" : "saves as"},
+        {"source": 3, "target": 17, "rel_name" : "saves as"},
+        {"source": 3, "target": 18, "rel_name" : "creates and saves"},
+        {"source": 18, "target": 19, "rel_name" : "saved in"},
+        {"source": 3, "target": 20, "rel_name" : "creates service"},
+        {"source": 20, "target": 21, "rel_name" : "uses driver file"},
+        {"source": 21, "target": 22, "rel_name" : "is part of"},
+        {"source": 3, "target": 23, "rel_name" : "overwrites"},
+        {"source": 3, "target": 24, "rel_name" : "overwrites"},
+        {"source": 3, "target": 25, "rel_name" : "uses image for overwriting"},
+        {"source": 26, "target": 27, "rel_name" : "registered to"},
+        {"source": 27, "target": 28, "rel_name" : "set expiration date to"},
+        {"source": 3, "target": 29, "rel_name" : "issues command"},
+        {"source": 25, "target": 30, "rel_name" : "marks beginning of"}
+    ]
+}

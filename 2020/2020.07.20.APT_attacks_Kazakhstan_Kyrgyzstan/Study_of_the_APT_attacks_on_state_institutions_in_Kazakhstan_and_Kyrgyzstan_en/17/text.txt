@@ -1,0 +1,192 @@
+Operating routine
+The library contains the following exporting functions:
+
+
+ServiceMain
+
+
+mymain
+
+
+The mymain carries the main functionality of the trojan.
+mymain function
+When called, this function uses GetTempFileNameW to generate the name of the
+temporary file with the .rar prefix and opens it for writing. This file is used as a journal.
+Writing to the journal is performed in the following format:
+```
+ [%d-%02d-%02d %02d:%02d:%02d] %d %d\n%s\n\n" => "[YYYY-MM-DD HH:MM:SS] 
+\n\n\n
+```
+where:
+rec_id — is a record type ID;
+error_code — error code (in most cases, it has a 0 value); if an error occurs during
+execution, the GetLastError() or WSAGetLastError() value is written;
+
+record — additional data.
+
+Before it is added to the journal, the written data is encoded with the XOR operation, using
+the 0x31 byte. The rec_id table of ID values is listed at the end of this description.
+Next, the trojan collects the following information about the infected system:
+```
+ struct sysinfo
+{
+DWORD dword_0;
+ DWORD is_VMWare;
+ WCHAR str_test[8]; //возможно ID
+ DWORD dword_1;
+ BYTE user_name[64];
+```
+```
+ BYTE gap_0[64];
+ WCHAR host_IP[20];
+ DWORD osver_Major;
+ DWORD osver_Minor;
+ DWORD uiANSI_CP;
+ DWORD uiOEM_CP;
+ WCHAR host_name[15];
+ BYTE gap_1[98];
+ BYTE user_SID[128]; //string SID
+ DWORD osver_ProductType;
+ BYTE is_Wow64process;
+ BYTE mac_address[12];
+ BYTE gap_2[3];
+ DWORD number_of_processors;
+```
+DWORD total_phys_mem_MBytes ;
+```
+ };
+```
+It then checks that the library runs inside the VMWare virtual machine environment. If it
+detects a virtual machine, the corresponding information is added to the collected system
+data, while the trojan continues to run.
+There is a list of several C&C server addresses encoded inside the source code of the
+BackDoor.Logtu.1. They are encrypted with the XOR, using the 0x11 byte. However, only the
+first address from that list is used to control the backdoor:
+
+
+104.194.215[.]199;
+
+
+192.168.1[.]115;
+
+
+www[.]test[.]com.
+
+
+Moreover, the trojan stores an array of ports within which each element corresponds to one
+of the servers above: 443, 443, 80.
+BackDoor.Logtu.1 has an option to use a proxy server, but the analyzed sample lacks such an
+address. If the proxy server address is present, it is also encoded byte by byte with the XOR
+operation, using the 0x11 byte.
+After the initial preparation, the trojan launches the cycle of connections to the C&C server
+through the TCP socket. Within the first connection, BackDoor.Logtu.1 tries to directly
+connect to the server. If it fails, it uses an HTTP proxy server if its address is encoded into the
+body of the trojan. If it wasn’t successful, the trojan extracts the proxy server parameters
+from the [ HKCU\Software\Microsoft\Windows\CurrentVersion\Internet
+Settings\ProxyServer] registry key and tries to establish the connection. In case of
+another failure, the backdoor tries to obtain the proxy server information through the
+WinHTTP API, sending the google[.]com request via the WinHttpGetProxyForUrl
+function. If this attempt has also failed, BackDoor.Logtu.1 tries to extract the corresponding
+settings from the HKU\<session_user_SID>\...\ProxyServer registry key. This cycle
+repeats until the trojan is successfully connected to the server.
+After successfully connecting, BackDoor.Logtu.1 sends the information about the infected
+system to the server. The data transfer and response receipt is divided into two stages:
+
+
+Sending the packet with the length of the payload,
+
+
+Sending the payload itself.
+
+
+The value of the packet with the length of 4 bytes equals <payload_len>+4 . This is
+because the packet with the payload contains a 4 bytes prefix, which in turn, contains the
+payload ID. Consequently, the payload has the format as shown below:
+```
+ struct payload
+{
+DWORD payload_id;
+ BYTE payload[payload_len];
+ }
+```
+The data transferred from the trojan to the server, as well as its response, are encrypted with
+the RC4 algorithm. The encryption key is stored inside the trojan body as a separate string,
+but calculates using the following algorithm:
+```
+ from hashlib import md5
+password = "123456"
+salt = md5("").hexdigest()
+key = md5(password + salt).hexdigest()
+```
+The ID of the packet with the system information has a value of 0 .
+After the system information is sent and the trojan receives the response from the server, it
+launches a thread that sends heartbeats every minute. Their ID has a value of 1 and the
+payload length has a value of 0 . After 10 packets are sent, the server connection closes and
+reestablishes again.
+The backdoor waits for the server reply with the packet with the length value that should not
+exceed 0x1F40 . Next, it waits for the packet itself, which contains the command as a
+payload. After this packet is decrypted, it checks the value of the first DWORD, which is the
+command ID. The ID value should not exceed 0x34 .
+In some cases, the command contains additional parameters presented in the form of the
+strings split with the | symbol. The structure of this command has the form of the
+"param_0"|"param_1"|...|"param_n" .
+The list of commands that the trojan can receive and execute is shown in the table below.
+|CommandID|Command description|
+|---|---|
+|0x00|NOP|
+|0x01|CallsGetTickCount(), writes the result into the global variable.|
+|0x02|In this command, two parameters separated with the| symbol, are received. The firstone is the path to the file. The trojan uses it to form two new paths:<param_0>.tu<param_0>.tut|
+|Col1|Next, the trojan checks if the file with the original name, specified in the command,exists. If it exists, the trojan sends the response |01 to the server. If it doesnot exist, it checks if the .tu is present. If this file exists, the trojan sends itssize as a |.If the .tu file does not exist, the trojan creates the file tut,writes the string, which consists of 32 zeros, into it and deletes the file.Depending on the command execution results, the trojan can send various types ofresponses to the server. In cases of failure at any given step of the command execution,the trojan sends |, where  can have a value from 01 to 05.|
+|---|---|
+|0x03|Creates an application process with the<param_0> name and<param_1> commandline parameters.|
+|0x04|Runs a separate thread that lists the processes and sends the information about themto the C&C server one by one. Before the listing, the packet with the0x17 ID and aDWORD 0x47 payload is sent to the server. It is sent as follows:struct process_info{WCHAR proc_name[30];DWORD PID;DWORD parent_PID;WCHAR self_module_path[260]}Herewith,self_module_path is only sent when the process is running in the WOW64environment. Otherwise, this string is filled with 0 values.|
+|0x05|Launches the cmd.exe thread. It creates the cmd.exe process with the input-outputredirection into the pipes. After the process is created, it sends a packet with the0x17ID and a0x3D payload in case of a successful connection, or0x3E in case of a failure.Herewith, the trojan receives the input parameters of the command line from themessage using theGetMessage function. The results are sent with the0x06 ID.|
+|0x06|Input of the parameters for the cmd.exe. UsingPostThreadMessage, it sends themessage0x464 to the cmd.exe thread and puts the data from the command intolParam.|
+|0x08|Ends the connection, sending a packet with the0x17 packet ID and a DWORD0x3Epayload prior, then deletes its service and executable file.|
+|0x09|Opens the file for writing from the end and writes the buffer received in the commandinto it. Command’s parameters:param_0 — name of the file;param_1 — unknown value;param_2 — buffer size;|
+|Col1|param_3 — special flag; if it equals 1, then the file must be moved;·param_4 — a buffer for a writing.·It adds a .tu extension to param_0, opens (or creates) the resulting file for writing,places the pointer to the end of the file and writes a param_4 buffer.If param_3 equals 1, then it deletes the param_0 file and renames the file.tu into param_0.|
+|---|---|
+|0x14|Gets the size of the file specified in the command.|
+|0x15|Reads the0x1000 bytes from theparam_0 file, starting withparam_2, and sends theresults with the0x15 ID to the server.|
+|0x16|Deletes the specified file. If successful, it sends a packet with the0x17 ID and a DWORD0x1F payload to the server; in case of an error, a packet with the0x20 ID is sentinstead.|
+|0x17|If the first DWORD of the command’s body equals 1, the trojan goes to sleep for 1second; if it equals 2, the trojan closes the file handle.|
+|0x18|Ends the process with PID specified in the command. In return, the C&C server sendsthe packet with the0x17 ID. If successful, DWORD0x0B is sent along with this ID. Iffailed,0x0C will be sent.|
+|0x19|Gets information about disks. Upon receiving this command, the trojan checks all thedisks available from the letter A to the Z and sends information about each of them tothe C&C server.The disk information is sent as a the following structure:struct disk_info{DWORD root_path;DWORD dword_0;DWORD type;DWORD dword_1;DWORD cdrom_or_removable;}Herewith, if the disk found has aDRIVE_REMOVABLE type or aDRIVE_CDROMtype, the trojan indicates the value 1 in thecdrom_or_removable parameter.Prior to listing the disks, the trojan sends thedisk_info structure with thedword_1 value, which equals 1, as well as other parameters, which are equal to 0.|
+|0x20|Gets the file list in the specified folder. The list is formed as lines of the<file_name>;<file_size>;<last_write_time(YYYY-MM-DDhh:mm:ss)>;<is_dir> format, which are separated by the| symbol.If the object represents the directory, the<is_dir> value is indicated as 1; if theobject represents a file, the 0 value is indicated.|
+|0x22|Creates the TCP tunnel. This command has the host parameters to connect to. Theparameters come as the following structure:struct tunnel_host{WORD index;char hostname[66];DWORD port;}Where index is the tunnel index.After connecting to the host, the trojan receives a block with the size of 0x400 bytesand sends it to the C&C server as the following structure:struct tunnel_data{WORD index;char buffer[];}After the last block is sent, the trojan sends the index with the 0x24 ID.|
+|---|---|
+|0x23|Sends the data to the tunnel. The C&C server sends the structuretunnel_data, andthe trojan sends the data into the tunnel with thetunnel_data.index index.|
+|0x24|This command contains tunnel index that needs to be closed.|
+|0x25|This command contains the structuretunnel_host. The trojan creates a TCP socket,binds the port totunnel_host.port, and awaits for the incoming connection.Upon receiving the incoming connection, the trojan sends a zero-length packet withouta payload and0x25 to the C&C server. After that, it receives the data from the newconnection, along with the0x26 ID and sends them to the C&C server.|
+|0x26|The command contains atunnel_data structure. Upon receiving this command, thetrojan sends the data to the connection it received in the0x25 command.|
+|0x28|Ends the thread sending the heartbeats.|
+|0x29|Moves the file fromparam_0 to theparam_1.|
+|0x31|Creates a desktop screenshot.|
+|0x33|Gets the list of running services as strings<service_name>;<service_display_name>;<current_state>, separatedwith the| symbol.|
+|0x34|Services management command.Ifparam_0 has a 0 value, the trojan stops theparam_1 service.|
+Upon receiving the command with the 0x17 ID, the trojan closes the file handler, which is
+stored in the global variable. This file is used only twice: once upon receiving the command,
+specified earlier, and once in the journal writing function.
+File handler closing:
+Writing to the journal (logging):
+Table of the identifiers of the log entries types
+|rec_id identifier|Error code|Log entry type|Description|
+|---|---|---|---|
+|0x01|0|No entry|Written at the beginningof the execution|
+|0x0E|0|The name of the C&Cserver||
+|0x0F|WSAGetLastError()|No entry|Added upon C&Cserver connection error|
+|0x07|0|Proxy server name||
+|0x08|0|No entry|Added beforeconnecting to the proxyserver|
+|---|---|---|---|
+|0x09|GetLastError()|No entry|Added upon proxyserver connectionfailure|
+|0x0A|0|CONNECT<proxy_addr>:<proxy_port>HTTP/1.1\r\nProxy-Authorization:Basic<proxy_auth>\r\n\r\norCONNECT<proxy_addr>:<proxy_port>HTTP/1.1\r\n\r\n,if proxy serverauthorizationparameters are missing|HTTP-proxy connectionstring|
+|0x0B|GetLastError()|No entry|Added if there is aproxy server connectionerror|
+|0x0C|GetLastError()|No entry|Added upon receivingan empty reply from aproxy server|
+|0x0D|0|Proxy server response|Added uponsuccessfully connectingto the proxy server|
+|0x05|GetLastError()|No entry|Added when aHKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settingsregistry key openingfailed|
+|0x06|0|A not find proxyaddress string whichis encoded inside thebody of the trojan.|Added ifProxyServer registryparameter valuereceiving failed|
+|0x03|0|No entry|Added when a systeminformation packet issent through the proxyserver, whose addressis encoded inside thetrojan body|
+|---|---|---|---|
+|0x04|012|No entryNo entryNo entry|Added when systeminformation is sentthrough the proxyserver:from the registrysectionHKCU;received using WinHTTPAPI;from theHKU\<session_user_SID> registry section|
+|0x02|0|No entry|Added when systeminformation is sentdirectly to the server|
+|0x10|0|No entry|Added after systeminformation is sent tothe server and before athread with heartbeatsis launched|

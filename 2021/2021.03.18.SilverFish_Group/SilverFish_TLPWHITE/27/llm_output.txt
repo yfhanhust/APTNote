@@ -1,0 +1,221 @@
+
+
+
+Sentence : • [Sarasota -operatingsystem server -Domaincontroller *] • [Sarasota -operatingsystem 2003] •
+[Sarasota -operatingsystem server » C:\programdata\srv.txt]
+25 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+3.3.3 Cobalt Strike & Empire Beacons
+During the post-exploitation analysis, the PTI Team identified several
+encoded/obfuscated Powershell commands for loading Cobalt Strike and Empire
+beacon payloads. Almost all of the Cobalt Strike payloads are executed with compressed
+and encoded Powershell commands. The decoded and decompressed Powershell
+commands contains another Powershell loader script. The second stage script extracts the
+BASE64 Cobalt Strike beacon payload and decodes it by performing an XOR operation with
+the key 53.
+Figure 25. Decoded Cobalt Strike beacon loader Powershell code
+Executed Cobalt Strike beacons use domain fronting for communicating to the command
+and control server. The PTI Team was able to extract all of the Cobalt Strike beacons used
+by SilverFish attackers. Following table contains the Cobalt Strike command and control
+servers and list of domains used for fronting.
+Analyst Note : Domain fronting is a technique for Internet censorship circumvention that
+uses different domain names in different communication layers of an HTTPS connection
+to discreetly connect to a different target domain than is discernable to third parties
+monitoring the requests and connections [13].
+26 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+One of the Cobalt Strike beacons used by the SilverFish group directly connected to the
+address tanzaniafisheries.com without using the domain fronting technique. That particular
+Cobalt Stike beacon was deployed to more than 20 victims with file name ms6543223.csproj
+6.1 and executed with the command in the following image.
+Figure 26. Victim task command executing ms6543223.csproj file
+Analyst Note : msbuild.exe utility and .csproj files are frequently used to load shellcode in
+red teaming engagements.
+Figure 27. Domain fronting used by SilverFish group frequently
+Besides the domain fronting method, the SilverFish group uses the ”mallable C2 profile”
+features of Cobalt Strike. The following image shows the Cobalt Strike beacon shellcode
+emulation results, fronted domain, and actual host value. The chosen mallable C2 profile [22]
+artifacts can easily be identified.
+Figure 28. Decoded Cobalt Strike beacon shellcode emulation
+27 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+The PTI Team was able to analyze one of the Empire agents used by the SilverFish group.
+As with Cobalt Strike beacons, Empire agent loaders are executed with encoded and
+compressed Powershell commands. After de-obfuscating the Empire agent loader, the PTI
+Team extracted the https://149.154.157.248:443 C&C address.
+Figure 29. Decoded Empire agent code
+3.4 VictimTotal Sandbox
+One of the most shocking discoveries of the PTI Team was a web panel for testing the
+malicious payloads over a list of actual victim devices with enterprise EDR and AV solutions.
+The SilverFish attackers were using this system to periodically test their malicious payloads
+on more than 6000 victim devices, scripts, and implants. The following images (Figure 30, 31)
+contain the list of victims with various different enterprise security solutions. The top section
+includes brief information about the malicious file that is being scanned periodically and
+at the right-most column there are scanning results gathered from the security solutions of
+victims’ devices.
+28 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+Figure 30. VictimTotal Sandbox testing a given sample compiled for the US targets
+Figure 31. VictimTotal Sandbox testing a given sample compiled for EU targets
+If the uploaded file gets a different detection result, the website notifies the logged-in user.
+This feature indicates that SilverFish group members are tracking the detection rate of their
+payloads in real time. The PTI Team also noticed two payloads uploaded to the file detection
+sandbox panel, one of which is named buildus9_3.ps1 (Figure 30) and other build_eu.ps1
+(Figure 31). This could mean that the SilverFish group is targeting the US and EU with specially
+crafted payloads.
+The following table contains the MD5 hashes of the files that are uploaded for periodical
+detection checking.
+29 / 51
+|File Name|MD5 Hash|
+|---|---|
+|~~build_eu.ps1~~|~~f43f16e900ed0c70062951d226081b8e~~|
+|~~buildus9_3.ps1~~|~~7982b08be78ee4136efd89b06941f75c~~|
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+3.4.1 NetSupport Remote Control
+During the analysis made on the C&C server contents, PTI team was able to gather
+the buildus9_3.ps1 and build_eu.ps1 files that are uploaded to detection sandbox panel
+which is explained in section 3.4. At first glance, PTI team observed that the files are heavily
+obfuscated and the main payload is encrypted using AES encryption.
+Figure 32. Encoded contents of buildus9_3.ps1 file
+After de-obfuscating and extracting the decrypted payload inside the Powershell files, we
+came across another Powershell stub that decodes another BASE64 encoded payload using
+6 byte XOR keys. Once the second script executed using Invoke-Expression, it first creates
+a folder under the %APPDATA% directory with a random name. After creating the random
+directory script removes all the files with ”.ps1” extension under the %TEMP% directory. This
+could mean that this script is meant to be executed under the %TEMP% directory.
+Figure 33. Extracted payload removing all ”.ps1” files under %TEMP% directory
+Then the script writes the decoded contents of the BASE64+XOR encoded payload
+into a randomly named ”.zip” file under the created directory. In the next line of
+code script extracts the ZIP file contents using expand-archive . After analyzing the
+extracted contents of the ZIP file, PTI Team found out that extracted files belongs to
+a publicly known multi platform remote managing software called NetSupportManager
+[10]. The script continuous the execution by removing the ZIP file and renaming the
+client32.exe of NetSupportManager to ctfmon.exe . Renamed EXE file is added to
+the HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run registry for
+persistence.
+30 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+Figure 34. Contents of the extracted ZIP file
+Amoung the extracted ZIP file contents, client32.ini file contains the necessary configuration
+settings for NetSupportManager remote access software. PTI Team extracted the both
+client32.ini configuration files from buildus9_3.ps1 and build_eu.ps1 Powershell scripts.
+Extracted INI files contains a HTTP field that includes gateway and secondary gateway
+address values.
+Figure 35. Extracted client32.ini file for buildus9_3.ps1
+At the end of the analysis on the subject Powershell files, the PTI Team was able to extract
+all of the gateway addresses, following table contains the extracted file name and two
+gateway address for both NetSupportManager INI file.
+31 / 51
+|File Name|Gateway|Second Gateway|
+|---|---|---|
+|~~buildus9_3.ps1~~|~~moreoft.cn:443~~|~~nfsajubjury5gct4.xyz:443~~|
+|~~build_eu.ps1~~|~~moreeu.cn:443~~|~~nefvnvudygct4.xyz:443~~|
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+3.5 Topology
+During the PTI Team investigation, one of the detected command and control panels of
+the SilverFish group was 188.120.239.154, which was hosted in Russia with AS Label ”JSC The
+First”, The second C&C address was 130.0.235.92 and the IP was registered to Ukraine with
+A.S. label ”ITL LLC”. Both IP addresses are registered to a domain.
+In contrast to traditional attacks that use a domain name purchased via means of anonymous
+payments, SilverFish is using hacked domains for redirecting traffic to their command and
+control panel. We observed 10-year old legitimate domain names used in their operation.
+To avoid disrupting the legitimate traffic of the website, the SilverFish group is creating
+new subdomains which makes it almost impossible for an unattended website owner to
+understand that their domain is being exploited in the attacks. The analysis made on the
+C&C servers, revealed that the SilverFish group is found to be filtering out the victims from
+commonwealth of independent states(CIS). Following image displays the source code of the
+traffic distribution system(TDS), which is explained in section 3.2 in detail.
+Figure 36. Source code of TDS filtering CIS countries
+As seen in the TDS source code, the SilverFish group clearly discarding the victims originating
+from the following list of states.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sarasota -operatingsystem server", "type" : "OPPS"},
+        {"id": 2, "description": "Sarasota -operatingsystem 2003", "type" : "OPPS"},
+        {"id": 3, "description": "C:\\programdata\\srv.txt", "type" : "SYSP"},
+        {"id": 4, "description": "SilverFish APT Group", "type" : "ACTO"},
+        {"id": 5, "description": "Powershell commands for loading Cobalt Strike and Empire beacon payloads", "type" : "EXEF"},
+        {"id": 6, "description": "Cobalt Strike payloads", "type" : "DOCF"},
+        {"id": 7, "description": "Empire agent loaders", "type" : "DOCF"},
+        {"id": 8, "description": "tanzaniafisheries.com", "type" : "CCSH"},
+        {"id": 9, "description": "ms6543223.csproj", "type" : "DOCF"},
+        {"id": 10, "description": "msbuild.exe utility and .csproj files", "type" : "APPS"},
+        {"id": 11, "description": "https://149.154.157.248:443 C&C address", "type" : "CCSH"},
+        {"id": 12, "description": "VictimTotal Sandbox", "type" : "TAMP"},
+        {"id": 13, "description": "buildus9_3.ps1", "type" : "DOCF"},
+        {"id": 14, "description": "f43f16e900ed0c70062951d226081b8e (MD5 Hash of build_eu.ps1)", "type" : "IOCF"},
+        {"id": 15, "description": "buildus9_3.ps1", "type" : "DOCF"},
+        {"id": 16, "description": "7982b08be78ee4136efd89b06941f75c (MD5 Hash of buildus9_3.ps1)", "type" : "IOCF"},
+        {"id": 17, "description": "NetSupportManager", "type" : "APPS"},
+        {"id": 18, "description": "client32.exe", "type" : "EXEF"},
+        {"id": 19, "description": "ctfmon.exe", "type" : "EXEF"},
+        {"id": 20, "description": "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run registry for persistence", "type" : "REGK"},
+        {"id": 21, "description": "client32.ini configuration file", "type" : "DOCF"},
+        {"id": 22, "description": "moreoft.cn:443", "type" : "CCSH"},
+        {"id": 23, "description": "nfsajubjury5gct4.xyz:443", "type" : "CCSH"},
+        {"id": 24, "description": "moreeu.cn:443", "type" : "CCSH"},
+        {"id": 25, "description": "nefvnvudygct4.xyz:443", "type" : "CCSH"},
+        {"id": 26, "description": "188.120.239.154 C&C panel hosted in Russia with AS Label ”JSC The First”", "type" : "CCSH"},
+        {"id": 27, "description": "130.0.235.92 C&C address registered to Ukraine with A.S. label ”ITL LLC”", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"from": 4, "to": 5, "label": "uses"},
+        {"from": 5, "to": 6, "label": "loads"},
+        {"from": 5, "to": 7, "label": "loads"},
+        {"from": 4, "to": 8, "label": "targets"},
+        {"from": 4, "to": 9, "label": "uses"},
+        {"from": 10, "to": 9, "label": "executes"},
+        {"from": 7, "to": 11, "label": "communicates with"},
+        {"from": 4, "to": 12, "label": "tests payloads on"},
+        {"from": 12, "to": 13, "label": "uploads payload"},
+        {"from": 12, "to": 15, "label": "uploads payload"},
+        {"from": 14, "label": "is hash of", "to": 13},
+        {"from": 16, "label": "is hash of", "to": 15},
+        {"from": 15, "to": 17, "label": "downloads and installs"},
+        {"from": 17, "to": 18, "label": "contains file"},
+        {"from": 18, "to": 19, "label": "renames to"},
+        {"from": 19, "to": 20, "label": "adds to"},
+        {"from": 17, "to": 21, "label": "contains file"},
+        {"from": 21, "to": 22, "label": "configures gateway"},
+        {"from": 21, "to": 23, "label": "configures secondary gateway"},
+        {"from": 24, "to": 25, "label": "configures gateway"},
+        {"from": 26, "to": 4, "label": "hosts C&C panel for"},
+        {"from": 27, "to": 4, "label": "hosts C&C panel for"}
+    ]
+}

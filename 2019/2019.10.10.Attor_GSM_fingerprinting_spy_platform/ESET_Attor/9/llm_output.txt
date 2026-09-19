@@ -1,0 +1,576 @@
+
+
+
+Sentence : 4 TECHNICAL ANALYSIS
+In this section, we will provide technical details about the respective Attor components.
+4.1 Dispatcher
+The dispatcher, which is a dynamic-link library, is a central unit of the platform. Its name usually starts
+with letters “SR”, followed by some random letters. Dispatcher names we have seen include ~~SRnhm.dll~~,
+~~SRSfxu.dll~~, ~~SRzsp.dll~~, ~~SRhhz.dll~~, ~~SRanx.dll~~ and ~~sRWobwa.dll~~ . For 64-bit versions, the “x64”
+suffix is added to the name, e.g., ~~SRzspx64.dll~~ .
+The dispatcher contains encrypted configuration data with:
+   - Paths to working folders (Upload folder, Plugin folder, Update folder, Resource folder)
+
+   - FTP server domain and credentials (for C&C and exfiltration)
+
+
+   - RSA public key
+
+
+   - Name of the service under which the malware should be installed
+
+Other components retrieve the configuration data from the dispatcher via a designated interface.
+The dispatcher injects itself into all processes (except some system processes and some processes
+belonging to Symantec products). Subsequently, it loads all plugins from the Plugin folder (location of
+which is determined by the configuration).
+The plugins then use functions implemented by the dispatcher, a reference to which is passed to the
+plugins on load.
+There are both 32-bit and 64-bit versions of the main Attor dispatcher DLL. On 64-bit systems, both are
+loaded, which ensures the malware can inject itself into both 32-bit and 64-bit processes and monitor
+them (e.g., by taking screenshots and collecting keystrokes).
+4.1.1 Encryption methods
+Strings in the malware components are protected by an XOR cipher with a hardcoded key [2] .
+The configuration data (which is embedded in the main module), as well as the backdoor commands,
+are protected by a hybrid encryption scheme, where data is encrypted symmetrically using Blowfish and
+prepended with an RSA-encrypted Blowfish key.
+The Blowfish cipher is used in OFB mode, with a 16-byte key randomly generated for each message. The
+public RSA key [2] used for encrypting the Blowfish key is embedded in the main module.
+Encryption and decryption methods are implemented by the main module, but are also used by the
+loadable plugins via the interface provided by the main module (see Section 4.1.3). Attor’s plugins use the
+same encryption scheme for encrypting the collected data.
+4.1.2 Evasion techniques
+Attor has implemented measures to detect whether it is being executed in an analytical environment. It
+terminates itself if an emulator or virtual machine is detected.
+To detect (some) emulators, Attor performs two similar tests:
+   - It creates a randomly-named event, and then queries the event name via the ~~`NtQueryObject`~~ API
+
+function.
+   - It opens the `HKEY_LOCAL_MACHINE\SYSTEM` registry key and then queries its name by passing the key
+
+handle to the same API function.
+2 See the IoCs section for the extracted keys
+8 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+If there is a mismatch in the names in any of these cases, Attor assumes the presence of an emulator
+and exits.
+To detect virtual machines, Attor utilizes the following methods for detecting VMware, VirtualBox and
+Virtual PC:
+   - It calls the ~~`sldt`~~ _[instruction](https://www.aldeid.com/wiki/X86-assembly/Instructions/sldt)_, which stores the address of the Local Descriptor Table in a register; the
+
+address should be zero on native systems and non-zero in VMware. This is illustrated in Figure 5a.
+   - It executes an undefined instruction ~~`vpcext`~~ that is valid in Virtual PC and VirtualBox environments,
+
+but will generate an exception if executed in a native environment. This is illustrated in Figure 5b.
+   - It attempts to retrieve the VMware version by communicating with I/O ports, using the ~~`in`~~
+
+instruction. If called in a VMware environment with the parameters seen in Figure 5c, the magic value
+~~VMXh~~ is returned as the result.
+   - It tries to read from the ~~`\\.\VBoxMiniRdrDN`~~ pseudo-device, to discover whether it is running in
+
+VirtualBox. This is illustrated in Figure 5d.
+Figure 5 // Attor employs several techniques to detect specific virtual environments
+Furthermore, Attor uses other techniques to avoid detection:
+   - Network communication plugins are injected into applications such as web browsers or IM
+
+applications, in order to blend in with legitimate network traffic.
+   - To prevent suspicion, whenever Attor manipulates a file or a registry key, it then restores the original
+
+values of their last access time.
+   - All files created by Attor have the hidden, system and archive attributes set in order to be hidden from
+
+Windows Explorer by default.
+9 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+4.1.3 Interface for plugins
+Attor’s plugins use functions implemented by the main module, which makes them harder to detect and
+analyze, because they call functions of the dispatcher instead of Windows API functions.
+The functions are called using the function dispatcher, which takes as its arguments the function type
+and its numerical identifier. Figure 6 illustrates a part of one plugin, calling the function dispatcher on
+several occasions. In the disassembly on the right, we replaced the numeric identifiers with descriptive
+names, that we recovered by reverse-engineering the dispatcher.
+A reference to the function dispatcher is passed to the plugin on load. Since the plugins are loaded into
+the same process as the dispatcher, they share the same address space, and thus the plugins can call the
+functions of the dispatcher DLL directly. This design makes it harder to analyze individual components of
+Attor without access to the dispatcher, which translates the specified identifier to a meaningful function
+that is then executed.
+Figure 6 // Additional plugins use functions implemented in the main module,
+by calling the function dispatcher (dubbed helperFnc here)
+10 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+According to our analysis, the dispatcher implements three to four dozen functions, depending on the
+dispatcher version (new functions are included in the newer samples). Table 1 lists functions recovered
+across all samples examined.
+Table 1 // The interface provided by the dispatcher DLLs
+Function type Function ID Functionality
+1 NtCreateFile wrapper
+2 NtClose wrapper
+3 SetFilePointer wrapper
+4 NtFlushBuffersFile wrapper
+5 Change file attributes
+6 NtReadFile wrapper
+7 NtWriteFile wrapper
+1 (resource
+manipulation
+functions)
+2 (cryptographic
+primitives)
+8 Create and close a file
+9 Create a session event
+10 Create a mutex
+11 Find first file
+12 Find next file
+13 Release all resources used by an unowned critical section object
+14 Delete a file
+15 NtOpenEvent wrapper
+1 Free a memory block
+2 Free a memory block and overwrite it with null bytes
+3 Generate a new Blowfish key and initialize the encryption routine
+4 Overwrite the Blowfish key with null bytes
+5 Encrypt the Blowfish key with RSA
+6 Encrypt/decrypt data with a previously initialized Blowfish key, in OFB mode
+Hybrid decryption – decrypt the RSA-encrypted Blowfish key and then decrypt
+7 the Blowfish-encrypted data
+8 Generate an RSA key
+9 Hash data (SHA-1 or MD5)
+10 Hash data – init part (SHA-1 or MD5)
+11 Overwrite a memory block with null bytes
+12 Hash data – update part (SHA-1 or MD5)
+13 Hash data – final part (SHA-1 or MD5)
+Hybrid encryption – generate a Blowfish key, encrypt it with RSA and then
+14 encrypt the data with Blowfish in OFB mode
+11 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+Function type Function ID Functionality
+1 Get path to the Upload folder (from the config)
+2 Get path to the Update folder (from the config)
+3 Get path to the Plugin folder (from the config)
+4 Get path to the Resource folder (from the config)
+5 Get 16 hardcoded bytes
+6 Get attributes of ntdll.dll file (to be used for forging file timestamps)
+3 (retrieving
+configuration
+data and global
+variables)
+4.2 Shared resources
+7 Change file timestamps to those of ntdll.dll file
+8 Check if there is enough space on disk
+9 Get FTP directory name (from the config)
+10 Get user ID (from the config)
+11 Get structure with global variables and configuration data
+12 Get user security descriptor
+13 Get the specified config field
+14 Resolve import
+Instrumental for synchronization between the main module and plugins is a set of four central folders,
+where various resources are stored.
+The precise locations are hardcoded in Attor’s configuration; most often we have seen the patterns in
+Table 2 used for naming these folders ( x represents a variable lower-case letter).
+Table 2 // Naming convention for the folders
+Folder type Naming pattern
+Plugin folder %ALLUSERSPROFILE%\Oracle\Java\.NET35\s xx
+Update folder %ALLUSERSPROFILE%\Oracle\Java\.NET35\v xx
+Resource folder %ALLUSERSPROFILE%\Oracle\Java\.NET35\k xx
+Upload folder %ALLUSERSPROFILE%\Oracle\Java\.NET35\d xx
+4.2.1 Plugin folder, Update folder
+All plugins are permanently stored – compressed and encrypted – in the Plugin folder. The dispatcher
+loads plugins from this folder on each execution.
+The Update folder serves as a temporary store for additional files the attacker wants to execute on the
+compromised machine. The files get pushed to this folder via the Command dispatcher plugin; once the
+dispatcher recognizes a DLL in the Update folder, it loads it automatically, and deletes it afterwards.
+According to the artifacts in the dispatcher, the thread responsible for this functionality is called
+~~Update_th~~ ; thus, we believe this mechanism most likely is used for updating Attor’s components.
+12 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+4.2.2 Upload folder
+The Upload folder is used, by the plugins tasked with collection, as a central folder to store collected
+data, and by other plugins to store log files.
+The File uploader plugin automatically uploads these files to the C&C server. Each file contains control
+data including plugin ID, file creation timestamp and a control flag ~~3ff3~~ and is encrypted using
+Blowfish-OFB combined with RSA. The hidden, system and archive attributes of the log files are set; the
+last access time is faked.
+Figure 7 // Hybrid encryption scheme used by Attor
+Additionally, index files are used to keep track of log files – they store the number of log files of a certain
+group, and the counter values are then used to name the log files.
+Plugins usually store data in subdirectories of the Upload folder named by the plugin ID.
+Filenames are derived from user names, collected data (such as clipboard contents or device
+information), timestamp or counter value, and are mostly hexadecimal values.
+13 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+Table 3 // The properties of the files in the Upload folder
+Filename pattern Plugin ID File content
+1.<device-hash>\nm\index.dat 1 Index file for storage device metadata
+Storage device information (bus type, device type, total disk
+1.<device-hash>\<counter><data-hash> 1
+size, TrueCrypt version. . )
+Information about documents stored on the device (name,
+1.<device-hash>\<counter><data-hash><data-hash> 1 size, creation & last modified time)
+1.<com-device-hash>\nm\index.dat 1 Index file for COM device metadata
+COM device information (information about the phone/
+1.<com-device-hash>\<counter><data-hash> 1
+modem, information about the subscriber)
+2.<user-name-hash>\nm\index.dat 2 Index file for screenshots
+2.<user-name-hash>\<counter><data-hash> 2 Screenshot file
+7\nm\info 7 Hash of last-stored clipboard data
+7\nm\index.dat 7 Index file for keylog/clipboard files
+7\<counter><data-hash> 7 Keylog/clipboard data
+nm\0_skp_<user-name>\index.dat 3 Index file for audio recordings
+0_skp_<variable-data> 3 Audio recording file
+Note: We only analyzed the older version of the plugin with ID 0x03. The file paths may be slightly different in the
+newer version, i.e., the one with the modern architecture.
+4.2.3 Resource folder
+This folder is used by all plugins to store miscellaneous resources that are not to be exfiltrated to the
+C&C server, such as scripts, timestamps or temporary files.
+4.3 Plugins
+Attor’s architecture allows customization for individual targets, where the functionality of the platform
+relies heavily on plugins deployed on the compromised machine.
+The plugins are implemented as DLLs, loaded by the dispatcher. They are stored on the disk in a
+compressed and encrypted form, with the valid form of the DLL only being recovered in memory, when
+the dispatcher loads the plugin. This probably is an attempt to thwart detection, as the plugin DLLs are
+never present unencrypted on disk.
+All plugins export the same set of functions: ~~DllCanUnloadNow~~, ~~DllGetClassObject~~,
+~~DllRegisterServer~~, ~~DllUnregisterServer~~, ~~DllEntryPoint~~ . When the dispatcher loads a plugin
+( ~~DllEntryPoint~~ ), a start event is created, and several threads with the payload are started, which all
+wait until the event is signaled.
+14 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+Figure 8 // DllGetClassObject export of a plugin that is responsible for initialization and starting the actual payload
+The plugins are activated by the main DLL calling the ~~DllGetClassObject~~ export (see Figure 8) with
+the following actions happening:
+   - The main DLL passes a reference to the helper function of the dispatcher, which the plugin will use for
+
+retrieving configuration data, for file manipulation, for encryption/decryption…
+   - The start event is signaled, which activates the threads
+
+
+   - The plugin returns the plugin ID and version, so that the main DLL can keep track of the active
+
+modules
+The version information of plugins recovered in the course of our investigation, along with the plugins’
+functionality, is listed in Table 4.
+15 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+Table 4 // The analyzed plugins and their versions
+Plugin ID Analyzed versions Functionality
+0x01 0x0E Device monitor
+0x02 (no version), 0x0C Screengrabber
+0x03 (no version), 0x08, 0x09, 0x0B, 0x0C Audio recorder
+0x05 0x0A File uploader
+0x06 0x0A Command dispatcher/SOCKS proxy
+0x07 0x02, 0x04, 0x09, 0x0A Key/clipboard logger
+0x0D 0x03 Tor client
+0x10 0x01 Installer/watchdog
+Note that if the numbering is continuous (which it might be, since 0x10 is the last we have seen and is
+only version 1, while e.g., 0x03 is now on version 0x0C), there may be additional plugins available that
+we haven’t seen.
+We only can guess what functionality those plugins unknown to us might have. If we are to speculate,
+we feel that missing is a remote shell functionality, and also functionality to exfiltrate specific files
+silently; there may also be more victim-specific plugins available.
+4.3.1 Device monitor (ID 0x01)
+The most curious plugin in Attor’s arsenal collects information about connected modem/phone devices
+and connected storage drives, and about files present on these drives. It is responsible for collection of
+metadata, not the files themselves, so we consider it a plugin used for device fingerprinting, used as a
+base for further data theft.
+The Device monitor plugin creates a new window and uses ~~SHChangeNotifyRegister~~ API to register
+Shell-level notifications for that window on storage media insertion/removal, with a custom window
+message 0x421. The window procedure handles these events, and WM_DEVICECHANGE message, and
+collects a specific set of information for either a modem or a phone device, or an external storage drive.
+
+External storage drive
+
+In case a hard disk device is inserted, Device monitor collects the following information:
+   - Bus type, device type, device type modifier, vendor ID, product ID, product revision string, serial
+
+number, device interfaces
+   - Free space on disk, total disk size, filesystem used
+
+
+   - If applicable, also TrueCrypt version
+
+The TrueCrypt version is determined by sending IOCTLs to the TrueCrypt driver (0x222004
+( TC_IOCTL_GET_DRIVER_VERSION ) and 0x72018 ( TC_IOCTL_LEGACY_GET_DRIVER_VERSION )). As
+these are TrueCrypt-specific control codes, not standard codes, the authors of the malware must have
+been familiar with the code of the TrueCrypt driver, or TrueCrypt installer. This technique is very rare.
+16 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+Figure 9 // Device monitor plugin sends non-standard, TrueCrypt-specific control codes to the TrueCrypt driver,
+in order to determine the TrueCrypt version
+Further, it scans these hard disk devices for specific files and collects information about these files. It
+collects metadata such as filename, file size, creation and last-modified time of documents having the
+target extensions: .xls, .xlsx, .xlsm, .doc, .docx, .docm, .ppt, and .pptx.
+The information gathered by this plugin is stored in separate log files in the Upload folder, in order to be
+exfiltrated by another plugin.
+
+GSM/GPRS modem/phone device
+
+The more unusual functionality of this plugin is the ability to fingerprint GSM devices. Whenever
+a modem or a phone device is connected to the COM port, Device monitor uses AT commands to
+communicate with the device, via the associated serial port.
+AT commands, also known as Hayes command set, were originally developed in the 1980s to command
+a modem to dial, hang up or change connection settings. The command set was subsequently extended
+to support additional functionality, both standardized and vendor-specific.
+17 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+In a recent paper, it was discovered that the commands are still in use in most modern smartphones. The
+researchers were able to bypass security mechanisms and communicate with the smartphones using AT
+commands through their USB interface. Thousands of commands were recovered and tested, including
+those to send SMS messages, push touch events, or leak sensitive information.
+This research illustrates that the old-school AT commands pose a serious risk when misused.
+As for Attor’s plugin, however, we may only speculate why AT commands are employed. We have
+detected a 64-bit version of this plugin in 2019, and we can confirm it is still a part of the modernized
+Attor platform (that we first saw in 2018). On the other hand, it seems unlikely it is targeting modern
+smartphone devices. The plugin ignores devices connected via a USB port, and only contacts those
+connected via a serial port (more precisely, devices with “COM*” in the friendly name).
+A more likely explanation of the plugin’s main motive is that it targets modems and older phones.
+Alternatively, it may be used to communicate with some specific devices (used by the victim or target
+organization) that are connected to the COM port or to the USB port using a USB-to-serial adaptor. In
+this scenario, it is possible the attackers have learned about the victim’s use of these devices using some
+other reconnaissance techniques.
+In any case, the plugin retrieves the following information from the connected devices, using the AT
+commands listed in Table 5:
+   - Basic information about the mobile phone or GSM/GPRS modem: name of manufacturer, model
+
+number, IMEI number and software version
+   - Basic information about the subscriber: MSISDN and IMSI number
+
+Table 5 // The commands of the AT protocol used by the Device monitor plugin
+AT command Functionality
+AT Signals start of communication (AT for attention).
+AT+MODE=2 Prepares the phone for an extended AT+ command set.
+AT+CGSN Requests IMEI number (International Mobile Equipment Identity), which is a unique number to identify a device.
+AT+CGMM Requests information about the model of the device (model number).
+AT+CGMI Requests name of the device manufacturer.
+AT+CGMR Requests the version of the software loaded on the device.
+Requests MSISDN (Mobile Station International Subscriber Directory Number), which is the mapping of the telephone
+AT+CNUM
+number to the subscriber identity module in a mobile or cellular phone.
+AT+CIMI
+Requests IMSI (International Mobile Subscriber Identity), which is a unique number identifying a GSM subscriber. This
+number has two parts. The initial part is comprised of six digits in the North American standard and five digits in the
+European standard. It identifies the GSM network operator in a specific country with whom the subscriber holds an
+account. The second part is allocated by the network operator to uniquely identify the subscriber.
+Note that many more (vendor-specific) AT commands exist that are not used by this plugin. It is possible
+that malware operators use the listed commands to fingerprint the connected devices, and then deploy
+another plugin with more-specific commands to extract information from the device.
+18 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+4.3.2 Screengrabber (ID 0x02)
+This plugin captures screenshots of targeted applications and stores them encrypted in the Upload
+folder. It is only activated in applications of the attackers’ choice, determined by the process name.
+After activation, the Screengrabber monitors the application’s foreground window and if it is a web
+browser with a specific window title, or if it is another from the list of target applications, captures a
+screenshot every 10 seconds. For example, the plugin takes a screenshot if the victim is using an email
+client or has opened an email attachment.
+Targeted are mostly web browsers, including all major (Firefox, Opera, Chrome, Safari, Internet Explorer)
+and a few less popular (Maxthon, Avant, SeaMonkey) ones. By checking the window title of the web
+browser, the malware can determine whether the user is visiting a website of interest.
+We have encountered process names and window titles referring to these services:
+   - Social networks and blogging platforms (Facebook, Twitter, Google+, Blogger, Livejournal)
+
+
+   - Email services (Gmail, AOL Mail, Hotmail, Hotbox, Webmail, Yahoo! Mail)
+
+   - Office software (MS Word, Powerpoint, Excel, Visio, Notepad, Notepad++, Wordpad)
+
+
+   - Archiving utilities (WinRAR, WinZip, Hamster)
+
+   - Cloud storage and file sharing services (Turbobit, Skydrive, RapidShare)
+
+
+   - Messaging, VoIP applications and web-based messaging services (Skype, Viber, Miranda, Pidgin, QIP,
+
+qutIM)
+Apart from these widely used applications, the list contains a number of irregularities, which can give us
+more insight about the intended victims.
+For example, having TrueCrypt on the list suggests that the attackers are specifically interested in
+privacy-conscious users. Also targeted are encryption/digital signature utilities, a VPN application (HMA
+VPN), secure mail clients (The Bat! and HushMail) and a secure web browser (Dragon).
+Furthermore, the applications on the list show the attackers are targeting Russian-speaking users –
+which is also confirmed by the geographical distribution of Attor, as explained in Section 2. The strings
+from the list of services targeted by the Screengrabber, that support this claim, are documented
+in Table 6.
+Table 6 // Artifacts from Attor’s Screengrabber associated with Russian applications
+Process name/window title substring Context
+ОДНОКЛАССНИКИ (transl. Classmates) Russian social network ( Odnoklassniki )
+AGENTVKONTAKTE Russian social network ( VKontakte )
+WEBMONEY Online payment system used in Russia ( WebMoney )
+MAIL.YANDEX, ЯНДЕКС.ПОЧТА (transl. Yandex.Mail),
+Russian email services ( Mail.ru, Yandex.Mail )
+MAIL.RU, POCHTA (transl. Mail), MAGENT
+ПРИГЛАШЕНИЕ ДРУЖИТЬ (transl. Friend request) Russian text
+ВАМ СООБЩЕНИЕ (transl. Message for you) Russian text
+MULTIFON Russian VoIP service
+QIP, INFIUM Russian IM application ( QIP )
+RAMBLER Russian search engine ( Rambler )
+19 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+Interestingly, the list of targeted applications contains some services that are now defunct or less
+popular than 10 years ago, which may suggest that the Attor platform is much older than we think.
+4.3.3 Audio recorder (ID 0x03)
+This plugin creates audio recordings using available microphones and stores them encrypted in the
+Upload folder.
+The plugin is only activated if executed within a process of a teleconferencing application, which is
+determined by comparing the process name against a hardcoded list that includes Skype, Facebook
+Video Calling, Brosix or Cheap VoIP.
+This may indicate the attackers are interested in eavesdropping on online calls.
+With this mechanism, the attackers can also record the victim’s conversations outside of
+teleconferencing apps. In this case, running in a process of a teleconferencing application can be an
+attempt to stay undetected, as the user is less likely to become suspicious that these applications access
+the microphone device.
+4.3.4 File uploader (ID 0x05)
+The File uploader plugin is responsible for exfiltration of collected data and log files to the C&C server.
+The files are uploaded to the C&C server automatically, in batches. Files are uploaded in FTP passive
+mode, as binary content, and are deleted from the Upload folder after the exfiltration.
+The C&C server and credentials are hardcoded in the configuration data; these credentials were used in
+all the collected plugins:
+   - C&C server: “idayqh3zhj5j243t[.]onion”
+
+
+   - username: “do”
+
+
+   - password: [Redacted]
+
+The plugin logs in to the FTP server and copies the contents of the upload directory to a directory on the
+FTP server hardcoded in the config, creating a subdirectory there, with the victim ID as its name.
+In order to reach out to the C&C server in the Tor network, the File uploader plugin uses other
+plugins (0x0D and 0x06) that provide the Tor and SOCKS proxy functionality (see Figure 4. Network
+communication.)
+The File uploader plugin is only activated if running within the process of a web browser or an instant
+messaging application or other network applications (this is determined by checking the process name
+against a hardcoded list). This trick hides the exfiltration-related network communication in a stream of
+legitimate communication made by that application, and thus reduces the risk of raising any suspicion.
+4.3.5 Command dispatcher/SOCKS proxy (ID 0x06)
+This plugin serves two purposes.
+First, it serves as a SOCKS proxy, used by the Tor client plugin (ID 0x0D) to communicate with the
+remote computer.
+Second, it downloads commands from the C&C server and interprets them.
+Just as with other plugins involved in C&C communication, Command dispatcher also hides its network
+communication using the trick described in Section 4.3.4.
+The Command dispatcher plugin communicates with the C&C server via the FTP protocol using the
+0x0D plugin (with Tor); the credentials are the same as those used by the File uploader plugin for
+exfiltration.
+20 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+After the communication is established, Command dispatcher downloads a file called ~~WAND.bin~~ from
+the server, decrypts it (RSA + Blowfish) and parses the commands using the ~~CommandLineToArgW~~ API
+function.
+The plugin supports four commands, as listed in Table 7.
+Table 7 // Commands supported by Attor’s Command dispatcher plugin
+Command name Functionality
+SET Set the value of an internal variable
+MOVE Rename a local file
+DELETE Delete a local file
+COPY Download a file from the FTP server to the specified location
+Of interest is the COPY command serves as a mechanism for the malware to download additional
+resources, namely:
+   - New plugins that will be stored in the Plugin folder and loaded by the main module on its next
+
+execution
+   - Updates that will be stored in the Updates folder and immediately loaded and then deleted by the
+
+dispatcher
+   - Miscellaneous files that will be stored in the Resource folder
+
+
+   - New versions of the dispatcher, either 32-bit or 64-bit
+
+Command dispatcher stores encrypted log data containing status/results of the executed commands in
+the Upload folder, and timestamp of the last time the C&C server was contacted, in the Resource folder.
+4.3.6 Key/clipboard logger (ID 0x07)
+This plugin steals clipboard data, and collects keystrokes pressed within the process in which the DLL is
+injected.
+Due to the fact the dispatcher injects itself into all running processes, and then loads additional plugins,
+this logger’s DLL will be loaded into all processes as well.
+This plugin scans the content of the clipboard and whenever a change is detected, it stores the data in a
+log file. It is only concerned with user GUI desktop (“WinSta0”) and UNICODE format clipboard data (i.e.,
+not files, objects etc.).
+For keylogging, this plugin installs a hook function to the window of the current process that has the
+keyboard focus. To avoid detection, it uses a less common technique : instead of hooking WH_KEYBOARD or
+WH_KEYBOARD_LL, it hooks WH_GETMESSAGE . Whenever the window receives WM_CHAR or WM_KEYDOWN
+message, the plugin translates the pressed keystrokes into text.
+The collected clipboard and keyboard data are stored in encrypted files in the Upload folder.
+4.3.7 Tor client (ID 0x0D)
+This plugin is based on the Tor client, customized to the design of this malware ( ~~tor.exe~~ with added
+interaction with Attor’s dispatcher).
+It is responsible for computations, such as choosing a random circuit and providing multilayer
+encryption, and for establishing the communication with the Tor network by resolving the onion
+hostname.
+21 AT commands, TOR-based communications: Meet Attor, a fantasy creature and also a spy platform TLP: WHITE
+For the actual network communication, it utilizes the SOCKS proxy implemented by plugin 0x06.
+The attackers use Tor for C&C communication and exfiltration for anonymity and untraceability. Also,
+the Tor client plugin hides its network communication using the trick described in Section 4.3.4.
+4.3.8 Installer/watchdog (ID 0x10)
+This plugin establishes and monitors persistence of the main module.
+It schedules a task that loads the main module with each system start or each user logon (depending on
+the process privileges). It then continues to monitor whether the task is still scheduled; if not, the plugin
+will reschedule it.
+To run with necessary privileges, the Installer/watchdog plugin is only activated if injected into one of
+the following processes:
+   - ~~`%system%\*`~~
+
+
+   - ~~`%windir%\explorer.exe`~~
+
+
+   - ~~`%windir%\regedit.exe`~~
+
+To make the task scheduling functionality stealthier, it doesn’t utilize API calls; instead, it is implemented
+using the ~~ITaskScheduler~~ COM interface, registered using XML specification.
+Output : 
+### Overview of Attor Malware Plugins and Functionality
+
+**Attor** is a sophisticated malware platform that utilizes multiple plugins to perform various malicious activities, including data exfiltration, command execution, keylogging, and more. The malware leverages the Tor network for communication with its Command & Control (C&C) server to ensure anonymity and untraceability. Below is a detailed breakdown of each plugin and its functionality:
+
+### 1. **Dispatcher**
+- **Function**: Manages the loading and coordination of other plugins.
+- **Mechanism**: The dispatcher injects itself into all running processes and then loads additional plugins as needed.
+
+### 2. **Device Injection Plugin (0x01)**
+- **Function**: Injects the main module into various system processes.
+- **Mechanism**: Uses a combination of techniques to ensure persistence and stealth, such as injecting into explorer.exe or other trusted processes.
+
+### 3. **Device Driver Plugin (0x02)**
+- **Function**: Installs a device driver to gain deeper system access.
+- **Mechanism**: Registers a driver that can perform low-level operations, often used for rootkit functionality.
+
+### 4. **Device Injector Plugin (0x03)**
+- **Function**: Injects the main module into specific processes.
+- **Mechanism**: Uses process injection techniques to load the malware into targeted applications.
+
+### 5. **Key/Clipboard Logger (ID 0x07)**
+- **Function**: Steals clipboard data and collects keystrokes.
+- **Mechanism**:
+  - **Clipboard Logging**: Monitors changes in the clipboard and logs Unicode format data.
+  - **Keylogging**: Installs a hook function to capture key presses. Uses WH_GETMESSAGE instead of WH_KEYBOARD or WH_KEYBOARD_LL for stealth.
+
+### 6. **Audio Recorder (ID 0x03)**
+- **Function**: Captures audio using available microphones.
+- **Mechanism**:
+  - Activates only within teleconferencing applications (e.g., Skype, Facebook Video Calling).
+  - Can also record outside of these apps by masquerading as a legitimate application.
+
+### 7. **File Uploader (ID 0x05)**
+- **Function**: Exfiltrates collected data and log files to the C&C server.
+- **Mechanism**:
+  - Uses FTP passive mode to upload files in binary format.
+  - Deletes files from the Upload folder after exfiltration.
+  - Communicates with the C&C server using hardcoded credentials.
+
+### 8. **Command Dispatcher/SOCKS Proxy (ID 0x06)**
+- **Function**: Serves as a SOCKS proxy and downloads commands from the C&C server.
+- **Mechanism**:
+  - Communicates via FTP using Tor for anonymity.
+  - Supports commands: SET, MOVE, DELETE, COPY.
+  - Hides network communication by injecting into legitimate processes (e.g., web browsers, messaging apps).
+
+### 9. **Device Injector Plugin (0x04)**
+- **Function**: Injects the main module into specific processes.
+- **Mechanism**: Uses process injection techniques to load the malware into targeted applications.
+
+### 10. **Tor Client (ID 0x0D)**
+- **Function**: Establishes and maintains communication with the Tor network.
+- **Mechanism**:
+  - Customized version of tor.exe integrated with Attor's dispatcher.
+  - Handles multilayer encryption and random circuit selection for anonymity.
+
+### 11. **Installer/Watchdog (ID 0x10)**
+- **Function**: Ensures persistence of the main module.
+- **Mechanism**:
+  - Schedules a task to load the main module on system start or user logon.
+  - Monitors and reschedules the task if it is removed.
+  - Uses ITaskScheduler COM interface for stealth.
+
+### Additional Notes
+- **C&C Server**: The C&C server is hosted on the Tor network at "idayqh3zhj5j243t[.]onion" with hardcoded credentials.
+- **Targeted Applications**: The malware targets a variety of applications, including social networks, email services, office software, and Russian-specific services, suggesting a focus on Russian-speaking users.
+- **Anonymity**: The use of Tor for communication ensures that the C&C server and exfiltration activities are difficult to trace.
+
+### Conclusion
+Attor is a highly modular and sophisticated malware platform designed to maintain persistence, steal sensitive data, and communicate with its C&C server while ensuring anonymity. The combination of plugins, process injection, and Tor integration makes it a significant threat to targeted systems.

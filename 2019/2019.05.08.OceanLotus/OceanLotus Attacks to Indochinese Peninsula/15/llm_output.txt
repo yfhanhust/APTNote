@@ -1,0 +1,95 @@
+
+
+
+Sentence : Template Injection Documents
+The template injection class document of OceanLotus has universality, after the
+document starts, it will load XXX.XXX/XXX. PNG
+And do the following.
+To give an example of one of these attacks, fdsw.png is an office compound document:
+(d497bd06b34a046841bb63d3bf20e605)
+If SysWOW64\cmd.exe file exists, the system is either 32-bit or 64-bit.
+Depending on the system, the file is taken out of the cell, base64 decoded, and dropped
+to: %appdata% main_background-png:
+The hijacked csids are "{2dea658f-54c1-4227-af9b-260ab5fc3543}".
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 22/69
+5/9/2019 奇安信威胁情报中心
+According to this CSID, it is the CSID of the DLL that is hijacked:
+%SystemRoot%\System32\ playsndsrv.dll
+This DLL is used to play sound.
+The extraction content of base64 content in the cell is as follows:
+Base64 decodes one of the 32-bit PE, Dllmain will apply 0x34aca byte memory space,
+and then write the shellcode at 0x10012760 into memory, and execute it through the
+thread:
+Shellcode goes to the pointer at offset 0xfc8 when the parameter is passed to the
+function of sub_160018:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 23/69
+5/9/2019 奇安信威胁情报中心
+The address offset 0xfc8 holds the command line argument and a PE:
+The function of sub_160018 is mainly to load the following PE in memory, and then pass
+the command line to execute according to the command line parameters. The figure
+below is the code of receiving the command line parameters for the PE:
+Request the URL, the downloaded data, after DES decryption, in memory load up.
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 24/69
+5/9/2019 奇安信威胁情报中心
+Find more samples through association analysis:
+Sort by compile time as follows:
+According to the table comparison, the command line of the first sample is different from
+other samples. It can be known that it should be the sample of different attacks. This
+sample is the annotated version, which will load shellcode in memory in the same way.
+The PE included in the file is found in a hacker's toolkit. The file name is CMD [w7][x64].
+The function of this sample is to execute the McOds. Exe (this is the exe file name of the
+white utility program used by OceanLotus) through the CMD [w7][x64]. Exe contained in
+the file, while the McOds. Exe should be the file released by the dropper before.
+The upload place of this sample is VN, the upload time is July 31, and the file name is
+msvchr.exe, we can know that this sample should be aimed at Vietnam attack:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 25/69
+5/9/2019 奇安信威胁情报中心
+Through the analysis and comparison of these samples, we can know that these
+samples should be used to specifically execute exe file in memory, and pass command
+line parameters of the Loader program, is the last six months to use the new malicious
+code framework, specifically used to develop against static kill.
+It is found that two samples are 10M, and the end is filled with 0x20 (space), which is
+filled into a large file to avoid being uploaded:
+And the way shellcode is loaded for these samples is a little different:
+
+Most samples are executed shellcode by creating threads
+
+2, compile the earliest version of the sample, in the form of services, with comments, in
+serviceMain create thread execution shellcode
+
+A small part of samples execute shellcode directly on the main thread
+
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 26/69
+5/9/2019 奇安信威胁情报中心
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "OceanLotus", "type" : "ACTO"},
+        {"id": 2, "description": "XXX.XXX/XXX.PNG", "type" : "URLS"},
+        {"id": 3, "description": "fdsw.png", "type" : "DOCF"},
+        {"id": 4, "description": "d497bd06b34a046841bb63d3bf20e605", "type" : "IOCS"},
+        {"id": 5, "description": "%appdata% main_background-png", "type" : "SYSP"},
+        {"id": 6, "description": "{2dea658f-54c1-4227-af9b-260ab5fc3543}", "type" : "TAMP"},
+        {"id": 7, "description": "%SystemRoot%\\System32\\playsndsrv.dll", "type" : "EXEF"},
+        {"id": 8, "description": "0x34aca byte memory space", "type" : "TAMP"},
+        {"id": 9, "description": "0x10012760", "type" : "TAMP"},
+        {"id": 10, "description": "sub_160018 function", "type" : "EXEF"},
+        {"id": 11, "description": "command line parameters", "type" : "TAMP"},
+        {"id": 12, "description": "request URL", "type" : "URLS"},
+        {"id": 13, "description": "DES decryption", "type" : "TAMP"},
+        {"id": 14, "description": "CMD [w7][x64].Exe", "type" : "EXEF"},
+        {"id": 15, "description": "McOds.Exe", "type" : "EXEF"},
+        {"id": 16, "description": "msvchr.exe", "type" : "EXEF"},
+        {"id": 17, "description": "Vietnam", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "has_hash"},
+        {"source": 3, "target": 5, "rel_name" : "decoded_to"},
+        {"source": 6, "target": 7, "rel_name" : "hijacked_DLL"},
+        {"source": 10, "relates_to": 8, "rel_name" : "applies_memory_space"},
+        {"source": 10, "relates_to": 9, "rel_name" : "writes_shellcode_into"},
+        {"source": 12, "target": 13, "rel_name" : "requests_and_decrypts"},
+        {"source": 14, "executes": 15, "rel_name" : "loads_and_executes"},
+        {"source": 16, "uploaded_to": 17, "rel_name" : "targeted_attack"}
+    ]
+}

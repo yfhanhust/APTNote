@@ -1,0 +1,79 @@
+
+
+
+Sentence : 4.2 DebugParser (launcher)
+The launcher, named ~~DebugParser.dll~~ internally, is called when the hijacked COM object
+is loaded. It is responsible for launching the main backdoor and for loading the hijacked COM object.
+The simplified pseudo-code of this component is provided in Figure 10.
+if (GetModuleFileNameW != “explorer.exe”) {
+CreateMutexW(“slma”)
+CreateProcess(“rundll32 (from HKCU\Software\Microsoft\Windows\
+OneDriveUpdate @=) StartRoutine”)
+}
+~~//Load hijacked library~~
+LoadLibraryW (from HKCU\Software\Microsoft\Windows\OneDriveUpdate
+“explorer.exe”=)
+Figure 10 Pseudocode of the launcher
+However, it uses some tricks to load the hijacked library and to return to the correct address.
+The process is described below:
+
+Retrieve the original return address after the legitimate call to ~~LoadLibrary~~ . At the beginning
+of ~~DllMain~~, it stores the value of the ESP register. Then it checks for ~~FF 15~~ (a CALL opcode)
+at ESP - 6. If it is present, the register holds the original return address.
+
+Figure 11 Search the address just after the LoadLibrary call
+
+
+Allocate RWX memory containing the following values:
+
+
+Jump to the hook function by modifying the return address of ~~DllMain~~ .
+
+
+16 24 48
+12
+0 4
+Pointer to HookLibrary Original return addr
+loader
+8
+Pointer to FreeLibrary 0xCC
+Hook
+function
+Figure 12 Allocated memory layout
+Hinst DLL
+15
+
+In the hook function:
+
+a. Call a function that is responsible for loading ~~ntshrui.dll~~ (or any other hijacked library)
+b. Call ~~FreeLibrary~~ on the ~~DebugParser.~~ dll (backdoor loader) handle
+c. Jump to the original return address before the hook.
+Because the original DLL is loaded, the user is unlikely to notice that the backdoor was launched
+at the same time.
+In the case of older variants, with the loader and backdoor functions in one file, the ~~DllMain~~ chooses
+which code to execute, as shown in Figure 13.
+Figure 13 Loader and Backdoor in the same library
+16
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DebugParser.dll", "type" : "EXEF"},
+        {"id": 2, "description": "explorer.exe", "type" : "EXEF"},
+        {"id": 3, "description": "rundll32", "type" : "EXEF"},
+        {"id": 4, "description": "HKCU\\Software\\Microsoft\\Windows\\OneDriveUpdate @=", "type" : "REGI"},
+        {"id": 5, "description": "slma", "type" : "TAMP"},
+        {"id": 6, "description": "LoadLibraryW", "type" : "EXEF"},
+        {"id": 7, "description": "DllMain", "type" : "EXEF"},
+        {"id": 8, "description": "ntshrui.dll", "type" : "EXEF"},
+        {"id": 9, "description": "FreeLibrary", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "hijacks"},
+        {"source": 3, "target": 4, "rel_name" : "reads_from"},
+        {"source": 1, "target": 5, "rel_name" : "creates_mutex"},
+        {"source": 3, "target": 1, "rel_name" : "launches"},
+        {"source": 6, "target": 4, "rel_name" : "reads_from"},
+        {"source": 7, "target": 8, "rel_name" : "loads"},
+        {"source": 9, "target": 1, "rel_name" : "frees"}
+    ]
+}

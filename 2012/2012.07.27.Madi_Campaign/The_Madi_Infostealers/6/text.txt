@@ -1,0 +1,141 @@
+Command and control: Protocol
+We are now going to cover all the timers responsible for contacting the C&C server and receiving
+commands to execute on the infected machine, and all the various handlers used to execute actions
+according to those orders.
+Note: In many routines, Madi creates ".bat" files in order to ping the C&C server to see if it is up or not and
+saves the result in a special file. Each file has a different name. If these files are referenced, we will provide
+the timer number responsible for its creation.
+The server manager looks like this:
+The GUI was probably rushed, but it serves its purpose. It can be used to create specific tasks for victims.
+See Timer 12 to see how each command is handled by the infostealer.
+Timer 1: Check-in
+Interval: 25 seconds
+Before receiving commands, the infostealer connects to the C&C to a special page. I call it the check-in
+routine. Here is the description:
+Timer 1 gets the ApplicationName and concatenates it with ".pkklm" (See Timer 15 description for details
+on how this file is created). It tries to open that file, looking for the "Reply From" string (when the IP
+responds to a ping). If it's not found, it disables Timer 1 and returns.
+If present, the last part of the BOTID is generated using the "C:" Volume Serial Number.
+Basically, the API function GetVolumeInformationW is called to get the Volume Serial Number, which is
+then concatenated to the BOTID_TMP generated in the TForm4.FormCreate. Now that the final BOTID
+has been generated, the final URL that is visited is generated as follows:
+BOTID|COMPUTERNAME|VolumeSerialNumber/dastor/file.htm e.g.: abaanu5|MYCOMPUTER
+8712422C|6D8704FE/dastor/file.htm
+The final URL is visited using Internet Explorer (IE) instrumentation. (e.g.:
+http://C&C/abaanu5MYCOMPUTER-8712422C6C7704EF/dastor/file.htm)
+Once visited, it enables Timer 18, disables Timer 1 and returns.
+This is the checking-in process, which can tell the attackers when a victim computer is ready to receive
+commands.
+Once the attackers have decided to send commands to the infected computer, a "das.htm" will be available
+in the "/dastor/" folder.
+Timer 16: Visit commands page
+Interval: 25 seconds
+Timer 1 gets the ApplicationName and concatenates it with ".pkxm" (ping results from Timer 11). It tries
+to open that file, looking for the "Reply From" string (when the IP responds to a ping).
+If it's not found, it disables Timer 16 and returns.
+The Final BOTID is computed (see Timer 1 description) to build the URL that is visited in order to receive
+commands. Before visiting that URL, the "dast.xls" file is deleted (see Timer 17 below).
+The URL is visited using IE instrumentation. Timer 17 is enabled, and Timer 16 disabled.
+Timer 17: Save the command page as "dast.xls"
+Interval: 20 seconds
+Note: During the execution of the Madi infostealer, many instances of IE are running.
+Timer 17 will go through all the different instances of instrumented IE, looking for pages with "dastor" in
+their title. Once found, the content of the page (without the title) is saved as "dast.xls".
+If nothing is found, it will go to next IE instance, and repeat the checks until no instances are left. If
+nothing is found, a clean-up routine is launched.
+At the end of the Timer 17, it looks for " - dastor - Windows Internet Explorer" and different variants
+(Internet Explorer) and sends a "WM_Close" Message using the "PostMessageW" function in order to
+close the page. Among all those captions, it also looks for " - 404 - File or directory not found" and variants
+of 404 pages, if the page wasn't found.
+Once the clean-up is completed, Timer 17 disables itself and returns. At this point, we have a local file with
+the commands to execute on the infected machine.
+Timer 12: Command dispatcher
+This timer is responsible for parsing the command file. In order to make the description a little easier to
+follow, here is a sample command file:
+When executed, Timer 12 is disabled.
+The infostealer Trojan then checks if the file "dast.xls" is present (created by Timer 17, see above).
+If it's not present, Timer 12 is re-enabled and returns.
+The next stage of the process opens "dast.xls" which searches for commands to execute (see the command
+file above). Lots of commands can be sent simultaneously, meaning Timer 12 will not stop parsing when
+one command is found. Here is the full logic of the parsing:
+PIK:
+If the command file contains the word "pik", it checks if the status of Timer 3 is enabled. (Timer 3 is a
+webmail, social network and IM screen capture routine.)
+If not enabled, Timer 3 is enabled, and screen monitoring begins. Command parsing continues. If the
+"pik" command is not found, Timer3 is disabled.
+DESK:
+If the command file contains the word "desk", it checks if the status of Timer 13 is enabled. (Timer 13 is a
+screen capture routine.)
+If not enabled, Timer 13 is enabled, and screen monitoring begins. Command parsing continues. If the
+"desk" command is not found, Timer13 is disabled.
+SOUND:
+If the command file contains the word "sound", it checks if the status of Timer 14 is enabled. (Timer 14 is a
+sound recording routine.)
+If not enabled, Timer 14 is enabled, and sound recording begins. Command parsing continues. If the
+"sound" command is not found, Timer14 is disabled.
+If the command file contains the word "newfi", nothing happens. This is probably a leftover from older
+code.
+UPDATE:
+If the command file contains the word "update", it checks to see if it also contains a version number, which
+must be different from current version ("1.1.6" in the analyzed sample). If neither of those two conditions
+are valid, it goes to the next command parsing. The checking routine is very simplistic and assumes that
+the version number will be higher, not lower. It is therefore possible to downgrade the Trojan.
+If the required update criteria are met, it will create "Update.dll". (Update.dll is made from a hardcoded
+stream of bytes and isn't a valid DLL.)
+The Trojan now locates the "STARTUP" folder where a copy of the "UpdateOffice.exe" (Trojan
+downloader) is found, and executes it using ShellExecute. (In the first part of the article, we explained how
+the downloader downloads and installs the infostealer.)
+The Trojan downloader is necessary in order for updates to occur. If the downloader has been deleted for
+some reason, the update won't be performed.
+Once executed, Timer 12 terminates its execution, as the infostealer executable (iexplore.exe) will be
+overwritten by the Trojan downloader with a newer version and executed.
+DELETE:
+If the command file contains the word "delete", it will create "delete.dll", using exactly the same stream of
+bytes that is used in "update.dll".
+The Trojan now locates the "STARTUP" folder where a copy of the "UpdateOffice.exe" downloader is
+located, and deletes it. Once deleted, it then proceeds to terminate itself.
+At this point, upon the next reboot, the infection isn't restarted.
+Note: The infostealer doesn't restart by itself, allowing an automatic update every time the computer
+reboots.
+On the other hand all the other downloader files (non-malicious) are still present in the /printhood/
+folder. The full folder of the infostealer is still present, as is the malware.
+BIND: If neither "update" nor "delete" are found, Timer 12 checks if the command file contains the word
+"bind" and creates "nrbindek.dll" using exactly the same stream of bytes that is used in "update.dll".
+Nothing else happens at this point. However, as we have seen in the Form creation, upon execution, the
+malware checks whether "nrbindek.dll" is present.
+If it is present, Timer 12 will enable Timer 28.
+If "bind" isn't found, the parsing continues with the next command.
+DISKGO: If the command file contains the word "diskgo", it will create "lbdiskgo.dll", using exactly the
+same stream of bytes that is used in "update.dll". Parsing continues with next command.
+Note: "lbdiskgo.dll" is checked by Timer 42 and Timer 43.
+DISKGET: If the command file contains the word "diskget", it will create "fskdiskget.dll", using exactly the
+same stream of bytes that is used in "update.dll" and enable Timer 23.
+Timer 12 then checks whether "specialfile.dll" is present. If NOT, it will look for the file extensions
+included in the command that was received. The attackers select from a list of 27 extensions that are
+provided by the C&C server, and which can be selected using a Remote Control Tool (see at the beginning
+of the Timer 12 description to view the extensions listed in the sample command file). Each file extension
+is separated by a special marker "$.$".
+Timer 12 searches for the "$.$" marker. If it's not present, the parsing stops there.
+If the marker is present, it saves those extensions to the "specialfile.dll" and enables Timer 26.
+Note: Specialfile.dll is therefore used to tell the malware what file extensions to look for and Timer 26 will
+handle diskget.
+Afterwards, or if specialfile.dll was already present, it will check whether the "logfi.dll" is present, and stop
+parsing commands if it is not.
+If the file is present, it looks in the command buffer for the word "file" and exits the commands parsing if
+not found.
+If logfil.dll is present, it will search files on fixed hard drives and remote drives. The authors' poor
+programming skills are quite noticeable in this part of the code.
+It is also interesting to note that it will search for "MHTML" files, even if that option isn't available in the
+Server Control tool, and that they made a duplicate entry in the hardcode list of files that need to be to
+located (htm is present twice).
+File types searched:
+.txt/.jpg/.doc/.pdf/.bmp/.docx/.mdb/.xls/.csv/.html/.avi/
+.mp3/.wave/.htm/.rar/.zip/.htm
+(again?!)/.gif/.7z/.jar/.JPEG/.mp4/.3gp/
+.dat/.MPEG/.SWF/.WMV/.xml/.MHTML/
+Total of 29 extensions, with one duplicate. 27 extensions are present in the Server Control tool and one
+that is not (MHTML).
+It saves the log file as "logfi.dll" for each hard drive and creates a backup as "logfi.dll.BMH". It will
+overwrite the logs for each iteration of the loop.
+It only search files on remote and fixed drives, not on USB/external drives; that's for the logging part.
+Once the Parsing is complete, Timer 12 re-enables itself and exits.

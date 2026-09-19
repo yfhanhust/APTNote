@@ -1,0 +1,40 @@
+En Route with Sednit
+
+The bootkit driver injects the bootkit user-mode component into the ~~explorer.exe~~
+process by patching its entry-point before it is executed. The user mode component then
+loads Downdelph and, interestingly, it tries to set an exported global Boolean variable named
+~~m_bLoadedByBootkit~~ in Downdelph to ~~TRUE~~ ~~,~~ as shown in Figure 12.
+
+Figure 12. User mode bootkit component attempts to set an exported Boolean variable
+in Downdelph, after having loaded it
+As this global variable is absent in all Downdelph binaries, we speculate that the bootkit was
+originally intended to be used with a different payload, and was repurposed by Sednit’s operators.
+Moreover, the user-mode component of the bootkit exports two functions named ~~Entry~~ and ~~ep_data~~ .
+Those two export names are also present in early samples of the infamous BlackEnergy malware [11] .
+Also, we found several cases of code sharing between the bootkit components and the same
+BlackEnergy samples. These hints lead us to speculate that the developers may be related.
+Kernel Mode Rootkit
+Another interesting Downdelph persistence method we analyzed relies on a Windows driver,
+used during deployments in February 2014. Once loaded at startup as a Windows service, this driver
+executes and hides Downdelph, effectively acting as a rootkit [22] . We were able to dig up only four
+samples of this rootkit: three 32-bit versions, corresponding to Cases 2, 3 and 4 in Figure 3,
+and an additional 64-bit version for which we do not have any context.
+Roughly summarized, the rootkit hides certain operating system artifacts (files, registry keys, folders)
+whose location matches a rule in a set of so-called ~~Hide rules~~ . Those rules are set by the dropper
+and stored in the Windows Registry, making the rootkit a flexible tool able to hide any given artifacts.
+Interestingly, numerous debug messages were left by the developers in the rootkit, which allow
+those ~~Hide rules~~ in particular to be clearly seen. For example, here are the rules used with
+one sample, as output in debug logs during execution:
+```
+   HIDEDRV: >>>>>>>>Hide rules>>>>>>>> rules
+HIDEDRV: File rules: \Device\HarddiskVolume1\Windows\system32\mypathcom\dnscli1.dll
+   HIDEDRV: File rules: \Device\HarddiskVolume1\Windows\system32\drivers\FsFlt.sys
+   HIDEDRV: Registry rules: \REGISTRY\MACHINE\SYSTEM\ControlSet002\services\FsFlt
+   HIDEDRV: Registry rules: \REGISTRY\MACHINE\SYSTEM\ControlSet001\services\FsFlt
+   HIDEDRV: Registry rules: \REGISTRY\MACHINE\SYSTEM\CurrentControlSet\services\FsFlt
+   HIDEDRV: Inject dll: C:\Windows\system32\mypathcom\dnscli1.dll
+   HIDEDRV: Folder rules: \Device\HarddiskVolume1\Windows\system32\mypathcom
+HIDEDRV: <<<<<<<<XXXXX<<<<<<<< rules
+HIDEDRV: <<<<<<<<Hide rules<<<<<<<< rules
+```
+20

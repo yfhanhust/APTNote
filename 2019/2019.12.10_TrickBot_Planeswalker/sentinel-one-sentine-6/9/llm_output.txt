@@ -1,0 +1,201 @@
+
+
+
+Sentence : MEMSCRAPER, THE FIN NEXUS
+The Memscraper payload is this group’s POS focused payload. It shares
+some similarities with Anchor bot in that they both can use OpenNIC
+resolvers with EmerDNS domains; they both have an ‘installer’
+component, and also share the code used to generate the random
+filenames for writing to disk is the same.
+Figure 26: Memscraper C2 domain on EmerDNS
+Figure 27: Memscraper and Anchor installer drop name
+generation comparison
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 2 1
+This POS malware is exactly what it sounds like as it is designed to scrape memory of processes
+looking for credit card data which will then be exfiltrated back to the C2 panel. It comes with
+an onboard whitelist of substrings that it will utilize when enumerating the process tree for the
+following processes:
+
+
+teller
+
+
+shop
+
+
+store
+
+
+retail
+
+
+macros
+
+
+pos
+
+
+processing
+
+
+proc
+
+
+kiosk
+
+
+opss
+
+
+directorr
+
+
+info
+
+
+reception
+
+
+kassa
+
+
+opos
+
+
+chef
+
+
+verifon
+
+
+infor
+
+
+Figure 28: Memscraper process tree enumeration
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 2 2
+As you can see in the above screenshot, a check has also been placed to blacklist Skype. After
+finding a good process, the memory will then be read using VirtualQueryEx and ReadProcessMemory
+before being enumerated for possible track data.
+Figure 29: Memscraper hunting for possible card data in memory
+After finding potential card data, the memory will be passed off to a function that will perform luhn
+checking to verify the card number before being POSTed up to the C2.
+Figure 30: Memscraper magnetic cards
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 2 3
+Figure 31: Memscraper building URL
+For HTTP based exfiltration, the data post matches exactly what you would see with a normal
+TrickBot module exfiltration of data, but the “source” is called “magnetic cards” in the POST. We
+can do a quick comparison with a picture from another researcher’s PCAP [6], which shows “os
+passwords” being POSTed up to a TrickBot C2.
+Figure 32: TrickBot module data post
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 2 4
+For Memscraper data, you would have the card track data in the “data” section and in “source”
+would be “magnetic cards” with “User-Agent: WinHTTP sender/1.0”
+--1b36dac2-17f9-440a-80f4-e2049e83484b
+Content-Disposition: form-data; name="data"
+
+--1b36dac2-17f9-440a-80f4-e2049e83484b
+Content-Disposition: form-data; name="source"
+magnetic cards
+--1b36dac2-17f9-440a-80f4-e2049e83484b-
+HTTP exfiltration, however, is not the only trick in Memscrapers book. Similar to the previously
+mentioned blog on Anchor having a DNS variant, it turns out Memscraper also has a DNS variant.
+The process enumeration and threads are all the same for the DNS variant with the obvious biggest
+difference being the DNS based exfiltration of data.
+The thread responsible for scraping memory builds the data into a report structure.
+Figure 33: Memscraper DNS report structure
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 2 5
+Before then retrieving a hardcoded filename to store the data in.
+Figure 34: Memscraper DNS variant hardcoded filename
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 2 6
+The data will be XOR-encoded using an onboard table before being written to the file.
+Figure 35: Memscraper DNS variant writing data to file
+This file is monitored by another thread in the process that will read in the data, XOR-decode it,
+and then process it to be shipped off. The domain that will be used is hardcoded:
+Figure 36: Memscraper DNS variant hardcoded domain name
+Then the subdomain is built using some hardcod characters, random bytes, a built-in UUID and the
+previous report data XOR-encoded with 0xAA.
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 2 7
+Figure 37: Memscraper DNS building domain for exfiltration
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 2 8
+Periods are added, and it confirms to proper specifications for the labels.
+Figure 38: Memscraper DNS variant creating proper length labels
+Then the request is made and the data is exfiltrated.
+Figure 39: Memscraper DNS variant sending off DNS request
+TRICKBOT PROJECT “ANCHOR:” WINDOW INTO SOPHISTICATED OPERATION 2 9
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Memscraper", "type" : "TTPS"},
+        {"id": 2, "description": "Anchor bot", "type" : "TTPS"},
+        {"id": 3, "description": "OpenNIC resolvers", "type" : "DNSS"},
+        {"id": 4, "description": "EmerDNS domains", "type" : "DNSS"},
+        {"id": 5, "description": "installer component", "type" : "EXEF"},
+        {"id": 6, "description": "C2 domain on EmerDNS", "type" : "CCSH"},
+        {"id": 7, "description": "teller process", "type" : "APPS"},
+        {"id": 8, "description": "shop process", "type" : "APPS"},
+        {"id": 9, "description": "store process", "type" : "APPS"},
+        {"id": 10, "description": "retail process", "type" : "APPS"},
+        {"id": 11, "description": "macros process", "type" : "APPS"},
+        {"id": 12, "description": "pos process", "type" : "APPS"},
+        {"id": 13, "description": "processing process", "type" : "APPS"},
+        {"id": 14, "description": "proc process", "type" : "APPS"},
+        {"id": 15, "description": "kiosk process", "type" : "APPS"},
+        {"id": 16, "description": "opss process", "type" : "APPS"},
+        {"id": 17, "description": "directorr process", "type" : "APPS"},
+        {"id": 18, "description": "info process", "type" : "APPS"},
+        {"id": 19, "description": "reception process", "type" : "APPS"},
+        {"id": 20, "description": "kassa process", "type" : "APPS"},
+        {"id": 21, "description": "opos process", "type" : "APPS"},
+        {"id": 22, "description": "chef process", "type" : "APPS"},
+        {"id": 23, "description": "verifon process", "type" : "APPS"},
+        {"id": 24, "description": "infor process", "type" : "APPS"},
+        {"id": 25, "description": "Skype", "type" : "APPS"},
+        {"id": 26, "description": "VirtualQueryEx", "type" : "TTPS"},
+        {"id": 27, "description": "ReadProcessMemory", "type" : "TTPS"},
+        {"id": 28, "description": "luhn checking function", "type" : "EXEF"},
+        {"id": 29, "description": "C2 panel", "type" : "CCSH"},
+        {"id": 30, "description": "magnetic cards source", "type" : "TTPS"},
+        {"id": 31, "description": "HTTP exfiltration", "type" : "NETP"},
+        {"id": 32, "description": "TrickBot module data post", "type" : "TTPS"},
+        {"id": 33, "description": "DNS variant of Memscraper", "type" : "TTPS"},
+        {"id": 34, "description": "hardcoded filename", "type" : "DOCF"},
+        {"id": 35, "description": "XOR-encoded data file", "type" : "DOCF"},
+        {"id": 36, "description": "DNS request for exfiltration", "type" : "NETP"},
+        {"id": 37, "description": "hardcoded domain name", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "shares similarities with"},
+        {"source": 1, "target": 4, "rel_name" : "uses"},
+        {"source": 1, "target": 5, "rel_name" : "has"},
+        {"source": 1, "target": 6, "rel_name" : "C2 domain on EmerDNS"},
+        {"source": 1, "target": 7, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 8, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 9, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 10, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 11, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 12, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 13, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 14, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 15, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 16, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 17, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 18, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 19, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 20, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 21, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 22, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 23, "rel_name" : "enumerates for"},
+        {"source": 1, "target": 24, "rel_name" : "uses to read memory"},
+        {"source": 1, "target": 25, "rel_name" : "uses to read memory"},
+        {"source": 1, "target": 26, "rel_name" : "uses for luhn checking"},
+        {"source": 1, "target": 27, "rel_name" : "exfiltrates data to"},
+        {"source": 1, "target": 30, "rel_name" : "uses as source name"},
+        {"source": 1, "target": 31, "rel_name" : "can use for exfiltration"},
+        {"source": 1, "target": 32, "rel_name" : "compares with"},
+        {"source": 1, "target": 33, "rel_name" : "has DNS variant of"},
+        {"source": 33, "target": 34, "rel_name" : "uses hardcoded filename for"},
+        {"source": 33, "target": 35, "rel_name" : "writes data to"},
+        {"source": 33, "target": 36, "rel_name" : "sends off DNS request for"},
+        {"source": 33, "target": 37, "rel_name" : "uses hardcoded domain name"}
+    ]
+}

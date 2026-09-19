@@ -1,0 +1,114 @@
+
+
+
+Sentence : cat ~/Desktop/Final_Presentation.app/Contents/Resources/date.txt
+2012201800380925
+https://objective-see.com/blog/blog_0x3B.html 9/13
+3/5/2019 Objective-See's Blog
+The tuffel method is rather involved (and we’ll expand upon in an update to this blog
+post). However, some of it’s main actions include:
+
+
+Moving the (malicious) application into the /Users/user/Library/ directory
+
+
+Executing this persisted copy, via the open command
+
+Decrypting embedded strings that relate to file extensions of (likely) interest
+
+We can observe step #2 (execution of the persisted copy) via my open-source process
+monitor library, ProcInfo:
+procInfo[915:9229] process start:
+pid: 917
+path: /usr/bin/open
+user: 501
+args: (
+open,
+"-a",
+"/Users/user/Library/Final_Presentation.app"
+)
+Step #3, (string decryption) is interesting as it both reveals the capabilities of the malware
+as well as (again) helps identify the (malicious) application as OSX.WindTail . The
+yoop method appears to be the string decryption routine:
+-(void )yoop:(void )arg2 {
+rax = [[[NSString alloc] initWithData:[[yu decode:arg2]
+AESDecryptWithPassphrase:cfstring__] encoding:0x1] stringByTrimmingCharactersInSet:
+[NSCharacterSet whitespaceCharacterSet]];
+return rax;
+}
+Specifically it invokes a decode and AESDecryptWithPassphrase helper methods.
+Looking closer at the call to the AESDecryptWithPassphrase method, we can see it’s
+invoked with a variable named cfstring__ (at address 0x100013480 ). This is the
+(hard-coded) AES decryption key:
+cfstring___100013480:
+0x000000010001c1a8, 0x00000000000007d0,
+0x000000010000bc2a, 0x0000000000000010 ; u"æ$&łŁńŚŽ~Ę?|!~<Œ",
+Interestingly this is the exact same key as Karin showed in his slides, for OSX.WindTail.A:
+To see what the (malicious) application is decrypting, we can simply set a breakpoint
+within the yoop method, and then dump the (now) decrypted strings:
+https://objective-see.com/blog/blog_0x3B.html 10/13
+3/5/2019 Objective-See's Blog
+(lldb) b 0x000000010000229b
+Breakpoint 8: where = usrnode`___lldb_unnamed_symbol6$$usrnode + 92, address =
+0x000000010000229b
+(lldb) po $rax
+http://flux2key.com/liaROelcOeVvfjN/fsfSQNrIyxeRvXH.php?very=%@&xnvk=%@
+It’s rather easy to break ‘AES’ when you have the key C
+Other strings that are decrypted (as noted) relate to file extensions of (likely) interest such
+as doc, pdf, db, etc. Makes sense that a cyber-espionage implant would be
+interested in such things, ya?
+Moving on the myDel method appears to attempt to connect to the malware’s C&C
+servers. Of course these are encrypted, but again, by dynamically debugging the malware,
+we can can simply wait until it invokes the AES decryption routine, then dump the (now)
+plaintext strings:
+(lldb) x/s 0x0000000100350a40
+0x100350a40: "string2me.com/qgHUDRZiYhOqQiN/kESklNvxsNZQcPl.php
+...
+(lldb) x/s 0x0000000100352fe0
+0x100352fe0: "http://flux2key.com/liaROelcOeVvfjN/fsfSQNrIyxeRvXH.php?
+very=%@&xnvk=%@
+The C&C domains ( string2me.com and flux2key.com ) are both WindShift domains,
+as noted by Karim in an interview with itWire
+“the domains string2me.com and flux2key.com identified as associated with these attacks”
+These domains are currently offline:
+$ ping flux2key.com
+ping: cannot resolve flux2key.com: Unknown host
+$ nslookup flux2key.com
+Server:  8.8.8.8
+Address: 8.8.8.8#53
+** server can't find flux2key.com: SERVFAIL
+…thus the malware appears to remain rather inactive. That is to say, (in a debugger), it
+doesn’t do much - as it’s likely awaiting commands from the (offline) C&C servers.
+However, a brief (static) triage of other methods found within the (malicious) application
+indicate it likely supports ‘standard’ backdoor capabilities such as file exfiltration and the
+(remote) execution of arbitrary commands. I’ll keep digging and update this post with any
+new findings!
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "/Users/user/Library/Final_Presentation.app", "type" : "APPS"},
+        {"id": 2, "description": "/usr/bin/open", "type" : "EXEF"},
+        {"id": 3, "description": "AESDecryptWithPassphrase method", "type" : "TTPS"},
+        {"id": 4, "description": "http://flux2key.com/liaROelcOeVvfjN/fsfSQNrIyxeRvXH.php?very=%@&xnvk=%@", "type" : "URLS"},
+        {"id": 5, "description": "string2me.com/qgHUDRZiYhOqQiN/kESklNvxsNZQcPl.php", "type" : "URLS"},
+        {"id": 6, "description": "string2me.com", "type" : "CCSH"},
+        {"id": 7, "description": "flux2key.com", "type" : "CCSH"},
+        {"id": 8, "description": "/Users/user/Library/ directory", "type" : "SYSP"},
+        {"id": 9, "description": "Objective-See's Blog", "type" : "URLS"},
+        {"id": 10, "description": "OSX.WindTail.A", "type" : "DOCF"},
+        {"id": 11, "description": "WindShift domains", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "executes"},
+        {"source": 3, "target": 4, "rel_name" : "decrypts"},
+        {"source": 3, "target": 5, "rel_name" : "decrypts"},
+        {"source": 6, "target": 1, "rel_name" : "C&C server of"},
+        {"source": 7, "target": 1, "rel_name" : "C&C server of"},
+        {"source": 9, "target": 10, "rel_name" : "mentions"},
+        {"source": 10, "target": 1, "rel_name" : "related to"},
+        {"source": 10, "target": 6, "rel_name" : "uses"},
+        {"source": 10, "target": 7, "rel_name" : "uses"},
+        {"source": 11, "target": 6, "rel_name" : "includes"},
+        {"source": 11, "target": 7, "rel_name" : "includes"}
+    ]
+}

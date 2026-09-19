@@ -1,0 +1,127 @@
+
+
+
+Sentence : Attack Methods
+The attacker uses two different methods to infect and control the Tuyul-infected
+victims: injecting a web shell or connecting the server to an IRC server and
+joining a botnet. The following sections describe both.
+Method #1: Gaining Access by Injecting a Web
+Shell
+The attacker uses a number of different PHP web shells to gain access to the
+server. When the campaign launches, an open source application called Tiny File
+Manager is used as a back door, giving the attacker easy access to the server’s
+file system.
+Figure 4. Tiny File Manager serves as a back door.
+In later stages of the campaign, a different, unknown web shell is deployed. This
+shell has more advanced capabilities and sophistication. We need to conduct
+additional research to fully understand its functionality.
+Figure 5. Unknown web shell with unknown capabilities
+https://www.f5.com/labs/articles/threat-intelligence/new-perl-botnet--tuyul--found-with-possible-indonesian-attributi 3/14
+2/1/2021 New Perl Botnet (Tuyul) Found with Possible Indonesian Attribution
+Notably, the shell referenced in Figure 5 uses the Black Hat logo from Black Hat
+information security events.
+The third web shell used was an obfuscated PHP shell that takes three steps
+when deployed. In the first step, a bash dropper called inject executes on the
+target server. The script does two things: first, it downloads a PHP script from the
+main localroot[.]xyz server.
+Figure 6. Inject bash dropper
+If this first script is successfully executed on the server, a POST request is sent to
+an API on the second zero0art[.]com server, logging the successful infection.
+Figure 7. A POST request logging the successful infection in a dedicated API
+After a successful execution, the PHP script server acts as a dropper by installing
+an obfuscated PHP back door in several locations on the server.
+Figure 8. The PHP dropper inject.php
+The back door is installed and receives commands through a parameter called
+preman, which appears to be the one of the attacker’s monikers.
+https://www.f5.com/labs/articles/threat-intelligence/new-perl-botnet--tuyul--found-with-possible-indonesian-attributi 4/14
+2/1/2021 New Perl Botnet (Tuyul) Found with Possible Indonesian Attribution
+Figure 9. PHP back door that receives commands
+We were able to obtain the source code of the API script and found an important
+clue about the attacker’s origin. The PHP code had a date_default_timezone_set
+function set to Asia/Jakarta.
+Figure 10. The attacker’s API source code with Asia/Jakarta set as the default
+time
+Method #2: Gaining Access via an IRC Botnet
+The second infection method connects the victim’s server to an IRC botnet. The
+malware is written in Perl, and this makes it worth thinking about. In the past, Perl
+was a popular language for writing attack tools. Since Perl is easier than lower
+4
+level languages such as C, it attracted many script kiddies ~~.~~ The DDoS Perl
+IRCBot script written in 2012 is still one of the most common IRC malware scripts
+5
+in use today. But since 2005 ~~,~~ Perl has been on the decline in favor of Python for
+IRC bots and general programming. As noted in the Key Findings, many IRC
+botnets are now created with Python. Perl is still used due to its low entry barrier
+and is a common language for script kiddies to learn. Because it can be used to
+create powerful and dense programs, there are still many Perl users around the
+6
+globe ~~.~~ Developing a malicious script in 2020 in Perl makes this threat actor’s
+choice interesting.
+4
+5
+6
+The first stage of the infection instructs the server to download a Bash script
+dropper (see Figure 11). The dropper instructs the server to download a compiled
+Perl binary and execute it on the system. If it is unsuccessful, it then tries to
+download an uncompiled version of the file and execute it using Perl.
+Figure 11. The join bash dropper that tells a server to execute a Perl script
+At the time of writing, the binary version of this malware went undetected by
+antivirus software. This allows the attacker to work on the machine virtually
+undetected by a signature-based antivirus.
+https://www.f5.com/labs/articles/threat-intelligence/new-perl-botnet--tuyul--found-with-possible-indonesian-attributi 5/14
+2/1/2021 New Perl Botnet (Tuyul) Found with Possible Indonesian Attribution
+Figure 12. The binary version of the malware goes undetected by antivirus
+engines
+If successfully executed, the server connects to an IRC server on the attacker’s
+C&C server ( irc[.]localroot[.]xyz ), where it joins the rest of the infected servers
+waiting for further instructions from the attacker (see Figure 13).
+Figure 13. The IRC bot malware configuration
+To stay persistent on the system, the malware periodically downloads a bash
+script named cron, which ensures that the Tuyul script is still installed (see Figure
+14).
+Figure 14. A bash script checking that the Tuyul script is still running
+It also detects and kills rival processes of other malware infections (see Figure
+15).
+Figure 15. Bash script killing rival malware processes (the comment is in the
+original script)
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Attacker", "type" : "ACTO"},
+        {"id": 2, "description": "Tuyul-infected victims", "type" : "DOCF"},
+        {"id": 3, "description": "Web shell (PHP)", "type" : "EXEF"},
+        {"id": 4, "description": "Tiny File Manager", "type" : "APPS"},
+        {"id": 5, "description": "Unknown web shell", "type" : "EXEF"},
+        {"id": 6, "description": "Black Hat logo", "type" : "TAMP"},
+        {"id": 7, "description": "Obfuscated PHP shell", "type" : "EXEF"},
+        {"id": 8, "description": "Bash dropper (inject)", "type" : "EXEF"},
+        {"id": 9, "description": "Main localroot[.]xyz server", "type" : "CCSH"},
+        {"id": 10, "description": "Zero0art[.]com server", "type" : "CCSH"},
+        {"id": 11, "description": "PHP script (dropper)", "type" : "EXEF"},
+        {"id": 12, "description": "PHP back door", "type" : "EXEF"},
+        {"id": 13, "description": "API source code with Asia/Jakarta timezone", "type" : "DOCF"},
+        {"id": 14, "description": "IRC botnet (Perl)", "type" : "EXEF"},
+        {"id": 15, "description": "DDoS Perl IRCBot script (2012)", "type" : "TAMP"},
+        {"id": 16, "description": "Bash dropper (join)", "type" : "EXEF"},
+        {"id": 17, "description": "Compiled Perl binary", "type" : "EXEF"},
+        {"id": 18, "description": "Uncompiled Perl script", "type" : "DOCF"},
+        {"id": 19, "description": "irc[.]localroot[.]xyz (C&C server)", "type" : "CCSH"},
+        {"id": 20, "description": "Bash script named cron", "type" : "EXEF"},
+        {"id": 21, "description": "Tuyul script", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "infects and controls"},
+        {"source": 1, "target": 3, "rel_name" : "uses to gain access"},
+        {"source": 1, "target": 4, "rel_name" : "uses as backdoor"},
+        {"source": 1, "target": 5, "rel_name" : "deploys in later stages"},
+        {"source": 1, "target": 7, "rel_name" : "uses for deployment"},
+        {"source": 8, "target": 9, "rel_name" : "downloads from"},
+        {"source": 8, "target": 10, "rel_name" : "sends POST request to"},
+        {"source": 11, "target": 12, "rel_name" : "installs as backdoor"},
+        {"source": 14, "target": 16, "rel_name" : "downloads and executes"},
+        {"source": 16, "target": 17, "rel_name" : "tries to download and execute"},
+        {"source": 16, "target": 18, "rel_name" : "falls back to download and execute"},
+        {"source": 19, "target": 2, "rel_name" : "connects infected server to"},
+        {"source": 20, "target": 21, "rel_name" : "ensures is still installed"}
+    ]
+}

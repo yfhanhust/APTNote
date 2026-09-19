@@ -1,0 +1,70 @@
+Loader Analysis
+The decrypted Loader module is named L.dll. The function of the dll is mainly to decrypt
+and load the appended data behind the hta:
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 3/14
+6/21/2019 奇安信威胁情报中⼼
+Figure 2.4 Some functions of Loader
+The X function is mainly to encrypt and load the shellcode; the decoding algorithm is
+base64 and then performs XOR decryption with the key in single byte, and the key is
+passed by the parameter:
+Figure 2.5 X function of L.dll
+The key here is 1632689155 (0x6150DC03). From the algorithm, only the first 3 bytes
+(0x03, 0xdc, 0x50) are used in while performing XOR decryption:
+Figure 2.6 L.dll decryption function
+Then the decrypted data is executed in memory:
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 4/14
+6/21/2019 奇安信威胁情报中⼼
+Figure 2.7 function B of L.dll
+The function of the shellcode executed by Loader is mainly to release the file and
+achieve persistence. As can be seen from the code features, OceanLotus often uses the
+shellcode to perform attacks.
+Figure 2.8 Shellcode frequently used by OceanLotus
+After shellcode is loaded in memory, it will load the dll file in memory after execution.
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 5/14
+6/21/2019 奇安信威胁情报中⼼
+Figure 2.9 Loading Dll into memory by shellcode
+Subsequently released files are stored in the resource, and the PE file to be released is
+extracted from the resource data through RtlDecompressBuffer:
+Figure 2.10 Get the address of the decompression API
+The resource names are 0x65 and 0x66. As shown in the figure, if the 0x65 resource
+does not exist, it will get 0x66 resource instead.
+Figure 2.11 Obtaining resource data
+The obtained resource data is as follows, including the file name, file size, and
+compressed data:
+Figure 2.12 Raw data in the resource
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 6/14
+6/21/2019 奇安信威胁情报中⼼
+Then get the exe and dll file names in system32, Program File and Windows directory,
+insert them into the array, then randomly generate a random number, randomly select a
+file in the array, get the file name and file description of the file as the name of the
+dropped exe file and related folder name respectively:
+Figure 2.13 Get the file name of the specified directory
+If rasman.dll is randomly selected, it will get the file description as the name of the folder
+where the malicious code was released. Here is the Create Remote Access Connection
+Manger folder for placing malicious code.
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 7/14
+6/21/2019 奇安信威胁情报中⼼
+Figure 2.14 File description of rasman.dll
+If the File Description field of the selected file is empty, this will use the default folder
+name "NLS_000001":
+Figure 2.15 handling the case when the field is empty
+In the following 2 folders ("Program Files", "%appdata%"), it creates a subdirectory (the
+name is a randomly selected "file description" content). If there is no permission to
+create a directory under "Program Files", it will be under %appdata%":
+https://ti.qianxin.com/blog/articles/english-version-of-new-approaches-utilized-by-oceanLotus-to-target-vietnamese-environmentalist/ 8/14
+6/21/2019 奇安信威胁情报中⼼
+Figure 2.16 Creating a subdirectory
+Then release the 10 files decrypted in the resource to the newly created directory; in our
+case the released directory name is: "C:Program FilesRemote Access Connection
+Manager", which is based on the description of the file randomly selected.
+The name of the exe file is the name of the randomly selected file.
+Rasman.db3 is the shellcode to be loaded.
+Figure 2.17 Released file
+Then it will be written into the registry run item to achieve persistence.
+At the same time, an empty docx file will be created under temp folder and then opened,
+so that the victim thinks that it is a docx file:
+Thong tin chi tiet nhung san pham can dat hang qua shop zero waste_Bao gia chi tiet
+san pham.docx
+Figure 2.18 The created docx file
+English translation of the file name: The details information about products need order
+shop zero waste details price list

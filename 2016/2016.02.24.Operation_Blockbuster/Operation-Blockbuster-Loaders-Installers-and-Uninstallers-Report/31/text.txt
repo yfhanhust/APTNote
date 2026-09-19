@@ -1,0 +1,33 @@
+Operation Blockbuster: Loaders, Installers and Uninstallers Report 23
+Consisting of a single known member, IndiaDelta is a simplistic installer responsible for dropping then activating the
+LimaAlfa loader (see Section 14) as well as dropping the WhiskeyCharlie wiper and its command file. While the general
+functionality the malware provides is simple (drop files and activate the next stage), the steps are somewhat convoluted.
+The operating mode of IndiaDelta is determined by the number of command line arguments that are supplied to the
+executable when it is activated. If there are less than two command line arguments, the program quietly terminates. If
+there are only two command arguments, IndiaDelta enters the relocation and re-initialization mode. If there are only four
+arguments, IndiaDelta enters the installation and activation mode. Any other combination of command line arguments
+results in IndiaDelta terminating quietly.
+Both of IndiaDelta’s modes begin by dynamically loading API functions. Unlike the majority of other code within the
+Lazarus Group’s collection, the dynamic API loading functionality is done without obfuscation of the API names. Rather,
+IndiaDelta performs a series of GetProcAddress calls with very little fanfare.
+The relocation and re-initialization mode is responsible for, as the mode’s description suggests, relocating the IndiaDelta
+binary to the victim’s %TEMP% directory and re-activating itself from within that location. The task of relocation consists
+of locating the %TEMP% directory on the victim’s machine, deleting any file within that directory that contains the
+same filename as the currently active IndiaDelta binary, and then copying the original IndiaDelta binary to the victim’s
+%TEMP% directory. The re-initialization task generates a new set of command line arguments with the following format:
+/install  
+The new instance of IndiaDelta is activated by passing the new IndiaDelta’s filename and the new command line to
+CreateProcess . The original IndiaDelta instance then terminates with the exit code set to 1 .
+The installation and activation mode is the workhorse mode of the malware. The mode begins by verifying that the first
+command line argument is equal to /install as set by the relocation and re-initialization mode. IndiaDelta’s main thread
+continues as a Message Loop [6] to support the unnecessary Windows GUI subsystem that IndiaDelta operates under while
+the actual installation and activation tasks are spun off into their own thread. The first task this mode performs is to set the
+current working directory to the directory that contained the original IndiaDelta binary (the location of IndiaDelta at the
+time of the relocation and re-initialization mode). Next, IndiaDelta begins the process of extracting its embedded files to disk.
+IndiaDelta stores its embed as a sequence of {header, file data} blocks appended to the end of its own binary image. The
+last 8 bytes of the IndiaDelta binary contains two 32-bit values, each XOR’d with the 32-byte value 0x1234567 (in little
+endian). The first 32-bit value defines the number of embedded blocks contained within the installer, and the second (or
+last) 32-bit value defines the offset to the start of the embedded blocks.
+Each embedded block contains a header that consists of 20 bytes that define the filename of the embedded file followed
+by a 32-bit value that defines the size of the embedded file image (but not necessarily the final size of the embed). The
+6 Microsoft. “About Messages and Message Queues” https://msdn.microsoft.com/en-us/library/windows/desktop/ms644927(v=vs.85).aspx Accessed 8 November 2015

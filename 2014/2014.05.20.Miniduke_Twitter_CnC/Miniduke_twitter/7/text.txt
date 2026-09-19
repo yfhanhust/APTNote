@@ -1,0 +1,22 @@
+The tale of the broken SHA-1
+The code hashing algorithm used by the component looks very much like SHA-1 but outputs different
+hashes (you can find the complete implementation in Appendix B. We decided to search for what was
+changed in the algorithm; one of our working hypotheses was that the algorithm might have been altered
+to make collisions feasible. We couldn’t find an obvious difference; all the constants and the steps of the
+algorithm were as expected. Then we noticed that for short messages only the second 32-bit word was
+different when compared to the original SHA-1.
+SHA1(‘test’) : a94a8fe5 ccb19ba6 1c4c0873d391e987982fbbd3
+TwitterJS_SHA1(‘test’) : a94a8fe5 dce4f01c 1c4c0873d391e987982fbbd3
+By examining how this 2nd word was generated we finally discovered that this was caused by a scope
+issue. As shown below the SHA-1 function used a variable named f: the function Z() is then called which
+also uses a variable named f without the var keyword, causing it to be treated as a global variable rather
+than local to the function. The end result is that the value of f is also changed in the SHA-1 function which
+affects the value of the 2nd word for that round and ultimately the whole hash for long messages.
+A likely explanation of how this problem came to be is
+that the variable names were changed to single letters
+using an automated tool prior to embedding it in the
+payload. The 2 f variables probably had different names
+in the original script which avoided the issue. So this
+leaves us with two takeaways: 1) The difference in the
+hashing algorithm was unintentional and 2) Always
+declare your local variables with the var keyword. ;-)

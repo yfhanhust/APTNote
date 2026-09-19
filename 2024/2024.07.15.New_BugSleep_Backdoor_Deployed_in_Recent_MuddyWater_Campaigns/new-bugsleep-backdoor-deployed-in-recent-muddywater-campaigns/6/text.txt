@@ -1,0 +1,79 @@
+BugSleep Technical Analysis
+BugSleep is a new tailor-made malware used in MuddyWater phishing lures since May 2024, partially replacing their use
+of legitimate RMM tools. We discovered several versions of the malware being distributed, with differences between
+each version showing improvements and bug fixes (and sometimes creating new bugs). These updates, occurring within
+short intervals between samples, suggest a trial-and-error approach.
+BugSleep main logic is similar in all versions, starting with many calls to the Sleep API to evade sandboxes and then
+it loads the APIs it needs to run properly. It then creates a mutex (we
+observed “PackageManager” and “DocumentUpdater” in our samples) and decrypts its configuration which
+includes the C&C IP address and port. All the configurations and strings are encrypted in the same way, where every byte
+is subtracted with the same hardcoded value.
+In most BugSleep samples, the malware then creates a scheduled task with the same name as the mutex and adds the
+comment "sample comment” to it. The scheduled task, which ensures persistence for BugSleep, runs the malware
+and is triggered every 30 minutes on a daily basis.
+Figure 7 – Scheduled task method of setting up persistence used by BugSleep.
+The malware communication is also encrypted the same way as its strings, adding 3 to every byte modulo 256. Every
+message exchanged between BugSleep and its C&C domain follows this format: [size_of_data][data] .
+BugSleep starts by sending the ID of the victim, consisting of the computer name followed by the username, formatted
+as [computer_name][username] .
+The malware has several commands it can perform based on the data sent from the C&C:
+Run commands throu
+the command ‘termin
+Update ‘receive timeo
+new timeout value.
+|# Of Command|Arguments|
+|---|---|
+|1|File name|
+|2|File name|
+|3|Command|
+|4|Timeout value|
+|6|–|
+|9|–|
+Update sleep time (nofi
+version).
+Update the receive tim
+in the first version).
+Sends the same value
+ping).
+|# Of Command|Arguments|
+|---|---|
+|10|–|
+|11|–|
+|97|Sleep time|
+|98|Timeout value|
+|99|–|
+Evasions
+In one of the malware versions, the developers implemented a couple of evasion methods from EDR solutions. First, the
+malware enables the MicrosoftSignedOnly flag of the ProcessSignaturePolicy structure to prevent the
+process from loading images that are not signed by Microsoft. This prevents other processes from injecting DLLs into
+the process.
+Next, it enables the ProhibitDynamicCode flag of the ProcessDynamicCodePolicy structure to prevent
+the process from generating dynamic code or modifying existing executable code.
+Enabling ProcessDynamicCodePolicy may be useful for protecting it from EDR solutions that hook userland
+API functions to inspect programs’ intents.
+Figure 8 – Evasions method.
+BugSleep Loader
+One of the samples we analyzed came with a custom loader. The loader injects a shellcode that loads BugSleep in
+memory into one of the following processes, based on whether they are already running:
+msedge.exe
+opera.exe
+chrome.exe
+anydesk.exe
+Ondedrive.exe
+powershell.exe
+The shellcode in this case is also encrypted with the same algorithm as the strings in BugSleep but with a different shift:
+every byte is subtracted with a hardcoded value of 6. After the decryption, the loader writes the shellcode inside the
+process with the WriteProcessMemory API and invokes the shellcode with the CreateRemoteThread API.
+Bugs and Unused Code
+Some of the samples contained several bugs, and parts of the code appear poorly written, with questionable omissions or
+additions that seem to be mistakes.
+One of the samples checks if the file “C:\users\public\a.txt” exists and if it doesn’t, it creates the file
+which it later deletes. The purpose of this code is not entirely clear and may be unfinished code inserted by the
+authors or borrowed from other places without fully understanding what the code does.
+In one sample, some of the API names were not encrypted like the others, probably due to lack of attention.
+In some samples, instead of properly encrypting (adding 3 to each byte), the malware runs the decryption
+algorithm (subtracting each byte by 3), which is probably by mistake. In a newer sample, the malware authors
+fixed that bug but did not do the same for all of the commands. Another questionable action is that the malware
+decrypts the data after it’s sent. We assume that their intent was to encrypt the strings again so they would not be
+seen in memory, but in this case, it does the opposite.
+Figure 9 – Encryption/Decryption confusion in the send method.

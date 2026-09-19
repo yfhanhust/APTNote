@@ -1,0 +1,41 @@
+WhatsApp
+The Pegasus authors have instrumented the interception of WhatsApp messages and calls within the samples that we have ob
+tained. In addition to logging the appropriate information for messages and calls, the software also loads a library (libwacalls.
+dylib) that is designed to hook key WhatsApp functions and intercept various communication types.
+This library issues system-wide notifications when calls are connected, interrupted, or ended, and when another call event
+occurs. Any application can receive these events provided they know the ID of the notification. Throughout Pegasus these
+notifications are unique and conspicuous, and they are made up of a sequence that’s 56 characters long and appears to be the
+output of a sha224 hash function. Another Pegasus module responsible for recording audio included notification observers
+that explicitly listen for these IDs. It seems that when these notifications are sent from libwacalls, and consequently handled by
+libaudio.dylib, Pegasus records the current WhatsApp call a victim is making.
+Libaudio saves audio recordings from WhatsApp calls in the following directories:
+
+
+micFileName - /private/var/tmp/cr/x..caf
+
+
+spkFileName - /private/var/tmp/cr/t..caf
+
+
+sentryFileName - /private/var/tmp/cr/z..caf
+
+
+TECHNICAL ANALYSIS OF PEGASUS SPYWARE | 26
+libwacalls first checks that Cydia Mobile substrate exists by attempting to load and link /usr/lib/libdata.dylib. If it isn’t present
+then libwacalls exits. Otherwise execution continues, resulting in the decryption of several strings that are used to identify class
+es and methods to be hooked.
+Libwacalls is responsible for hooking the following methods that belong to the CallManager class:
+```
+ • setCallConnected
+• setCallInterrupted
+• setCallInterruptedByPeer
+• endCall
+```
+The following method is also hooked that belongs to the CallLogger class:
+• addCallEvent
+All hooks rely on distributed notifications for IPC. As a result all hooks post a system-wide notification, with each notification
+containing a unique identifier that notification observers must reference exactly in order to receive. In all cases notification IDs
+are 56 characters, likely a sha224 hash digest. The functionality of these hooks is as follows:
+Hook method
+Information included in Notification Notification IDs
+TECHNICAL ANALYSIS OF PEGASUS SPYWARE | 28

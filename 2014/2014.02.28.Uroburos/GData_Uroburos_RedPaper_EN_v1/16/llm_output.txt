@@ -1,0 +1,69 @@
+
+
+
+Sentence : The NTFS file system
+The encryption used for the file systems is CAST-128 [1] . The respective encryption key is hardcoded
+within the driver file. Once decrypted, the virtual file system is a classic NTFS volume, which can be
+simply accessed through the standard Microsoft file system APIs. During our analysis, we identified
+several files the file systems contained:
+ .bat scripts used by the attackers
+ .log files with the output of the execution of the .bat files
+ third party tools
+ queue files
+The .bat scripts contain some net use commands to map a remote file server, netstat commands to
+have network information, system info commands to get a complete view of the system
+configuration.
+Figure 5: Example of one of the .bat scripts
+1 http://en.wikipedia.org/wiki/CAST-128
+Copyright © 2014 G Data Software AG 6
+G Data Red Paper February 2014: Uroburos
+The queue file is the most interesting and complex part of the virtual file system. Each message in
+the queue contains a unique ID, a type, a timestamp and content. The content is also encrypted
+using the CAST-128 algorithm and the respective key is stored in a message, too. The messages can
+contain the following information:
+ a key to decrypt other messages
+ a configuration
+ a file (or library injected in user land)
+ …
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "NTFS file system", "type" : "SYSP"},
+        {"id": 2, "description": "CAST-128 encryption", "type" : "TAMP"},
+        {"id": 3, "description": "driver file with hardcoded key", "type" : "EXEF"},
+        {"id": 4, "description": ".bat scripts used by the attackers", "type" : "DOCF"},
+        {"id": 5, "description": ".log files", "type" : "DOCF"},
+        {"id": 6, "description": "third party tools", "type" : "STOR"},
+        {"id": 7, "description": "queue files", "type" : "DOCF"},
+        {"id": 8, "description": "net use commands", "type" : "TTPS"},
+        {"id": 9, "description": "netstat commands", "type" : "TTPS"},
+        {"id": 10, "description": "system info commands", "type" : "TTPS"},
+        {"id": 11, "description": "remote file server", "type" : "CCSH"},
+        {"id": 12, "description": "unique ID in queue messages", "type" : "TAMP"},
+        {"id": 13, "description": "message type in queue messages", "type" : "TAMP"},
+        {"id": 14, "description": "timestamp in queue messages", "type" : "TAMP"},
+        {"id": 15, "description": "content of queue messages (encrypted)", "type" : "DOCF"},
+        {"id": 16, "description": "key to decrypt other messages", "type" : "KEY"},
+        {"id": 17, "description": "configuration in queue messages", "type" : "TAMP"},
+        {"id": 18, "description": "file or library injected in user land", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 3, "target": 2, "rel_name" : "contains encryption key for"},
+        {"source": 1, "target": 4, "rel_name" : "contains"},
+        {"source": 1, "target": 5, "rel_name" : "contains"},
+        {"source": 1, "target": 6, "rel_name" : "contains"},
+        {"source": 1, "target": 7, "rel_name" : "contains"},
+        {"source": 4, "target": 8, "rel_name" : "uses"},
+        {"source": 4, "target": 9, "rel_name" : "uses"},
+        {"source": 4, "target": 10, "rel_name" : "uses"},
+        {"source": 8, "target": 11, "rel_name" : "maps to"},
+        {"source": 7, "target": 2, "rel_name" : "encrypts content with"},
+        {"source": 7, "target": 12, "rel_name" : "contains"},
+        {"source": 7, "target": 13, "rel_name" : "contains"},
+        {"source": 7, "target": 14, "rel_name" : "contains"},
+        {"source": 7, "target": 15, "rel_name" : "contains"},
+        {"source": 15, "target": 16, "rel_name" : "may contain"},
+        {"source": 15, "target": 17, "rel_name" : "may contain"},
+        {"source": 15, "target": 18, "rel_name" : "may contain"}
+    ]
+}

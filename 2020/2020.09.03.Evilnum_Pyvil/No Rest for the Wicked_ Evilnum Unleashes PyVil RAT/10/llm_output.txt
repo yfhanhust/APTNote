@@ -1,0 +1,140 @@
+
+
+
+Sentence : PyVil: A New Python RAT
+The Python code inside the py2exe is obfuscated with extra layers, in order to prevent
+decompilation of the payload using existing tools. Using a memory dump, we were able to
+extract the first layer of Python code. The first piece of code decodes and decompresses
+the second layer of Python code:
+The first layer of deobfuscation code
+The second layer of Python code decodes and loads to memory the main RAT and the
+imported libraries:
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 14/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+Snippet from the second layer of code: extraction of Python libraries
+The PyVil RAT has several functionalities including:
+Keylogger
+Running cmd commands
+Taking screenshots
+Downloading more Python scripts for additional functionality
+Dropping and uploading executables
+Opening an SSH shell
+Collecting information such as:
+Anti-virus products installed
+USB devices connected
+Chrome version
+PyVil RAT’s Global variables give a clear understanding of the malware’s capabilities:
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 15/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+Global variables showing PyVil RAT's functionality
+PyVil RAT has a configuration module that holds the malware’s version, C2 domains, and
+user agents to use when communicating with the C2:
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 16/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+Configuration module
+PyVil RAT’s C2 communications are done via POST HTTP requests and are RC4
+encrypted using a hardcoded key encoded with base64:
+RC4 key
+data exfiltration from the infected machine being sent to the C2
+This encrypted data contains a Json of different data collected from the machine and
+configuration:
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 17/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+One of the decrypted JSONs sent to the C2
+|Field|Usage|
+|---|---|
+|type|Not clear|
+|xmode|Not clear|
+|req_type|Request type|
+|svc_ver|Malware version in the configuration|
+|ext_ver|A version of an executable the malware may download (-2 means the exe-cutables folder does not exist)|
+|ext_ex-ists|Checks for the existence of a particular executable|
+|svc_-name|Appears to be a name used to identify the malware by the C2.|
+|ext_uuid|Encoded machine UUID|
+|svc_uuid|machine UUID|
+|host|Hostname|
+|uname|User name|
+|ia|Is user admin|
+|wv|Windows version|
+|dt|Current date and time|
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 18/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+|avs|List of installed anti-virus products|
+|---|---|
+|gc|Dictionary of different configuration|
+|sc_sec-s_min|Minimum sleep time between sending screenshots|
+|sc_sec-s_max|Maximum sleep time between sending screenshots|
+|kl_sec-s_min|Minimum sleep time between sending keylogging data|
+|kl_sec-s_max|Maximum sleep time between sending keylogging data|
+|kl_run|Is keylogger activated|
+|klr|Is keylogger activated|
+|tc|Is USB connected|
+|cr|Is chrome.exe is running|
+|ct|Type of downloaded module to run: executable or Python module|
+|cn|Module name corresponding to “ct”|
+|imp|Execute the downloaded module (corresponds with “ct”)|
+|pwds|Extracted passwords|
+|cooks|Cookies information|
+Fields used in C2 communication
+During the analysis of PyVil RAT, on several occasions, the malware received from the C2
+a new Python module to execute. This Python module is a custom version of the LaZagne
+Project which the Evilnum group has used in the past. The script will try to dump
+passwords and collect cookie information to send to the C2:
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 19/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+Decrypted LaZagne output sent to the C2
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PyVil", "type" : "APPS"},
+        {"id": 2, "description": "Python code inside py2exe", "type" : "EXEF"},
+        {"id": 3, "description": "First layer of Python code", "type" : "DOCF"},
+        {"id": 4, "description": "Second layer of Python code", "type" : "DOCF"},
+        {"id": 5, "description": "Main RAT and imported libraries", "type" : "APPS"},
+        {"id": 6, "description": "Keylogger functionality", "type" : "TTPS"},
+        {"id": 7, "description": "Running cmd commands functionality", "type" : "TTPS"},
+        {"id": 8, "description": "Taking screenshots functionality", "type" : "TTPS"},
+        {"id": 9, "description": "Downloading more Python scripts functionality", "type" : "TTPS"},
+        {"id": 10, "description": "Dropping and uploading executables functionality", "type" : "TTPS"},
+        {"id": 11, "description": "Opening an SSH shell functionality", "type" : "TTPS"},
+        {"id": 12, "description": "Anti-virus products installed information", "type" : "REGI"},
+        {"id": 13, "description": "USB devices connected information", "type" : "USB"},
+        {"id": 14, "description": "Chrome version information", "type" : "APPS"},
+        {"id": 15, "description": "C2 domains", "type" : "CCSH"},
+        {"id": 16, "description": "User agents for C2 communication", "type" : "REGI"},
+        {"id": 17, "description": "POST HTTP requests", "type" : "NETP"},
+        {"id": 18, "description": "RC4 encryption key", "type" : "TTPS"},
+        {"id": 19, "description": "Encrypted data sent to C2", "type" : "DOCF"},
+        {"id": 20, "description": "Json of different data collected from the machine and configuration", "type" : "DOCF"},
+        {"id": 21, "description": "Decrypted JSONs sent to the C2", "type" : "DOCF"},
+        {"id": 22, "description": "LaZagne Project", "type" : "APPS"},
+        {"id": 23, "description": "Extracted passwords", "type" : "REGI"},
+        {"id": 24, "description": "Cookies information", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "decodes and decompresses"},
+        {"source": 3, "target": 4, "rel_name" : "decodes and loads to memory"},
+        {"source": 4, "target": 5, "rel_name" : "loads"},
+        {"source": 1, "target": 6, "rel_name" : "has functionality"},
+        {"source": 1, "target": 7, "rel_name" : "has functionality"},
+        {"source": 1, "target": 8, "rel_name" : "has functionality"},
+        {"source": 1, "target": 9, "rel_name" : "has functionality"},
+        {"source": 1, "target": 10, "rel_name" : "has functionality"},
+        {"source": 1, "target": 11, "rel_name" : "has functionality"},
+        {"source": 1, "target": 12, "rel_name" : "collects information on"},
+        {"source": 1, "target": 13, "rel_name" : "collects information on"},
+        {"source": 1, "target": 14, "rel_name" : "collects information on"},
+        {"source": 1, "target": 15, "rel_name" : "communicates with"},
+        {"source": 1, "target": 16, "rel_name" : "uses for communication"},
+        {"source": 1, "target": 17, "rel_name" : "sends data via"},
+        {"source": 1, "target": 18, "rel_name" : "encrypts data with"},
+        {"source": 1, "target": 19, "rel_name" : "sends encrypted data to C2"},
+        {"source": 1, "target": 20, "rel_name" : "collects and sends as JSON"},
+        {"source": 1, "target": 21, "rel_name" : "decrypts and reads JSON from C2"},
+        {"source": 15, "target": 19, "rel_name" : "receives encrypted data from"},
+        {"source": 15, "target": 21, "rel_name" : "sends decrypted JSON to"},
+        {"source": 22, "target": 23, "rel_name" : "extracts and sends passwords"},
+        {"source": 22, "target": 24, "rel_name" : "extracts and sends cookies"}
+    ]
+}

@@ -1,0 +1,301 @@
+Malware Analysis
+CASTSP.exe executed
+which sideloads
+vcruntime140.dll
+vcruntime140.dll
+decrypts shellcode and
+injects Trochilus
+payload into memory
+Trochilus variant
+deployed in memory, with
+C2 communications
+encrypted using XOR,
+RC4, and Salsa20
+The malware sets used for both infection chains are nearly identical
+both in infection method and code structure. Because the malware
+for both infection chains were so similar, it is only necessary to
+include the in-depth analysis for one chain here, so we focused on
+Infection Chain 1. It included the binaries below:
+
+CASTSP.exe: A valid and signed application that utilizes DLL
+
+sideloading to execute the malicious DLL, “version.dll”
+
+Version.dll: Main functionality of “Version.dll” is to decrypt and
+
+execute the Trochilus payload
+
+CZYSOYKPOIKKZGUFOIUI: DES-encrypted Trochilus payload
+
+Trochilus Implant
+The Trochilus loader, version.dll, has four entry points, as
+shown below. The malicious entrypoint called by CASTSP.exe is
+DllEntryPoint.
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 12
+CYBER THREAT ANALYSIS
+After version.dll runs, it loads the file CZYSOYKPOIKKZGUFOIUI
+into memory. The file “CZYSOYKPOIKKZGUFOIUI” is 387,094 bytes
+of binary code that is not human-readable.
+After the file is loaded, the next function, sub_6a351000, starts the
+decryption routine for CZYSOYKPOIKKZGUFOIUI. The file is DESencrypted and the key can be identified being loaded into memory
+at the start of the decryption routine.
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 13
+CYBER THREAT ANALYSIS
+Once the payload is decrypted, version.dll creates a new process
+in a suspended state and writes the Trochilus payload into the
+suspended process. Next, version.dll resumes the process,
+executing the Trochilus payload.
+Trochilus attribution.
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 14
+CYBER THREAT ANALYSIS
+This variant of Trochilus is significantly different from some of the
+reported variants. [1] The C2 infrastructure, network communications,
+and encryption are different from prior versions, but the code
+similarities and the use of DLL sideloading demonstrate that this
+is just another variant of Trochilus. First, the libraries below are
+included in the Trochilus variant and are known to be a part of the
+source code upon which Trochilus is based on.
+- SelfDestruction.cpp
+
+
+- MySocket.cpp
+
+
+- CommManager.cpp
+
+
+
+Common.cpp
+
+
+Main.cpp
+
+
+Manager.cpp
+
+
+ServiceManager.cpp
+
+
+TCPComm.cpp
+
+
+
+
+UDPComm.cpp
+
+
+Second, the unencrypted C2 beacon, _msgid.23.__serial.0.clientid.
+xxxxxxxxxxxxxxx, is a well-defined component of the Trochilus
+source code.
+The capabilities of Trochilus are well documented in other research
+reports, but the C2 infrastructure for this variant uses a combination
+of XOR, RC4, and Salsa20, which is different from what has previously
+been reported for Trochilus.
+Command and Control Infrastructure
+The C2 domain www.miphomanager[.]com is hardcoded, and after
+a successful DNS request for the IP address, the Trochilus implant
+will use that IP address for communication.
+1 https://www.us-cert.gov/ncas/alerts/TA17-117A, https://www.carbonblack.
+com/2017/05/09/carbon-black-threat-research-dissects-red-leaves-malware-leverages-dll-
+side-loading/, https://blogs.jpcert.or.jp/en/2017/04/redleaves---malware-based-on-open-
+source-rat.html
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 15
+CYBER THREAT ANALYSIS
+The encoding and encryption routines used in this variant are
+different from other variants and use three stages of encryption.
+Other variants have typically used XOR encoding with RC4 encryption
+to obfuscate C2 communication.
+Stage 1: Rolling XOR Function
+The first stage is a simple rolling XOR function. The rolling XOR key
+is computed by taking two initial values, Constant 1 and Constant
+2, and adding them together. The result is then divided against the
+divisor 0xff. The remainder of this result is used as the XOR key. On
+the second iteration, Constant 1 is now saved as Constant 2, and
+Constant 2 becomes the remainder from the previous operation.
+They are added together and again divided by the divisor 0xff to
+produce the next XOR key. This process repeats until the end of
+the cleartext string. A Python script is provided below showing this
+encoding function.
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 16
+CYBER THREAT ANALYSIS
+Our analysis revealed that the “__msgid.23.” cleartext string below
+was sent to the XOR function above.
+Stage 2: RC4 Encryption
+The resulting data then goes to the second stage, which is RC4
+encryption using the hard-coded string NASDKJF7832Hnkjsadf87
+8UHds89iujkhNHKJDHJDH8UIYE98uihwjshewde8w. The main
+routine shown below takes the key and then sends it to the function
+sub_B49252, which initializes the key-scheduling algorithm (KSA)
+and pseudo-random generation algorithm (PRGA), which are the
+two key components of RC4 encryption.
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 17
+CYBER THREAT ANALYSIS
+Stage 3: Salsa20 Encryption
+For the final phase, the resulting data from the RC4 encryption is
+then encrypted again, this time with Salsa20. Salsa20 is another
+stream cipher that encrypts data in 64-byte blocks. Salsa20 uses a
+secret key and nonce to initialize the encryption. These values are
+hard-coded and are:
+- Secret Key: 0x1,0x2,0x3,0x4,0x5,0x6,0x7,0x8,0x9,0xA,0xB,0xC,
+
+0xD,0xE,0xF,0x10
+- Nonce: 0x65,0x66,0x67,0x68,0x69,0x6A,0x6B,0x6C (“efghijkl”)
+
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 18
+CYBER THREAT ANALYSIS
+After the message is encrypted, it is then sent via an HTTP POST to
+the C2 host, which in this case is the domain www.miphomanager[.]
+com. The HTTP headers are provided in the figure below.
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 19
+CYBER THREAT ANALYSIS
+Infrastructure
+DNS log data revealed that requests were made for the malicious
+Trochilus C2 domain, www.miphomanager[.]com, as early as August
+30, 2018 — only two weeks after Visma was initially compromised
+on August 17, 2018. This slight delay may point to the handing over
+of active exploitation duties to other operator(s) in a multi-team
+APT10 effort within the Ministry of State Security for the attack.
+According to WHOIS information, the malicious "miphomanager"
+domain was registered with a relatively small Bahamas-based
+domain registrar, internet.bs. This registrar is widely noted to host
+a disproportionate number of rogue or malicious websites, with the
+registrar aggressively marketing itself as an “offshore” registrar. Other
+examples of malicious infrastructure registered with internet.bs
+include domains for APT28’s VPNFilter malware campaign and the
+registration of the cyber-berkut[.]org domain that was affiliated
+with the pro-Russian and potentially Russian state-linked threat
+actor CyberBerkut.
+The registrant organization name was privacy protected using Whois
+Privacy Corp, and the registered name servers for the malicious C2
+were listed as:
+- Ns-canada.topdns[.]com
+
+
+- Ns-uk.topdns[.]com
+
+
+- Ns-usa.topdns[.]com
+
+Internet.bs and the name servers listed above were noted in the
+registration of a malicious C2 used in a KHRAT campaign targeting
+Cambodia. KHRAT is a backdoor trojan purported to be used with
+the China-linked cyberespionage group DragonOK.
+All three name servers appear in Recorded Future with an unusual
+risk rating as they appear in the “Bambenek Consulting C&C
+Nameserver Blocklist” threat list, because of their prevalence in
+being associated with a Zeus-based banking trojan, Sphinx.
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 20
+CYBER THREAT ANALYSIS
+Credential Harvesting and Exfiltration
+During our investigation, we also found evidence of a legitimate
+decompression utility typically packaged with Java named
+“unpack200.exe” being executed on the Visma network. This utility
+sideloaded Mimikatz (pd.exe) and enabled credential theft from
+Visma users. Interestingly, the same combination of unpack200.
+exe to deploy Mimikatz was used by the same attackers in both the
+apparel company and U.S.-based law firm breaches.
+Using the newly acquired credentials, the attacker accessed Visma’s
+Microsoft Active Directory domain controller, deployed Trochilus,
+and made a copy of the “NTDS.DIT” database file containing Active
+Directory data for Visma’s corporate network, including password
+hashes for all users in the domain.
+The NTDS.DIT file and accompanying stolen data was then packaged
+up using a renamed WinRAR executable (r.exe) that was transferred
+across by the attacker who then used cURL for Windows (renamed
+to “CU.exe”) to upload the exfil to content.dropboxapi.com. The
+RAR files followed a naming convention of a short run of repeating
+characters (for example, kkk.rar, ss.rar, pp.rar, dds.rar, gggg.rar,
+etc).
+Rapid7 research revealed the exfiltrated content from Visma was
+uploaded to a Dropbox account that contained files from another
+incident related to the compromise of an international apparel
+company that they were investigating.
+US-Based Law Firm Attack
+In late 2017, Rapid7 responded to a breach at a U.S.-based law firm.
+The attacker first gained access to the victim environment through
+Citrix servers. Once inside the victim network, the attacker deployed
+their own customized malware and also used known good binaries
+that have DLL search order hijacking issues in order to perform DLL
+sideloading to execute customized versions of Mimikatz in order
+to retrieve passwords. The filename for the custom malware was
+“ccSEUPDT.exe” (MD5: d8e37f07fdc9827871f0f959519275e1), a
+legitimate Symantec Security Submission Engine Update Module
+binary. The custom malware also would have a DLL in the same staging
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 21
+CYBER THREAT ANALYSIS
+directory and a randomized 15-character uppercase and lowercase
+alpha character set filename without an extension that contained the
+shellcode. The attacker used unpack200.exe (MD5: 6807be8466955b
+afffa568b6da0e785c), a decompression program that
+comes with Java 8 and their copy of Mimikatz was placed
+into MSVCR100.DLL (MD5: c8ea12ee884f274ca35fa54a073
+df130).
+These methods of initial ingress into the victim networks and the
+method of obtaining passwords remained consistent TTPs across
+all victims. The DLL sideloading technique can evade application
+whitelisting and antivirus software. However, if deployed, systems
+that perform process.start creation would log the command line
+being passed to the binary and could be reviewed, and then
+signatures created that look for the common flags could be passed
+to Mimikatz. The attacker would also move laterally by mounting the
+remote drive on a system, copying “1.bat” to it, use task scheduler
+to execute, and then delete the batch script.
+In order to perform exfiltration of the stolen data, the attacker used
+common file compression utilities (rar.exe) to create archives of
+the information they intended to exfiltrate, and then used common
+command line-based web clients (curl.exe) to transfer the stolen
+data to a cloud-based storage provider (Dropbox). This TTP for data
+exfiltration remained consistent across all victims.
+To maintain access to the victim network from the external
+public internet, the attacker deployed password-protected
+ASP eval webshells (Filename “iisstart.aspx,” SHA256:
+243d47fc2a24b391e1153d5c7807c6e5de51aba65fc79465d7b3e
+5c64d5fac41) within the client environment in order to maintain
+access.
+Server-side ASPX payload of the China Chopper webshell. (Source: Rapid7)
+This resembled the server-side ASPX payload of the China Chopper
+webshell documented previously. Uploads to VirusTotal in late
+August 2018 resembling the same filename, iisstart.aspx, indicate
+the deployed webshell was likely a version of the China Chopper
+webshell known to have been used by several Chinese threat actors.
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 22
+CYBER THREAT ANALYSIS
+The attacker also used TeamViewer in order to maintain remote
+access to compromised systems within the victim environment.
+International Apparel Company Attack
+In early 2018, Rapid7 identified that the attackers compromised an
+apparel company, based upon detections and intelligence gathered
+from the U.S.-based law firm breach. The attacker gained access to
+the victim’s internet-accessible Citrix systems and authenticated to
+them from networks associated with low-cost VPN providers owned
+by VPN Consumer Network. Rapid7 again observed the attackers
+dropping payloads named “ccSEUPDT.exe.” The attackers used
+identical TTPs for executing malware and Mimikatz as observed
+before, by using DLL sideloading with known good binaries that had
+DLL search order path issues. The attackers used the Notepad++
+updater GUP.exe (MD5: f5322b2f18605674b9a0c1757de5fd94),
+the Java archive decompression utility unpack200.exe
+(MD5: 6807be8466955bafffa568b6da0e785c), renamed
+from “coInst.exe,” and Norton Identity Safe binary CASRTSP.
+exe (MD5: 1e3a57cff7cba8732364c26f4bbdcbe2). These
+binaries were used to load malware from DLL files
+MSVCR100.DLL (MD5: 5739c1f17503e21e56667d53ea823401)
+and libcurl.dll (MD5: 8f07160febdb240909b27aa519b
+ba575). Rapid7 reviewed malware discovered in the victim’s
+environment and found implants that used Dropbox as the C2.
+The attackers used the same method of lateral movement by
+mounting the remote drive on a system, copying 1.bat to it, using
+task scheduler to execute the batch script, and finally, deleting the
+batch script.
+For exfiltration of stolen data, the attacker used WinRAR and
+renamed “rar.exe” to “r.exe” to create archives, upload them with
+“curl.exe” (renamed to “c.exe”), and again, use the cloud storage
+provider Dropbox. Rapid7 discovered that additional data was
+placed into the Dropbox accounts under control of the attacker
+during the compromise and was able to attribute data that was
+placed into it as being owned by Visma. Rapid7 then provided a
+breach notification to Visma to alert them to this compromise in
+September 2018.
+Recorded Future | www.recordedfuture.com | CTA-2019-0206 | 23
+CYBER THREAT ANALYSIS

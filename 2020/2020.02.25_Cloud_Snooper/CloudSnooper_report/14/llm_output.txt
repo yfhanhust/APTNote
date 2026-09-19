@@ -1,0 +1,218 @@
+
+
+
+Sentence : Another variant of the rootkit
+During the investigation, a different Linux host was found to be running a different variant of the
+snd_floppy rootkit.
+|Sample #4|Col2|
+|---|---|
+|MD5|9cd93bb2a12cf4ef49ee1ba5bb0e4a95|
+|SHA1|b37fdb9d32e90d4be1e0bd187ef64899038c3785|
+|SHA-256|620616d76334204516501c477ae46953bfc9ab8c29e096ae4f76f2e732e69845|
+|File size|544,832 bytes|
+|Internalname|snd_floppy|
+This kernel module is very similar to the variant described above. The embedded resource is encrypted
+with the same RC4 key.
+The only difference is in the embedded file itself. It is a different file dropped as /bin/vsftpd
+Cloud Snooper - SophosLabs Page 18 of 29
+Cloud Snooper - SophosLabs
+|Sample #5|Col2|
+|---|---|
+|MD5|15e96f0ee3abc9d5d2395c99aabc3b92|
+|SHA1|8a34cb3d4431985dafe7e2f9843552b56b2a6641|
+|SHA-256|cedb5b81f88afbb5b718c3e66ab25bf945476b8e64b1da0f204d3860a694cce5|
+|File size|60,456 bytes|
+|Internalname|vsftpd|
+/bin/vsftpd in this case is not a well-known FTP server daemon but a backdoor that listens on port
+2080.
+The communications are encrypted with a custom algorithm based on AES and an additional XOR round.
+Key initialization is based on hashing the string "replace with your password" and a key received from
+the server, hashed with SHA-1.
+The bot can execute three commands, encoded with integer numbers 1 to 3:
+1: download specified file
+internal name: tshd_get_file()
+2: upload file and save it under a specified file name
+internal name: tshd_put_file()
+3: execute remote shell command with /bin/sh
+internal name: tshd_runshell()
+A different version of vsftpd, a backdoor, recovered as a file named ips, was found to be listening on
+port 10443.
+|Sample #6|Col2|
+|---|---|
+|MD5|2b7d54251068a668c4fe8f988bfc3ab5|
+|SHA1|61f824bd85630b2bcc48defb7b6cb2a963a744c6|
+|SHA-256|1d6fe2f90b4e05625167c8601f07eb33d9eee4623e3338ef264cc6961f5175a0|
+|File size|35,580 bytes|
+|Internalname|ips|
+Cloud Snooper - SophosLabs Page 19 of 29
+Cloud Snooper - SophosLabs
+The presence of ips suggests that another 32-bit version of snd_floppy that redirects incoming traffic
+into port 10443 may exist.
+The samples #1-#6 described above represent a combination of a rootkit and a passive backdoor that
+accepts connections on an open port.
+Sample #7
+Apart from those samples, we have also recovered a different Linux backdoor, a backdoor that does not
+open any ports. Instead, it relies on a C2 polling mechanism.
+The analysis of this bot functionality reveals it belongs to Gh0st RAT, only it's a version that has been
+written for Linux.
+It is hard to tell if Gh0st has always existed as a multi-platform RAT, or whether the attackers developed
+a Linux-based Gh0st after the source code of Gh0st for Windows was leaked online.
+At the end of the day, it makes sense to have clients deployed across various platforms, using a unified
+configuration format and C2 protocol, while having a single server for all those clients.
+Still, we will leave the guesswork out of this description, rather focusing on what the recovered samples
+|actually do.|Col2|
+|---|---|
+|MD5|ecac141c99e8cef83389203b862b24fd|
+|SHA1|2f4ee1c39f78ecde5a84233233d02b355022aa50|
+|SHA-256|c49371cd8dd33f725a780ea179e6281f5cb7f42e84a00836c8fe3350b7b9b2d0|
+|File size|64,412 bytes|
+|File Name|/bin/snort|
+/bin/snort is a backdoor that contacts a remote C2 to fetch and execute commands. Its internal config
+file is encrypted with RC4, using the password: "r0st@#$" :
+```
+ 185.86.151.67:443;|1;1;1;1;1;0;0;|10-20;|10
+```
+The '1;1;1;1;1;0;0;' part of the config are the flags that stand for seven days of the week.
+The '10-20;' seems to indicate working hours (10 a.m. to 8 p.m.), so current weekday and current hour
+should match what's in config.
+If there is no match, the bot falls asleep for just over seven minutes (423.756 seconds), then checks the
+time again.
+In case of a match, it attempts to reach the C2; if it cannot, it retries again in one minute.
+Cloud Snooper - SophosLabs Page 20 of 29
+Cloud Snooper - SophosLabs
+Traffic to the C2 is encrypted with double RC4, where a key is randomly generated based on the current
+time.
+The backdoor has six commands:
+
+The bot clears environmental variable HISTFILE to make sure no history is kept for
+
+/bin/bash execution; the C2 responds with a string, and the bot sets TERM variable to that
+returned string
+Next, it receives a command and executes it with /bin/bash, with or without a '-c' switch
+(allows for executing commands as provided within the quotes)
+The output from the executed command is sent back.
+
+File manipulations:
+
+o Locate and obtain timestamp for the specified file
+o Rename specified file
+o Recursively delete all files in the specified directory
+
+More file manipulations:
+
+o Read the contents of the specified file
+o Recursive search for files
+o Write data into a specified file
+o Create specified directory
+
+
+The next two commands manipulate file descriptors with fcntl() syscall, and fork child processes
+
+
+Receive data and save it into a local file /usr/include/sdfwex.h
+
+
+It appears that /usr/include/sdfwex.h contains a timestamp (year, month, day, hour, minutes) for
+when the C2 connection should commence.
+If the bot cannot open this file, it tries to open /tmp/.llock – if that file also cannot be opened, the bot
+skips the timestamp check, and proceeds with trying to connect to the C2.
+Sample #8
+|A backdoor very|y similar to /bin/snort was recovered as /usr/bin/javad, described below:|
+|---|---|
+|MD5|67c8235ac0861c8622ac2ddb1f5c4a18|
+|SHA1|6aa0b6bfe059354782febd4fa665dbacd726b488|
+|SHA-256|a8db92a8f34caa5084a3fdb8a683a1854bff84612dfd25a965bc12a454a38556|
+|File size|64,412 bytes|
+|File Name|/usr/bin/javad|
+Cloud Snooper - SophosLabs Page 21 of 29
+Cloud Snooper - SophosLabs
+This backdoor is similar to the sample #7
+(c49371cd8dd33f725a780ea179e6281f5cb7f42e84a00836c8fe3350b7b9b2d0). It uses a different
+configuration:
+```
+ cloud.newsofnp.com:443;|1;1;1;1;1;1;1;|00-24;|1
+```
+An analysis of network activity revealed that a similar domain – ssl.newsofnp.com was also resolved
+from a Windows host.
+Sample #9
+|A backdoor very|y similar to /bin/snort and /usr/bin/javad:|
+|---|---|
+|MD5|850bf958f07e6c33a496b39be18752f3|
+|SHA1|ea579984897dd585af348ecbfc112044a0346ca1|
+|SHA-256|dbd926b097e5a2b142b898fce94fd076b0c6283f0e38a1c6ce01ab87cf41edda|
+|File size|66,000 bytes|
+|File Name|nood.bin|
+Just like other samples, it decrypts its config file using RC4 key "r0st@#$" .
+The decrypted config is:
+```
+ load.CollegeSmooch.com:82;|1;1;1;1;1;1;1;|00-24;|10
+```
+Just like /bin/snort and its Windows counterpart NSIProvider.dll, it also checks if the current day
+matches the configuration file and falls asleep for exactly 423.756 seconds (just over seven minutes)
+before it tries again.
+For the beacon signal it sends to the C2, it collects basic system configuration into a fingerprint. This info
+consists of:
+
+
+Hostname and IP address
+
+
+Platform type, as read from /proc/version, such as 'x86_64'
+
+
+Full name of the Linux version, as read from /etc/issue.net and /etc/issue, such as:
+
+
+```
+     'Red Hat Enterprise Linux Server release 6.10 (Santiago)'
+```
+or
+```
+     'Ubuntu 16.04.5 LTS'
+```
+Cloud Snooper - SophosLabs Page 22 of 29
+Cloud Snooper - SophosLabs
+The communications with the C2 are always encrypted using a bespoke algorithm that relies on a timebased random RC4 key with extra encryption layers.
+The backdoor commands received from the C2 and executed by nood.bin fully match /bin/snort
+functionality. That is, it provides remote shell and a dedicated remote file manipulation capability, such
+as an ability to read, write, rename, delete, or recursively search for files.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "snd_floppy rootkit", "type" : "EXEF"},
+        {"id": 2, "description": "/bin/vsftpd backdoor", "type" : "EXEF"},
+        {"id": 3, "description": "ips (backdoor)", "type" : "EXEF"},
+        {"id": 4, "description": "Gh0st RAT for Linux", "type" : "EXEF"},
+        {"id": 5, "description": "/bin/snort backdoor", "type" : "EXEF"},
+        {"id": 6, "description": "/usr/bin/javad backdoor", "type" : "EXEF"},
+        {"id": 7, "description": "nood.bin backdoor", "type" : "EXEF"},
+        {"id": 8, "description": "185.86.151.67:443", "type" : "CCSH"},
+        {"id": 9, "description": "cloud.newsofnp.com:443", "type" : "CCSH"},
+        {"id": 10, "description": "ssl.newsofnp.com", "type" : "URLS"},
+        {"id": 11, "description": "load.CollegeSmooch.com:82", "type" : "CCSH"},
+        {"id": 12, "description": "/proc/version", "type" : "SYSP"},
+        {"id": 13, "description": "/etc/issue.net", "type" : "SYSP"},
+        {"id": 14, "description": "/etc/issue", "type" : "SYSP"},
+        {"id": 15, "description": "/usr/include/sdfwex.h", "type" : "SYSP"},
+        {"id": 16, "description": "/tmp/.llock", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "drops as"},
+        {"source": 2, "target": 3, "rel_name" : "variant of"},
+        {"source": 4, "target": 5, "rel_name" : "similar to"},
+        {"source": 5, "target": 6, "rel_name" : "similar to"},
+        {"source": 5, "target": 7, "rel_name" : "similar to"},
+        {"source": 5, "target": 8, "rel_name" : "communicates with"},
+        {"source": 6, "target": 9, "rel_name" : "communicates with"},
+        {"source": 6, "target": 10, "rel_name" : "resolved from"},
+        {"source": 7, "target": 11, "rel_name" : "communicates with"},
+        {"source": 5, "target": 12, "rel_name" : "reads from"},
+        {"source": 5, "target": 13, "rel_name" : "reads from"},
+        {"source": 5, "target": 14, "rel_name" : "reads from"},
+        {"source": 7, "target": 12, "rel_name" : "reads from"},
+        {"source": 7, "target": 13, "rel_name" : "reads from"},
+        {"source": 7, "target": 14, "rel_name" : "reads from"},
+        {"source": 5, "target": 15, "rel_name" : "checks for"},
+        {"source": 5, "target": 16, "rel_name" : "checks for"}
+    ]
+}

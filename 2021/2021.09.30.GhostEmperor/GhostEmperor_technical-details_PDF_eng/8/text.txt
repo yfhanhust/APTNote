@@ -1,0 +1,56 @@
+Payload Injection and Console Control
+A few of the classes we observed serve the primary purpose of injecting a payload to other processes on the machine. The
+target process can be an existing one, in which case it is winlogon.exe, or a newly created process in suspended state. In
+the latter case, the chosen image for the created process needs to be passed by the code invoking the injection, which
+we did not obtain. Such code will instantiate the C++ class conducting the injection and invoke the corresponding injection
+function by passing the path to the image of the created process as an argument.
+The injection method is fairly straightforward and relies on creating a shared memory buffer between the source and target
+processes. The buffer is mapped using the NtCreateSection and NtMapViewOfSection APIs, allowing code and data to
+then be copied into it in the source process and having the same information reflected in the target process. In the case
+of winlogon.exe, since it is a Windows system process, the injecting code patches a flag in an OS version dependent offset
+within a structure resolved by the KernelBaseGetGlobalData function, as demonstrated here.
+9
+GhostEmperor’s infection chain and post-exploitation toolset: technical details
+The execution of a function within the remotely written buffer depends on the type of injected process. For winlogon.exe
+the injected payload will be initiated using the CreateRemoteThread API and for a newly created process the entry point of
+its executable image will be patched to conduct a jump to the payload, which will occur as soon as the process is resumed
+from its suspended state.
+Each injected code is passed along with a pipe name that is then used to establish a duplex IPC communication channel
+to the injecting component. The latter has the capacity to issue commands or instructions to the injected payload and
+receive the outputs of their execution. The pipe’s name scheme is \.\pipe\CDP_CALLBACK_%d, where %d is replaced by a
+different numeric value for each injected payload.
+The architecture used by the attackers to stage shellcode buffers in the winlogon.exe process in order to handle various remote control features
+The injected payload is a position-independent code that serves a couple of purposes, the first of which is to create a
+console in the remote process and facilitate a channel to interact with it via the previously created named pipe. This is
+achieved through the following sequence of actions:
+
+Creation of a new console within the injected process using the AllocConsole API and adjusting its window resolution to
+
+120 x 200.
+
+
+Getting handles to the console’s input and output streams using the GetStdHandle API.
+
+
+Connecting to the named pipe which has its name passed along with the executing shellcode.
+
+
+Checking if there is data on the pipe using the PeekNamedPipe API and if so retrieving it to a buffer.
+
+
+The numeric value of the first byte in the obtained data determines the message’s purpose:
+
+
+If it's a 1, it means the client in the injecting process is requesting a line of the console’s output. This is retrieved by
+using the console’s output handle and iterating on its window output data along the Y axis (while X is set to 0). For
+each iterated coordinate a single output character is read at a time using the ReadConsoleOutputCharacterW API.
+The generated output buffer is then prepended with a data structure of type CONSOLE_SCREEN_BUFFER_INFO to
+convey the console’s window dimension.
+
+
+If it’s a 2, the message is intended to pass input to the console and the first byte will be followed by the input buffer
+that is passed to the WriteConsoleInputW API.
+
+
+10
+GhostEmperor’s infection chain and post-exploitation toolset: technical details

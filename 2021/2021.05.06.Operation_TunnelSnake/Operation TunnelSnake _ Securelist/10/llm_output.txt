@@ -1,0 +1,75 @@
+
+
+
+Sentence : The ProcessKiller rootkit vs. security products
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 29/33
+5/7/2021 Operation TunnelSnake | Securelist
+Another interesting artefact found in our telemetry that could be tied to the developers of Moriya is a malware named ProcessKiller. As
+its name suggests, it is intended to eliminate execution of processes, with the use of a kernel mode driver. Ultimately, this tool is used to
+shut down and block initiation of AV processes from kernel space, thus allowing other attack tools to run without being detected.
+This malware operates through the following stages:
+An attacker calls the malware’s DLL from an export named Kill, passing it a list of process names it would like to shut down and
+block as a command-line argument.
+The malware writes a driver that is embedded as a resource within it, impersonating a Kaspersky driver under the path
+%SYSTEM%\drivers\kavp.sys.
+There is an attempt to load the driver using the Service Control Manager. However, since it is not signed and loading is prone to
+fail on Windows versions above Vista 64-bit, the malware uses the same DSEFix code to bypass Digital Signature Enforcement as
+witnessed in Moriya’s user mode agent.
+The malware parses the process names passed as arguments and creates a vector of ‘blacklisted processes’ out of them.
+For each process in the list, the malware detects its PID and issues it through an IOCTL with code 0x22200C to the driver which is
+in charge of shutting it down from kernel space. The shutdown is carried out by locating the process object with the function
+PsLookupProcessByProcessId and then terminating it with ZwTerminateProcess.
+The list of processes is then passed via another IOCTL with the code 0x222004 to the driver, which inserts each member of it to a
+linked list in kernel space. When the driver is bootstrapped, it registers a callback for newly created processes through the
+PsSetCreateProcessNotifyRoutineEx function, which inspects the image name of the created process and compares it against those
+found in the linked list. If a match is found, the process creation status in the PPS_CREATE_NOTIFY_INFO structure will be set
+to STATUS_UNSUCCESSFUL, signaling the user space API function that process creation failed.
+At this point any other malware can theoretically operate without being detected.
+If the attacker wishes to disable blacklisting, it can be done by issuing an IOCTL with the code 0x222008, which would destroy the
+linked list of blacklisted processes.
+Once again, the connection to Moriya is based on several observations:
+Distinct debug error messages, as the one presented below.
+Fig. 19. Unique debug message that appears in ProcessKiller and Moriya
+https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831/ 30/33
+5/7/2021 Operation TunnelSnake | Securelist
+Filename of the same structure, i.e., Moriya’s agent is internally named
+‘MoriyaServiceX64.dll’, and ProcessKiller’s DLL is named ‘ProcessKillerX64.dll’
+Usage of the exact same DSEFix code to load an unsigned driver.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "ProcessKiller", "type" : "APPS"},
+        {"id": 2, "description": "DLL from ProcessKiller", "type" : "EXEF"},
+        {"id": 3, "description": "List of process names", "type" : "TAMP"},
+        {"id": 4, "description": "kavp.sys (impersonating Kaspersky driver)", "type" : "EXEF"},
+        {"id": 5, "description": "Service Control Manager", "type" : "APPS"},
+        {"id": 6, "description": "DSEFix code", "type" : "TTPS"},
+        {"id": 7, "description": "Blacklisted processes", "type" : "TAMP"},
+        {"id": 8, "description": "Driver (ProcessKiller)", "type" : "EXEF"},
+        {"id": 9, "description": "IOCTL with code 0x22200C", "type" : "TTPS"},
+        {"id": 10, "description": "PsLookupProcessByProcessId", "type" : "TTPS"},
+        {"id": 11, "description": "ZwTerminateProcess", "type" : "TTPS"},
+        {"id": 12, "description": "IOCTL with code 0x222004", "type" : "TTPS"},
+        {"id": 13, "description": "PsSetCreateProcessNotifyRoutineEx function", "type" : "TTPS"},
+        {"id": 14, "description": "PPS_CREATE_NOTIFY_INFO structure", "type" : "TAMP"},
+        {"id": 15, "description": "IOCTL with code 0x222008", "type" : "TTPS"},
+        {"id": 16, "description": "MoriyaServiceX64.dll (Moriya's agent)", "type" : "EXEF"},
+        {"id": 17, "description": "ProcessKillerX64.dll (ProcessKiller's DLL)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "calls"},
+        {"source": 2, "target": 3, "rel_name" : "receives list of processes to block"},
+        {"source": 2, "target": 4, "rel_name" : "writes and impersonates driver"},
+        {"source": 2, "target": 5, "rel_name" : "uses to load driver"},
+        {"source": 2, "target": 6, "rel_name" : "uses to bypass Digital Signature Enforcement"},
+        {"source": 8, "target": 7, "rel_name" : "creates vector of blacklisted processes"},
+        {"source": 8, "target": 9, "rel_name" : "receives IOCTL with code 0x22200C"},
+        {"source": 9, "target": 10, "rel_name" : "locates process object using"},
+        {"source": 9, "target": 11, "rel_name" : "terminates process using"},
+        {"source": 8, "target": 12, "rel_name" : "receives IOCTL with code 0x222004"},
+        {"source": 13, "target": 14, "rel_name" : "registers callback for new processes in"},
+        {"source": 15, "target": 7, "rel_name" : "destroys linked list of blacklisted processes"},
+        {"source": 16, "target": 6, "rel_name" : "uses same DSEFix code as"},
+        {"source": 17, "target": 2, "rel_name" : "similar to"}
+    ]
+}

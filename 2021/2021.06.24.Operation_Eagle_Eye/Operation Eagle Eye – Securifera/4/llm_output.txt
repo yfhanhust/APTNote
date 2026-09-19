@@ -1,0 +1,70 @@
+
+
+
+Sentence : Exploitation – HP iLO (CVE-2017-12542)
+While my scanner was still enumerating endpoints on the CommandPost, I went ahead and fired up the iLO
+exploit to confirm whether or not the target was actually exploitable. Sure enough, I was able to create a new
+admin user and login.
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 6/20
+6/24/2021 Operation Eagle Eye – Securifera
+We now have privileged access to an iLO web management portal of some unknown web server. Outside of
+getting some server statistics and being able to turn the server on and off, what can we actually do that’s useful
+from an attacker’s perspective? Well for one we can utilize the remote console feature. HP iLOs actually have
+two ways to do this, one via Java web start from the web interface and one over SSH (which shares the
+credentials for the web interface).
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 7/20
+6/24/2021 Operation Eagle Eye – Securifera
+Loading up the remote console via Java for this iLO reveals that this server is actually a Fidelis Direct Sensor
+appliance. Access to the remote console in itself is not super useful since you still have to have credentials to
+login to the server. However, when you bring up the Java web start remote console you’ll notice a menu that
+says “Virtual Drives”. What this menu allows you to do is to remotely mount a ISO of your choosing.
+With the ability to mount a custom ISO remotely, this introduces a possible avenue to gain code execution. If the
+target server does not have a BIOS password and doesn’t utilize full disk encryption, we should be able to boot
+to an ISO we supply remotely and gain access to the server’s file system. This technique definitely isn’t subtle
+as we have to turn off the server but maybe the system owner won’t notice if the outage is brief
+If you are reading this there’s a good chance you’ll be attempting to pull this off through some sort of proxy/C2
+comms mid-operation rather than physically sitting at a system on the same network. This makes the choice of
+ISO critical since network bandwidth is limited. A live CD image that is as small as possible is ideal. I originally
+tried a 30MB TinyCore linux but eventually landed on the 300 MB Puppy Linux since it comes with a lot more
+features out-of-the-box. Once the OS loaded up I mounted the filesystem and confirmed access to critical files.
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 8/20
+6/24/2021 Operation Eagle Eye – Securifera
+Since the device had SSH enabled, I decided the easiest mechanism for compromise would be to simply add a
+SSH public key to the root user’s authorized key file. The “sshd_config” also needed to be updated to allow root
+login and enable public key authentication.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "HP iLO", "type" : "APPS"},
+        {"id": 2, "description": "CVE-2017-12542", "type" : "CVES"},
+        {"id": 3, "description": "CommandPost", "type" : "COUN"},
+        {"id": 4, "description": "new admin user", "type" : "ACTO"},
+        {"id": 5, "description": "iLO web management portal", "type" : "APPS"},
+        {"id": 6, "description": "unknown web server", "type" : "COUN"},
+        {"id": 7, "description": "Java web start from the web interface", "type" : "APPS"},
+        {"id": 8, "description": "SSH (for iLO)", "type" : "NETP"},
+        {"id": 9, "description": "Fidelis Direct Sensor appliance", "type" : "APPS"},
+        {"id": 10, "description": "Virtual Drives menu in Java web start remote console", "type" : "TTPS"},
+        {"id": 11, "description": "custom ISO for remote mounting", "type" : "DOCF"},
+        {"id": 12, "description": "BIOS password (absent)", "type" : "TAMP"},
+        {"id": 13, "description": "full disk encryption (not utilized)", "type" : "TAMP"},
+        {"id": 14, "description": "TinyCore Linux", "type" : "APPS"},
+        {"id": 15, "description": "Puppy Linux", "type" : "APPS"},
+        {"id": 16, "description": "root user’s authorized key file", "type" : "REGI"},
+        {"id": 17, "description": "sshd_config", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "vulnerable to"},
+        {"source": 3, "target": 1, "rel_name" : "used for scanning"},
+        {"source": 4, "target": 5, "rel_name" : "created in"},
+        {"source": 5, "target": 6, "rel_name" : "manages"},
+        {"source": 7, "target": 10, "rel_name" : "provides access to"},
+        {"source": 8, "target": 10, "rel_name" : "provides access to"},
+        {"source": 9, "target": 6, "rel_name" : "is a type of"},
+        {"source": 10, "target": 11, "rel_name" : "allows mounting of"},
+        {"source": 11, "target": 14, "rel_name" : "can be a"},
+        {"source": 11, "target": 15, "rel_name" : "can be a"},
+        {"source": 16, "target": 8, "rel_name" : "configured for"},
+        {"source": 17, "target": 8, "rel_name" : "configures"}
+    ]
+}

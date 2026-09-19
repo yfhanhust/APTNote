@@ -1,0 +1,59 @@
+
+
+
+Sentence : Meterpreter and DNS tunneling – C17C335B7DDB5C8979444EC36AB668AE8E4E0A72
+This document contains a malicious macro that, when enabled, drops an NSIS installer
+whose task is to prepare installation of the main backdoor. Part of the installation
+process is to set up firewall rules to allow the malicious component to communicate with
+the C&C server. Next is a command example the NSIS installer uses to set up these
+rules:
+cmd.exe /c netsh advfirewall firewall add rule name=\”Realtek HD Audio Update Utility\”
+dir=in action=allow program=\”< path >\RtlUpd.exe\” enable=yes profile=any
+However, the final payload is something that we have never seen associated with
+Buhtrap. Encrypted in its body are two payloads. The first one is a very small shellcode
+downloader, while the second one is Metasploit’s Meterpreter. Meterpreter is a reverse
+shell that grants its operators full access to the compromised system.
+The Meterpreter reverse shell actually uses DNS tunnelling to communicate with its C&C
+server by using a module similar to what is described here. Detecting DNS tunnelling
+can be difficult for defenders, since all malicious traffic is done via the DNS protocol, as
+https://www.welivesecurity.com/2019/07/11/buhtrap-zero-day-espionage-campaigns/ 5/8
+7/11/2019 Buhtrap group uses zero ~~-~~ day in latest espionage campaigns | WeLiveSecurity
+opposed to the more regular TCP protocol. Below is a snippet of the initial
+communication of this malicious module.
+7812.reg0.4621.toor.win10.ipv6-microsoft[.]org
+7812.reg0.5173.toor.win10.ipv6-microsoft[.]org
+7812.reg0.5204.toor.win10.ipv6-microsoft[.]org
+7812.reg0.5267.toor.win10.ipv6-microsoft[.]org
+7812.reg0.5314.toor.win10.ipv6-microsoft[.]org
+7812.reg0.5361.toor.win10.ipv6-microsoft[.]org
+[…]
+The C&C server domain name in this example is impersonating Microsoft. In fact, the
+attackers registered different domain names for these campaigns, most of them abusing
+Microsoft brands in one way or another.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Meterpreter", "type" : "EXEF"},
+        {"id": 2, "description": "C17C335B7DDB5C8979444EC36AB668AE8E4E0A72", "type" : "IOCS"},
+        {"id": 3, "description": "Malicious macro in the document", "type" : "DOCF"},
+        {"id": 4, "description": "NSIS installer", "type" : "EXEF"},
+        {"id": 5, "description": "Main backdoor", "type" : "EXEF"},
+        {"id": 6, "description": "Firewall rules", "type" : "FIRW"},
+        {"id": 7, "description": "C&C server", "type" : "CCSH"},
+        {"id": 8, "description": "Realtek HD Audio Update Utility", "type" : "EXEF"},
+        {"id": 9, "description": "< path >\\RtlUpd.exe", "type" : "SYSP"},
+        {"id": 10, "description": "Small shellcode downloader", "type" : "EXEF"},
+        {"id": 11, "description": "Metasploit’s Meterpreter", "type" : "EXEF"},
+        {"id": 12, "description": "DNS tunnelling module", "type" : "TTPS"},
+        {"id": 13, "description": "toor.win10.ipv6-microsoft[.]org", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "drops"},
+        {"source": 4, "target": 5, "rel_name" : "prepares installation of"},
+        {"source": 4, "target": 6, "rel_name" : "sets up"},
+        {"source": 6, "target": 7, "rel_name" : "allows communication with"},
+        {"source": 10, "target": 11, "rel_name" : "part of final payload"},
+        {"source": 11, "target": 7, "rel_name" : "communicates with using DNS tunnelling"},
+        {"source": 12, "target": 7, "rel_name" : "uses to communicate with"}
+    ]
+}

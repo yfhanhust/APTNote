@@ -1,0 +1,39 @@
+BOOSTWRITE Loader: Where You At?
+BOOSTWRITE is a loader crafted to be launched via abuse of the DLL search order of
+applications which load the legitimate ‘Dwrite.dll’ provided by the Microsoft DirectX Typography
+Services. The application loads the ‘gdi’ library, which loads the ‘gdiplus’ library, which ultimately
+loads ‘Dwrite’. Mandiant identified instances where BOOSTWRITE was placed on the file system
+alongside the RDFClient binary to force the application to import DWriteCreateFactory from it
+rather than the legitimate DWrite.dll.
+Once loaded, DWrite.dll connects to a hard-coded IP and port from which it retrieves a
+decryption key and initialization vector (IV) to decrypt two embedded payload DLLs. To
+accomplish this task, the malware first generates a random file name to be used as a text log
+under the current user's %TEMP% directory; this filename starts with ~rdf and is followed by a set
+of random numbers. Next, the malware scans its own image to find the location of a 32-byte long
+multi-XOR key which is used to decode data inside its body. Part of the decoded data is an IP
+address and port which are used to retrieve the key and the IV for the decryption of the
+embedded payloads. The encryption algorithm uses the ChaCha stream cipher with a 256-bit key
+and 64-bit IV.
+https://www.fireeye.com/blog/threat-research/2019/10/mahalo-fin7-responding-to-new-tools-and-techniques.html 1/9
+10/11/2019 Mahalo FIN7: Responding to the Criminal Operators’ New Tools and Techniques | FireEye Inc
+Once the key and the IV are downloaded the malware decrypts the embedded payloads and
+performs sanity checks on the results. The payloads are expected to be PE32.DLLs which, if the
+tests pass, are loaded into memory without touching the filesystem.
+The malware logs various plaintext messages to the previously created logfile
+%TEMP%\~rds which are indicative of the loader’s execution progress. An
+example of the file content is shown in Figure 1:
+Loading...
+Starting...
+Init OK
+Key OK
+Data: 4606941
+HS: 20
+K:[32] V:[8]
+DCnt: 732642317(ERR)
+Figure 1: BOOSTWRITE log file
+Before exiting, the malware resolves the location of the benign DWrite.dll library and passes the
+execution control to its DWriteCreateFactory method.
+The malware decrypts and loads two payload DLLs. One of the DLLs is an instance of the
+CARBANAK backdoor; the other DLL is a tool tracked by FireEye as RDFSNIFFER which allows
+an attacker to hijack instances of the NCR Aloha Command Center Client application and interact
+with victim systems via existing legitimate 2FA sessions.

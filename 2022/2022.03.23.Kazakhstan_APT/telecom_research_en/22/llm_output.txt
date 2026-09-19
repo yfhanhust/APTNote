@@ -1,0 +1,88 @@
+
+
+
+Sentence : Operating principle
+The trojan folder contains the following files:
+
+mcupdui.exe — the executable file into which the malicious library is loaded using
+Hijacking DLL has a valid McAfee signature:
+```
+  4F638B91E12390598F037E533C0AEA529AD1A371: CN=McAfee, Inc., OU=IIS,
+  OU=Digital ID Class 3 - Microsoft Software Validation v2,
+  O=McAfee, Inc., L=Santa Clara, S=California, C=US
+
+```
+
+
+McUiCfg.dll — downloader
+
+
+mscuicfg.dat — encrypted shellcode
+
+
+mcupdui.ini — configuration of trojan
+
+
+To move to the main malicious functionality, the trojan modifies the process memory:
+The instruction following the malicious library’s download library is modified:
+Trojan.Loader.891 finds all the functions it needs by hashes using the PEB (Process Environment
+Block) structure.
+At the same time, the names of libraries and functions are hashed differently: library names are
+hashed as Unicode strings converted to upper case. Function names are hashed as ASCII strings
+without changing the case. The resulting two hashes are added together and then compared
+with the desired one.
+```
+ ror = lambda val, r_bits, max_bits: \
+((val & (2 ** max_bits - 1)) >> r_bits % max_bits) | \
+(val << (max_bits - (r_bits % max_bits)) & (2 ** max_bits - 1))
+def hash_lib_whitebird(name: bytes) -> int:
+a = name.upper() + b'\x00'
+c = 0
+for i in range(0, len(a)):
+c = (a[i] + ror(c, 13, 32)) & 0xffffffff
+# library name is a unicode string
+c = (0 + ror(c, 13, 32))
+return c
+```
+```
+ def hash_func_whitebird(name: bytes) -> int:
+a = name + b'\x00'
+c = 0
+for i in range(0, len(a)):
+c = (a[i] + ror(c, 13, 32)) & 0xffffffff
+return c
+```
+Trojan’s main functions are encrypted. When the function is called, it decrypts its code, and when
+it exits, it encrypts it back.
+Main function:
+Trojan.Loader.891 obtains the MAC addresses of all network interfaces on the computer. The
+trojan then reads data from the mscuicfg.dat file. If the last 6 bytes are zero, then it writes the
+first MAC address from the list into them and encrypts this file with the RC4 algorithm. In this
+case, the key is equal to the MAC address written to the file, so the encrypted data is saved to
+the file mscuicfg.dat .
+After that, in any way, the trojan reads the file again, sorting through each of the received MAC
+addresses until it finds the right one. The decryption’s correctness is checked by matching the
+last 6 decrypted bytes with the encryption key. Upon successful decryption, the trojan cuts them
+off and decrypts the file again using the RC4 algorithm, but takes the string mscuicfg.dat as
+the key. The received data is a shellcode with a configuration and a payload.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "mcupdui.exe", "type" : "EXEF"},
+        {"id": 2, "description": "McUiCfg.dll", "type" : "EXEF"},
+        {"id": 3, "description": "mscuicfg.dat", "type" : "DOCF"},
+        {"id": 4, "description": "mcupdui.ini", "type" : "DOCF"},
+        {"id": 5, "description": "Trojan.Loader.891", "type" : "TTPS"},
+        {"id": 6, "description": "PEB (Process Environment Block)", "type" : "SYSP"},
+        {"id": 7, "description": "MAC addresses of all network interfaces", "type" : "MAC"},
+        {"id": 8, "description": "RC4 algorithm", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loads"},
+        {"source": 2, "target": 3, "rel_name" : "downloads from"},
+        {"source": 5, "target": 6, "rel_name" : "uses to find functions"},
+        {"source": 5, "target": 7, "rel_name" : "obtains"},
+        {"source": 5, "target": 3, "rel_name" : "reads and writes to"},
+        {"source": 8, "target": 3, "rel_name" : "encrypts using"}
+    ]
+}

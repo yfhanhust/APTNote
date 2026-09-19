@@ -1,0 +1,137 @@
+
+
+
+Sentence : Ransomware plugin — Hansom
+We also discovered a ransomware plugin that encrypts specific file extensions on the infected
+endpoint. Traditionally ransomware encrypts files on the infected endpoint using a
+combination of asymmetric and symmetric encryption. This plugin is different.
+It locks files into individually created archives using randomly generated passwords. The
+passwords are then encrypted using an embedded public key (part of an embedded pub
+certificate). Once the infected user gets access to the private key (after the ransom has been
+paid), the private key can be plugged into the accompanying decryptor .exe that decrypts the
+archive passwords and subsequently unpacks the original files from the archive.
+The plugin performs the following housekeeping actions before it begins encrypting files on
+the endpoint:
+Terminate specific application processes.
+Suppress Windows Defender notifications by setting registry value:
+HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\UX Configuration |
+Notification_Suppress = 0x1
+Terminate Windows Defender process "MsMpEng.exe" specifically.
+Disable task manager via registry:
+HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System |
+DisableTaskMgr = 0x1
+Setup persistence for self via registry and regsvr32:
+HKCU\Software\Microsoft\Windows\CurrentVersion\Run | HANSOM = regsvr32.exe
+/s 
+Targeted File Extensions
+The following file extensions are targeted by the ransomware plugin. The ransomware
+excludes certain file and folder names from encryption to ensure the stability of the
+Operating System (listed in the IOCs section).
+doc,docx,ppt,pps,pptx,xls,xlsx,mdb,chm
+txt,log,pdf,hwp,hst,ods,odt,rtf,csv,hwpml,show,eps,epub,eml
+htm,html,js,css,vbs,php,jsp,xml,asp,aspx
+asm,java,c,cpp,cs,h,m,3ds,max,dwg,cad
+rar,zip,alz,tar,tgz,gz,7z,iso,bz2,bzip2,arj,arc,ace,xz,lz
+jpg,jpeg,png,bmp,tiff,gif,psd,ai,fla,ppm,xbm
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 15/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+exe,dll,jar,war,bat,py,pl,apk,msi,ocx,cmd
+db,frm,myd,myi,mdf,sdf,dbf,sql,sqlite3,dat
+cer,crt,der,p7b,p7c,p12,pfx,pem,csr,key
+ini,inf,reg,bak,ldf,config,conf,cka,au3
+Ransomware Encryption Algorithm
+The plugin uses the following sequence of steps to encrypt/lock files on the infected
+endpoint:
+
+Create a password by generating random 0x48 bytes and base64 encoding them. Then
+
+take the target file and add it to a password-protected RAR archive using command:
+"C:\Users\\AppData\Roaming\WinRar\Rar.exe" a -y -ep -k -r -s -ibck -df
+-m0 -hp -ri1:250 ".rar" ""
+This command also deletes the target file once it has been added to the archive.
+
+After the target file has been archived, the random password used for the creation of
+
+the RAR archive is encrypted using an embedded RSA public key.
+
+The encrypted password blob is appended to the archive along with a marker indicating
+
+that the file has been encrypted successfully. The marker used is:
+48 61 6E 73 6F 6D 32 30 30 38 20 20 07 29 Hansom2008 .)
+
+Then the RAR archive is renamed (via file move) to the name of the original file.
+
+E.g. C:\blah\abc.txt.rar is renamed back to C:\blah\abc.txt
+
+A ransom note is dropped in the target file's directory named HANSOM_README.txt
+
+informing the user of the ransomware infection.
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 16/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+Ransom Note
+The BTC addresses discovered so far do not hold any money (with no transactions made in or
+out of the BTC addresses).
+Post-Processing Activities
+The ransomware plugin performs the following activities after it has encrypted all the
+targeted files on the system:
+
+Create and encrypt sample files on desktop folder "Hansom_Sample" for
+
+demonstrating the decryptor:
+sample.docx
+sample.jpg
+sample.pdf
+sample.zip
+2. Drop the decryptor .exe to the current user's desktop as "Hansom Decryptor.exe".
+https://blog.talosintelligence.com/2020/11/crat-and-plugins.html 17/32
+11/13/2020 Cisco Talos Intelligence Group - Comprehensive Threat Intelligence: CRAT wants to plunder your endpoints
+
+Copy the ransom note JPG to C:\Users\Public\Pictures\hansom.jpg and set it as the
+
+current wallpaper via registry.
+Hansom ransomware wallpaper:
+
+Remove any registry based persistence mechanisms such as Run keys to prevent re
+encryption of files on startup.
+Delete disk shadow copies using wmic command: shadowcopy delete
+
+The ransomware plugin also communicates with a C2 server URL, sending it details (as
+JSONs) such as:
+Unique ID of machine (generated similar to CRAT)
+Ransom ID of the plugin
+Number of files encrypted
+Privilege level of the process, etc.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Hansom ransomware plugin", "type" : "EXEF"},
+        {"id": 2, "description": "Specific file extensions targeted by ransomware (doc, docx, ppt, pps, pptx, etc.)", "type" : "DOCF"},
+        {"id": 3, "description": "Windows Defender notifications suppression registry key: HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\UX Configuration | Notification_Suppress = 0x1", "type" : "REGI"},
+        {"id": 4, "description": "MsMpEng.exe process (Windows Defender)", "type" : "EXEF"},
+        {"id": 5, "description": "Task manager disable registry key: HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System | DisableTaskMgr = 0x1", "type" : "REGI"},
+        {"id": 6, "description": "Persistence setup via registry and regsvr32: HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run | HANSOM = regsvr32.exe /s", "type" : "REGI"},
+        {"id": 7, "description": "RAR encryption command using Rar.exe: C:\\Users\\AppData\\Roaming\\WinRar\\Rar.exe a -y -ep -k -r -s -ibck -df -m0 -hp -ri1:250 .rar", "type" : "EXEF"},
+        {"id": 8, "description": "Encrypted password blob appended to the RAR archive with marker 'Hansom2008'", "type" : "DOCF"},
+        {"id": 9, "description": "Ransom note HANSOM_README.txt", "type" : "DOCF"},
+        {"id": 10, "description": "Sample files created on desktop: Hansom_Sample (sample.docx, sample.jpg, sample.pdf, sample.zip)", "type" : "DOCF"},
+        {"id": 11, "description": "Decryptor .exe dropped to user's desktop as 'Hansom Decryptor.exe'", "type" : "EXEF"},
+        {"id": 12, "description": "Ransom note JPG: C:\\Users\\Public\\Pictures\\hansom.jpg", "type" : "DOCF"},
+        {"id": 13, "description": "C2 server URL for communication with ransomware plugin", "type" : "URLS"},
+        {"id": 14, "description": "Shadow copies deletion command using wmic: shadowcopy delete", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "encrypts files with extensions"},
+        {"source": 1, "target": 3, "rel_name" : "modifies registry to suppress notifications"},
+        {"source": 1, "target": 4, "rel_name" : "terminates process"},
+        {"source": 1, "target": 5, "rel_name" : "disables task manager via registry"},
+        {"source": 1, "target": 6, "rel_name" : "sets up persistence via registry and regsvr32"},
+        {"source": 1, "target": 7, "rel_name" : "uses Rar.exe to create password-protected archives"},
+        {"source": 1, "target": 8, "rel_name" : "appends encrypted password blob with marker"},
+        {"source": 1, "target": 9, "rel_name" : "drops ransom note"},
+        {"source": 1, "target": 10, "rel_name" : "creates sample files for demonstration"},
+        {"source": 1, "target": 11, "rel_name" : "drops decryptor .exe to desktop"},
+        {"source": 1, "target": 12, "rel_name" : "copies and sets ransom note JPG as wallpaper"},
+        {"source": 1, "target": 13, "rel_name" : "communicates with C2 server URL"},
+        {"source": 1, "target": 14, "rel_name" : "deletes shadow copies using wmic command"}
+    ]
+}

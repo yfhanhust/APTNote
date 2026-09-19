@@ -1,0 +1,62 @@
+
+
+
+Sentence : Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 14
+RomeoAlfa maintains its persistence by locating itself within the Start Menu folder ( CSIDL_STARTUP ) or the All User’s
+Start Menu ( CSIDL_COMMON_STARTUP ) of the victim’s computer. After initializing the configuration data structure,
+RomeoAlfa moves its current running executable to the Start Menu directory via a call to MoveFile .
+RomeoAlfa randomly selects a C2 server from the ten possible server addresses within the configuration data structure
+and use the selected address to establish a connection. If the connection to the selected C2 server fails or the selected C2
+server’s address is 0.0.0.0, a new C2 server is randomly selected and another attempt is made. If 10 unsuccessful attempts
+are made, RomeoAlfa sleeps for a defined period of time (as specified in the configuration data structure, typically set to
+60 seconds) before attempting the random C2 server selection and connection process again.
+One of the most distinctive features of RomeoAlfa is the use of the fake TLS communication scheme to encrypt
+end-to-end communication as well as to obfuscate the nature of the communication. After successfully connecting to a
+C2 server, RomeoAlfa generates a seemingly legitimate TLS channel, complete with the appropriate handshake protocol
+packets. However, the malware ultimately uses an encryption method that is not supported by the TLS standard. This
+encryption method therefore blends in with legitimate TLS traffic while at the same time is immune to SSL/TLS man-inthe-middle proxying that would reveal the plaintext of the communication.
+After establishing the fake TLS channel, RomeoAlfa exchanges a 12-byte datagram (through the fake TLS channel) with the
+C2 server as the first step in a two-part handshake. The datagram contains a channel identifier and the current connection
+state of the RomeoAlfa instance (Table 3-2). The channel identifier corresponds to the channel identifiers found within
+PapaAlfa samples. The code for establishing the handshake (Figure 3-3) is the exact inverse of the handshake function found
+in PapaAlfa. This implies that RomeoAlfa (and, as explained in later sections, RomeoBravo and RomeoHotel) can interface
+with a PapaAlfa instance, which in turn may be little more than a proxy point for the real C2 server. Regardless of the
+presence of PapaAlfa in the communication stream, the commands ultimately come from the C2 server.
+|STATE VALUE|DESCRIPTION|
+|---|---|
+|1|Initialized state (only occurs prior to first C2 connection attempt)|
+|2|Sleep state|
+|3|Not used in RomeoAlfa|
+|4|Not used in RomeoAlfa|
+|5|Active state|
+Table 3-2: RomeoAlfa’s State Values
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RomeoAlfa", "type" : "ACTO"},
+        {"id": 2, "description": "Start Menu folder (CSIDL_STARTUP)", "type" : "SYSP"},
+        {"id": 3, "description": "All User’s Start Menu (CSIDL_COMMON_STARTUP)", "type" : "SYSP"},
+        {"id": 4, "description": "Executable file of RomeoAlfa", "type" : "EXEF"},
+        {"id": 5, "description": "C2 server", "type" : "CCSH"},
+        {"id": 6, "description": "10 possible server addresses within the configuration data structure", "type" : "TAMP"},
+        {"id": 7, "description": "Defined period of time (60 seconds)", "type" : "TAMP"},
+        {"id": 8, "description": "Fake TLS communication scheme", "type" : "NETP"},
+        {"id": 9, "description": "12-byte datagram", "type" : "TAMP"},
+        {"id": 10, "description": "Channel identifier", "type" : "TAMP"},
+        {"id": 11, "description": "Current connection state of the RomeoAlfa instance", "type" : "TAMP"},
+        {"id": 12, "description": "PapaAlfa samples", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "maintains persistence in"},
+        {"source": 1, "target": 3, "rel_name" : "maintains persistence in"},
+        {"source": 1, "target": 4, "rel_name" : "moves to"},
+        {"source": 1, "target": 5, "rel_name" : "connects to"},
+        {"source": 1, "target": 6, "rel_name" : "selects from"},
+        {"source": 1, "target": 7, "rel_name" : "sleeps for"},
+        {"source": 1, "target": 8, "rel_name" : "uses"},
+        {"source": 1, "target": 9, "rel_name" : "exchanges with C2 server via"},
+        {"source": 9, "target": 10, "rel_name" : "contains"},
+        {"source": 9, "target": 11, "rel_name" : "contains"},
+        {"source": 10, "target": 12, "rel_name" : "corresponds to in"}
+    ]
+}

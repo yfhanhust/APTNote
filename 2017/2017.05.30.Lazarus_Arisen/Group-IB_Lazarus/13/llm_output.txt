@@ -1,0 +1,62 @@
+
+
+
+Sentence : 9 Lazarus arisen: architecture, tools, attribution
+1
+2
+3
+4
+This allowed us to analyze communications between the Admin-Tool and
+Backend_Listener and we discovered that:
+Admin_Tool must have an key pair that is identical to the server
+Admin_Tool sends a customized Hello-package that differs from the one
+that is provided by the library. By default this package (msg) is specified in
+the library as follows:
+```
+  #ifndef WOLFSSL_ALT_TEST_STRINGS
+  char msg[32] = «hello wolfssl!»;  / GET may make bigger /
+```
+The correct Hello packet that will be accepted by Backend_Listener must be of the
+following form:
+```
+  static unsigned char msg[4] = { 0x11, 0x00, 0x00, 0x00, };
+```
+In fact, this is an information packet, rather than a Hello packet, and its first byte
+contains the length of the next packet sent («len»), while the rest bytes must be zero
+in this case.
+Admin_Tool sends an encrypted (special) packet with a length from the
+previous packet (len).
+The server decrypts the contents of the packet sent.After decryption, the
+following conditions must be true:
+```
+  (DWORD)&decrypted_buff[5] == len
+  (DWORD)&decrypted_buff[15] == len
+```
+where len is the length of the packet
+```
+  static unsigned char msg[4] = { 0x11, 0x00, 0x00, 0x00, };
+  static unsigned char ecnrypted_str[17] = { 0x38, 0x94, 0x3C, 0x6A, 0x58, 0x39,
+  0x1A, 0x56, 0x81, 0x4B, 0x09, 0x99, 0x1D, 0xE0, 0xCF, 0x81, 0x3F };
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Lazarus", "type" : "ACTO"},
+        {"id": 2, "description": "Admin_Tool", "type" : "APPS"},
+        {"id": 3, "description": "Backend_Listener", "type" : "APPS"},
+        {"id": 4, "description": "key pair", "type" : "TAMP"},
+        {"id": 5, "description": "Hello-package (msg)", "type" : "EXEF"},
+        {"id": 6, "description": "customized Hello-package", "type" : "EXEF"},
+        {"id": 7, "description": "encrypted packet", "type" : "EXEF"},
+        {"id": 8, "description": "decrypted_buff[5]", "type" : "TAMP"},
+        {"id": 9, "description": "decrypted_buff[15]", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "communicates with"},
+        {"source": 2, "target": 4, "rel_name" : "shares key pair with"},
+        {"source": 2, "target": 5, "rel_name" : "sends default Hello-package to"},
+        {"source": 2, "target": 6, "rel_name" : "sends customized Hello-package to"},
+        {"source": 2, "target": 7, "rel_name" : "sends encrypted packet with"},
+        {"source": 3, "target": 7, "rel_name" : "decrypts packet from"},
+        {"source": 8, "target": 9, "rel_name" : "matches condition of"}
+    ]
+}

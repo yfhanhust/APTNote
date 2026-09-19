@@ -1,0 +1,49 @@
+
+
+
+Sentence : USB Backdoor
+One of the modules, agentcpd.dll, is a backdoor that was designed to
+work as an advanced reconnaissance tool for air-gapped computers that
+are normally used in highly secure facilities. The backdoor waits for a USB
+drive to be plugged in and if that’s a new disk, it instantly allocates some
+space for a hidden container using its own FAT16/FAT32 filesystem driver.
+This is what the FAT root directory looks like before and after plugging a
+USB drive into an infected machine:
+Hexdump of raw disk partition before and after plugging into an infected
+machine
+On top of this hexdump the drive label “MYDRIVE” can be found
+(corresponding hex bytes are underlined with green). It is followed by a
+single byte flag value (0x08 in hex) which, according to Microsoft, means
+ATTR_VOLUME_ID. Each entry in this root directory table is 32-bytes
+long.
+Subdirectory entries such as Pictures, Music, Documents and Work
+occupy 63 bytes, because of the long filename FAT feature. There are two
+variants of subdirectory names – short and long. A subdirectory entry
+uses a flag 0x10 following the short directory name, which, according to
+Microsoft, means ATTR_DIRECTORY.
+The last record inserted by Fanny (highlighted in red) uses an invalid
+directory name and a flag 0x18, which combines ATTR_VOLUME_ID and
+ATTR_DIRECTORY. This combination of flags is not documented
+according to current FAT specifications and the whole entry is therefore
+ignored by filesystem drivers as if it were a data corruption or a bad block.
+As a result this entry is not visible in Windows, Mac OS and Linux and
+probably all other implementations of FAT driver.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "agentcpd.dll", "type" : "EXEF"},
+        {"id": 2, "description": "USB drive", "type" : "USB"},
+        {"id": 3, "description": "FAT16/FAT32 filesystem driver", "type" : "OPPS"},
+        {"id": 4, "description": "MYDRIVE", "type" : "TAMP"},
+        {"id": 5, "description": "0x08 (ATTR_VOLUME_ID)", "type" : "TAMP"},
+        {"id": 6, "description": "0x10 (ATTR_DIRECTORY)", "type" : "TAMP"},
+        {"id": 7, "description": "Fanny", "type" : "ACTO"},
+        {"id": 8, "description": "invalid directory name and a flag 0x18", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "waits for"},
+        {"source": 2, "target": 3, "rel_name" : "uses"},
+        {"source": 4, "target": 5, "rel_name" : "has attribute"},
+        {"source": 7, "target": 8, "rel_name" : "inserts"}
+    ]
+}

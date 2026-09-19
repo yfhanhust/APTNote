@@ -1,0 +1,208 @@
+
+
+
+Sentence : • [OS] • [Build] • [Architecture] • [Antivirus] • [Is Admin] • [Integrity Level] • [UAC Setting] • [ConsentPromptBehaviorAdmin] • [PromptOnSecureDesktop] • [First visit] • [Last visit]
+Figure 6. C&C - Victim details page
+The available commands inside the victim details page are listed below. Every command
+contains a brief explanation of the action to be executed; the explanatory comments
+clearly show the sophistication of the SilverFish group’s TTP.
+```
+Spawn new shell session (port 443)
+Spawn new shell session (port 80)
+Spawn new shell session (port 25)
+Spawn new shell session (port 110)
+```
+13 / 51
+DISCLAIMER: This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+```
+Spawn new shell session (port 143)
+Spawn new shell session (port 443) (+amsi.dll patch WIN10 ONLY)
+Spawn new shell session (port 443) (+amsiInitFailed=true WIN10 ONLY) TEST
+Spawn new bot instance
+Spawn new bot instance elevated (slui, build>=9600, WIN8.1, WIN10) powershell required
++ console shown. Blocked by WD
+Spawn new bot instance elevated (eventvwr, WIN7, WIN8.1)
+Spawn new bot instance elevated (sdclt, build>=14393, WIN10) WD alert, instance dies,
+still works
+Execute beacon
+Execute exe file with cmd
+Upload file TEMP
+Upload file ProgramData
+Download file from bot (specify file path) traffic not encrypted!
+Execute command with cmd
+Execute command with cmd (RUNAS)
+Execute command elevated (fodhelper, build>=10240), full path, no output
+returned
+Execute command elevated (computerdefaults, build>=10240), full path, no output
+returned
+Execute command elevated (slui, build>=9600), full path, no output
+returned, powershell required + console shown. if failed, needs manual reg cleanup
+Execute command elevated (sdclt, build>=14393), full path, no output returned,
+WD alert, executes, instance dies
+Execute command elevated (eventvwr, build>=7600 && build <15031),
+full path, no output returned
+Execute command elevated (compmgmtlauncher, build>=7600 && build <15031),
+full path, no output returned
+Detection trigger (ps1) (test)
+Detection clean (ps1) (test)
+Syntax error (ps1) (test)
+Kill bot
+```
+Figure 7. Command and control panel - Available commands
+14 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+The available commands allow the threat actors to spawn shells on ports; 443, 80, 25, 110,
+143 with the ability to bypass AMSI protection via DLL patching.
+Analyst Note : The Windows Antimalware Scan Interface (AMSI) allows applications and
+services to integrate with any antimalware product that’s present on a machine. AMSI
+provides enhanced malware protection for end-users and their data, applications, and
+workloads [12].
+Threat actors are also able to run elevated commands with different ways and upload
+arbitrary files to the infected victims. The results of the executed commands are shown on a
+separate tab as follows :
+Figure 8. C&C - Victim task response page
+To upload a file to victim devices, threat actors are using the ”file list” page of the C&C server
+shown in the following image. The page contains a basic file upload form that stores the
+uploaded files with an ID. Once threat actors issue an ”Upload file” command with an ID
+value, the selected file is uploaded to victim devices under the path %TEMP% or ProgramData
+depending on the selected upload command type.
+Figure 9. C&C - File listing page
+15 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+3.1.1 Server Analysis
+In this section, we present our important findings obtained from the C&C server. One of
+the most expected observation is that the SilverFish group used many common techniques
+to harden the server. Firstly, the group installed and configured AppArmor which is a common
+practice to allow running applications in an isolated environment. Secondly, all collectable
+logs inside the operating system (web access logs, ssh auth log, console history etc.) were
+disabled. Lastly, network firewall is configured to communicate only with pre-defined IP
+Addresses (Figure 10).
+Figure 10. Firewall configuration of the server
+One of the most notable findings from the server-side is the web proxy configuration. We
+discovered several crucial domains belonging to a range of nodes including TDS and C&C
+proxies. An example of configuration is provided in Figure 11 and all of the domains can be
+found in Section 6.
+Figure 11. Proxy configuration of the server
+Next, The PTI Team tried to access the previously assigned IP address directly with
+a GET request and immediately observed a redirection to securesearchnow[.]com
+domain. This finding was important because it linked 209.99.40.223 IP with both
+secureconnectiongroup[.]com and securesearchnow[.]com domains. Moreover, the PTI Team
+observed that several IPs in that range also points requests to the securesearchnow[.]com
+domain. The similarity between domain names is another aspect of the correlation which
+should not be disregarded.
+16 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+Figure 12. Same script is called from both securesearchnow[.]com and 208.91.198.23
+Figure 12 illustrates the similarities between securesearchnow[.]com and 208.91.198.23
+IP address. Both of the web servers redirect the visitors to a PHP script hosted at
+freeresultsguide[.]com. Ideally, we would like to analyze the source code of sk-jspark_init.php.
+However, the PTI Team could not find the code of the script during the writing of this report.
+We believe it might give some other clue about the SilverFish group. In any case, we will
+include it in our repository once it’s been analyzed by us or by any other research group.
+On March 4, 2021 Microsoft published another set of IOCs in their blog [20] related with
+SolarWinds attackers. It is worth noting that reyweb[.]com domain in their list also resolves to
+208.91.198.23 which can be traced back to SilverFish group’s C&C server.
+17 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+3.1.2 Team Hierarchy
+Figure 13. Team structure of SilverFish
+While significant attention has been focused on reversing and identifying the tools of
+the SilverFish group, victim handling and team management methodology should also be
+discussed in detail. In general, command and control servers are managed with a single or
+multiple administrator accounts. It is not common to see multiple accounts with different
+permission levels to manage a C&C server. SilverFish uses a team based workflow model
+and a triage system similar to modern project management applications like Jira (see
+Figure 14). Whenever a new victim is infected, it is assigned to the current ”Active Team”
+which is pre-selected by the administrator. Each team on the C&C server can only see the
+victims assigned to them. Furthermore, the system has the capability to auto-assign victims
+based on the current workload. During our investigation, we found four different teams
+( namely 301,302,303,304 ) who were actively exploiting the victims’ devices. These teams
+cycle frequently almost every day or every two days. In Section 4.3, we present ”Attacker
+Activity Time Graph” to urge further exploration of the group’s working hours.
+Figure 14. Team assignment for each victim
+Moreover, there are clues indicating that multiple users are managing the SilverFish TDS panel
+that is analyzed in the next 3.2 section of this report. Each user is able to write comments
+for each victim to prioritize the exploitation. Based on these comments, we were able to
+understand more about the motivation of the group and prioritization of the victims. It is also
+important to mention that most of the comments are written in Russian slang and vernacular.
+( ”dno”,”pidori”, ”poeben”, ”poebotina”, ”psihi”, ”hernya”, ”xyeta”, ”gavno” )
+18 / 51
+DISCLAIMER : This document and its contents shall be deemed as proprietary and privileged information of PRODAFT and shall
+be subjected to articles and provisions that have been stipulated in the General Data Protection Regulation and Personal
+Data Protection Law No. 6698. It shall be noted that PRODAFT provides this information “as is” according to its findings, without
+providing any legally applicable warranty regarding completeness or accuracy of the contents. Therefore, neither this report
+nor any of its contents can be used as admissible proof before legal authorities.
+TLP:WHITE SilverFish APT Group
+Another significant finding is that the C&C source code
+(within PHP files) statically contain nicknames and ID
+numbers of 14 people who most likely work under the
+supervision of 4 different teams.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SilverFish APT Group", "type" : "ACTO"},
+        {"id": 2, "description": "C&C - Victim details page", "type" : "CCSH"},
+        {"id": 3, "description": "port 443", "type" : "NETP"},
+        {"id": 4, "description": "port 80", "type" : "NETP"},
+        {"id": 5, "description": "port 25", "type" : "NETP"},
+        {"id": 6, "description": "port 110", "type" : "NETP"},
+        {"id": 7, "description": "port 143", "type" : "NETP"},
+        {"id": 8, "description": "+amsi.dll patch WIN10 ONLY", "type" : "TTPS"},
+        {"id": 9, "description": "+amsiInitFailed=true WIN10 ONLY", "type" : "TTPS"},
+        {"id": 10, "description": "Windows Antimalware Scan Interface (AMSI)", "type" : "OPPS"},
+        {"id": 11, "description": "%TEMP%", "type" : "SYSP"},
+        {"id": 12, "description": "ProgramData", "type" : "SYSP"},
+        {"id": 13, "description": "AppArmor", "type" : "OPPS"},
+        {"id": 14, "description": "Firewall configuration of the server", "type" : "FIRW"},
+        {"id": 15, "description": "securesearchnow[.]com", "type" : "URLS"},
+        {"id": 16, "description": "209.99.40.223 IP", "type" : "CCSH"},
+        {"id": 17, "description": "secureconnectiongroup[.]com", "type" : "URLS"},
+        {"id": 18, "description": "208.91.198.23 IP", "type" : "CCSH"},
+        {"id": 19, "description": "freeresultsguide[.]com", "type" : "URLS"},
+        {"id": 20, "description": "sk-jspark_init.php", "type" : "EXEF"},
+        {"id": 21, "description": "reyweb[.]com", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "contains command to spawn shell on port"},
+        {"source": 2, "target": 4, "rel_name" : "contains command to spawn shell on port"},
+        {"source": 2, "target": 5, "rel_name" : "contains command to spawn shell on port"},
+        {"source": 2, "target": 6, "rel_name" : "contains command to spawn shell on port"},
+        {"source": 2, "target": 7, "rel_name" : "contains command to spawn shell on port"},
+        {"source": 2, "target": 8, "rel_name" : "contains technique for AMSI patching"},
+        {"source": 2, "target": 9, "rel_name" : "contains technique for AMSI initialization failure"},
+        {"source": 10, "target": 8, "rel_name" : "used in technique"},
+        {"source": 10, "target": 9, "rel_name" : "used in technique"},
+        {"source": 2, "target": 11, "rel_name" : "contains command to write to directory"},
+        {"source": 2, "target": 12, "rel_name" : "contains command to write to directory"},
+        {"source": 13, "target": 14, "rel_name" : "configured on server"},
+        {"source": 16, "target": 15, "rel_name" : "redirects to domain"},
+        {"source": 16, "target": 17, "rel_name" : "resolves to domain"},
+        {"source": 18, "target": 19, "rel_name" : "hosts script at URL"},
+        {"source": 21, "target": 18, "rel_name" : "resolves to IP"}
+    ]
+}

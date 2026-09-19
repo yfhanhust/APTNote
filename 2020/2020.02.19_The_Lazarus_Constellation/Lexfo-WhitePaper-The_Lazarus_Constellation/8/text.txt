@@ -1,0 +1,416 @@
+MALWARE AND INTERPRETING LINKS
+DATASET
+We gathered more than 290 malware attributed to North Korea from various sources:
+J Twitter
+J Various RE and malware forums
+J VirusTotal (Hunting)
+J Online sandboxes (HybridAnalysis, Any.RUN...)
+J Malware repository (VirusBay, VirusShare, Malshare)
+J U.S. Cyber command malware uploads
+J Threat intelligence reports
+J LEXFO’s own incident responses
+We ended up with the following families:
+Malware family
+apt38_contopee polishbanks
+powerratankba joanapbrambul
+nukesped bankshot
+killdisk mydoom
+029
+cybercom karbarcobra
+apt37_summit hoplight
+apt37_humanrights bitcoin
+apt37 fastcash
+blockbuster_sequel golddragon
+redbanc kimsuky_shark2
+keymarble sony
+darkhotel redgambler
+apt37_rocketman typeframe
+safebank troydarkseoul
+fallchill kimsuky
+electricfish dtrack
+hermesryuk sharpshooter
+ratankba intezer
+apt37_evilnewyear bangladesh_swift
+volgmer backswap
+wipall wannacry
+hiddencobra duuzer
+kimsuky_mysterybaby deltacharlie
+Malware family
+andariel_rifle apt38_dyepack
+sony_sierraalfa ghostsecret
+apt38 blockbuster_continues
+sony_kordllbot vietnam
+kimsuky_stolenpencil taiwan
+applejeus_loader Lazarus under the hood (Kaspersky)
+Samples were compiled from 2004-05-23 to 2019-10-22 according to compilation timestamps that
+seemed legitimate.
+METHODOLOGY
+After several manual analyses of Lazarus samples, we concluded that the following links where relevant:
+—
+Idenfifying links
+After several manual analysis of Lazarus samples, we figured that the following links where relevant:
+— Standard links:
+J Code reuse (Fuzzy hashes SSDEEP + MACHOKE)
+J Import hashing
+J Timestamps PDB
+— Advanced links:
+J Rich Headers
+J Yara signatures (see next part)
+030
+— A word on Rich headers
+Rich headers are added to standard PE headers in executables compiled using VisualStudio. It is a
+fingerprint of the compilation environment that can be easily decrypted and decoded. It can then be
+used to identify if binaries were compiled in the same environment, which is a strong relation. As we
+empirically saw that North Korean groups have been using VisualStudio almost exclusively, and there is a
+high chance that their malware-building infrastructure is quite conservative, we chose to develop a script
+to parse rich headers from samples and included it as a relation link in our classifier.
+—
+Building Yara rules
+For each North-Korean malware family we identified, we built Yara rules in order to keep signatures of the
+following implementations that are likely to be reused by Lazarus:
+J
+Specific strings
+J Cryptographic algorithms
+J Cryptographic keys
+J Unique implementations of features:
+J
+mapping of files
+J lateral movement
+J installing service
+J wiper implementation
+J handling logs
+J ...
+J Way of dynamically loading API
+J Obfuscation
+J ...
+We also built rules for statically linked library like OpenSSL, libcurl, ZIP etc. of specific versions, as Lazarus
+was seen to be pretty conservative in using the same versions over the years. Those rules were named
+~~lib_static_[lib name]_[version]~~ and we attributed them a lesser weight than implementation
+rules as it doesn’t illustrate a strong enough link between two samples.
+We built a set of about 100 rules that we ran on our sample dataset. To our own Yara rule set, we added
+auto-generated rules from Malpedia [37] when they showed accurate results.
+Before adding them to our ruleset, we ran tests on a huge malware set to make sure that the rules were
+accurate and there were close to zero false positive.
+—
+Building similarity profiles
+We produced a profile for each sample with fuzzy hashes, decoded rich header, compilation timestamps
+and matching Yara rules. We then compared profiles using nearest neighbor algorithms with weight
+we empirically tested to get the best results. Jaccard distance was used to compare fuzzy hashes. We
+attributed heavy weights for identical rich headers encountered in different samples and for every non
+~~lib_static_*~~ Yara rule matches. Weights (W) were roughly according to this order relation:
+~~W(Exact same Rich header) > W(Yara match (non lib_static_)) > W(Machoke code~~
+~~reuse) > W(Compilation timestamp) > W(Yara match (lib_static_)) > W(Rich header~~
+~~similarity) > W(Imphash) > W(Various metadata)~~
+—
+Handling packers
+Non-specific packers like UPX are handled separately: as fuzzy hashes become irrelevant, we dismissed
+them when computing weights. For more specific packers (Themida, Enigma...), we built Yara rules to
+identify them and considered them as a valid relation of similarity between samples since Lazarus uses
+specific versions of those packers.
+When possible, we reversed the packed samples and tried to get clean unpacked executables so our tool
+could classify them indiscriminately and accurately.
+031
+—
+Result review and improvements
+We ran our tool multiple times and tried to analyze samples that seemed to be oddly placed or unique. We
+reversed each of them and adapted our classification methodology and criteria according to our findings,
+and ran the test again and iteratively re-applied this process until the classification was accurate enough.
+—
+Building the graph
+From there, we created a graph with samples as nodes and weighted links as relations between them.
+VISUALIZATION
+We used the Fruchterman-Reingold spacialisation to visualize links and identify clusters. We ended up
+with the following constellation, where each dot is a sample and each link represents the strength of a
+relation between two samples:
+Fruchterman-Reingold spacialisation applied to our relation graph
+REVIEWING RESULTS
+Our tool revealed more than 2500 actual links between around 290 samples, which showcases that
+such a classification is relevant as Lazarus samples are rarely unique in a 10 years span period. We see
+clear clusters and many overlaps. This will shed some light on North Korean malware and groups, as the
+number of reports and campaign names grows and it can be hard to keep track and attribution is often
+confusing or unsure.
+—
+Kimsuky
+The Kimsuky group has its own cluster but we see Rich header and compilation timestamp overlaps
+with other Lazarus samples. Kimsuky and Lazarus are therefore likely to be working together, which is
+confirmed by the fact that Kimsuky malware were found on Lazarus targets several times.
+032
+Moreover, our tool revealed links between DTrack samples from the Kudankulam Nuclear Power Plant
+(KNPP) and Kimsuky samples: both use SQlite as a statically-linked library, but a different version
+(compiled on ~~2017- 10-24 18:55:49~~ for the latter vs ~~2017-02-13 16:02:40~~ for the former). Looking
+at compilation timestamps, we can see that some DTrack and Kimsuky samples were also compiled the
+same day (or close to) as other Lazarus malware used in campaigns:
+~~(2019-07-29 13:36:26) ./dtrack/npp_~~
+~~bfb39f486372a509f307cde3361795a2f9f759cbeb4cac07562dcbaebc070364~~
+~~<- Timestamp -> (2019-07-29 07:08:01) ./andariel_rifle/javaupdatemain_unpack.~~
+~~exe~~
+~~(2019-03-01 00:07:25) ./dtrack/~~
+~~npp_3cc9d9a12f3b884582e5c4daf7d83c4a510172a836de90b87439388e3cde3682~~
+~~<- Timestamp -> (2019-03-01 09:08:44)~~
+~~./kimsuky_~~
+~~shark2/4b3416fb6d1ed1f762772b4dd4f4f652e63ba41f7809b25c5fa0ee9010f7dae7.bin~~
+This could mean that the groups are working together for some operations, with Lazarus doing the
+intrusion and handing the exfiltrating part to Kimsuky when the target matches their interest.
+Finally, interesting findings stand out when looking at Rich header similarities. The Kimsuky stolen pencil
+sample has the exact same Rich header as samples found in Lazarus campaigns such as DarkSeoul and
+GoldDragon.
+~~(2018-12-21 00:34:35) ./kimsuky_stolenpencil/1.bin~~
+(2012-07- ./troydarkseoul/DarkSeoul/DarkSeoul_50E<- Rich -> 12:24:18)
+06 03200C3A0BECBF33B3788DAC8CD46
+(2012-07- ./troydarkseoul/DarkSeoul/DarkSeoul_E4F66C<- Rich -> 12:24:18)
+06 3CD27B97649976F6F0DAAD9032
+(2013-01- ./troydarkseoul/DarkSeoul/DarkSeoul_5FCD6E<- Rich -> 10:27:18)
+31 1DACE6B0599429D913850F0364
+(2013-01- ./troydarkseoul/DarkSeoul/DarkSeoul_0A8032CD<- Rich -> 10:27:18)
+31 6B4A710B1771A080FA09FB87
+(2013-01- ./troydarkseoul/DarkSeoul/DarkSeoul_DB4BBD<- Rich -> 10:27:18)
+31 C36A78A8807AD9B15A562515C4
+(2013-01- ./troydarkseoul/DarkSeoul/DarkSeoul_
+<- Rich -> 10:27:18)
+31 F0E045210E3258DAD91D7B6B4D64E7F3
+(2017-12- ./golddragon/e68f43ecb03330ff0420047b6193358
+<- Rich -> 08:16:57)
+24 3b4144585
+(2017-12- ./golddragon/4f58e6a7a04be2b2ecbcdc<- Rich -> 08:47:21)
+24 bae6f281778fdbd9f9
+(2017-12- ./golddragon/11a38a9d23193d9582d02ab0eae<- Rich -> 08:29:04)
+24 767c3933066ec
+(2017-12- ./golddragon/3a0c617d17e7f819775e48f7ede<- Rich -> 08:37:57)
+24 fe9af84a1446b
+(2017-12- ./golddragon/bf21667e4b48b8857020ba455531c<- Rich -> 08:44:08)
+24 9c4f2560740
+— DarkHotel
+Samples attributed to the DarkHotel group have identical Rich header as a lot of APT38 Nukesped
+samples, which is a strong link:
+~~(2011-04-07 06:58:03) ./~~
+~~darkhotel/2b6288bbd81bb9d666c3a0372f26ede47c8c9ff11c604307982d51654fb9e850.ViR~~
+~~<- Rich -> (2017-07-14 22:40:25) ./cybercom/d2da675a8adfef9d0c146154084fff62.bin~~
+~~<- Rich -> (2017-07-11 18:26:59) ./nukesped/3EDCE4D49A2F31B8BA9BAD0B8EF54963~~
+~~<- Rich -> (2017-08-11 05:03:45) ./cybercom/2a791769aa73ac757f210f8546125b57.bin~~
+~~<- Rich -> (2017-08-01 16:39:36) ./ghostsecret/Sample_5ae56e2077d7dc0d380c3bfd_~~
+~~exe~~
+~~...~~
+033
+Though DarkHotel TTPs and malware are different from Lazarus, those groups seem to be working in
+tandem.
+—
+Andariel subgroup
+Clear Andariel clusters stand out, with malware involved in operations Red Gambler and Rifle. Those
+samples are closely linked with each other by specific and custom cryptographic algorithms found in
+malware from both operations. For instance:
+~~yara_andariel_7F8: (2016-04-21 10:41:15)~~
+~~./andariel_rifle/~~
+~~d246669cf1e25860f8601e456edd7156aa7304026ff4eadac18a2a82a18fabbf~~
+~~yara_andariel_7F8: (2016-12-01 13:56:28) ./~~
+~~redgambler/9a50be3def3681242f35d3c0911e2e70~~
+~~yara_andariel_7F8: (2017-03-21 16:05:58) ./~~
+~~redgambler/2573d0ad00f4ba8ee86d7fce7454d963_unpack~~
+Same cryptographic algorithm found in RedGambler and Rifle samples
+RedGambler samples seem to be related to older samples from the Troy/DarkSeoul operation as well as
+an APT37 Navrat sample by their Rich headers which are identical:
+~~(2016-12-01 13:56:28) ./redgambler/9a50be3def3681242f35d3c0911e2e70~~
+~~<- Rich -> (2016-05-01 05:53:43)~~
+~~./apt37_summit/navrat_old_~~
+~~e0257d187be69b9bee0a731437bf050d56d213b50a6fd29dd6664e7969f286ef.bin~~
+~~<- Rich -> (2013-03-20 04:07:02)~~
+~~./troydarkseoul/DarkSeoul/DarkSeoulDropper/~~
+~~DarkSeoulDropper_9263E40D9823AECF9388B64DE34EAE54_unpack~~
+~~<- Rich -> (2017-03-21 16:05:58) ./~~
+~~redgambler/2573d0ad00f4ba8ee86d7fce7454d963_unpack~~
+Other Andariel samples are linked with various Lazarus samples. For example, Andariel uses inflate
+library version 1.1.4 which is the same version found in several other North Korean samples (GoldDragon,
+Fallchill, Dtrack...).
+034
+—
+APT38/Bluenoroff
+Bluenoroff clusters are linked by Rich headers, timestamps and code similarity. Most of the links are quite
+strong and make APT38 clusters the most distinguishable ones, meaning that the group doesn’t think it’s
+necessary to be sneaky and reinvent itself, but will reuse a lot of elements, from architecture to malware
+implementations. These clusters are mainly composed of the following malware families:
+J Nukesped
+J Fallchill
+J Volgmer
+J
+Electricfish
+J Dyepack
+J SWIFT-related malware
+J Hoplight
+J Some Sony / Blockbuster samples
+J Malware from bank attacks (Poland, Vietnam...)
+J Destover
+J Bankshot
+J Fastcash
+J ...
+Looking at the links, we can see that a Yara rule we built is matching almost 40 samples from our dataset,
+all of them attributed to APT38. The Yara rule was built to detect a specific RC4 implementation and
+called ~~yara_apt38_rc4~~ ~~:~~
+~~rule yara_apt38_rc4 { strings:~~
+~~$s1 = { 8A 90 01 01 00 00 // mov dl, byte [eax + 0x101]~~
+~~8A 88 00 01 00 00 // mov cl, byte [eax + 0x100] 8A 14 02 // mov dl, byte [edx + eax]~~
+~~8A 1C 01~~ ~~// mov bl, byte [ecx + eax]~~
+~~02 D3~~ ~~// add dl, bl~~
+~~8A 1C 2E~~ ~~// mov bl, byte [esi + ebp]~~
+~~81 E2 FF 00 00 00 // and edx, 0xff~~
+~~8A 0C 02~~ ~~// mov cl, byte [edx + eax]~~
+~~32 CB }~~ ~~// xor cl, bl~~
+~~condition:~~
+~~uint16(0) == 0x5a4d and any of ($s*)~~
+~~}~~
+This rule showcases once again that Lazarus groups reuse a lot of code for their malware. Here are some
+of the samples using this RC4 implementation:
+~~yara_apt38_rc4: ./apt38_~~
+~~contopee/766d7d591b9ec1204518723a1e5940fd6ac777f606ed64e731fd91b0b4c3d9fc.bin~~
+~~yara_apt38_rc4: ./nukesped/3EDCE4D49A2F31B8BA9BAD0B8EF54963~~
+~~yara_apt38_rc4: ./nukesped/sample2.bin~~
+~~yara_apt38_rc4: ./nukesped/34E56056E5741F33D823859E77235ED9 yara_apt38_rc4: ./~~
+~~nukesped/sample (9).bin~~
+~~yara_apt38_rc4: ./nukesped/sample (1).bin~~
+~~yara_apt38_rc4: ./nukesped/F315BE41D9765D69AD60F0B4D29E4300~~
+~~yara_apt38_rc4: ./~~
+~~nukesped/32ec329301aa4547b4ef4800159940feb950785f1ab68d85a14d363e0ff2bc11~~
+~~yara_apt38_rc4: ./cybercom/38fc56965dccd18f39f8a945f6ebc439.bin~~
+~~yara_apt38_rc4: ./cybercom/5c0c1b4c3b1cfd455ac05ace994aed4b.bin~~
+~~yara_apt38_rc4: ./typeframe/~~
+~~e69d6c2d3e9c4beebee7f3a4a3892e5fdc601beda7c3ec735f0dfba2b29418a7.~~
+~~bin yara_apt38_rc4: ./fallchill/~~
+~~ca70aa2f89bee0c22ebc18bd5569e542f09d3c4a060b094ec6abeeeb4768a143.~~
+~~bin yara_apt38_rc4: ./~~
+~~intezer/4a84452752cf8e493ae820871096044edd9f6453366842927148e7d8e218dc87.~~
+~~bin yara_apt38_rc4: ./~~
+~~intezer/80b5cc9feb10fac41ee2958ab0f751bf807126e34dcb5435d2869ef1cf7abc41_~~
+~~z5Xv8XY4hN.bin yara_apt38_rc4: ./~~
+~~intezer/7429a6b6e8518a1ec1d1c37a8786359885f2fd4abde560adaef331ca9deaeefd.~~
+035
+~~bin yara_apt38_rc4: ./intezer/~~
+~~dbae68e4cab678f2678da7c48d579868e35100f3596bf3fa792ee000c952c0ed.~~
+~~bin yara_apt38_rc4: ./intezer/~~
+~~a4a2e47161bbf5f6c1d5b1b3fba26a19dbfcdcf4eb575b56bde05c674089ae95.~~
+~~bin yara_apt38_rc4: ./bangladesh_~~
+~~swift/4659dadbf5b07c8c3c36ae941f71b631737631bc3fded2fe2af250ceba98959a.bin~~
+~~yara_apt38_rc4: ./bangladesh_swift/nroff_b.exe~~
+~~yara_apt38_rc4: ./bangladesh_swift/evtdiag.exe~~
+~~yara_apt38_rc4: ./apt38_~~
+~~dyepack/4659dadbf5b07c8c3c36ae941f71b631737631bc3fded2fe2af250ceba98959a~~
+~~yara_apt38_rc4: ./apt38_~~
+~~dyepack/5b7c970fee7ebe08d50665f278d47d0e34c04acc19a91838de6a3fc63a8e5630~~
+~~yara_apt38_rc4: ./~~
+~~ghostsecret/45e68dce0f75353c448865b9abafbef5d4ed6492cd7058f65bf6aac182a9176a.~~
+~~bin yara_apt38_rc4: ./ghostsecret/Sample_5ae56e2077d7dc0d380c3bfd_exe~~
+~~yara_apt38_rc4:~~
+~~./blockbuster_continues/~~
+~~volgmer_7429a6b6e8518a1ec1d1c37a8786359885f2fd4abde560adaef331ca9deaeefd.bin~~
+~~[...]~~
+Other Yara rules are matching several APT38 samples from different malware families: some related to
+file wiping implementations, Fallchill success codes, string decoding algorithms, inflate 1.1.3 strings...
+On another hand, Rich header analysis reveals that some recent malware found in India, Vietnam and
+Taiwan, as well as samples LEXFO found during incident responses share the same Rich headers, which
+are strong links.
+—
+WannaCry
+WannaCry samples are timestomped, but we see that the WannaCry cluster is close to the Bluenoroff
+ones. In particular, we see that the ~~wannacry_rand~~ Yara rule we built from the WannaCry sample
+~~3e6de9e2baacf930949647c399818e7a2caea2626df6a468407854aaa515eed9~~ matches the
+Contopee malware attributed to APT38
+( ~~766d7d591b9ec1204518723a1e5940fd6ac777f606ed64e731fd91b0b4c3d9fc~~ ).
+~~yara_wannacry_rand: (2015-02-23 01:32:57)~~
+~~./apt38_~~
+~~contopee/766d7d591b9ec1204518723a1e5940fd6ac777f606ed64e731fd91b0b4c3d9fc.bin~~
+~~(2017-02-09 09:47:27)~~
+~~./wannacry/3e6de9e2baacf930949647c399818e7a2caea2626df6a468407854aaa515eed9~~
+Shared code between Bluenoroff Contopee and WannaCry
+Most WannaCry samples were statically linked with inflate lib version 1.1.3, which links them to some
+Bluenoroff samples that are using the exact same version (for instance the recent APT38 keylogger
+~~efd470cfa90b918e5d558e5c8c3821343af06eedfd484dfeb20c4605f9bdc30e~~ used on Vietnamese
+targets).
+~~yara_lib_static_inflate_113: (2010-11-20 09:05:05) ./wannacry/dropper.bin~~
+~~(2018-04-28 02:53:06)~~
+~~./vietnam/efd470cfa90b918e5d558e5c8c3821343af06eedfd484dfeb20c4605f9bdc30e.~~
+~~bin yara_lib_static_inflate_113: (2010-11-20 09:03:08) ./wannacry/mssecsvc.bin~~
+~~(2018-04-28 02:53:06)~~
+~~./vietnam/efd470cfa90b918e5d558e5c8c3821343af06eedfd484dfeb20c4605f9bdc30e.bin~~
+— DTrack
+DTrack is a malware attributed to Lazarus / APT38. Recent DTrack samples found on critical infrastructures
+like nuclear power plants are linked with a sample from the Troy/DarkSeoul campaign compiled in 2011.
+The link comes from the reuse of the specific ZIP password ~~dkwero38oerA^t@#~~ ~~.~~ This is surprising and
+could be a false flag.
+036
+~~yara_zip_password: ./troydarkseoul/Http Troy/Files inside~~
+~~8FBC1F3048263AA0D4F56D119198ED04/Layer 4/DLL 1 (bs.dll).dll~~
+~~yara_zip_password: ./dtrack/~~
+~~npp_3cc9d9a12f3b884582e5c4daf7d83c4a510172a836de90b87439388e3cde3682~~
+~~yara_zip_password: ./dtrack/npp_~~
+~~bfb39f486372a509f307cde3361795a2f9f759cbeb4cac07562dcbaebc070364 yara_zip_password:~~
+~~./dtrack/dfa984f8d6bfc4ae3920954ec8b768e3d5a9cc4349966a9d16f8bef658f83fcd.bin~~
+Those DTrack samples are also weakly linked with other Lazarus samples by statically-linked libraries such as
+TZip and SQlite.
+—
+GoldDragon campaign
+GoldDragon samples are linked to Lazarus by two main features: the reuse of a specific RC4 implementation
+that was seen in old Joanap dropper samples and detected by our Yara rules, and the overlaps of rich headers.
+Here is an example of a GoldDragon sample sharing its Rich header with other known Lazarus samples (as well
+as other GoldDragon samples):
+~~(2017-12-24 08:37:57) ./golddragon/3a0c617d17e7f819775e48f7edefe9af84a1446b~~
+<- Rich -> (2013-01-31 10:27:18) ./troydarkseoul/DarkSeoul/DarkSeoul_0A8032CD6B4A710B1771A080FA09FB87
+<- Rich -> (2017-12-24 08:29:04) ./golddragon/11a38a9d23193d9582d02ab0eae767c3933066ec
+<- Rich -> (2012-07-06 12:24:18) ./troydarkseoul/DarkSeoul/DarkSeoul_E4F66C3CD27B97649976F6F0DAAD9032
+<- Rich -> (2017-12-24 08:44:08) ./golddragon/bf21667e4b48b8857020ba455531c9c4f2560740
+<- Rich -> (2017-12-24 08:47:21) ./golddragon/4f58e6a7a04be2b2ecbcdcbae6f281778fdbd9f9
+<- Rich -> (2013-01-31 10:27:18) ./troydarkseoul/DarkSeoul/DarkSeoul_DB4BBDC36A78A8807AD9B15A562515C4
+<- Rich -> (2013-01-31 10:27:18) ./troydarkseoul/DarkSeoul/DarkSeoul_F0E045210E3258DAD91D7B6B4D64E7F3
+<- Rich -> (2018-12-21 00:34:35) ./kimsuky_stolenpencil/1.bin
+<- Rich -> (2017-12-24 08:16:57) ./golddragon/e68f43ecb03330ff0420047b61933583b4144585
+<- Rich -> (2012-07-06 12:24:18) ./troydarkseoul/DarkSeoul/DarkSeoul_50E03200C3A0BECBF33B3788DAC8CD46
+<- Rich -> (2013-01-31 10:27:18) ./troydarkseoul/DarkSeoul/DarkSeoul_5FCD6E1DACE6B-0599429D913850F0364
+Another link is the statically-linked inflate v. 1.1.4 that we found in GoldDragon samples, as this version is widely
+used in a lot of Lazarus samples.
+— APT37
+Samples attributed to APT37 (Reaper) seem to be quite unique and only linked with Lazarus samples by staticallylinked library or encryption algorithms, which are weak links. This confirms what FireEye stated in its report: this
+group needs to be tracked separately from Lazarus.
+A lot of APT37 samples share the same Rich header. We also found the following identical Rich headers between
+an APT37 malware and a Bluenoroff Nukesped sample:
+~~(2019-01-02 01:43:47)~~
+~~./apt37_~~
+~~evilnewyear/2019_636844ce36f41641d854a1b239df91da3103873d3dfec0c25087582eec064e4d.~~
+~~bin~~
+~~<- Rich -> (2018-02-12 20:06:28) ./cybercom/07d2b057d2385a4cdf413e8d342305df.bin~~
+~~<- Rich -> (2018-02-12 20:06:28) ./nukesped/07D2B057D2385A4CDF413E8D342305DF~~
+Finally, we found a Navrat sample attributed to APT37 and an Andariel sample from the RedGambler operation
+with the same Rich header, which connects the two groups (see the part about Andariel below).
+037
+—
+The OlympicDestroyer false flag
+To complicate attribution, the attackers behind OlymicDestroyer copied a Rich header from Lazarus
+samples to replace the rich header of some of their malware. Our tool gives the following result, showing
+that the Rich header was taken from Bluenoroff samples (one of them from the Bangladesh SWIFT heist):
+~~(2017-12-27 09:03:48) ./olympicdestroyer/3c0d740347b0362331c882c2dee96dbf~~
+~~<- Rich -> (2016-02-04 13:45:39) ./bangladesh_swift/evtsys.exe~~
+~~<- Rich -> (2017-03-02 16:46:13)~~
+~~./blockbuster_sequel/032ccd6ae0a6e49ac93b7bd10c7d249f853fff3f5771a1fe3797f733f09db5a0.bin~~
+Kaspersky published an article about this false flag operation [38] .
+WORKING HOURS AND DAYS OF THE LAZARUS DEVELOPERS
+We extracted all compilation timestamps from the samples in our dataset and removed those that
+were either altered or inconsistent. Some samples appeared to be legitimate software infected by
+Lazarus without recompiling, making the timestamps irrelevant. For instance, we ignored the sample
+~~2223a93521b261715767f00f0d1ae4e692bd593202be40f3508cb4fd5e21712b~~ which turned out to
+be a version of the FTP tool FileZilla that the attackers altered by adding some malicious code without
+recompiling it, leaving its original compilation timestamp and compiler fingerprints unmodified.
+Analyzing unaltered compilation timestamps, we see that the Lazarus developers are mostly working
+between 8AM and 8PM UTC+9 (KST). We can even notice some breaks at lunchtime, and that Lazarus
+developers are working overnight. Most samples were compiled from Monday to Saturday included.
+Lazarus compilation timestamps by days
+038
+Lazarus compilation timestamps by hours (KST / UTC+9)
+CONCLUSION
+Such a classification proved to be very relevant for North Korean malware. It highlighted heavy links
+illustrating code and architecture reuse inside established groups, as well as relations (or lack of)
+between these separate groups.
+Attacker groups like Lazarus are so active they struggle or are reluctant to renew their arsenal. Studying
+their TTPs prove to be very valuable and will greatly help properly reacting to incident. As a defender,
+being able to exploit Lazarus laziness and carelessness by quickly identifying their TTPs will give you
+some key information: you know what they want, how they plan to achieve it and with which tools.
+The information given in this report, the classification LEXFO established and the associated internally
+developed tools helped the incident response team practically during missions involving Lazarus, as
+it narrowed down the analysis and gave good hints on where to look for technical clues: persistence,
+communications, lateral movements, exfiltration etc.
+039
+040

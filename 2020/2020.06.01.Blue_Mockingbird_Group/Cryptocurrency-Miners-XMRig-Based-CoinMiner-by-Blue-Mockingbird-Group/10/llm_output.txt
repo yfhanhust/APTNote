@@ -1,0 +1,84 @@
+
+
+
+Sentence : XMRIG-BASED COINMINER
+Recall the detection phase and forensic investigation, we were aware of a couple of DLLs
+These unknown DLL files were accompanied with multiple DLLs with random names, but
+all of them (except one) had the same hash.
+We proceeded with the brief analysis of the samples with the same hash, which caused
+a lot of DNS resolutions of the domain names such as:
+xmr-us-east1.nanopool.org
+xmr-us-west1.nanopool.org
+xmr-eu1.nanopool.org
+pool.minexmr.com
+
+...
+
+So evidently the domain names are associated with the Monero mining pools. Of course,
+they could be used as network IOCs for detection of other machines infected with this
+CoinMiner.
+Also, a string search revealed the origin in XMRig CoinMiner, with exact versions and build
+dates. We saw various similar samples collected from our clients and from public
+repositories, with build dates between February and April.
+Figure 11. Code Reuse of the XMRig-based CoinMiner
+There is another thing common for all of these XMRig-based CoinMiner DLLs. All of them
+(at least all of we were able to capture) had the exported symbol (function) called
+“fackaaxv”. At the very beginning of this exported function the samples created Mutex
+called “Samplexn07”, and if this mutex already exists, this function ends.
+Figure 13. Call (jump) to the fackaaxv from DllRegisterServer() function
+This means that even if this DLL is used with regsvr32.exe, the same mutex is created,
+and moreover, its exclusivity is guaranteed even if the fackaaxv entry from this DLL is
+called via rundll32.exe, for example.
+All of these tasks were executed daily, on 08:10, 20:02, 20:15, 20:20 and 20:25. Most of
+the tasks had random names, except the last one with the name "Windows Problems
+Collection".
+And that is not all, there was one more service with a random name on the system, which
+executed the following command:
+
+cmd /c sc config wercplsupport start= auto & sc start wercplsupport &
+```
+    copy c:\windows\System32\%result3%.dll
+    c:\windows\System32\wercplsupporte.dll /y & regsvr32.exe /s
+    c:\windows\System32\%result3%.dll
+
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "XMRIG-based CoinMiner", "type" : "APPS"},
+        {"id": 2, "description": "DLLs with random names", "type" : "EXEF"},
+        {"id": 3, "description": "xmr-us-east1.nanopool.org", "type" : "CCSH"},
+        {"id": 4, "description": "xmr-us-west1.nanopool.org", "type" : "CCSH"},
+        {"id": 5, "description": "xmr-eu1.nanopool.org", "type" : "CCSH"},
+        {"id": 6, "description": "pool.minexmr.com", "type" : "CCSH"},
+        {"id": 7, "description": "XMRig CoinMiner", "type" : "APPS"},
+        {"id": 8, "description": "fackaaxv function", "type" : "TTPS"},
+        {"id": 9, "description": "Samplexn07 Mutex", "type" : "TTPS"},
+        {"id": 10, "description": "regsvr32.exe", "type" : "EXEF"},
+        {"id": 11, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 12, "description": "Daily tasks at 08:10, 20:02, 20:15, 20:20 and 20:25", "type" : "TTPS"},
+        {"id": 13, "description": "Windows Problems Collection task", "type" : "TTPS"},
+        {"id": 14, "description": "Random named service", "type" : "APPS"},
+        {"id": 15, "description": "%result3%.dll", "type" : "EXEF"},
+        {"id": 16, "description": "wercplsupporte.dll", "type" : "EXEF"},
+        {"id": 17, "description": "sc config wercplsupport start= auto & sc start wercplsupport", "type" : "TTPS"},
+        {"id": 18, "description": "c:\\windows\\System32\\%result3%.dll", "type" : "SYSP"},
+        {"id": 19, "description": "c:\\windows\\System32\\wercplsupporte.dll", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "resolves to"},
+        {"source": 2, "target": 4, "rel_name" : "resolves to"},
+        {"source": 2, "target": 5, "rel_name" : "resolves to"},
+        {"source": 2, "target": 6, "rel_name" : "resolves to"},
+        {"source": 1, "target": 7, "rel_name" : "is based on"},
+        {"source": 2, "target": 8, "rel_name" : "contains function"},
+        {"source": 8, "target": 9, "rel_name" : "creates mutex"},
+        {"source": 10, "target": 9, "rel_name" : "uses mutex"},
+        {"source": 11, "target": 9, "rel_name" : "uses mutex"},
+        {"source": 2, "target": 12, "rel_name" : "executes tasks"},
+        {"source": 12, "target": 13, "rel_name" : "includes task"},
+        {"source": 14, "target": 17, "rel_name" : "executes command"},
+        {"source": 15, "target": 18, "rel_name" : "is copied to"},
+        {"source": 16, "target": 19, "rel_name" : "is created as"}
+    ]
+}

@@ -1,0 +1,113 @@
+
+
+
+Sentence : 64-BIT EDITIONS OF WINDOWS
+The 64-bit version of Snake must deal with a number of additional security protections implemented in 64-bit editions of Microsoft
+Windows, the most significant of which are kernel driver signature validation and Kernel Patch Protection (more commonly known as
+PatchGuard).
+PatchGuard is a feature of 64-bit Windows which aims to prevent modification of the Windows kernel, something that is often
+performed by malware attempting to hide itself on an infected system. Although PatchGuard is successful at preventing kernel
+patching once initialised, several published bypass approaches exist [4,5] . The technique used by Snake appears to be similar to these
+approaches.
+The driver signing policy enforced by all 64-bit versions of Windows from Vista onwards requires all kernel-mode drivers to be signed
+with a valid digital signature. The Snake dropper contains both 32-bit and 64-bit unsigned drivers, and it can successfully load its
+unsigned 64-bit driver on a 64-bit version of Windows XP – as driver signing is not enforced it does not have to resort to any tricks
+under this OS version. In this case, in order to ensure the driver is loaded automatically at startup, the dropper can install the 64-bit
+driver on 64-bit Windows XP in the same way it installs a 32-bit driver on a 32-bit version of Windows XP.
+On 64-bit versions of Windows Vista and above it behaves differently. Firstly, the 64-bit unsigned driver file is created as usual:
+%windows%\$NtUninstallQ817473$\fdisk.sys
+However, the driver is not registered; what is registered instead is the dropper itself. To do that, the dropper first copies itself as:
+%windows%\$NtUninstallQ817473$\fdisk_mon.exe
+The dropper then registers itself as a service to ensure it starts every time Windows is booted, by creating the values:
+ErrorControl = 0
+Type = 16
+Start = 2
+ImagePath = ”%SystemRoot%\$NtUninstallQ817473$\fdisk_mon.exe
+ObjectName = ”LocalSystem”
+WOW64 = 1
+in the registry key:
+HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Ultra3
+Now comes the most interesting part: does the dropper manage to load its 64-bit unsigned driver under 64-bit versions of Windows
+Vista and later versions, such as 64-bit Windows 7/8? The answer: Yes, it does.
+Does it resort to using bootkit technology, which has been used in the past to bypass protections to load unsigned 64-bit drivers?
+The answer: No. Bootkits must overwrite the Master Boot Record (MBR) and antivirus products are well trained to catch that kind of
+bad behavior.
+The masterminds behind Snake rootkit seem to be well aware of this so what they resorted to instead is leveraging a vulnerability
+in a well-known virtualization product called VirtualBox, a product made by Oracle which is widely used by researchers to analyse
+malware. VirtualBox driver version 1.6.2 was released in June 2, 2008. Two months later, in August 2008, security researchers
+reported that its main driver component, which is signed under the entity “innotek Gmbh”, contained a privilege escalation
+vulnerability [6] .
+In a nutshell, the VirtualBox software installs a driver called VBoxDrv. The driver is controlled with the Input/Ouput Control Codes
+(32-bit values called IOCTL) passed along DeviceIoControl() API. One of the documented transfer methods that the system
+uses to pass data between the caller of DeviceIoControl() API and the driver itself is called METHOD_NEITHER.
+As per MSDN documentation [7], METHOD_NEITHER is a special transfer type when Input/Output Request Packet (IRP) supplies the
+user-mode virtual addresses of the input and output buffers, without validating or mapping them.
+4 http://www.codeproject.com/Articles/28318/Bypassing-PatchGuard-3
+5 http://uninformed.org/index.cgi?v=3&a=3&p=17
+6 http://www.coresecurity.com/content/virtualbox-privilege-escalation-vulnerability
+7 http://msdn.microsoft.com/en-us/library/windows/hardware/ff543023(v=vs.85).aspx
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 22
+It is the responsibility of the driver to validate the addresses sent from user mode in order to make sure those addresses are valid
+usermode addresses.
+The source code of the vulnerable driver (shown below) demonstrates how the integer value of the rc variable is first derived from
+the input parameters pDevObj (device object) and pIrp (request packet). Next, that integer value is written into the UserBuffer - an
+arbitrary address, pointed by the input parameter pIrp (request packet). As there are no validations made for the UserBuffer an
+attacker can craft such input parameters that will define address within kernel memory to patch and the data to patch it with:
+Now that the vulnerable driver can be used as a weapon to patch kernel memory, all the malware needs to do is to patch the content
+of the variable nt!g_CiEnabled, a boolean variable “Code Integrity Enabled” that marks whether the system was booted in
+WinPE mode.
+When running in WinPE mode there is no Code Integrity control, therefore by enabling this mode by patching only one bit,
+Code Integrity verification is disabled so that the unsigned 64-bit driver can be loaded.
+This variable is used within the function SepInitializeCodeIntegrity(), implemented within CI.dll’s function
+CiInitialize() and imported by the NT core (ntoskrnl.exe). In order to find the variable in kernel memory, the Snake
+dropper loads a copy of the NT core image (ntoskrnl.exe), locates the import of CI.dll’s function CiInitialize(), and then
+SepInitializeCodeIntegrity() within it. Then it parses the function’s code to locate the offset of the variable.
+Once located, the content of the variable nt!g_CiEnabled is patched in kernel memory and the 64-bit unsigned driver is loaded.
+This explains why Snake dropper registers itself as a service to start each time Windows starts: in order to install the vulnerable
+VBox driver first, then pass it a malformed structure to disable Code Integrity control with a DeviceIoControl() API call, and
+finally, load the driver.
+In order to be able to perform the steps above, the dropper must first obtain Administrator privileges. It attempts to do this by
+running MS09-025 and MS10-015 exploits on the target system. These exploits are bundled within the dropper in its resource
+section as executable files. Other resources embedded within the dropper are the 32-bit and 64-bit builds of its driver, a tool for
+creating NTFS file systems, and the initial message queue file which is written into the virtual volume. The message queue file
+contains configuration data and the libraries that will be injected into usermode processes.
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 23
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Snake rootkit", "type" : "ACTO"},
+        {"id": 2, "description": "64-bit Windows editions", "type" : "OPPS"},
+        {"id": 3, "description": "kernel driver signature validation", "type" : "TTPS"},
+        {"id": 4, "description": "Kernel Patch Protection (PatchGuard)", "type" : "TTPS"},
+        {"id": 5, "description": "64-bit unsigned drivers", "type" : "EXEF"},
+        {"id": 6, "description": "%windows%\$NtUninstallQ817473$\fdisk.sys", "type" : "SYSP"},
+        {"id": 7, "description": "%windows%\$NtUninstallQ817473$\fdisk_mon.exe", "type" : "EXEF"},
+        {"id": 8, "description": "HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Ultra3", "type" : "REGI"},
+        {"id": 9, "description": "VirtualBox driver version 1.6.2", "type" : "APPS"},
+        {"id": 10, "description": "VBoxDrv driver", "type" : "EXEF"},
+        {"id": 11, "description": "DeviceIoControl() API", "type" : "TTPS"},
+        {"id": 12, "description": "nt!g_CiEnabled variable", "type" : "REGI"},
+        {"id": 13, "description": "CI.dll’s function CiInitialize()", "type" : "EXEF"},
+        {"id": 14, "description": "SepInitializeCodeIntegrity() function", "type" : "TTPS"},
+        {"id": 15, "description": "ntoskrnl.exe (NT core image)", "type" : "EXEF"},
+        {"id": 16, "description": "MS09-025 exploit", "type" : "CVES"},
+        {"id": 17, "description": "MS10-015 exploit", "type" : "CVES"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "targets"},
+        {"source": 1, "target": 3, "rel_name" : "bypasses"},
+        {"source": 1, "target": 4, "rel_name" : "bypasses"},
+        {"source": 1, "target": 5, "rel_name" : "uses"},
+        {"source": 1, "target": 6, "rel_name" : "creates"},
+        {"source": 1, "target": 7, "rel_name" : "registers_as_service"},
+        {"source": 1, "target": 8, "rel_name" : "modifies_registry_key"},
+        {"source": 1, "target": 9, "rel_name" : "exploits_vulnerability_in"},
+        {"source": 9, "target": 10, "rel_name" : "contains"},
+        {"source": 1, "target": 11, "rel_name" : "uses_API_call"},
+        {"source": 1, "target": 12, "rel_name" : "patches_variable"},
+        {"source": 12, "rel_name" : "is_part_of", "target": 13},
+        {"source": 14, "rel_name" : "calls", "target": 15},
+        {"source": 1, "target": 16, "rel_name" : "uses_exploit"},
+        {"source": 1, "target": 17, "rel_name" : "uses_exploit"}
+    ]
+}

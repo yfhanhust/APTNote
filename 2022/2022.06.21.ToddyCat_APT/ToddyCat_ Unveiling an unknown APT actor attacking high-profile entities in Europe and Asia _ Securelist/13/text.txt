@@ -1,0 +1,60 @@
+Other variants
+During our investigations, we discovered several loader and installer variants that evolved
+during 2021 and were used in different campaigns.
+Installers
+All the installers are quite similar in their logic: they load a payload from an external file,
+usually located in the same directory, with a name that differs according to the variant:
+debug.xml
+web.xml
+access.log
+cache.dat
+reg.txt
+logo.jpg
+The files are always decrypted with the same algorithm, CALG_3DES_112, but the loaded
+data are usually tailored for the victim.
+All installers create a new service using a name and description specified in an encrypted
+file. They also set a registry value (either httpsvc or w3esvc) in the following Windows
+registry key:
+1 HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost
+These values cause svchost.exe to automatically start the malicious service and load the
+code in its process address memory. The registry values contain the malicious service
+name. The main difference between the installer variants is related to the final payload.
+Based on initial investigations, we know that the first variants (from December 2020 to
+May 2021) were configured to store their payload inside a registry key, such as:
+1
+2
+$HKLM\SOFTWARE\Classes\Interface{6FD0637B-85C6-D3A9-CCE9-65A3F73ADED9}
+$HKLM\SOFTWARE\Classes\Interface{AFDB6869-CAFA-25D2-C0E0-09B80690F21D}
+Starting from March we also observed new variants configured to store the final backdoor
+inside other encrypted files in the file system. The most common dropped the Stage 2
+loader in the following paths:
+https://securelist.com/toddycat/106799/ 21/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+%System32%\Triedit.dll
+%System32%\fveapi.dll
+and the Stage 3 loader and encrypted payload in the following paths:
+%WINDIR%\Microsoft.NET\Framework\sbs_clrhost.dll
+%WINDIR%\Microsoft.NET\Framework\sbs_clrhost.dat
+%WINDIR%\Microsoft.NET\Framework\Util.dll
+%WINDIR%\Microsoft.NET\Framework\Util.dat
+Starting from September 2021, we observed new samples configured to once again store
+the final payload in the Windows registry, but instead of relying on static registry key
+values, the malware was configured to create a dynamically generated key in
+$HKLM\SOFTWARE\Classes\Interface\, based on the disk drive’s serial number:
+Code snippet to create a registry key based on the Volume Serial Number
+The constants used to generate the final registry key name change for each sample.
+Loaders
+The loaders are basic tools used to decrypt payloads from 3DES and load them into
+memory. They were modified over time along with the installers to account for the
+changes in how the final payload is stored.
+Some loaders, like those mentioned in the previous paragraph, were configured to load
+another payload from an encrypted file and pass the resulting data as arguments for
+another library, a Stage 3 loader, stored in a specific location.
+https://securelist.com/toddycat/106799/ 22/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+Other loaders were configured to load the payload from the registry and pass it to the
+Stage 3 library.
+Some variants included a function to directly run .NET code at runtime, without relying
+on another external Stage 3 library.
+Finally, we observed other loaders that were mainly used on desktop systems to load the
+Ninja Trojan.

@@ -1,0 +1,221 @@
+3. The Evolution of Packrat’s Implants
+Over the past seven years Packrat has used several different types of malware, much of it off-the-shelf RATs, such as
+Cybergate, Xtreme, AlienSpy, and Adzok. While these malware families are known to researchers, Packrat typically
+obfuscates their malware using a range of tools, including: an unknown VB6 crypter, AutoIt3Wrapper, UPX, PECompact,
+PEtite, and Allatori Obfuscator. This layer of obfuscation means that Packrat’s attacks frequently escaped detection by
+antivirus when the attacks were deployed. This section describes these tools, roughly grouped into distinct time periods.
+Image 12: Packrat malware families
+3.1. 2008-2014: Packed RATS, mostly CyberGate
+Between 2008 and 2014, Packrat made extensive use of off-the-shelf RATs encapsulated in AutoIt3Wrapper, a runtime
+packer. This packer is written in AutoIt, a compilable scripting language for automating tasks in Windows. The use of an
+initial obfuscation layer seems to have been enough to thwart or at least misguide detection, as well as leverage some
+basic anti-debugging techniques.
+https://citizenlab.org/2015/12/packrat-report/ 13/40
+2015/12/11 Packrat: Seven Years of a South American Threat Actor
+The majority of implants that are then dropped and executed appear to be CyberGate RAT. In 2013 and 2014, Packrat
+seems to have adopted XtremeRAT as well. Cybergate and Xtreme are both written in Delphi and share code with each
+other and other Delphi based RATs, SpyNet and Cerberus.
+Many of these attacks included embedded decoy Office documents that are opened at execution of the implant, likely
+in the context of a targeted attack. Among the documents we found are résumés of purported Brazilian citizens, as well
+as purported payment receipts of the Association of Lawyers of Sao Paulo, Brazil.
+Image 13: A résumé
+These attacks suggest that Packrat had Portuguese speaking targets during this period. Based on the specifics of the bait
+documents, it seems likely that they were Brazilian.
+https://citizenlab.org/2015/12/packrat-report/ 14/40
+2015/12/11 Packrat: Seven Years of a South American Threat Actor
+Image 14: Payment receipt
+The majority of the implants we found were configured to beacon back to a Command & Control,
+taskmgr.servehttp.com, although a few others include ruley.no-ip.org, lolinha.no-ip.org, and taskmgr.serveftp.com (See
+Appendix B for a complete list).
+3.1.1 Analysis of CyberGate RAT
+The CyberGate RAT samples we analyzed were, as mentioned above, typically wrapped in a layer of AutoIt. Code and
+strings found in the binary indicate that it is based on the Spy-Net RAT version 2.6. This RAT was developed by a Brazilian
+hacker using the handle spynetcoder and is outlined on the Spy-Net RAT ‘official’ website.
+CyberGate’s Infection Routine
+After unpacking from the applied runtime packer, CyberGate runs its second stage, which is likeley the infection routine.
+This injects the third stage, a DLL, into a running process. Once implanted, CyberGate then deploys a range of
+techniques for persistence and monitoring.
+The third stage module picks from three execution paths (based on mutexes, which can also be set by a prior infection):
+Password gathering (mutex: “x_X_PASSWORDLIST_X_x”)
+Block mouse and keyboard input to any other application (mutex: “x_X_BLOCKMOUSE_X_x”)
+Infection routine
+CyberGate Anti Analysis
+The infection routine comes with a set of anti-analysis features packaged in a single function. CyberGate searches for a
+range of virtual and sandbox environments. [[3]] It also checks for user space debuggers through the IsDebuggerPresent
+API, and for SoftICE and Syser through their respective pipes. The malware performs breakpoint detection on the function
+entries of the listed anti-analysis features by checking whether the first byte of each function equals ‘CC’, the
+bytecode indicating a breakpoint.
+Image 15: CyberGate Anti Analysis
+CyberGate Process Injection
+The infection routine fetches the encrypted implant from the resource section, and upon decryption attempts to inject its
+implant into the Windows system shell process (explorer.exe). If this fails, CyberGate launches an explorer.exe process on
+its own, injects its implant into it, and then completes the setup. Additionally, another instance of the CyberGate implant
+is injected into a default browser process, which runs invisibly.
+The infection routine drops a copy of itself into different directories, depending on the Windows version: /System,
+/Windows, or /Program Files. The implant’s name varies: taskhost.exe, regedit.exe, or taskmgr.exe are all common. The
+infection routine also writes a copy of the encrypted implant into the %TEMP% directory and names it XX–XX–XX.txt.
+To achieve persistence, the second stage writes registry keys so that CyberGate is run at startup:
+HKLM\SOFTWARE\Microsoft\Active Setup\Installed Components\%GUID%\StubPath:
+“C:\WINDOWS\System32\regedit.exe”
+HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\policies\Explorer\Run\Policies:
+“C:\WINDOWS\System32\regedit.exe”
+HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\msconfig: “C:\WINDOWS\System32\regedit.exe”
+Password Collection
+If tasked with password collection, the second stage binary grabs passwords from a range of locations, including: the No
+ip Dynamic Update Client (DUC), MSN messenger, Firefox, and Internet Explorer. The credentials are collected from the
+Windows Registry, browser profiles, the RAS dial up settings, Local Security Authority (LSA) settings, MS ProtectedStorage,
+MS IntelliForms, and the credential store.
+CyberGate’s Functionality
+The CyberGate implant runs two instances. The first runs in the default browser process, and acts as the monitoring
+https://citizenlab.org/2015/12/packrat-report/ 15/40
+2015/12/11 Packrat: Seven Years of a South American Threat Actor
+component. Meanwhile, the explorer.exe instance serves as ‘watchdog,’ ensuring persistence and making sure the
+infector binary on disk doesn’t disappear.
+Image 16: Searching for indicators of an existing Spy-Net
+installation
+The CyberGate implant comes with the same credential stealing capabilities as the infector, and is extended by routines
+to spy on Chrome and STEAM credentials as well. Also inherited from the infector, the implant owns the same anti-analysis
+routine protecting it from sandboxes and debuggers.
+Beyond the capabilities seen in the infector, CyberGate has a range of features that provide an attacker with a full
+spectrum of monitoring and remote control functionality.
+CyberGate capabilities include:
+Collecting detailed information about the infected system
+Activation and control of the webcam and microphone
+Screenshot capture
+Blocking user input (e.g. keyboard and mouse)
+Control over processes, windows, applications, devices, drive, ports, TCP & UDP connections, the clipboard,
+registry keys and values etc.
+Control over the filesystem
+Download and execution of further binaries
+Exfiltration via FTP
+Collection of information on installed security products
+Interestingly, CyberGate gathers information on installed security products through the Windows Management
+Instrumentation (WMI) by launching cscript.exe on a hardcoded .vbs-script. The script requests name and version number
+of installed antivirus and firewall solutions and dumps the data to a file:
+Set objSecurityCenter = GetObject(“winmgmts:.rootSecurityCenter”)
+Set colFirewall = objSecurityCenter.ExecQuery(“Select * From FirewallProduct”,,48)
+Set colAntiVirus = objSecurityCenter.ExecQuery(“Select * From AntiVirusProduct”,,48)
+Set objFileSystem = CreateObject(“Scripting.fileSystemObject”)
+Set objFile = objFileSystem.CreateTextFile(“%FILEPATH%”, True)
+Enter = Chr(13) + Chr(10)
+CountFW = 0
+CountAV = 0For Each objFirewall In colFirewall
+CountFW = CountFW + 1
+Info = Info & “F” & CountFw & “) ” & objFirewall.displayName & ” v” & objFirewall.versionNumber &
+Enter
+NextFor Each objAntiVirus In colAntiVirus
+CountAV = CountAV + 1
+Info = Info & “A” & CountAV & “) ” & objAntiVirus.displayName & ” v” & objAntiVirus.versionNumber &
+EnterobjFile.WriteLine(Info)
+objFile.Close
+Collected data is stored in dump files on disk and exfiltrated to the remote server component by HTTP or FTP.
+3.1.2 Analysis of XTremeRAT
+XTremeRAT is commercial off-the-shelf malware, often available cracked, and used to monitor victim machines. While
+used by apolitical hackers, XTremeRAT has been extensively used by government-linked malware groups to target the
+opposition during the ongoing Syrian Civil War, as well as by other politically-motivated groups in the Middle East and
+https://citizenlab.org/2015/12/packrat-report/ 16/40
+2015/12/11 Packrat: Seven Years of a South American Threat Actor
+North Africa. It has also been extensively analyzed, and we encourage interested readers to review some of these
+analyses.
+While often packed, XTreme RAT itself has limited stealth and persistence functionality. Its monitoring capabilities are also
+straightforward. The versions we analyze here have no code obfuscation. XTreme Rat is implemented as client/server
+architecture, where the infected machine acts as server, while the C&C component is the client.
+This version of Xtreme Rat’s capabilities include:
+Logging keystrokes
+Logging the name of the foreground desktop application
+Sniffing the clipboard for passwords
+Downloading and executing binaries via HTTP, presumably to install second stage malware
+Image 17: Installation of the XTreme RAT keylogger module
+Xtreme RAT operation and keylogging functionality
+The Xtreme RAT implant sniffs the clipboard contents via the keylogger window, using a clipboard viewer that it also
+installs. The viewer receives the window message WM_DRAWCLIPBOARD every time the clipboard changes, and provides
+access to Clipboard contents. Clipboard and keylogger data is dumped to a .dat-file that, along with the configuration
+file (.cfg), is located in the […]\Application Data\Microsoft\Windows folder for the current user. Both filenames are
+dictated by XTreme RAT’s configuration.
+XTreme RAT data files
+C:\Documents and Settings\Administrator\Application Data\Microsoft\Windows\RJokLSZBj.cfg
+C:\Documents and Settings\Administrator\Application Data\Microsoft\Windows\RJokLSZBj.dat
+The dump file is exfiltrated via push to FTP. XTreme RAT comes with preconfigured FTP server credential placeholders
+(ftpuser/ftppass) to log on to ftp.ftpserver.com, which are then switched for updated values received from the C&C at
+runtime.
+The XTreme RAT implant also creates a mutex named following the same naming scheme as configuration and dump file
+(e.g. “RJokLSZBjPERSIST”). The RAT’s configuration is fetched from the .rsrc-section and encrypted using RC4, with the
+key “CONFIG”. The same algorithm and key combination has been seen in use before in other variants of XTreme RAT.
+This variant of XTreme RAT uses explorer.exe as a container for remote threads to carry out specific functions. Thread
+injection can happen on at least three occasions.
+Possible injections of explorer.exe by XTreme RAT:
+A ‘watchdog’ thread to restore persistence keys, and to locate and run the infector binary. To increase stealth,
+the dropping module changes the timestamp of the dropped infector.
+A thread for deleting of XTreme RAT’s files on disk
+The entire keylogging code and FTP push functionality
+3.2: 2014- 2015 AlienSpy Dominates
+Over the past two years, Packrat has been using an evolving family of off-the-shelf malware known as AlienSpy. The
+software began as the free RAT “Frutas,” and was identified in 2013 during a campaign in Mexico. This was
+subsequently adapted for commercial sale as the “Premium RAT” Adwind. Adwind could be purchased for $75 for a
+https://citizenlab.org/2015/12/packrat-report/ 17/40
+2015/12/11 Packrat: Seven Years of a South American Threat Actor
+single license, and up to $250 for multiple licenses. Then, by 2013, AdWind was renamed UNRECOM (UNiversal REmote
+COntrol Multi-platform), and was detected in targeted attacks in the Middle East.
+The software was most recently branded “AlienSpy,” and was again found by security researchers in targeted spying
+operations. At the time of this report, the latest re-packaging of this RAT is known as JSocket. For the purposes of this
+report, we’ll refer to all variants of this spyware as “AlienSpy.” AlienSpy is a relatively full-featured RAT with a range of
+features, such as recording the victim’s keystrokes, audio eavesdropping via a device’s built-in microphone, remote
+viewing of the desktop, and the ability to turn on a victim’s webcam “without user notification.” Alienspy has been
+extensively analyzed by malware researchers, including reports by ProofPoint and Fidelis.
+3.2.1 Packrat’s Alienspy Deployment
+From 2014 to early 2015, Packrat’s preferred technique was to send AlienSpy implants as attachments in phishing emails
+with the extension ‘.pdf.jar.’ The default setting in Windows is to hide file extensions, thus making it appear to be a
+“.pdf” file. With some minor differences, all the samples from this time period are built in a similar manner. There’s an
+outer .jar (Java archive) file containing a folder named META-INF and two files: Favicon.ico and Principal.class. Upon
+execution, Principal.class unzips the contents of “Favicon.ico” (not an icon file, but a .zip archive), and looks for a
+filename containing “.jar”.
+Contents of Favicon.ico
+0doc.jar
+1Estrictamente Secreto y Confidencial.pdf
+Once it finds the right file (in this case 0doc.jar), it drops it to a randomly-named temp file starting with a constant string
+and invokes Java to run it.
+Inside the .jar file from “Favicon.ico”
+META-INF/MANIFEST.MF
+MANIFEST.MF
+ID
+plugins/Server.class
+Main.class
+Estrictamente Secreto y Confidencial.pdf
+“Main.class” is obfuscated using Allatori, a Russian-origin JVM obfuscator used by AlienSpy.
+This reads part of an RC4 key from the file “ID.” To this it appends a constant string, then uses the full RC4 key to decrypt
+the contents of MANIFEST.MF, which yields the actual Adwind implant JAR file. Others have written about the operation
+and deobfuscation of Allatori, including how to deobfuscate it, here, here, and here.
+AlienSpy in MS Office Documents
+In 2015, Packrat started sending AlienSpy implants embedded in .docx files. The method used to obfuscate these files is
+more complex, but ultimately similar to previous techniques. Uncompressing an infected MS Word document reveals a
+file named “oleObject1.bin” under the directories word/embeddings. Opening this file, which is a jar, reveals:
+a
+abcdefghijka.class
+abcdefghijkf.class
+abcdefghijkj.class
+abcdefghijks.class
+abcdefghijku.class
+abcdefghijkz.class
+a.txt
+b.txt
+c.dat
+kjmhs
+Main.class
+META-INF
+Similar to the obfuscation described above in Packrat’s earlier uses of AlienSpy, half the decryption key is in a.txt. The
+other half is a string which is decrypted iteratively by the abcdefghijk[a,f,j,s,u,z].class files with the method and class
+names from the caller.
+https://citizenlab.org/2015/12/packrat-report/ 18/40
+2015/12/11 Packrat: Seven Years of a South American Threat Actor
+Persistence is achieved by adding the following registry value:
+“reg.exe” (Access type: “SETVAL”, Path:
+“\REGISTRY\MACHINE\SOFTWARE\MICROSOFT\WINDOWS\CURRENTVERSION\RUN”, Key: “JAVASE”, Value:
+“”C:\Users\PSPUBWS\Cas436FlashJava\RoUndCuBe\bin\javaw.exe” -jar
+“C:\Users\PSPUBWS\Cas436FlashJava\Cas436FlashJava\Cas934FlashJava.
+3.2.2 Adzok makes an appearance
+Between 2014-2015, Packrat also used Adzok – Invisible Remote Administrator. Similar to AlienSpy in functionality, the java
+based Adzok is apparently from Bolivia. The premium version costs $990, but it appears that Packrat is using the “free”
+version. This version of Adzok does not use obfuscation, which makes it possible to simply uncompress the jar files within
+the docx and read the clear-text configuration file. Given the obfuscated nature of the other RATs that Packrat has used,
+their use of Adzok is surprising. It is possible that they were having stability, compatibility, or detection problems with other
+RATs and that Adzok served a specific requirement.

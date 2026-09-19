@@ -1,0 +1,47 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 70
+|OFFSET|SIZE|FIELD DESCRIPTION|
+|---|---|---|
+|0|4 Bytes (DWORD)|Magic value (0xB4F4)|
+|4|4 Bytes (DWORD)|Command ID|
+|8|2 Bytes (WORD)|Command type|
+|10|2 Bytes (WORD)|Verify file flag|
+|12|4 Bytes (DWORD)|Data header size|
+Table 17-6: SierraJuliett-MikeOne’s Command File Header
+Interestingly, the data header, the size of the data portion, and the data portions of the command file are in cleartext. The
+data header contains three byte fields followed by an optional NULL-terminated string. The data that follows the data
+header contains the command specific data and varies in structure based on the command type.
+|OFFSET|SIZE|FIELD DESCRIPTION|
+|---|---|---|
+|0|1 Byte|Unknown field, seemingly unused|
+|1|1 Byte|Activate command for node types less than0x1000000|
+|2|1 Byte|Activate command for node types greater than or equal to0x1000000|
+|3|Variable (NULL-terminated string)|Parameter string for command|
+Table 17-7: SierraJuliett-MikeOne’s Command File’s Data Header
+If the verify file flag (offset 10 of the command file header) is non-zero, the last 128 bytes of the command file contains
+another RSA private key encrypted data blob containing the MD5 hash of all of the bytes in the command up to, but not
+including, the last 128 bytes, which the client node can use to verify the integrity of the command file upon reception.
+To perform the synchronization of command files from the server node to the client node, the client node transmits a
+4-byte (DWORD) value to the server node representing the last command ID that the client executed. The server node
+responds with a 4-byte (DWORD) value containing its last command ID executed. The server node then enters a loop
+punctuated by calls to FindFirstFile/FindNextFile in order to enumerate all of the server’s stored command files
+from the %SYSDIR%\1008 directory.
+For each command file that the server node finds, the server node decrypts the command file’s header, verifies that the
+decryption was successful by ensuring that offset 0 of the command file header is equal to 0xB4F4, and then compares
+the command ID (offset 4) against the client’s last command ID. For any file that successfully decodes and has a value
+greater than the last command ID reported by the client node, the server node sends a 4-byte value (DWORD) of
+0x00000010 to the client to indicate that a command file is inbound. The server then sends the command file to the
+client using a sequence of datagrams. The protocol for sending a file to or from a node is as follows:
+
+
+Transmit the entirety of the file in sequence of 4KB datagrams with the data type field set to 0x1111
+
+
+Conclude the transfer by sending a datagram with the data type field set to 0xFFFF .
+
+
+Once all necessary command files, if any, have been sent to the client, the server terminates the synchronization operation
+by transmitting 4-bytes (DWORD) of 0x00000002 to the client, and the client acknowledges the synchronizations
+conclusion by replying with 4-bytes (DWORD) of 0x00000001 . The server node terminates the communication channel
+with the client.
+Visually, the sequence of events that make up the sync channel operations as viewed from the network perspective is
+illustrated in Figure 17-4.

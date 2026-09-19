@@ -1,0 +1,34 @@
+Infection vectors & persistence
+Similarly to most other trojan families, Win32/Potao arrives at the victim’s computer system
+in the form of a trojan dropper that acts as an “installer” for the malware. We have observed
+several infection vectors used to distribute the trojan, as described in the Attack timeline section.
+To summarize:
+
+Executables masquerading as Word, Excel, and PDF documents. These were propagated through
+
+fake postal service websites and SMS links, and possibly also through phishing emails
+
+
+Worm-like USB spreading functionality
+
+
+Fake TrueCrypt software – see Win32/FakeTC for the technical analysis
+
+
+The dropper itself is usually in two stages. The first stage, for example, in the form of an executable
+with an icon of a MS Word document, merely drops the second stage dropper into the %temp%
+directory, executes it, and at the same time drops the embedded decoy document into the current
+working directory and opens it.
+The second stage dropper unpacks the main DLL from within itself using RtlDecompressBuferf .
+The DLL is dropped to the following path, loaded and injected into explorer.exe:
+%APPDATA%\Microsoft\%LUID%.dll [8]
+Before the DLL is dropped to the drive, however, a simple trick is applied. The Potao dropper patches
+the name of the Enter export function in the DLL file’s export address table to the LUID value. Figure
+23 shows the patching function and an example where Enter was renamed to __85fc_ . As a result, every
+dropped instance of the DLL will have a unique binary hash.
+8) %LUID% signifies the LUID structure, which is used as a unique identifier for the infected bot
+16
+Figure 23 – Patch of export function name before dropping the main DLL
+The trojan uses standard methods for loading its DLL – via rundll32.exe – and for maintaining
+persistence, by setting the Run registry entry:
+[HKCU\Software\Microsoft\Windows\CurrentVersion\Run] %LUID%

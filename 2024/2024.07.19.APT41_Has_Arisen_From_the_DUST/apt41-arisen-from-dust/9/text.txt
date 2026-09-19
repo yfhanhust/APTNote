@@ -1,0 +1,161 @@
+DUSTTRAP
+DUSTTRAP is a multi-stage plugin framework with multiple components. DUSTTRAP begins with a
+launcher (Stage 1) that AES-128-CFB decrypts an encrypted on-disk PE file .dll.mui and
+executes it in memory. Decryption relies on the target
+machine's HKLM\SOFTWARE\Microsoft\Cryptography\MachineGUID, thereby keying the
+launcher to the victim system. The decrypted PE from the launcher is a memory-only dropper (Stage 2)
+that is responsible for decrypting an embedded configuration and two or more embedded plugin
+dynamic-link libraries (DLLs) from its .lrsrc section. Once executed, these DLLs begin the setup of
+the modular plugin system. The first observed plugin (Stage 3) is responsible for low-level network setup
+and encryption. The second observed plugin (Stage 4) is responsible for higher-level network operations
+and may function as a downloader for additional plugins that, when loaded, may register themselves
+with prior components in the execution chain for additional functionality. We've observed the second
+plugin to vary in functionality and more plugin variants likely exist.
+Plugin loading is performed by trojanizing a legitimate system DLL from %windir% with a sufficiently
+large .text section to hold the contents of each plugin. To trojanize the target DLL, the dropper will
+generate a new file on disk
+at %windir%\Microsoft.NET\assembly\GAC_MSIL\System.Data.Trace\
+v4.0_4.0.0.0__b0\
+.dll or %programdata%\Microsoft.NET\System.Data.Trace\v4.0_4.0.0.0__b0<hex_uu
+.dll . The malicious plugin code is only present in the .text section of
+this file long enough to call ZwCreateSection, loading the trojanized malicious plugin code into
+memory. Before the trojanized file is closed, the original contents of the .text section are restored on
+disk. This is an evasion technique that will bypass endpoint detection and response (EDR) solutions that
+scan for malicious contents on file close. The malicious code may therefore not be present in the file
+depending on when it was quarantined. During the trojanization process, the system time may be written
+to a log file at .log and acquire the mutex ICMzUEkdLNayBdWF, though mutex names
+will likely vary from host to host.
+The following legitimate DLLs are blocklisted from being trojanized:
+cfgmgr32.dll
+combase.dll
+cryptbase.dll
+cryptsp.dll
+dhcpcsvc.dll
+dhcpcsvc6.dll
+dnsapi.dll
+FWPUCLNT.DLL
+gdi32.dll
+gdi32full.dll
+iertutil.dll
+imm32.dll
+IPHLPAPI.DLL
+kernel.appcore.dll
+kernel32.dll
+KernelBase.dll
+locale.nls
+msvcp_win.dll
+msvcrt.dll
+mswsock.dll
+NapiNSP.dll
+nlaapi.dll
+nsi.dll
+ntdll.dll
+ntmarta.dll
+oleaut32.dll
+OnDemandConnRouteHelper.dll
+pnrpnsp.dll
+powrprof.dll
+advapi32.dll
+apphelp.dll
+bcrypt.dll
+bcryptprimitives.dll
+profapi.dll
+rasadhlp.dll
+rpcrt4.dll
+rsaenh.dll
+sechost.dll
+SHCore.dll
+shell32.dll
+shlwapi.dll
+sspicli.dll
+ucrtbase.dll
+urlmon.dll
+user32.dll
+userenv.dll
+webio.dll
+win32u.dll
+windows.storage.dll
+winhttp.dll
+wininet.dll
+winnlsres.dll
+winnsi.dll
+winrnr.dll
+winsta.dll
+ws2_32.dll
+wshbth.dll
+Wtsapi32.dll
+The section objects created by the Stage 2 dropper for each trojanized plugin are appended to a linked
+list in the droppers process and executed in memory. The dropper and each plugin perform a registration
+process with each other so that stages 2, 3, and 4 rely on each other and cooperatively call into and out
+of each other to handle the operation each is responsible for. Execution between all of these
+components is accomplished via Windows fiber-based task event loop driven by Stage 2. Additional
+plugins may be registered and executed via this plugin framework.
+We've observed at least 15 plugins with the higher-level themes of:
+Shell Operations
+Executing processes via cmd.exe
+File System Operations
+Directory enumeration
+Changing directory
+Delete file
+Create directory
+Copy file
+Move file
+File exists
+Change file timestamp
+List attached drives
+Process Operations
+Enumerate running processes
+Inject shellcode
+Kill a process
+Network Probing
+Ping a remote host
+Attempt connections on port
+Network Store Interface Operations
+Get network interface statistics
+Screen Operations
+Get screen size
+Screenshot
+System Information Survey
+List RDP sessions
+List installed security software
+Get system info
+List user accounts
+Get system boot time
+Enumerate hidden and visible process windows
+File Manipulation Operations
+Open file
+Write file
+CRC32 file content
+Read file
+Close file
+Keylogger
+Activate
+Delete log
+Active Directory Operations
+Enumerate domain controller information
+Add user
+Delete user
+Get server configuration
+Get server shares
+Get detailed server and workstation domain information
+Enumerate servers
+Get list of services
+Get list of network shares
+Add network share
+Disconnect network share
+Get list of users
+Set user password
+File Uploader
+Upload file resident on disk
+RDP
+Enumerate remote desktop sessions
+DNS Operations
+Perform DNS lookups
+DNS Cache Operations
+Retrieves DNS cache table operations
+Registry Operations
+Get registry value
+Dump registry path and children to disk
+Set registry value
+Delete registry value
+Figure 3: Full execution flow of DUSTTRAP

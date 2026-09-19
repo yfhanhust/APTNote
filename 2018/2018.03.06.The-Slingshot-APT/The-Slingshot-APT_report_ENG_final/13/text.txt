@@ -1,0 +1,183 @@
+Additional downloaders
+‘Rc’ downloader
+This component named ‘rc’ has the same input parameters as chmhelp.dll and the same output
+askpws. It provides the following functionality:
+
+
+Resolves environment variables.
+
+
+Sends info about files in directory: path, size, date modified.
+
+
+Write files, sends files.
+
+
+Sends info about run processes: PID, PPID, creation time, name of the executable file for the
+process, account name with domain, is process run under Wow64.
+
+
+Terminates process by PID.
+
+
+Impersonates user by login and password received from server or by process PID.
+
+
+Reverts to self after impersonation.
+
+
+Creates process. If impersonation was successful than creation take place on behalf of
+impersonated user.
+
+
+Communicates with created process.
+
+
+Sends name of the local computer, Windows version, build number, installed service pack.
+
+
+Sends username.
+
+
+Migrates to another process: infects process by PID with itself in memory. Socket connected to
+server is passed too.
+
+
+Migrates to another process: path to process to be created is received from server. Inject is only
+in memory. Socket connected to server is passed too. When injected, malware downloads and
+runs next Slingshot component.
+
+
+Downloads and configures new module, then runs it in new thread in current process. All logging
+
+
+of new module will be send to server.
+The configuration of a new module can be only done through command line (embedded in the
+header of the packed component) and consists ofreceiving it from the C2 server, parsing it and
+inserting it into the downloaded sample.
+This seems a strange behavior, as there is no need to do all this on the victim side.
+Interestingly, ‘rc’ logs in some victims showed connections to the 2869/1900/5431 ports, linked to
+vulnerabilities in previous UPnP protocols. This might be another one clue that attackers used
+vulnerable routers as infection vector.
+Spork downloader
+This is the last downloader we have found, quite different from the ones described above:
+Not as interesting as its main duty (downloads and run a payload) is its implementation. This module
+introduces a rule engine with embedded serialized rules. This is intended to find some Personal
+Security Products (PSPs) that suit the rules among the started processes. This is used to decide to
+which process the embedded malicious shellcode will be injected.
+Rules are serialized according the following scheme:
+
+
+Byte count_rules, count_PSPs.
+
+
+Rule all_rules[count_rules] (6 or 8 bytes per rule depending on spork version - yellow).
+
+
+Short offsets_to_PSP_names[count_PSPs] (purple).
+
+
+Char PSP_names[count_PSPs][] (green).
+
+
+Each rule consists of 6 fields:
+
+
+Process name of the PSP represented as index in offsets array.
+
+
+Array of names of processes to inject to as index view too (some below will be described).
+
+
+Min version of the PSP.
+
+
+Max version of the PSP.
+
+
+Flags: for example, x32/x64.
+
+
+Type used as result when rule was found.
+
+
+Spork enumerates all the started processes, checking each of them with each rule. If any process
+matches at least one of them, it decides whether to inject code into it depending on the type of the
+matched rule. Type can be any of the following values:
+
+
+Type 0: default
+
+
+Type 1: error
+
+
+Type 2: inject into matched PSP
+
+
+Type 3: inject into lsass.exe
+
+
+Type 4: inject into winlogon.exe
+
+
+Type 5: inject into svchost.exe
+
+
+Type 6: inject into process specified in second field of matched rule
+
+
+If no process matches any rules, then the default process ‘svchost.exe’ is used for injection.
+The matching process with a rule can be summarized as follows:
+
+
+Process name is equal to the PSP name in rule
+
+
+Version of the PSP is inside the bounds specified in the rule
+
+
+Process suits all flags that are set in the rule
+
+
+The version of PSP is determined by sequence calls to GetFileVersionInfo and VerQueryValue to get
+dwProductVersionMS field, which contains the number of the product this file (PSP) was distributed.
+The following table summarizes the found PSP with the process to inject:
+|found PSP name|versions|bitness|process to inject|
+|---|---|---|---|
+|avfwsvc.exe|00-ff|x32|avguard.exe|
+|avfwsvc.exe|00-ff|x64|inssda64.exe|
+|avgtray.exe|00-ff|x32|avgtray.exe|
+|avgtray.exe|00-ff|x64|avgsrmaa.exe|
+|avp.exe|01-07|x32-x64|winlogon.exe|
+|avp.exe|08-0c|x32|avp.exe|
+|avp.exe|08-0c|x64|lsass.exe|
+|avp.exe|0d-0d|x32-x64|lsass.exe|
+|avastui.exe|00-ff|x32|avastui.exe|
+|avastui.exe|00-ff|x64|winlogon.exe|
+|avgnt.exe|00-ff|x32|avguard.exe|
+|avgnt.exe|00-ff|x64|inssda64.exe/avshadow.exe|
+|avgui.exe|00-ff|x32-x64|winlogon.exe|
+|bdagent.exe|00-ff|x32-x64|bdagent.exe|
+|cfp.exe|00-ff|x32-x64|cfp.exe|
+|casc.exe|07-08|x32-x64|svchost.exe|
+|casc.exe|05-06|x32-x64|error|
+|defenderdaemon.exe|00-ff|x32-x64|error|
+|egui.exe|00-ff|x32-x64|default - svchost.exe|
+|fsdfwd.exe|00-ff|x32-x64|default - svchost.exe|
+|mcagent.exe|00-ff|x32-x64|winlogon.exe|
+|rstray.exe|00-ff|x32|rstray.exe|
+|rstray.exe|00-ff|x64|error|
+|rtvscan.exe|00-ff|x32-x64|default - svchost.exe|
+|tmproxy.exe|00-ff|x32-x64|tmproxy.exe|
+|umxcfg.exe|07-08|x32-x64|default - svchost.exe|
+|umxcfg.exe|05-06|x32-x64|error|
+|zlclient.exe|00-ff|x32-x64|error|
+Instead of injecting the malicious code in already started processes, spork creates a new process of
+the selected image. Process is created with the: flags hide, create no window, default instead of
+loading cursor and suspended. Then it creates a new section, fills it with malicious shellcode
+depending on the created x32 or x64 process and patches the EntryPoint so that it calls the
+shellcode. The last step is calling ResumeThread to run it.
+The new shellcode loads its needed libraries by parsing PEB, connects to its C2 (specified in cmdline), sends to it constant 0xC0FFEE44 or 0xC0FFEE43 depends on process bitness, downloads the
+malware from the received answer, passes to it socket used for the connection and runs. Unlike all
+the previously described downloaders, it doesn’t check for 0xDEADFOOD at 0x84 offset.

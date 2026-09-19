@@ -1,0 +1,96 @@
+
+
+
+Sentence : PROXY C&C (AKA TRIUNGULIN)
+As mentioned before, the attackers can use an internal server as a proxy C&C.
+It is important to note that we have discovered that the attackers have even built chains of proxy C&C
+servers, in which the first such server would redirect network traffic to the next proxy C&C and so on,
+until it reaches its final destination on the internet.
+The attackers use different methods to turn an internal server into a proxy C&C. To do so, the attackers
+could use the GreyEnergy malware itself, additional third-party software, or scripts. In the first case,
+the attackers could compromise a Windows server with the GreyEnergy malware, turning it into a
+proxy C&C by pushing 3proxy and plink modules. While monitoring GreyEnergy activity we have seen
+deployment of the following legitimate third-party software on internal Linux servers:
+   - 3proxy tiny proxy server
+
+
+   - Dante SOCKS server
+
+
+   - PuTTY Link (Plink)
+
+Instead of third-party software, the attackers have leveraged internal webservers by deploying their
+own scripts on them. For this, they have used the PHP and ASP programming languages.
+In all the cases we observed, the PHP scripts deployed were obfuscated and encrypted using the same
+type of obfuscation that was used for webserver backdoors. However, in this case the cookie that
+contains a decryption key is supplied by the GreyEnergy malware itself. For that reason, the malware
+operators have to use a special configuration format for the ~~ServerUrls~~ value.
+Figure 20. // A GreyEnergy configuration containing a cookie value used for decryption of the PHP backdoor code
+19 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+Interestingly, the malware configuration contains the word triungulin in the path to the obfuscated
+proxy PHP script. It seems that this is an internal name for this proxy C&C technique used by the
+malware operators.
+It is important to note that if the malware has an internal proxy C&C server in its configuration, then it
+does not contain the external C&C. In order to find an external C&C address it is, therefore, necessary to
+have both a malware sample and all associated PHP scripts.
+We have seen the following PHP scripts used:
+   - A custom PHP proxy script
+
+   - A slightly modified version of the _[Antichat Socks5 Server](https://github.com/tennc/webshell/blob/master/xakep-shells/PHP/Antichat Socks5 Server.php.php.txt)_
+
+A custom PHP proxy script contains a URL with the external C&C in the header.
+Figure 21. // External C&C embedded in custom PHP proxy script
+The custom PHP proxy script uses OpenSSL and Curl libraries in order to redirect requests from the
+malware to an external C&C server on the internet.
+Figure 22. // The code of a custom PHP proxy script used by GreyEnergy
+20 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+As mentioned before, the attackers could use ASP scripts for the same purpose. In one case that we saw,
+an ASP script was using a cookie supplied by the malware in order to decrypt only a real C&C address
+using AES: the rest of the code was not encrypted or obfuscated.
+Figure 23. // The code of an ASP proxy used by GreyEnergy
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "GreyEnergy malware", "type" : "EXEF"},
+        {"id": 2, "description": "internal server", "type" : "TAMP"},
+        {"id": 3, "description": "proxy C&C servers", "type" : "CCSH"},
+        {"id": 4, "description": "Windows server", "type" : "SYSP"},
+        {"id": 5, "description": "3proxy module", "type" : "APPS"},
+        {"id": 6, "description": "plink module", "type" : "APPS"},
+        {"id": 7, "description": "legitimate third-party software on internal Linux servers", "type" : "APPS"},
+        {"id": 8, "description": "3proxy tiny proxy server", "type" : "APPS"},
+        {"id": 9, "description": "Dante SOCKS server", "type" : "APPS"},
+        {"id": 10, "description": "PuTTY Link (Plink)", "type" : "APPS"},
+        {"id": 11, "description": "internal webservers with deployed scripts", "type" : "TAMP"},
+        {"id": 12, "description": "PHP programming language", "type" : "EXEF"},
+        {"id": 13, "description": "ASP programming language", "type" : "EXEF"},
+        {"id": 14, "description": "obfuscated and encrypted PHP scripts", "type" : "DOCF"},
+        {"id": 15, "description": "cookie with decryption key", "type" : "TAMP"},
+        {"id": 16, "description": "triungulin in the path to the obfuscated proxy PHP script", "type" : "SYSP"},
+        {"id": 17, "description": "custom PHP proxy script", "type" : "DOCF"},
+        {"id": 18, "description": "Antichat Socks5 Server.php.txt", "type" : "URLS"},
+        {"id": 19, "description": "OpenSSL library", "type" : "APPS"},
+        {"id": 20, "description": "Curl libraries", "type" : "APPS"},
+        {"id": 21, "description": "external C&C server on the internet", "type" : "CCSH"},
+        {"id": 22, "description": "ASP script with AES encryption for real C&C address", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "compromise and use"},
+        {"source": 2, "target": 3, "rel_name" : "turned into"},
+        {"source": 4, "target": 3, "rel_name" : "turned into using"},
+        {"source": 5, "target": 3, "rel_name" : "deployed on"},
+        {"source": 6, "target": 3, "rel_name" : "deployed on"},
+        {"source": 7, "target": 3, "rel_name" : "used to turn into"},
+        {"source": 8, "target": 3, "rel_name" : "deployed on"},
+        {"source": 9, "target": 3, "rel_name" : "deployed on"},
+        {"source": 10, "target": 3, "rel_name" : "deployed on"},
+        {"source": 11, "target": 3, "rel_name" : "used to turn into using"},
+        {"source": 12, "target": 14, "rel_name" : "written in"},
+        {"source": 13, "target": 22, "rel_name" : "written in"},
+        {"source": 15, "target": 14, "rel_name" : "contains key for decryption of"},
+        {"source": 16, "target": 17, "rel_name" : "included in path of"},
+        {"source": 17, "target": 21, "rel_name" : "contains URL with"},
+        {"source": 19, "target": 17, "rel_name" : "uses for redirecting requests"},
+        {"source": 20, "target": 17, "rel_name" : "uses for redirecting requests"}
+    ]
+}

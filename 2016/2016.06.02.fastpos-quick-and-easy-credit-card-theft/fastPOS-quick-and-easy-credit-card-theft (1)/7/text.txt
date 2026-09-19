@@ -1,0 +1,62 @@
+Information theft routines
+FastPOS has three separate threads, pertaining to its notable capabilities:
+
+
+Keylogger
+
+
+Main RAM scraper process
+
+
+(Note: The latest file set avoids several process names: Firefox.exe, Chrome.exe,
+Svchost.exe, Dwm.exe, and Skype.exe)
+Self-updating mechanism
+The first two threads, the keylogger and the main RAM scraper process, are for information theft
+purposes. We will tackle the third thread in the data exfiltration phase.
+In the first thread, FastPOS captures keystrokes and sends back the entire string to the C&C
+server once the return key is pressed. Keyloggers often go together with PoS threats as the
+former enable the attackers to do reconnaissance and obtain other information aside from the
+stolen data from the credit card scrape. Stolen information from keyloggers may also vary
+between the products or services purchased and the card security code (unique card code/card
+identification number) being asked in some establishments.
+FastPOS implements a simple key-logging functionality similar to another PoS threat,
+NewPosThings, in that keylogged data are held in memory with no file written in disk. As such,
+this poses challenges to detection and removal of the malware from PoS systems. Although,
+such routine may result to some level of network noise, there are relatively few instances of the
+return key being used. This is also seen when you compare the normal operations of PoS
+terminal to that of a regular workstation.
+The main RAM scraping process handled by the second thread and a custom algorithm is
+implemented in the following flow:
+
+Check field separator ('=' or 'D')
+Check first digit of the primary account number (aka, primary account number or
+
+PAN) (3,4,5,6)
+3. Check expiry year (not later than 2040)
+4. Check expiry month (no value above 12)
+5. Service code should be 201 or 101 (magnetic stripe card/IC card, PIN not required)
+6. Must pass Luhn validation
+7. Data after service code should be digits from 0-9 up to 16 characters, and ends with
+'?'
+3
+Trend Micro | FastPOS: Quick and Easy Credit Card Theft
+This process also checks if the number of digits is 16 numbers. The PAN checking indicates
+that it allows cards from major players like American Express, Discover, JCB, MasterCard, and
+VISA among others. The steps taken by this RAM scraper is quite common, except to one
+procedure where it checks the service code. Based on our analysis of one particular sample
+(sha1: 01cdb9f7935434df31196660a7542e0b46bcf480), FastPOS looks for a specific service
+code 201 or 101, namely:
+Position 1, value 1: International interchange OK
+Position 1, value 2: International interchange, use IC (chip) where feasible
+
+
+Position 2, value 0: Normal
+
+
+Position 3, value 1: No Restrictions
+
+
+Figure 3: Service code checking
+This filtering ensures that the credit card data that it searches for are international cards
+(position 1), unrestricted for authorization (position 2), and does not require a pin (position 3). A
+full list of possible service code combinations can be read here.

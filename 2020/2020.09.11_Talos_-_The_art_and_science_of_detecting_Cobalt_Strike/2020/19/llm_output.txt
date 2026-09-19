@@ -1,0 +1,54 @@
+
+
+
+Sentence : The art and science of detecting Cobalt Strike
+Figure 26
+VBA
+The VBA Method gives a little bit of a different approach
+(Figure 26).
+So far, we’ve seen basic methods of loading binary code
+and executing it. In this method, we can see that it uses an
+Excel Workbook to execute additional code. The first thing
+that happens is Cobalt Strike loads up an Excel.Application
+and then queries a registry key:
+HKEY_CURRENT_USER\Software\Microsoft\
+Office\<Excel Version>\Excel\Security\AccessVBOM\
+This key is a security setting for restricting default
+programmatic access to the Office VB project. If it’s
+enabled, Office will trust all macros and run any code
+without a security warning or additional permissions from
+the user. Cobalt Strike attempts to flip that switch and
+disable this protection in the registry.
+After that, Cobalt Strike once again calls the Windows API
+to execute binary code. Then, it allocates an executable
+section of memory within the process and runs it by calling
+kernel32.dll!CreateRemoteThread.
+Detection
+This type of multilayer obfuscation is easy to extract when
+in hand but can be extremely effective against security
+products that don’t know it’s coming. But it’s possible to
+work around this.
+For the executable method, the shellcode was actually the
+same assembly code as what we discussed earlier in the
+Staged/Stageless Executables. The NOP-based function is
+interpreted as a hex string, so we can clone those rules to
+© 2020 Cisco. All rights reserved. talos-external@cisco.com | talosintelligence.com page 15 of 29
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cobalt Strike", "type" : "ACTO"},
+        {"id": 2, "description": "Excel Workbook", "type" : "DOCF"},
+        {"id": 3, "description": "Excel.Application", "type" : "APPS"},
+        {"id": 4, "description": "HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\<Excel Version>\\Excel\\Security\\AccessVBOM\\", "type" : "REGI"},
+        {"id": 5, "description": "Windows API", "type" : "APPS"},
+        {"id": 6, "description": "kernel32.dll!CreateRemoteThread", "type" : "EXEF"},
+        {"id": 7, "description": "shellcode", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loads and executes code from"},
+        {"source": 1, "target": 3, "rel_name" : "queries and modifies registry key"},
+        {"source": 1, "target": 5, "rel_name" : "calls to execute binary code"},
+        {"source": 1, "target": 6, "rel_name" : "calls to allocate executable memory and run it"},
+        {"source": 7, "target": 2, "rel_name" : "contains assembly code in"}
+    ]
+}

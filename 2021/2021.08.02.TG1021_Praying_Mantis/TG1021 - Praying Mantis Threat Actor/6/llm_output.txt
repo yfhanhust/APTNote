@@ -1,0 +1,77 @@
+
+
+
+Sentence : Checkbox Survey RCE Exploit (CVE-2021-27852)
+One of the vulnerabilities that the threat actor leveraged to exploit IIS servers is a 0-day vulnerability associated with
+an insecure implementation of the deserialization mechanism within the “Checkbox Survey” web application, a
+commercial survey platform. The vulnerability in the “Checkbox Survey” application enables remote code execution
+(RCE) on the target resulting with the initial compromise of an IIS server. Analysis of the activity found the vulnerability
+resides in an insecure implementation of the VIEWSTATE mechanism in .NET.
+VIEWSTATE is a mechanism in .NET used to maintain and preserve web page session data between a client and a
+server. When using this feature any client that browses an application receives a serialized .NET object that contains
+the values of specific variables. When the client sends an HTTP request back to the web application, the VIEWSTATE
+object is sent along with it, which in turn gets deserialized and processed on the server’s side setting the variables to
+their previous values.
+The vulnerability in “Checkbox Survey” was identified on a specific webpage in the application where the methods
+originally used to handle the VIEWSTATE mechanism were replaced with an insecure and compressed version called
+VSTATE. As illustrated in Figure 1, the new “LoadPageStateFromPersistenceMedium” method does not validate the
+integrity of the data passed in the VSTATE variable, blindly triggering the deserialization process. Sending a crafted
+VSTATE variable which exploits the “LosFormatter” deserialization process would allow a threat actor to execute code
+remotely on the Checkbox application server.
+Figure 1: Vulnerable code snippet found within Checkbox code [2]
+2 Checkbox source code found on GitHub
+4
+The same exact VSTATE implementation was published in a blog post in 2005 as a solution for a compressed
+implementation of VIEWSTATE. Some web applications have copied this piece of code into their own repository,
+exposing the application to the vulnerability. This topic of VSTATE deserialization exploits was covered in the past by
+Graa – Security Blog. The vulnerable piece of code was found in version 6 of the “Checkbox Survey” software and is
+shown in Figure 1 .
+The flow of the VSTATE deserialization exploit used by the threat actor was executed in a single HTTP POST to the
+Checkbox application server, and is illustrated in Figure 2 below:
+
+The threat actor crafts and sends an HTTP POST request containing two main components – A crafted VSTATE
+
+variable containing a reflective loader DLL and a VSTATEGENERATOR variable containing the NodeIISWeb
+malware.
+
+
+The exploited deserialization process executes the reflective loader DLL contained in the VSTATE variable.
+
+
+The reflective loader DLL reads, decodes, and decrypts the data passed in the “__VSTATEGENERATOR”
+
+
+parameter.
+
+Finally, the decrypted data (the NodeIISWeb malware) is reflectively loaded and acts as a backdoor on the
+
+compromised asset.
+Figure 2 : Threat actor VSTATE/VIEWSTATE exploit flow.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Threat actor", "type" : "ACTO"},
+        {"id": 2, "description": "Checkbox Survey web application", "type" : "APPS"},
+        {"id": 3, "description": "CVE-2021-27852", "type" : "CVES"},
+        {"id": 4, "description": "IIS server", "type" : "OPPS"},
+        {"id": 5, "description": "VIEWSTATE mechanism in .NET", "type" : "TTPS"},
+        {"id": 6, "description": "VSTATE variable", "type" : "DOCF"},
+        {"id": 7, "description": "LosFormatter deserialization process", "type" : "TTPS"},
+        {"id": 8, "description": "Crafted VSTATE variable", "type" : "IOCS"},
+        {"id": 9, "description": "Reflective loader DLL", "type" : "EXEF"},
+        {"id": 10, "description": "__VSTATEGENERATOR parameter", "type" : "DOCF"},
+        {"id": 11, "description": "NodeIISWeb malware", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "exploited"},
+        {"source": 3, "target": 2, "rel_name" : "vulnerability in"},
+        {"source": 2, "target": 4, "rel_name" : "runs on"},
+        {"source": 5, "target": 6, "rel_name" : "uses"},
+        {"source": 1, "target": 8, "rel_name" : "crafted and sent"},
+        {"source": 8, "target": 7, "rel_name" : "exploits"},
+        {"source": 9, "target": 6, "rel_name" : "contained in"},
+        {"source": 10, "target": 11, "rel_name" : "contains"},
+        {"source": 9, "target": 10, "rel_name" : "reads and decodes"},
+        {"source": 9, "target": 11, "rel_name" : "reflectively loads"}
+    ]
+}

@@ -1,0 +1,44 @@
+En Route with Sednit
+Kernel
+As described in Table 1, ~~AgentKerne~~ l is the execution manager, and the only module
+that has to be present in all Xagent binaries.
+Constructor
+Our analysis of ~~AgentKernel~~ begins in its constructor:
+```
+   AgentKernel::AgentKernel(wchar_t *path_Xagent)
+   {
+     [...]
+```
+local_storage_ = ~~new~~ LocalStorage(path_Xagent); ➊
+```
+     [...]
+ cryptor_ = new Cryptor(kernel_main_crypto_key, sizeof (kernel_main_crypto_
+
+```
+key)); ➋
+```
+     [...]
+```
+channel_controller_ = ~~new~~ ChannelController ~~(~~ ~~this~~ ); ➌
+reserved_ = ~~new~~ ReservedApi(); ➍
+```
+     [...]
+```
+modules_.insert(modules_.begin(), ~~this~~ ); ➎
+```
+   }
+```
+➊ Instantiation of a ~~LocalStorage~~ object, which is the kernel store. It contains both
+a file-based storage for the communications with the C&C server, and an SQLite3 [15]
+database to store various configuration parameters.
+➋ Instantiation of a ~~Cryptor~~ object, which is the cryptographic engine of the kernel.
+It will serve in particular to encrypt the communications with the C&C server.
+➌ Instantiation of a ~~ChannelController~~ object, which is the interface to contact
+the C&C server, as we will explain later.
+➍ Instantiation of a ~~ReservedApi~~ object. It implements some helper functions used by the kernel,
+like ~~ReservedApi::initAgentId()~~ to generate a 4-byte ID for the Xagent infected computer.
+➎ The kernel being a module, it inserts itself in the list of modules whose execution will be managed.
+In the kernel constructor code and elsewhere, important strings are accessed through a class
+named ~~Coder~~, which is a wrapper around an encrypted string. The string is then decrypted on-demand
+by an exclusive-or (XOR) with a key defined at the time the ~~Coder~~ object was instantiated.
+56

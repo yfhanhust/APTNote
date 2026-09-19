@@ -1,0 +1,45 @@
+En Route with Sednit
+This mechanism makes Sedreco a flexible backdoor, which includes only the commands in a sample
+that are currently needed (which means in particular that the previous list of commands may
+not be complete). It also allows plugins to easily register new commands, as we will explain later.
+Communications with the C&C server
+Sedreco communicates with its C&C server in a quite unusual way, pictured in Figure 15.
+i
+Compromised
+computer
+i
+i
+i
+i
+i
+i
+C&C Server
+connected to Internet
+Figure 15. Data flow between Sedreco on a compromised host and its C&C server
+On one hand, Sedreco network threads periodically ask the C&C server for orders, and store them
+in an “inbound file”. Those orders are then fetched and processed by Sedreco core threads. On the other
+hand, the data to exfiltrate (logged keystrokes, results of executed commands, etc) are queued
+in an “outbound file”, and periodically transmitted in bulk to the server by the network threads.
+As this asynchronous communication method limits the number of network contacts with the
+C&C server, it might reduce the chance of attracting attention in the target’s network. Moreover,
+using files rather than keeping the data buffered in memory avoids losing the data if the machine
+shuts down or loses network connectivity.
+In the following sections, we describe the network communications and the exact format
+of the inbound/outbound files.
+Inbound Communications
+Sedreco regularly asks its C&C server for a command to run — usually every 10 minutes. The C&C server
+domain names are retrieved from the configuration, and they are contacted in their order of appearance
+in this configuration (see confguration formati ). In other words, if the first C&C server is up — C&C1
+in Figure 13 — the others are never contacted.
+The actual contact is a POST request over HTTP or, depending of the sample, HTTPS, on the URI
+~~/update~~ . The body of the request contains the base64-encoding of the data structure pictured
+in Figure 16.
+|0 1|1 5|5 n-1|-14 n-1|10 n-|-6 n|
+|---|---|---|---|---|---|
+|||||||
+|ComputernameOperation namesize + computerEncrypteddata sizeKeyTypeOperation name|ComputernameOperation namesize + computerEncrypteddata sizeKeyTypeOperation name|ComputernameOperation namesize + computerEncrypteddata sizeKeyTypeOperation name|ComputernameOperation namesize + computerEncrypteddata sizeKeyTypeOperation name|ComputernameOperation namesize + computerEncrypteddata sizeKeyTypeOperation name|ComputernameOperation namesize + computerEncrypteddata sizeKeyTypeOperation name|
+i
+i
+i
+Figure 16. Network contact message format. Computer name is a variably-sized field
+72

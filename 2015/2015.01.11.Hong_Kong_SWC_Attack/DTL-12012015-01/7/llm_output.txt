@@ -1,0 +1,79 @@
+
+
+
+Sentence : Final stage (RAT – “PCClient”)
+Finally we are left with a full payload. Unsurprisingly the 3 [rd] and final stage of this part of the attack
+is a fully fledged RAT (Remote Administration Tool), which is detected by anti-virus as PCClient. This
+RAT allows the attacker to control the infected workstation and perform a vast array of
+administrative functions such as:
+
+
+Downloading files to the infected workstation
+
+
+Uploading from the infected workstation files to the attackers
+
+
+Enumerate/list all connected drives such as network shares or external devices
+
+
+Search the infected workstations hard drive for files
+
+
+Deleting, copying and moving files on the infected workstation
+
+
+Executing commands on the infected workstation
+
+
+A high-level view of the command structure gives us an idea as to how simple this functionality
+can seem, but does not turn away from how damaging the affects can be:
+D r a g o n T h r e a t L a b s, H o n g K o n g Page 7
+Once the RAT has been loaded on the infected machine it begins calling out to the command and
+control server (“phoning home”) and waits for the attackers to issue one of the above
+commands to the victim. As we usually see with APT attacks the malware controllers use a
+specific ID to code their attack campaign, which in this case is ‘C00BBB’.
+Information about the victim system is collected and posted off to the command and control
+server. This information gives the attacker a brief description about the machine. The
+information consists of:
+- Machine hostname
+
+- Total amount of RAM memory
+
+- Operating system and service pack level
+
+- Attack campaign code
+
+This information is encoded using a simple bitwise operation and then sent to the command and
+control server. For example:
+Unencoded data Encoded data
+D r a g o n T h r e a t L a b s, H o n g K o n g Page 8
+Whilst this may seem to make the data harder to recover it actually makes detection of the traffic
+easier. To decode the traffic a simple calculation can be performed by reversing the encoding
+operations. In this case the malware simply increases the initial encoding key by 1, then adds this
+value to each byte in the buffer and finally XOR’s each byte. Once again, the following pseudo-code
+can decode this data
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RAT – “PCClient”", "type" : "APPS"},
+        {"id": 2, "description": "Anti-virus software", "type" : "APPS"},
+        {"id": 3, "description": "Infected workstation", "type" : "SYSP"},
+        {"id": 4, "description": "Command and control server", "type" : "CCSH"},
+        {"id": 5, "description": "Attack campaign code 'C00BBB'", "type" : "TAMP"},
+        {"id": 6, "description": "Machine hostname", "type" : "TAMP"},
+        {"id": 7, "description": "Total amount of RAM memory", "type" : "TAMP"},
+        {"id": 8, "description": "Operating system and service pack level", "type" : "OPPS"},
+        {"id": 9, "description": "Attack campaign code", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "detected by"},
+        {"source": 1, "target": 3, "rel_name" : "controls"},
+        {"source": 1, "target": 4, "rel_name" : "communicates with"},
+        {"source": 1, "target": 5, "rel_name" : "uses"},
+        {"source": 1, "target": 6, "rel_name" : "collects"},
+        {"source": 1, "target": 7, "rel_name" : "collects"},
+        {"source": 1, "target": 8, "rel_name" : "collects"},
+        {"source": 1, "target": 9, "rel_name" : "collects"}
+    ]
+}

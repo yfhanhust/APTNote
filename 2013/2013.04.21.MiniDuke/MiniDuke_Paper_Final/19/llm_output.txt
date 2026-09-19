@@ -1,0 +1,44 @@
+
+
+
+Sentence : 5.7 Extraction of the secondary Twitter username
+If the primary Twitter username can’t be accessed or if there is an error while contacting the
+C&C server mentioned in the first tweet, the malware will attempt the same operation with
+the secondary Twitter account. This secondary account is derived from the Google ID (which
+is hardcoded into the sample) and the current date (current week). This means that a
+different ID should come up every week.
+The Algorithm
+The malware gets the current date, but only keeps the week of the month, month and year.
+These pieces of data are then concatenated with the decrypted data in the first data section. A
+SHA-1 hash is computed on a buffer that has the following structure: Date|GoogleSearchTerm .
+The hash is then converted to Base64 and isolates the first N bytes of the buffer, which are
+determined by:
+```
+N = ((DWORD) base64_string % mod_val) + add_val;
+// (mod_val, add_val) are
+// (8, 6) for samples dated 2011
+// (6, 7) for samples dated 2012/2013
+```
+Special characters are then stripped from the resulting string. Character ’+’ becomes ’a’, and
+character ’/’ becomes ’9’.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "primary Twitter username", "type" : "SOCM"},
+        {"id": 2, "description": "C&C server mentioned in the first tweet", "type" : "CCSH"},
+        {"id": 3, "description": "secondary Twitter account", "type" : "SOCM"},
+        {"id": 4, "description": "Google ID (hardcoded into the sample)", "type" : "TAMP"},
+        {"id": 5, "description": "current date (current week)", "type" : "TAMP"},
+        {"id": 6, "description": "Date|GoogleSearchTerm buffer", "type" : "TAMP"},
+        {"id": 7, "description": "SHA-1 hash of Date|GoogleSearchTerm buffer", "type" : "IOCS"},
+        {"id": 8, "description": "Base64 conversion of SHA-1 hash", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contacts"},
+        {"source": 2, "target": 3, "rel_name" : "fallback to"},
+        {"source": 4, "target": 6, "rel_name" : "concatenated with"},
+        {"source": 5, "target": 6, "rel_name" : "concatenated with"},
+        {"source": 6, "target": 7, "rel_name" : "hashed by"},
+        {"source": 7, "target": 8, "rel_name" : "converted to"}
+    ]
+}

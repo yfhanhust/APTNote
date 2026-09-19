@@ -1,0 +1,38 @@
+Our discovery: a sophisticated implant within UEFI firmware
+The UEFI implant, which was detected in spring 2021, was found to have been incorporated by the
+attackers into the CORE_DXE component of the firmware (also known as the DXE Foundation), which
+is called early on at the DXE (Driver Execution Environment) phase of the UEFI boot sequence. Among
+other things, this component is responsible for initializing essential data structures and function
+interfaces, one of which is the EFI Boot Services Table – a set of pointers to routines that are part of the
+CORE_DXE image itself and are callable by other DXE drivers in the boot chain.
+The source of the infection starts with a set of hooks that intercept the execution of several functions in
+the EFI Boot Services Table, namely AllocatePool, CreateEventEx and ExitBootServices. Those hooks are
+used to divert the flow of these functions to malicious shellcode that is appended by the attackers to the
+CORE_DXE image, which in turn sets up additional hooks in subsequent components of the boot chain,
+namely the Windows loader.
+This multistage chain of hooks facilitates the propagation of malicious code from the CORE_DXE image
+to other boot components during system startup, allowing the introduction of a malicious driver to the
+memory address space of the Windows kernel. This driver, which runs during the initial phases of the
+kernel’s execution, is in charge of deploying user-mode malware by injecting it into an svchost.exe
+process, once the operating system is up and running. Finally, the user mode malware reaches out to a
+hardcoded C&C URL (i.e. hxxp://mb.glbaitech[.]com/mboard.dll) and attempts to fetch another stage of
+the payload to run in memory, which we were not able to retrieve.
+https://securelist.com/moonbounce-the-dark-side-of-uefi-firmware/105468/ 2/17
+1/21/22, 9:00 PM MoonBounce: the dark side of UEFI firmware | Securelist
+The diagram below contains the outline of the stages taken from the moment the hooked Boot Services
+are called in the context of the DXE Foundation’s execution until the user-mode malware is deployed
+and run during the Operating System’s execution. The full description of each step in the diagram, along
+with the analysis of both the MoonBounce driver and user-mode malware can be found in the technical
+document released alongside this report.
+Flow of MoonBounce execution from boot sequence to malware deployment in user
+space
+Note that at the time of writing we lack sufficient evidence to retrace how the UEFI firmware was
+infected in the first place. The infection itself, however, is assumed to have occurred remotely. While
+previous UEFI firmware compromises (i.e. LoJax and MosaicRegressor) manifested as additions of DXE
+drivers to the overall firmware image on the SPI flash, the current case exhibits a much more subtle and
+stealthy technique where an existing firmware component is modified to alter its behaviour. Notably,
+particular functions were modified with an inline hook, meaning the replacement of the function
+prologue with an instruction to divert execution to a function chosen by the attacker. This form of binary
+instrumentation typically requires the attacker to obtain the original image, then parse and change it to
+introduce malicious logic. This would be possible for an attacker having ongoing and remote access to
+the targeted machine.

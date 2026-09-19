@@ -1,0 +1,117 @@
+Fire Chili Rootkit
+As part of our research, we have collected four driver samples — two pairs of 32-bit and 64-bit
+samples. One pair was compiled in early August 2017 and the second pair was compiled ten days
+later. All four driver samples are digitally signed with stolen certificates from game development
+companies, either the US-based Frostburn Studios or the Korean 433CCR Company (433씨씨알
+주식회사). The signatures made with Frostburn Studios’ certificate are even timestamped.
+Figure 8: Digital signature of a crtsys.sys driver
+Two of the samples are on VirusTotal and have a very low detection rate.
+https://www.fortinet.com/blog/threat-research/deep-panda-log4shell-fire-chili-rootkits 5/16
+4/27/22, 3:49 PM New Milestones for Deep Panda: Log4Shell and Digitally Signed Fire Chili Rootkits
+Figure 9: Detection rates of the rootkit samples from VirusTotal
+The rootkit starts by ensuring the victim machine is not running in safe mode. It then checks the
+operating system version. The rootkit uses Direct Kernel Object Modification (DKOM), which
+involves undocumented kernel structures and objects, for its operations. For this reason, it relies
+on specific OS builds as otherwise it may cause the infected machine to crash. In general, the
+latest supported build is Windows 10 Creators Update (Redstone 2), released in April 2017.
+The purpose of the driver is to hide and protect malicious artifacts from user-mode components.
+This includes four aspects: files, processes, registry keys and network connections. The driver has
+four global lists, one for each aspect, that contain the artifacts to hide. The driver’s IOCTLs allow
+dynamic configuration of the lists through its control device \Device\crtsys. As such, the dropper
+uses these IOCTLs to hide the driver’s registry key, the loader and backdoor files, and the loader
+process.
+IOCTL Action Description
+0xF3060000 Hide file Add a path to global file list
+0xF3060004 Stop hiding file Remove a path from global file list
+0xF3060008 Hide\protect process Add a file path or PID to global process list
+https://www.fortinet.com/blog/threat-research/deep-panda-log4shell-fire-chili-rootkits 6/16
+4/27/22, 3:49 PM New Milestones for Deep Panda: Log4Shell and Digitally Signed Fire Chili Rootkits
+0xF306000C Stop hiding\protecting
+process
+Remove a file path or PID from global process
+list
+0xF3060010 Hide registry key Add a key to global registry list
+0xF3060014 Stop hiding registry key Remove a key from global registry list
+0xF3060018 Hide network connections Add a file path or port number to global network
+list
+0xF306001C Stop hiding network
+connections
+Files
+Remove a file path or port number from global
+network list
+The rootkit implements a filesystem minifilter using code based on Microsoft’s official driver
+code samples. Prior to registering the minifilter instance, it dynamically creates an instance in
+the registry named Sfdev32TopInstance with altitude 483601.
+The rootkit sets only one callback for a postoperation routine for
+IRP_MJ_DIRECTORY_CONTROL. When it receives an IRP with a minor function of
+IRP_MN_QUERY_DIRECTORY and a filename from the global file list, the callback changes the
+filename to “.” and the filename length to 0 (in the FILE_BOTH_DIR_INFORMATION
+structure).
+The global file list is initialized with the path of the driver by default
+(*\SYSTEM32\DRIVERS\CRTSYS.SYS).
+Processes
+There are two mechanisms pertaining to processes:
+Preventing process termination.
+Hiding a process.
+To prevent the termination of a process, the rootkit denies the PROCESS_TERMINATE access
+right of the processes it protects. Using ObRegisterCallbacks, it registers a preoperation callback
+routine that triggers whenever a handle to a process or thread is created or duplicated in the
+system. When the handle access originates from user-mode and the image path or PID of the
+handle target are in the global process list, the driver removes the PROCESS_TERMINATE
+permission from the DesiredAccess parameter. This results in restricting user-mode processes
+from acquiring the permissions needed to terminate the threat actor’s malicious processes using
+standard APIs.
+https://www.fortinet.com/blog/threat-research/deep-panda-log4shell-fire-chili-rootkits 7/16
+4/27/22, 3:49 PM New Milestones for Deep Panda: Log4Shell and Digitally Signed Fire Chili Rootkits
+​
+Figure 10: Unsetting the PROCESS_TERMINATE bit of DesiredAccess
+To hide a process, the rootkit monitors all newly created processes on the system by registering a
+callback using the PsSetCreateProcessNotifyRoutine API. Whenever a new process is created on
+the system, the rootkit checks if its path is in the global process list. If so, the process is removed
+from the ActiveProcessLinks list of the EPROCESS structure, which is a circular doubly-linked
+list of all running processes on the system. The driver removes the process’s list entry from
+ActiveProcessLinks ​ by linking its Flink (the next entry) to its Blink (the previous entry). As a
+result, the process is hidden from utilities such as Task Manager.
+​
+Figure 11: Removing a process from ActiveProcessLinks
+Since the EPROCESS structure changes between Windows builds, the rootkit resolves the
+ActiveProcessLinks offset dynamically during runtime. It traverses the process’s EPROCESS
+structure, comparing each member to its PID, to locate the offset of the UniqueProcessId field.
+https://www.fortinet.com/blog/threat-research/deep-panda-log4shell-fire-chili-rootkits 8/16
+4/27/22, 3:49 PM New Milestones for Deep Panda: Log4Shell and Digitally Signed Fire Chili Rootkits
+When found, the ActiveProcessLinks offset is also easily located as it is the next field in the
+EPROCESS structure. The older rootkit samples use the hiding mechanism on Windows 8 and
+below, while the newer samples use it on only Windows 7 and below.
+By default, the global process list is initialized with the path *\qwerty.exe. However, we have not
+observed any file with this name related to the campaign.
+Registry Keys
+The rootkit hides registry keys from users using Microsoft’s Registry Editor. The code is based on
+an open-source project published by a Chinese developer.
+The HHIVE->GetCellRoutine functions of keys in the global registry keys list are replaced with a
+filter function. When the path of the querying process is *\WINDOWS\REGEDIT.EXE, the
+function simply returns 0 in place of the key node.
+By default, the global registry list is initialized with the rootkit’s registry key
+(\REGISTRY\MACHINE\SYSTEM\CURRENTCONTROLSET\SERVICES\CRTSYS).
+Network Connections
+The rootkit is capable of hiding TCP connections from tools such as netstat. Much of the code for
+this part seems to be copied from an open-source project.
+The rootkit attaches to nsiproxy.sys’s device stack and intercepts IOCTLs of type
+IOCTL_NSI_GETALLPARAM (0x12000B) that are sent to it. This IOCTL is used to retrieve
+information about the active network connections on the system. When it is intercepted, the
+driver replaces the IoCompletion routine with a function that filters the results to hide its own
+network connections.
+IOCTL_NSI_GETALLPARAM returns the information about network connections in an
+NSI_PARAM structure. NSI_PARAM contains connection data such as IP, port, connection
+state, and process IDs of the executables in charge of creating the connection. The filter function
+iterates this structure, searching for connections involving a process or port number from its
+global network list. All identified connections are removed from the structure, rendering them
+hidden from the process that sent the IOCTL. It is interesting to note that the newer build of the
+64-bit rootkit added support to filter IOCTLs from 32-bit processes as well.
+If attaching to nsiproxy.sys fails, the rootkit attaches to \Device\Tcp instead, intercepting
+IOCTL_TCP_QUERY_INFORMATION_EX (0x120003) and hiding network connections in a
+similar manner.
+By default, the global network list is initialized with the following process paths:
+*\SYN.EXE
+*\SVCHOST.EXE
+As a result, TCP connections of all services running under svchost.exe are hidden, not just the
+ones of the Milestone backdoor.

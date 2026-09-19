@@ -1,0 +1,77 @@
+
+
+
+Sentence : 3.3 The MS10-061 Attack Vector
+Another way in which the worm replicates itself over the network exploits a vulnerability in Window
+Spooler (MS10-061). Machines with file and printer sharing turned on are vulnerable to the attack. This
+vulnerability results in privilege escalation allowing a remote user using a Guest account to write into
+%SYSTEM% directory of the target machine.
+The attack is performed in two stages: during the first stage the worm copies the dropper and additional
+file into Windows\System32\winsta.exe and Windows\System32\wbem\mof\sysnullevnt.mof
+respectively, while at the second stage the dropper is executed.
+The first stage exploits the MS10-061 vulnerability. Under certain conditions the spooler improperly
+impersonates a client that sends two “documents” for printing as we can see on the figure below.
+Figure 3.14 – "Printing" Malicious Files into Files in %SYSTEM% Directory
+These documents are “printed” to files in the %SYSTEM% directory while a user has Guest
+privileges that shouldn’t entail access rights to the %SYSTEM% directory. During exploitation of the
+vulnerability, a thread of the process spoolsv.exe calls an API function StartDocPrinter() with parameter
+specifying the following information about document to be printed:
+```
+typedef struct _DOC_INFO_1 {
+LPTSTR pDocName; // Default
+
+LPTSTR pOutputFile;  // winsta.exe or wbem\mof\sysnullevnt.mof
+
+LPTSTR pDatatype; // RAW
+
+} DOC_INFO_1;
+```
+In the middle of September 2010, Microsoft released a security patch to fix MS10-061. We have
+compared the original executable spoolsv.exe with the patched executable and found some functional
+differences. One of the most important differences concerns the YStartDocPrinter function which is
+eventually called in order to print a document. On the figure below we provide a graphical
+representation of the functions.
+www.eset.com
+32
+Figure 3.15 – Functional Changes in the Patched Version
+The left-hand side represents the patched function while on the right-hand the original is displayed. The
+functions are in general the same, but some additional checks have been added, and these are
+highlighted in red. Before printing a document the function performs the following checks: 
+whether the caller belongs to Local group; 
+whether OutputFile parameter is NULL or equal to a port name of the printer: otherwise
+a client needs to have appropriate access rights to write to the specified file.
+The sequence of check is presented on the figure below.
+www.eset.com
+33
+Figure 3.16 – Additional Checks Implemented by Microsoft
+The second stage of the attack employs the file wbem\mof\sysnullevnt.mof : that is, a Managed Object
+Format file. Files of this type are used to create or register providers, events, and event categories for
+WMI. Under certain conditions this file runs winsta.exe (the dropper) and its execution by the system
+results in the infection of the system.
+www.eset.com
+34
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "MS10-061", "type" : "CVES"},
+        {"id": 2, "description": "Windows Spooler", "type" : "OPPS"},
+        {"id": 3, "description": "%SYSTEM% directory", "type" : "SYSP"},
+        {"id": 4, "description": "winsta.exe", "type" : "EXEF"},
+        {"id": 5, "description": "wbem\\mof\\sysnullevnt.mof", "type" : "DOCF"},
+        {"id": 6, "description": "spoolsv.exe", "type" : "EXEF"},
+        {"id": 7, "description": "StartDocPrinter()", "type" : "APPS"},
+        {"id": 8, "description": "YStartDocPrinter", "type" : "APPS"},
+        {"id": 9, "description": "Local group", "type" : "TAMP"},
+        {"id": 10, "description": "Guest account", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "exploits vulnerability in"},
+        {"source": 2, "target": 3, "rel_name" : "writes to"},
+        {"source": 4, "target": 3, "rel_name" : "copied to"},
+        {"source": 5, "target": 3, "rel_name" : "copied to"},
+        {"source": 7, "target": 4, "rel_name" : "calls"},
+        {"source": 7, "target": 5, "rel_name" : "calls"},
+        {"source": 8, "target": 7, "rel_name" : "replaces function of"},
+        {"source": 10, "target": 2, "rel_name" : "uses"}
+    ]
+}

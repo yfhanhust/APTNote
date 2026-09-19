@@ -1,0 +1,213 @@
+
+
+
+Sentence : significant amount of investment in research and development, along with the two campaigns.
+discipline to ensure that the exploits are not used until the appropriate time, and
+that no one involved with the project leaks them to other parties.
+Technical details
+After gaining access to a victim’s computer, PLATINUM installs its own custom-built malware to
+communicate with the compromised system, issue commands, and move laterally through the
+network. The wide collection of backdoors and tools, and the differences between them, suggest the
+involvement of multiple teams or vendors in the development process. This section describes some of
+the tools used by the group.
+Dipsind
+PLATINUM uses a number of different custom-developed backdoors to communicate with infected
+computers. The lack of any significant evidence of shared code between any of these backdoor families
+is another clue as to the scope of the resources on which the activity group is able to draw, and the
+precautions the group is willing and able to take in order to avoid losing its ability to conduct its
+espionage operations.
+The group’s most frequently used backdoors belong to a malware family that Microsoft has designated
+Dipsind, although some variants are detected under different names. Multiple Dipsind variants have
+been identified, all of which are believed to be used exclusively by PLATINUM.
+The first variant, Win32/Dipsind.A!dha, is a lightweight application providing backdoor access to
+remote attackers. It can be customized for every victim to ensure that it remains undetected in targeted
+networks. It supports a small set of instructions that allow the attacker to perform basic functions, such
+as uploading or downloading files and spawning remote shells.
+Figure 11. Sample configuration file for Win32/Dipsind.A
+Each Dipsind file contains an embedded encrypted configuration file that acts as a control for the
+backdoor. This configuration file also includes the initial command and control (C&C) location the
+Dipsind backdoor uses in addition to the pollcommandsite variable which references a URL where
+additional backup C&Cs can be polled. Configurable parameters include instructions on where Dipsind
+should install a copy of cmd.exe for spawning a remote shell, depending on the user’s privileges, the
+hours during which the backdoor should function, and exfiltrate information. This capability allows the
+backdoor to confine its activities to normal working hours, making its communications harder to
+distinguish from normal network traffic.
+Dipsind has been observed using a combination of IP addresses and domains for its C&C infrastructure.
+The domains are a mix of registered domains and free subdomains obtained through dynamic DNS
+providers. Collected data showed that a vast majority of victim networks allowed unfiltered access to
+the dynamic DNS hosts. The hosts and domains are hosted on compromised infrastructure based in
+several different countries, some within academic institutions. In some cases, the backdoors are
+configured to connect to IP addresses instead of domain names. These factors make it challenging to
+locate the activity group’s infrastructure.
+Figure 12 shows a sampling of C&C infrastructure used by PLATINUM between 2009 and 2015.
+Figure 12. Some of the domains and addresses used by PLATINUM
+|Registered domains|Dynamic DNS|Hardcoded IPs|
+|---|---|---|
+|• box62.a-inet.net• eclipse.a-inet.net• joomlastats.a-inet.net• updates.joomlastats.co.cc• server.joomlastats.co.cc|• scienceweek.scieron.com• mobileworld.darktech.org• geocities.efnet.at• bpl.blogsite.org• wiki.servebbs.net|• 200.61.248.8• 209.45.65.163• 190.96.47.9• 192.192.114.1• 61.31.203.98|
+After Dipsind.A is installed on the victim’s computer, it connects to its C&C server for authentication. All
+network traffic is over HTTP, base64 encoded, with the underlying data encrypted using AES256 in ECB
+mode. Authentication is a five-step process, as shown in the following figure:
+Figure 13. Win32/Dipsind.A initial communication protocol (as decrypted)
+Analysis of several samples of this variant show exactly the same AES key
+(AOPSH03SK09POKSID7FF674PSLI91965) in use since 2009. The initial HTTP POST made by this
+backdoor appears as “ ud7LDjtsTHe2tWeC8DYo8A** ”, which translates to a simple whitespace. This
+sequence makes a simple network indicator usable by defenders.
+A second Dipsind variant registers as a Winlogon Event Notify DLL. This backdoor contains a minimized
+feature list from the original Dipsind variant, and supports a more limited number of commands.
+It sets the following registry keys in the HKEY_LOCAL_MACHINE hive for persistence and functionality:
+SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Notify\Cscdll32\Asynchronous
+SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Notify\Cscdll32\DllName
+SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Notify\Cscdll32\Impersonate
+SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Notify\Cscdll32\Startup
+SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Notify\Cscdll32\shutdown
+
+SOFTWARE\Microsoft\Windows\CurrentVersion\Run\cscdll32
+
+There are at least two additional minor versions of this variant, each of which show improvements in
+command implementation.
+One interesting feature of this variant is the way it implements a mechanism similar to port knocking to
+allow remote attackers to connect to a compromised computer without leaving any connection open
+for too long. The sequence of events is as follows:
+
+
+The backdoor is installed via an exploit.
+
+
+The backdoor sets a registry key to open a specific UDP port through the local firewall, if any, and
+listens to the port for incoming traffic.
+
+
+At a remote location, the attacker executes a tool (called PK2 here, although the actual name of the
+tool is unknown) using the following parameters:
+
+
+Pk2.exe    
+where the IP address is that of the computer with the backdoor, the UDP port is the one specified
+by the backdoor, and the password is a string encrypted by the tool before being sent.
+
+
+The backdoor receives the UDP packets, and then checks to see if the password is valid.
+
+
+If the password is indeed valid, the backdoor will wait for exactly 20 seconds and only then open
+the PK2 specified TCP port for a window of 3 seconds.
+
+
+Figure 14. How the Dipsind knocker component communicates with an attacker
+PK2 is also designed to connect to such open TCP ports and act as a console client for issuing
+commands to the backdoor. When running PK2 as a console client, the attacker needs to re-enter the
+password to authenticate a second time against the backdoor, and issue commands such as #sz to
+upload a file and #rz to download a file. During this research, one such collection of tools was obtained
+that had the password set to “t@ng0p@ss”. All communication used by this backdoor and PK2 is
+encrypted. If a connection from PK2 is not received within the 3-second window, the TCP port is shut
+and PK2 would need to reinitialize the port-knocking process.
+JPIN
+In addition to Dipsind and its variants, PLATINUM uses a few other families of custom-built backdoors
+within its attack toolset. These families of backdoors are significantly different in their capabilities and
+have completely different code bases. While one family relies on a small number of supported
+commands and simple shells, the other delves into more convoluted methods of injections, checks, and
+supported feature sets.
+Microsoft researchers refer to one such set of backdoor variants collectively as “JPIN,” which is the
+name of a service it uses when installed. JPIN is a comprehensive tool for executing and extracting
+information from the compromised computer. There is strong evidence to suggest that the developers
+of the JPIN and Dipsind code bases were in some way related.
+JPIN has its own installer and uninstaller component, which deletes itself when it encounters a version
+of Windows earlier than Windows XP, or finds any of these security-related processes running:
+Figure 15. Security-related processes avoided by the JPIN installer
+|Process|Security product|
+|---|---|
+|360tray.exe|360 Safeguard|
+|bdagent.exe|BitDefender|
+|proguard.exe|Process Guard|
+|blackd.exe|BlackICE|
+|blackice.exe|BlackICE|
+|savservice.exe|Sophos Anti-Virus|
+|avp.exe|Kaspersky Anti-Virus|
+|rstray.exe|Rising Anti-virus|
+|cmccore.exe|CMC Antivirus|
+|cmctrayicon.exe|CMC Antivirus|
+|zhudongfangyu.exe|360 Safeguard|
+After installing the backdoor, the installer deletes itself from the compromised computer.
+PLATINUM uses at least three distinct JPIN variants. One variant typically runs with a mutex named
+“hMSVmm” and installs itself in the folders %appdata%\Comm\Jpin and
+%userprofile%\AppData\Resource\Jpin. After it is installed and started, the JPIN service can perform
+the following tasks, among others:
+Obtain information about the computer, such as operating system version, user name, privileges,
+disk space, and so on.
+List running services, processes, job IDs, and task IDs.
+Enumerate drives and their types.
+Enumerate registry keys.
+Load a custom keylogger.
+
+Download files.
+
+Download and upgrade itself.
+Acquire network information such as DNS, IP, proxies, and so on.
+Exfiltrate information over HTTP GET and POST requests, with the data stored either within the
+HTTP body or within the URL parameters.
+Lower security settings by tampering with registry keys.
+Inject content into the lsass.exe process, in order to load the keylogger module into lsass and call its
+exported function.
+
+
+Communicate via FTP.
+
+
+Send email via SMTP.
+
+
+Change permissions on files using the cacls.exe command-line utility.
+JPIN can also target mobile suite applications and extract data from them. The backdoor contains code
+that looks for installed instances of Symbian, Blackberry, and Windows Phone management
+applications. If any are found, the backdoor logs sync dates, IMEI data, phone manufacturer and model
+information, software version date, memory, location, and capacity, among other things.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PLATINUM", "type" : "ACTO"},
+        {"id": 2, "description": "Dipsind backdoor family", "type" : "APPS"},
+        {"id": 3, "description": "Win32/Dipsind.A!dha variant", "type" : "APPS"},
+        {"id": 4, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 5, "description": "C&C server for Dipsind", "type" : "CCSH"},
+        {"id": 6, "description": "pollcommandsite URL", "type" : "URLS"},
+        {"id": 7, "description": "Registered domains (e.g., box62.a-inet.net)", "type" : "CCSH"},
+        {"id": 8, "description": "Dynamic DNS (e.g., scienceweek.scieron.com)", "type" : "CCSH"},
+        {"id": 9, "description": "Hardcoded IPs (e.g., 200.61.248.8)", "type" : "CCSH"},
+        {"id": 10, "description": "AES key (AOPSH03SK09POKSID7FF674PSLI91965)", "type" : "TAMP"},
+        {"id": 11, "description": "Registry keys for persistence", "type" : "REGI"},
+        {"id": 12, "description": "PK2 tool", "type" : "APPS"},
+        {"id": 13, "description": "UDP port (for backdoor)", "type" : "NETP"},
+        {"id": 14, "description": "TCP port (opened by PK2)", "type" : "NETP"},
+        {"id": 15, "description": "JPIN backdoor family", "type" : "APPS"},
+        {"id": 16, "description": "hMSVmm mutex", "type" : "TAMP"},
+        {"id": 17, "description": "%appdata%\\Comm\\Jpin folder", "type" : "SYSP"},
+        {"id": 18, "description": "%userprofile%\\AppData\\Resource\\Jpin folder", "type" : "SYSP"},
+        {"id": 19, "description": "lsass.exe process", "type" : "EXEF"},
+        {"id": 20, "description": "cacls.exe command-line utility", "type" : "EXEF"},
+        {"id": 21, "description": "FTP communication", "type" : "NETP"},
+        {"id": 22, "description": "SMTP email sending", "type" : "MAIL"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "has variant"},
+        {"source": 3, "target": 4, "rel_name" : "installs"},
+        {"source": 3, "target": 5, "rel_name" : "communicates with"},
+        {"source": 3, "target": 6, "rel_name" : "polls for backup C&C"},
+        {"source": 5, "rel_name" : "uses domain or IP", "target": 7},
+        {"source": 5, "rel_name" : "uses domain or IP", "target": 8},
+        {"source": 5, "rel_name" : "uses domain or IP", "target": 9},
+        {"source": 3, "target": 10, "rel_name" : "uses AES key"},
+        {"source": 3, "target": 11, "rel_name" : "sets registry keys"},
+        {"source": 3, "target": 12, "rel_name" : "communicates with tool"},
+        {"source": 3, "target": 13, "rel_name" : "listens on UDP port"},
+        {"source": 12, "target": 14, "rel_name" : "opens TCP port"},
+        {"source": 1, "target": 15, "rel_name" : "uses"},
+        {"source": 15, "target": 16, "rel_name" : "uses mutex"},
+        {"source": 15, "target": 17, "rel_name" : "installs in folder"},
+        {"source": 15, "target": 18, "rel_name" : "installs in folder"},
+        {"source": 15, "target": 19, "rel_name" : "injects into process"},
+        {"source": 15, "target": 20, "rel_name" : "uses command-line utility"},
+        {"source": 15, "target": 21, "rel_name" : "communicates via FTP"},
+        {"source": 15, "target": 22, "rel_name" : "sends email"}
+    ]
+}

@@ -1,0 +1,77 @@
+C2 协议
+Linux.Dacls Bot 和 C2 通信主要分为 3 个阶段，并采⽤了 TLS 和 RC4 双层加密算法，保障数据通信安
+全。第 1 阶段是建⽴ TLS 连接，第 2 阶段是双⽅协议认证过程（ Malware Beaconing ），第 3 阶段是
+Bot 发送 RC4 加密后的数据。
+SSL 连接
+建⽴ SSL 连接会发送若⼲次 Beacon 消息和 C2 互相确认身份。
+Cmd Direction Encrypted Description
+0x20000 send no Beacon
+0x20100 recv no Beacon
+0x20200 send no Beacon
+RC4 加密和解密流程
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 6/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+RC4 Key ⽣成算法，完全由随机函数⽣成， Key ⻓度范围：⼤于 0 且⼩于 50
+置换表⽣成算法，根据 RC4 Key ⽣成 RC4 加密⽤的置换表
+加 / 解密算法，根据置换表⽣成算法完成加 / 解密，因为 RC4 是个对称加密算法，所以加 / 解密
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 7/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+在完成协议认证之后， Bot 向 C2 发送 RC4 Key ⻓度（头 4 个字节）和 RC4 Key 数据。
+C2 收到加密 Key ，向 Bot 发送密⽂，解密后为 0x00000700 指令，之后 Bot 就会上传主机名相关信息
+给 C2 。
+Key:
+a3 2f c2 10 f3 92 79 c3 0e f6 e4 e5 2e 69 29 86
+0d 3a 92 f5 b7 23 fc 91 d9 46 91 55 a3 86 5a 47
+36 1d 58 2a af d1 6d 3d 49 52 23 77 bc 4d fd 49
+87
+密⽂ :
+fe 3c 2c d7 bf 08 e3 91 d7 00 1f d0
+明⽂ :
+00 07 00 00 00 00 00 00 00 00 00 00
+Linux.Dacls Bot 接受的指令实际共 12 个字节，但实际有效⼤⼩为 4 个字节，并分成控制两种模式。
+第⼀种模式：当第 3 个字节为 0 ，控制 Bot 主逻辑。
+以下是 0x00000700 指令对应的⽹络序数据包示例：模式为 0x00 ，指令 2 为 0x07 控制 Bot 上传主机名
+信息
+指令 1 指令 2 模式 未知
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 8/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+指令 1 指令 2 模式 未知
+00 07 00 00
+第⼆种模式：当第 3 个字节为 1 ，控制加载插件逻辑。
+以下是 0x00010101 指令对应的⽹络序数据包示例：模式为 0x01 ，指令 1 为 0x01 控制加载编号为 1 的
+插件
+指令 1 指令 2 模式 未知
+01 01 01 00
+Bot 收到指令后，执⾏成功返回 0x20500 ，执⾏失败返回 0x20600 。
+C2 指令表， Bot 主逻辑部分
+Module Cmd Encrypt Description
+Core 0x00000601 Yes 上传 C2 配置信息
+Core 0x00000602 Yes 下载配置信息保存到 $HOME/.memcache
+Core 0x00000700 Yes 要求 Bot 上传主机信息
+Core 0x00000900 Yes 要求 Bot 发送⼼跳信息
+C2 指令表， Bot 插件部分
+Module Cmd Encrypt Description
+/bin/bash 0x00010000 Yes 执⾏ C2 下发的 bash 命令
+/bin/bash 0x00010002 Yes 连接到指定的 C2 执⾏下发的系统命令
+plugin_file 0x00010100 Yes 写⽂件
+plugin_file 0x00010101 Yes 读⽂件
+plugin_file 0x00010103 Yes 删除⽂件
+plugin_file 0x00010104 Yes 扫描⽬录结构
+plugin_file 0x00010110 Yes 从指定 url 下载⽂件
+plugin_process 0x00010200 Yes 扫描并上传主机进程相关信息
+plugin_process 0x00010201 Yes 杀死指定进程
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 9/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+Module Cmd Encrypt Description
+plugin_process 0x00010202 Yes 创建 daemon 进程
+plugin_process 0x00010204 Yes 获得并上报进程 PID 和 PPID
+plugin_test 0x00010300 Yes 测试是否可以访问指定 IP
+plugin_reverse_p2p 0x00010400 Yes C2 连接代理
+logsend 0x00011100 Yes 测试是否可以访问 Log 服务器
+logsend 0x00011101 Yes 上传公⽹端⼝扫描结果和命令执⾏输出
+logsend 0x00011102 Yes ⽆操作
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 10/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+C2 通信流程图
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 11/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台

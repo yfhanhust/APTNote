@@ -1,0 +1,80 @@
+
+
+
+Sentence : 3.2.1. Dustman.exe
+The malware sample “dustman.exe” follows the below steps to achieve its destructive
+purposes:
+1. Checks if the malware was executed previously on the system by creating a mutex. If
+the mutex is found, it means the malware was previously executed on a system,
+malware jumps to step 8.
+F IGURE 5: C REATING MUTEX TO TRACK MACHINES FOR WHICH THE MALWARE WAS EXECUTED
+9
+Destructive Attack “DUSTMAN”
+Technical Report
+2. Extracts the resource “elrawdsk.sys”, decrypts it, and then writes the decrypted
+resource to a file on the current directory of the malware “dustman.exe”.
+F IGURE 6: D ECRYPTION ROUTINE USED TO DECRYPT THE DIFFERENT RESOURCED EMBEDDED IN THE MALWARE
+F IGURE 7: ELRAWDSK . SYS IS THE FIRST FILE TO BE DROPPED
+3. Checks if “VirtualBox” service is running on the system, If the service is running, the
+malware tries to stop it. The checks happens by looking for the registry key
+“Software\Oracle\VirtualBox” in the registry.
+F IGURE 8: R OUTINE TO CHECK IF V IRTUAL B OX IS INSTALLED BY QUERYING THE REGISTRY
+4. Extracts the vulnerable singed driver resource (“assistant.sys”), decrypts it, and then
+writes the decrypted resource to a file on the current directory of the dropper
+malware “dustman.exe”.
+10
+Destructive Attack “DUSTMAN”
+Technical Report
+F IGURE 9: ASSISTANT . SYS IS THE SECOND FILE TO BE DROPPED
+5. Creates and starts a driver service “VBoxDrv” backed by signed vulnerable driver
+“assistant.sys”.
+F IGURE 10: L ISTING VB OX D RV UPON ITS INSTALLATION
+6. Exploits the vulnerable service driver “assistant.sys” to overcome “Windows Driver
+Signature Enforcement (DSE)” and loads the unsigned raw disk driver “elrawdsk.sys”
+by writing shellcode to the vulnerable signed driver which would cause the unsigned
+driver to be loaded into the system.
+F IGURE 11: S HELLCODE USED TO EXPLOIT THE VULNERABLE SINGED DRIVER
+F IGURE 12: U NSIGNED DRIVER EL R AW D SK UPON ITS LOADING IN THE SYSTEM . S CREENSHOT FROM W IN O BJ E X 64. EXE .
+11
+Destructive Attack “DUSTMAN”
+Technical Report
+7. Unloads the vulnerable signed driver and removes the driver service that was
+created.
+F IGURE 13: U NSIGNED DRIVER EL R AW D SK UPON ITS LOADING IN THE SYSTEM . S CREENSHOT FROM W IN O BJ E X 64. EXE .
+8. Extracts the wiper malware resource “agent.exe”, decrypts it, and then writes the
+resource to a file on the current directory of the dropper malware “dustman.exe”.
+F IGURE 14: AGENT . EXE IS THE LAST FILE TO BE DROPPED
+9. Enumerates the different volumes on the system using the system call
+“GetLogicalDriveStringsW”.
+F IGURE 15: G ET L OGICAL D RIVE S TRING W IS USED TO ENUMERATE ALL VOLUMES ON A W INDOWS SYSTEM
+10. Starts the wiping process “agent.exe” for every volume on the system. The command
+used to wipe the volume will have the volume letter appended to the command, for
+example, to wipe the C drive, the command would be
+“$:\windows\system32\cmd.exe /c agent.exe C” where the “C” at the end of the
+command indicates the volume to be wiped.
+F IGURE 16: DUSTMAN . EXE STARTING AGENT . EXE TO WIPE OUT THE C VOLUME
+12
+Destructive Attack “DUSTMAN”
+Technical Report
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "dustman.exe", "type" : "EXEF"},
+        {"id": 2, "description": "elrawdsk.sys", "type" : "EXEF"},
+        {"id": 3, "description": "assistant.sys", "type" : "EXEF"},
+        {"id": 4, "description": "VBoxDrv service", "type" : "APPS"},
+        {"id": 5, "description": "Software\\Oracle\\VirtualBox", "type" : "REGI"},
+        {"id": 6, "description": "agent.exe", "type" : "EXEF"},
+        {"id": 7, "description": "$:\\windows\\system32\\cmd.exe /c agent.exe C", "type" : "TAMP"},
+        {"id": 8, "description": "GetLogicalDriveStringsW", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "drops"},
+        {"source": 1, "target": 3, "rel_name" : "drops"},
+        {"source": 1, "target": 4, "rel_name" : "creates and starts"},
+        {"source": 1, "target": 5, "rel_name" : "checks for"},
+        {"source": 1, "target": 6, "rel_name" : "drops"},
+        {"source": 1, "target": 8, "rel_name" : "uses to enumerate volumes"},
+        {"source": 7, "target": 6, "rel_name" : "starts for wiping"}
+    ]
+}

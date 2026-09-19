@@ -1,0 +1,71 @@
+
+
+
+Sentence : The Mattermost Attacker’s Server
+While analyzing the new SLUB variant, we noticed that the communication with Mattermost needed an
+authentication token with certain levels of permissions to, for example, create channels and send posts
+to those channels. The authentication token or bearer is sent as part of the HTTP header.
+19 | Operation Earth Kitsune: Tracking SLUB’s Current Operations
+Figure 26. The Mattermost authentication token
+As mentioned earlier, during the communication with the C&C Mattermost server, two important parameters
+are fixed in the SLUB samples:
+
+
+The bearer
+
+
+Team name: ZM
+
+
+That means the attacker may release sample variants using different Team names and bearers, depending
+on the campaigns. Knowing this information will allow us to take a closer look at the activities of the
+campaign.
+To learn more about the attacker’s infrastructure, we reviewed the Mattermost API to understand how
+much information about the attacker we can get if we use the same Mattermost bearer that the SLUB
+sample used to connect to the server.
+Because we did not know ahead of time that all the permissions the bearer has on the server is required,
+we tried to perform API by API calls until we had a rough idea of what was needed. After a few tries, we
+were able to extract the following data from the Mattermost server:
+
+
+The list of channels.
+
+
+The dump of all posts in each channel
+
+
+The dump of all screenshots in each channel
+
+
+The list of all users associated with the channels
+
+
+20 | Operation Earth Kitsune: Tracking SLUB’s Current Operations
+This is a lot of information to talk about, so we are going to mention only the important parts.
+As mentioned earlier, the campaign data indicates that two vectors are being used; one was using the
+PowerShell script while the other used the Chrome exploit shellcode to deploy the samples. In the
+Powershell vector, we discovered another Team name: MIN
+Figure 27. The Team name: MIN
+We were able to extract all the listed artifacts from both channels.
+Here are the descriptions of some of the captured artifacts.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Mattermost Attacker’s Server", "type" : "CCSH"},
+        {"id": 2, "description": "SLUB variant", "type" : "EXEF"},
+        {"id": 3, "description": "Mattermost API", "type" : "APPS"},
+        {"id": 4, "description": "Authentication token (bearer)", "type" : "REGI"},
+        {"id": 5, "description": "Team name: ZM", "type" : "TAMP"},
+        {"id": 6, "description": "Team name: MIN", "type" : "TAMP"},
+        {"id": 7, "description": "PowerShell script", "type" : "EXEF"},
+        {"id": 8, "description": "Chrome exploit shellcode", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "communicates with"},
+        {"source": 4, "target": 3, "rel_name" : "used in"},
+        {"source": 5, "target": 3, "rel_name" : "part of"},
+        {"source": 6, "target": 3, "rel_name" : "part of"},
+        {"source": 7, "target": 2, "rel_name" : "deploys"},
+        {"source": 8, "target": 2, "rel_name" : "deploys"}
+    ]
+}

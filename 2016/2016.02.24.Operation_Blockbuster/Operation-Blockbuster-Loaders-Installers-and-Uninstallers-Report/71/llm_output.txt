@@ -1,0 +1,96 @@
+
+
+
+Sentence : Operation Blockbuster: Loaders, Installers and Uninstallers Report 55
+A bit of an outlier in the Lazarus Group’s collection of malware, LimaDelta blurs its categorical lines by operating as both
+a downloader and loader. Known LimaDelta samples were compiled between September 2010 and March 2011 and most
+likely only operated during that time period, making it problematic to find intelligence on the files they downloaded.
+Despite the temporal distance between LimaDelta’s usage in the wild and the analysis of the malware family for this
+report, there is evidence to suggest that LimaDelta downloaded and then loaded IndiaGolf (see Section 8). This section
+works under the assumption that the downloaded binary is, indeed, IndiaGolf.
+LimaDelta, when viewed by its primary function of downloading and loading a file into running memory, is an example
+of over-engineering a solution for a relatively simple problem. When viewed at a macro level, LimaDelta performs the
+following tasks:
+
+
+Connect to a C2 server and authenticate
+
+
+Send information about the victim’s machine and exchange LimaDelta configuration between the C2 server and the
+
+
+malware
+
+
+Receive a list of download servers and a data blob containing the data to send to the installation function
+
+
+Connect to one of the download servers and authenticate
+
+
+Send information about the victim’s machine and receive 16 bytes from the download server
+
+
+Receive file from the download server and save it to the victim’s hard drive as a randomly generated named DLL
+
+
+Load the DLL into memory and decrypt a portion of the data blob
+
+
+Call the installation function with the decoded portion of the data blob
+
+
+Report status of DLL load to the C2 server and receive response from the C2 server
+
+
+Save the configuration to disk and delete additional files
+
+
+Generate and execute suicide script.
+
+
+There are three variants of LimaDelta that differ primarily in their verification method for the files they download.
+LimaDelta-One blindly assumes the file it downloads is non-corrupt. LimaDelta-Two verifies the integrity of the
+downloaded file via a CRC32 checksum. LimaDelta-Three uses MD5 to verify the integrity of the file it downloads.
+There are subtle differences between each of the various variants that will be discussed below, but the average similarity
+between the variants (using BinDiff as the similarity engine) is roughly 94.5%, indicating very little change across the life
+span of LimaDelta.
+LimaDelta can support up to 10 C2 servers via hardcoded IP and port number structures. From this list of C2 servers,
+LimaDelta randomly selects an entry and attempts to connect to the C2 server. If a server does not respond within 15
+seconds, the C2 server entry is removed from the list, another C2 server entry is selected, and the process repeats until
+either a successful connection occurs or the list empties.
+Once connected to a C2 server, LimaDelta must authenticate with the C2 server. This authentication process (the last
+half of Task #2) is over-engineered when compared to other families within the Lazarus Group. Authentication between
+LimaDelta and the C2 server consists of constructing a variable-sized data blob that has a minimum of 70 bytes and an
+upper limit of 120 bytes, transmitting the data blob to the C2 server, receiving a 5-byte response from the C2 server, and
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Lazarus Group", "type" : "ACTO"},
+        {"id": 2, "description": "LimaDelta", "type" : "EXEF"},
+        {"id": 3, "description": "IndiaGolf", "type" : "EXEF"},
+        {"id": 4, "description": "C2 server", "type" : "CCSH"},
+        {"id": 5, "description": "Download servers", "type" : "CCSH"},
+        {"id": 6, "description": "Randomly generated named DLL", "type" : "DOCF"},
+        {"id": 7, "description": "Data blob", "type" : "TAMP"},
+        {"id": 8, "description": "Suicide script", "type" : "EXEF"},
+        {"id": 9, "description": "CRC32 checksum", "type" : "IOCS"},
+        {"id": 10, "description": "MD5 hash", "type" : "IOCS"},
+        {"id": 11, "description": "Configuration file", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 4, "rel_name" : "connects to and authenticates with"},
+        {"source": 4, "target": 7, "rel_name" : "exchanges configuration"},
+        {"source": 4, "target": 5, "rel_name" : "provides list of download servers"},
+        {"source": 2, "target": 5, "rel_name" : "connects to and authenticates with"},
+        {"source": 5, "target": 6, "rel_name" : "downloads and saves as"},
+        {"source": 2, "target": 6, "rel_name" : "loads into memory"},
+        {"source": 7, "target": 6, "rel_name" : "decrypts portion of data blob"},
+        {"source": 8, "target": 2, "rel_name" : "executes as part of"},
+        {"source": 9, "target": 2, "rel_name" : "verifies integrity using (LimaDelta-Two)"},
+        {"source": 10, "target": 2, "rel_name" : "verifies integrity using (LimaDelta-Three)"},
+        {"source": 2, "target": 4, "rel_name" : "reports status of DLL load to"},
+        {"source": 4, "target": 2, "rel_name" : "responds with configuration update"},
+        {"source": 11, "target": 2, "rel_name" : "saved to disk by"}
+    ]
+}

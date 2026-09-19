@@ -1,0 +1,25 @@
+En Route with Sednit
+These three functions are called by Windows processes to access files, directories and registry keys
+respectively. The logic inserted by the rootkit is pretty simple: if the accessed artifact path matches
+one of the ~~Hide rules~~, then the function returns as if the artifact does not exist on the system.
+On the other hand, if the accessed artifact path is not rootkit-protected, the original SSDT function
+is executed. For example, the hook code for ~~ZwSetInformationFile~~ to hide files is presented
+in Figure 13.
+Figure 13. Hook code for ~~ZwSetInformationFile~~ to hide files
+With the arrival of 64-bit versions of Windows, the SSDT became protected by Kernel Patch
+Protection [26], preventing the insertion of hooks into this table. This probably explains why
+a different implementation of the concealment functionality was introduced in the rootkit,
+as described below.
+Minifilter Driver
+The Windows filter manager [25] allows registering a driver as a minifilter, so that its code will
+be called on certain I/O operations. Such a minifilter driver can register a pre -operation callback
+or a post -operation callback on each I/O operation it registers to filter.
+Minifilter drivers are ordered based on a value called “altitude”: the filter manager executes driver
+callbacks registered for an I/O operation in the descending order of altitude. This ordering allows,
+for example, prioritizing anti-virus minifilters over data-processing minifilters, in order to detect
+malicious files before opening them.
+In our case, the rootkit driver registers itself as a minifilter of altitude ~~370030~~ . This altitude
+is normally associated with a Windows legacy driver named ~~passThrough.sys~~ [27], which
+is an example of a minifilter open-sourced by Microsoft [28] . Thus, the rootkit takes the place
+of ~~passThrough.sys~~ in the minifilter stack, and provides callbacks for hiding.
+22

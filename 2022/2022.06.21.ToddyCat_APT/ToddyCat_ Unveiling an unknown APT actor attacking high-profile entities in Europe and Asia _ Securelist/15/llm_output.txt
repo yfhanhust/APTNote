@@ -1,0 +1,72 @@
+
+
+
+Sentence : How to detect the Samurai backdoor
+The whole infection scheme used to deploy and guarantee Samurai persistence, was
+designed to avoid forensic analysis and the most common superficial checks.
+As we said, the malicious code is loaded by the legitimate svchosts.exe process, which
+means that the backdoor cannot be detected with a simple process enumeration.
+Moreover, the backdoor cannot be spotted by watching the open TCP ports, because it
+uses the .NET HTTPListener class, which is built on top of HTTP.sys and allows different
+processes to share the same ports. In the case of the Samurai backdoor, it uses ports 80 or
+443, which are also used by Microsoft Exchange.
+We detect this backdoor as “HEUR:Backdoor.MSIL.Samurai.gen”, but in the absurd case
+that you are not using our products, a simple way to check if the backdoor is running is to
+try to find one of the IoCs shared in this blogpost or trying to execute the following
+command:
+https://securelist.com/toddycat/106799/ 23/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+1 #>netsh http show servicestate verbose=yes
+As described by Microsoft, this command will display a snapshot of the HTTP service, and
+you can try to find suspicious registered URLs such as the following:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+Server session ID: ED00000020000013
+Version: 2.0
+State: Active
+Properties:
+...
+Max bandwidth: inherited
+Max connections: inherited
+Timeouts:
+Timeout values inherited
+Number of registered URLs: 2
+Registered URLs:
+HTTP://*:80/OWA/AUTH/TOKEN/
+HTTPS://*:443/OWA/AUTH/TOKEN/
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "svchosts.exe", "type" : "EXEF"},
+        {"id": 2, "description": "Samurai backdoor", "type" : "TTPS"},
+        {"id": 3, "description": ".NET HTTPListener class", "type" : "APPS"},
+        {"id": 4, "description": "HTTP.sys", "type" : "APPS"},
+        {"id": 5, "description": "Microsoft Exchange", "type" : "APPS"},
+        {"id": 6, "description": "80 or 443", "type" : "NETP"},
+        {"id": 7, "description": "HEUR:Backdoor.MSIL.Samurai.gen", "type" : "TTPS"},
+        {"id": 8, "description": "https://securelist.com/toddycat/106799/", "type" : "URLS"},
+        {"id": 9, "description": "netsh http show servicestate verbose=yes", "type" : "EXEF"},
+        {"id": 10, "description": "HTTP://*:80/OWA/AUTH/TOKEN/", "type" : "URLS"},
+        {"id": 11, "description": "HTTPS://*:443/OWA/AUTH/TOKEN/", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loads"},
+        {"source": 2, "target": 3, "rel_name" : "uses"},
+        {"source": 3, "target": 4, "rel_name" : "built on top of"},
+        {"source": 6, "target": 5, "rel_name" : "shares with"},
+        {"source": 2, "target": 7, "rel_name" : "detected as"},
+        {"source": 9, "target": 10, "rel_name" : "displays"},
+        {"source": 9, "target": 11, "rel_name" : "displays"}
+    ]
+}

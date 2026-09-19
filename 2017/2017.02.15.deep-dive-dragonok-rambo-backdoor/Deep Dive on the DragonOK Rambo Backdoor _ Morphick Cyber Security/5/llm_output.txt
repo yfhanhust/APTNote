@@ -1,0 +1,132 @@
+
+
+
+Sentence : Rambo:
+Quickly after starting up, Rambo proceeds to enter a busy-loop making 2 million small malloc calls
+and then freeing each allocation. This ties up the malware for a couple minutes in order to throw off
+AV emulators (which will only emulate so many instructions). This also helps evade most sandboxes.
+Now that many sandbox systems short-circuit the sleep call, more malware is moving from sleeping
+to busy loops in order to use up the short time slice that a sandbox can devote to each sample.
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 3/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+Rambo contains several different components working in tandem to achieve full execution on the  WATCH the MORPHICK MDR INTRO (https://vimeo.com/204217543)
+victim machine. The initial binary SHA256:
+7571642ec340c4833950bb86d3ded4d4b7c2068347e8125a072c5a062a5d6b68 is a
+dropper that unpacks the 3 different parts, achieves persistence and starts execution. The dropper
+is also copied as the method of persistence.
+The key
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run\FaultChec
+is established at the persistence key with the key value pointing at C:\Users\
+\AppData\Local\Temp\
+Rambo will then fetch its con�guration by reading in the last 260 bytes of itself.
+The key “sd�popdfjkaweriopasdfnkl” is loaded, which is eventually used to decrypt the buffer using
+tiny encryption algorithm (TEA).
+Even though the whole string is referenced as a string, only the �rst 16 characters are used as the
+functional key. Perhaps this is a misunderstanding of the author, or an attempt to throw off analysts.
+The steps of the TEA decryption can be seen below.
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 4/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+The decryption of the code can be translated to python with the following snippet. (To get the
+decryption working, we had to make some patches to the opensource PyTea implementation, a
+modi�ed copy of the script that is used is posted at the end of this blogpost)
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 5/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+!/usr/bin/env python  WATCH the MORPHICK MDR INTRO (https://vimeo.com/204217543)
+from ctypes import *
+from pprint import pprint
+import sys
+import tea
+import re
+import struct
+def ascii_strings(data):
+strings = []
+for match in re.finditer(r'[\x20-\x80\n\r\t]{16,64}',data):
+strings.append(match.group()[:16])
+return strings
+def to_c_array(data):
+''' Converts a string to a list of c_uint32s '''
+c_array = []
+char_array = [hex(ord(char))[2:] for char in data]
+for index in range(0, len(char_array), 4):
+block = char_array[index:index + 4]
+hex_value = '0x' + ''.join(block)
+c_array.append(c_uint32(int(hex_value, 16)))
+return c_array
+with open(sys.argv[1], 'rb') as fp:
+data = fp.read()
+ciphertext = data[-260:]
+padding = len(ciphertext)%8
+ciphertext += '\x00'*padding
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 6/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+ WATCH the MORPHICK MDR INTRO (https://vimeo.com/204217543)
+for key in ascii_strings(data):
+print 'trying key %s' % (key)
+try:
+plaintext = tea.decrypt(ciphertext, key,verbose=False)
+if ".dll" in plaintext.lower() or '.exe' in plaintext.lower():
+break
+except:
+pass
+plaintext = plaintext[:-padding]
+print '[*]\tDecrypted with key "%s"\nConfig:' % (key)
+config = {}
+config['loader'] = {'name': plaintext[:0x20].rstrip('\x00'),
+'offset': struct.unpack('<L', plaintext[0xc8:0xcc])[0]}
+config['sideloader'] = {'name': plaintext[0x20:0x40].rstrip('\x00'),
+'offset': struct.unpack('<L', plaintext[0xd0:0xd4])[0]}
+config['backdoor'] = {'name': plaintext[0x40:0x60].rstrip('\x00'),
+'offset': struct.unpack('<L', plaintext[0xd8:0xdc])[0]}
+config['loader']['length'] = config['sideloader']['offset'] - config['loader']['offset
+config['sideloader']['length'] = config['backdoor']['offset'] - config['sideloader'][
+config['backdoor']['length'] = len(data) - config['backdoor']['offset'] - 260
+pprint(config)
+print
+for key, component in config.items():
+with open(component['name'], 'wb') as fp:
+print '[*]\tDropping %s' % (component['name'])
+fp.write(data[component['offset']:component['offset']+component['length']])
+Running the above script will yield in the following information and drop the 3 components:
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 7/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+[*]  Decrypted with key "sdflpopdfjkaweri"  WATCH the MORPHICK MDR INTRO (https://vimeo.com/204217543)
+Config:
+{'backdoor': {'length': 14336, 'name': 'vmwarebase.dll', 'offset': 37056},
+'loader': {'length': 5120, 'name': 'HeartDll.dll', 'offset': 12800},
+'sideloader': {'length': 19136, 'name': 'vprintproxy.exe', 'offset': 17920}}
+[*]  Dropping vmwarebase.dll
+[*]  Dropping vprintproxy.exe
+[*]  Dropping HeartDll.dll
+The con�guration contains the names of the dropped �les and the offsets of each �le. Marked up, the
+con�guration will resemble the following.
+Once the con�guration is decoded the malware will carve each �le out and write them to disk.
+Rambo (and the embedded components) make heavy use of stack strings to evade basic triage (ie,
+strings) from revealing a lot of information.
+http://www.morphick.com/resources/news/deep-dive-dragonok-rambo-backdoor 8/27
+2/28/2017 Deep Dive on the DragonOK Rambo Backdoor | Morphick Cyber Security
+The mutex is created with the value of {63SP948C­C21F­2R56­8176­2G0AC5OE03F4}. Once
+the mutex is created, WinExec is called starting HeartDll.dll with the DllRegisterServer argument.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Rambo", "type" : "ACTO"},
+        {"id": 2, "description": "7571642ec340c4833950bb86d3ded4d4b7c2068347e8125a072c5a062a5d6b68", "type" : "IOCS"},
+        {"id": 3, "description": "C:\\Users\\AppData\\Local\\Temp\\", "type" : "SYSP"},
+        {"id": 4, "description": "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\FaultChec", "type" : "REGI"},
+        {"id": 5, "description": "sdflpopdfjkaweri", "type" : "TAMP"},
+        {"id": 6, "description": "vmwarebase.dll", "type" : "EXEF"},
+        {"id": 7, "description": "HeartDll.dll", "type" : "EXEF"},
+        {"id": 8, "description": "vprintproxy.exe", "type" : "EXEF"},
+        {"id": 9, "description": "{63SP948C­C21F­2R56­8176­2G0AC5OE03F4}", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "drops"},
+        {"source": 2, "target": 3, "rel_name" : "writes to path"},
+        {"source": 4, "target": 3, "rel_name" : "creates registry key at"},
+        {"source": 5, "target": 6, "rel_name" : "decrypts"},
+        {"source": 5, "target": 7, "rel_name" : "decrypts"},
+        {"source": 5, "target": 8, "rel_name" : "decrypts"},
+        {"source": 1, "target": 6, "rel_name" : "starts with WinExec and DllRegisterServer argument"},
+        {"source": 9, "target": 1, "rel_name" : "creates mutex"}
+    ]
+}

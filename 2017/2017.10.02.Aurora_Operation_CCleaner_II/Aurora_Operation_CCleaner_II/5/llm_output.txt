@@ -1,0 +1,89 @@
+
+
+
+Sentence : Technical Analysis:
+The stage two payload that was analyzed in this report
+(dc9b5e8aa6ec86db8af0a7aa897ca61db3e5f3d2e0942e319074db1aaccfd
+c83), after launching the infected version of CCleaner, was dropped to
+only a selective group of targets, as reported by Talos. Although there is
+an x64 version, the following analysis will only include the x86 version
+because they are nearly identical. I will not be going too far in depth as full
+comprehension of the technical analysis will require an understanding of
+reverse engineering.
+Instead of using the typical API (VirtualAlloc) to allocate memory, the
+attackers allocated memory on the heap using LocalAlloc, and then copied
+a compressed payload to the allocated memory.
+It looks like the attackers used version 1.1.4 of zlib to decompress the
+payload into this allocated memory region.
+Depending on if you’re running x86 or x64 Windows, it will drop a
+di�erent module. (32-bit
+07fb252d2e853a9b1b32f30ede411f2efbb9f01e4a7782db5eacf3f55cf3490
+2, 64-bit
+128aca58be325174f0220bd7ca6030e4e206b4378796e82da460055733bb
+6f4f) Both modules are actually legitimate software with additional code
+and a modi�ed execution �ow.
+The last modi�ed time on the modules is changed to match that of the
+msvcrt.dll that is located in your system32 folder–a technique to stay
+under the radar by not being able to check last modi�ed �les.
+Some shellcode and another module are written to the registry.
+After the module is successfully dropped, a service is created under the
+name Spooler or SessionEnv, depending upon your environment, which
+then loads the newly dropped module.
+The new module being run by the service allocates memory, reads the
+registry where the other payload is located, and then copies it to memory.
+The next payload is executed, which decrypts another module and loads
+it. If we look at the memory of the next decrypted payload, we can see
+something that looks like a PE header without the MZ signature. From
+here, it is as simple as modifying the �rst two bytes to represent MZ and
+we have a valid PE �le.
+(f0d1f88c59a005312faad902528d60acbf9cd5a7b36093db8ca811f763e129
+2a)
+The next module is a essentially another backdoor that connects to a few
+domains; before revealing the true IP, it will connect to for the next stage
+payload.
+It starts by ensuring it receives the correct response from
+and .
+https://www.microsoft.com https://update.microsoft.com
+The malware proceeds to decrypt two more URLs.
+The malware authors used steganography to store the IP address in a
+ptoken �eld of the HTML.
+Here you can see the GitHub page with the ptoken �eld.
+The value is then XOR decrypted by 0x31415926 which gives you
+0x5A093B0D or the IP address: 13.59.9.90
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "dc9b5e8aa6ec86db8af0a7aa897ca61db3e5f3d2e0942e319074db1aaccfdc83", "type" : "IOCS"},
+        {"id": 2, "description": "CCleaner (infected version)", "type" : "APPS"},
+        {"id": 3, "description": "LocalAlloc API", "type" : "TTPS"},
+        {"id": 4, "description": "zlib 1.1.4", "type" : "APPS"},
+        {"id": 5, "description": "07fb252d2e853a9b1b32f30ede411f2efbb9f01e4a7782db5eacf3f55cf34902 (32-bit)", "type" : "IOCS"},
+        {"id": 6, "description": "128aca58be325174f0220bd7ca6030e4e206b4378796e82da460055733bb6f4f (64-bit)", "type" : "IOCS"},
+        {"id": 7, "description": "msvcrt.dll", "type" : "EXEF"},
+        {"id": 8, "description": "Registry keys with shellcode and module", "type" : "REGI"},
+        {"id": 9, "description": "Spooler or SessionEnv service", "type" : "TTPS"},
+        {"id": 10, "description": "Newly dropped module (service loader)", "type" : "DOCF"},
+        {"id": 11, "description": "Next decrypted payload (PE header without MZ signature)", "type" : "EXEF"},
+        {"id": 12, "description": "f0d1f88c59a005312faad902528d60acbf9cd5a7b36093db8ca811f763e1292a", "type" : "IOCS"},
+        {"id": 13, "description": "Backdoor module connecting to domains", "type" : "EXEF"},
+        {"id": 14, "description": "https://www.microsoft.com", "type" : "URLS"},
+        {"id": 15, "description": "https://update.microsoft.com", "type" : "URLS"},
+        {"id": 16, "description": "Decrypted URLs (hidden in ptoken field of HTML)", "type" : "TTPS"},
+        {"id": 17, "description": "GitHub page with ptoken field", "type" : "URLS"},
+        {"id": 18, "description": "0x5A093B0D (IP address: 13.59.9.90)", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "drops"},
+        {"source": 1, "target": 5, "rel_name" : "drops (32-bit)"},
+        {"source": 1, "target": 6, "rel_name" : "drops (64-bit)"},
+        {"source": 5, "target": 7, "rel_name" : "mimics"},
+        {"source": 6, "target": 7, "rel_name" : "mimics"},
+        {"source": 10, "target": 8, "rel_name" : "writes to registry"},
+        {"source": 9, "target": 10, "rel_name" : "creates and loads"},
+        {"source": 10, "target": 11, "rel_name" : "decrypts and executes"},
+        {"source": 13, "target": 14, "rel_name" : "connects to"},
+        {"source": 13, "target": 15, "rel_name" : "connects to"},
+        {"source": 16, "target": 17, "rel_name" : "hidden in"},
+        {"source": 18, "target": 16, "rel_name" : "revealed by"}
+    ]
+}

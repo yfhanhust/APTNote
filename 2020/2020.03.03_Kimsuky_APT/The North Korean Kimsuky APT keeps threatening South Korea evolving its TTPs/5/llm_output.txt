@@ -1,0 +1,104 @@
+
+
+
+Sentence : Bypassing AV Detection
+An interesting behaviour is the “ explorer.exe ” injection performed by the “ AutoUpdate.dll ” in order
+to avoid AVs detection. Digging in the malicious code, it is possible to see the methods used to
+perform this operation. First of all, the malware sets the right privileges, as reported in the
+following image.
+https://blog.yoroi.company/research/the-north-korean-kimsuky-apt-keeps-threatening-south-korea-evolving-its-ttps/ 4/12
+3/4/2020 The North Korean Kimsuky APT keeps threatening South Korea evolving its TTPs – Yoroi Blog
+Figure 7: Privilege set for the correct injection
+Once obtained the necessary privileges, the malware is able to proceed with the injection. As
+described by the analysis published by elastic, the malware writes the path to its malicious DLL in
+the virtual address space of another process through the “ VirtualAllocEx ” function. In this case,
+the target process is “ explorer.exe ”, it ensures the remote process loads it by creating a remote
+thread inside it.
+https://blog.yoroi.company/research/the-north-korean-kimsuky-apt-keeps-threatening-south-korea-evolving-its-ttps/ 5/12
+3/4/2020 The North Korean Kimsuky APT keeps threatening South Korea evolving its TTPs – Yoroi Blog
+To perform these operations, first of all the malware needs to know the Process ID of the target,
+this is performed through the navigation of all processes tree. This task can be executed using
+the Tool Help Library Windows API family using CreateToolhelp32Snapshot(), Process32First(),
+and Process32Next() API. Then, the malware calls VirtualAllocEx() to allocate a space to write
+the path to the malicious DLL, then it calls WriteProcessMemory() to write the DLL path inside
+the allocated memory.
+After that, the malware calls the CreateRemoteThread() API to link the thread newly created to
+the host process ( explorer.exe ). Parts of the described logic are shown in the below figure:
+Figure 8: API used for injection
+Two components are implanted in the “explorer.exe” process. In the following tables are
+presented some information about the two DLLs extracted.
+https://blog.yoroi.company/research/the-north-korean-kimsuky-apt-keeps-threatening-south-korea-evolving-its-ttps/ 6/12
+3/4/2020 The North Korean Kimsuky APT keeps threatening South Korea evolving its TTPs – Yoroi Blog
+Hash bbad65136d73cbd5262bc88571677b5434ceb54fc1103f2133757‐
+dae2ec4b47b
+Threat Injected DLL
+Brief
+Descrip‐
+tion
+First injected DLL
+Ssdeep 3072:AFSYAyju5JpkC7xfYZo9cPqvTV+ql4yFa+zB+K+H/kocFAQUG5R:
+AFJ0qC7xAZliT004+p10fkoefUG5
+Table 4: Information about first DLLinjected in explorer.exe process
+Hash 817e‐
+f0d9d3584977d1114b7e92012b653d339434a90967cbe8016899801f3751
+Threat Injected DLL
+Brief
+Descrip‐
+tion
+Second injected DLL
+Ssdeep 3072:AFSYAyju5JpkC7xfYZo9cPqvTV+ql4yFa+zo+K+H/kocFAnRG5R:AF
+J0qC7xAZliT004+p00fkoegRG5
+Table 5: Information about second DLL injected in explorer.exe process
+Comparing the ssdeep of the two DLLs is possible to notice several overlaps between the two
+libraries, a circumstance that confirms a high “similarity” between them. Below are highlighted the
+different portions of the hash:
+3072:AFSYAyju5JpkC7xfYZo9cPqvTV+ql4yFa+z *
++K+H/kocFAnRG5R:AFJ0qC7xAZliT004+p * 0fkoe *** RG5
+There are tiny differences between the DLLs as shown below performing a simple binary diffing
+analysis.
+Due to these differences between the two DLLs, we decided to continue the analysis on one of
+them. Digging into the DLL, we notice that every time a function has to be performed by the
+malware, it relies on a recurrent decryption routine, which decodes the strings containing the
+actual instruction and executes it. An example of the decryption routine is reported in the following
+figure on top right:
+https://blog.yoroi.company/research/the-north-korean-kimsuky-apt-keeps-threatening-south-korea-evolving-its-ttps/ 7/12
+3/4/2020 The North Korean Kimsuky APT keeps threatening South Korea evolving its TTPs – Yoroi Blog
+Figure 10: Decryption flow graph
+Every 15 minutes, the malware contacts the C2
+( suzuki.]datastore.]pe.]hu ) and sends back the
+information about the compromised machine, as reported
+in the previous figure. In particular, three HTTP requests
+are made using different URLs paths and different UserAgent fields for each request. An example of the C2
+registration is the following:
+Figure 11: Parts of subroutines used to
+perform network communication
+https://blog.yoroi.company/research/the-north-korean-kimsuky-apt-keeps-threatening-south-korea-evolving-its-ttps/ 8/12
+3/4/2020 The North Korean Kimsuky APT keeps threatening South Korea evolving its TTPs – Yoroi Blog
+Figure 12: Network traffic performed by the malware
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "explorer.exe", "type": "EXEF"},
+        {"id": 2, "description": "AutoUpdate.dll", "type": "EXEF"},
+        {"id": 3, "description": "VirtualAllocEx function", "type": "TTPS"},
+        {"id": 4, "description": "WriteProcessMemory function", "type": "TTPS"},
+        {"id": 5, "description": "CreateRemoteThread function", "type": "TTPS"},
+        {"id": 6, "description": "CreateToolhelp32Snapshot function", "type": "TTPS"},
+        {"id": 7, "description": "Process32First function", "type": "TTPS"},
+        {"id": 8, "description": "Process32Next function", "type": "TTPS"},
+        {"id": 9, "description": "First injected DLL (bbad65136d73cbd5262bc88571677b5434ceb54fc1103f2133757dae2ec4b47b)", "type": "EXEF"},
+        {"id": 10, "description": "Second injected DLL (817ef0d9d3584977d1114b7e92012b653d339434a90967cbe8016899801f3751)", "type": "EXEF"},
+        {"id": 11, "description": "C2 server (suzuki.datastore.pe.hu)", "type": "CCSH"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name": "injected into"},
+        {"source": 3, "target": 9, "rel_name": "allocates space for"},
+        {"source": 4, "target": 9, "rel_name": "writes path of"},
+        {"source": 5, "target": 1, "rel_name": "creates remote thread in"},
+        {"source": 6, "target": 8, "rel_name": "used to navigate processes"},
+        {"source": 7, "target": 8, "rel_name": "used to navigate processes"},
+        {"source": 9, "target": 1, "rel_name": "injected into"},
+        {"source": 10, "target": 1, "rel_name": "injected into"},
+        {"source": 1, "target": 11, "rel_name": "contacts C2"}
+    ]
+}

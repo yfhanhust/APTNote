@@ -1,0 +1,54 @@
+SILVERLIGHT XAP FILE
+The cambio.xap archive sample (4cc10ab3f4ee6769e520694a10f611d5) does not
+use eye-watch[.]in as a C&C channel but instead was downloaded from the URL:
+hxxps://www.eye-watch[.]in/design/fancybox/include/cambio.xap
+'cambio' is Spanish for 'change' . The URL is similar to that noted in the BadCyber
+blog, and the use of an XAP file matches what can be found in the Archive.org cache
+for the sap.misapor[.]ch site.
+XAP is a software package format used for Microsoft Silverlight applications.
+It can be opened as a standard ZIP archive and contains the following files:
+Together they form a re-packaged exploit for Silverlight based on CVE-2016-0034
+(MS16-006) – a Silverlight Memory Corruption vulnerability. The exploit has previously
+been used by several exploit kits including RIG and Angler to deliver multiple
+crimeware tools.
+The Shell_siver.dll file contains a compile path:
+Internally, the code of this DLL loads a 2nd stage library called
+binaryreader.Exploit – as seen below with the XOR-encoded string:
+byte[] array = new byte[]
+{
+115,120,127,112,99,104,99,116,112,117,
+116,99,63,84,105,97,125,126,120,101
+};
+this.InitializeComponent();
+for (int i = 0; i < array.Length; i++)
+{
+array[i] ^= 17;
+}
+if (args.get_InitParams().get_Keys().Contains("shell32"))
+{
+...
+type.InvokeMember("run", 256, null, obj, new object[])
+...
+}
+This 2nd stage payload DLL contained within the assembly is 30,720 bytes in size
+and encoded with XOR 56:
+Buffer.BlockCopy(Resource1._1, 54, array, 0, 30720);
+try
+{
+for (int i = 0; i < array.Length; i++)
+{
+byte b = 56;
+array[i] ^= b;
+}
+...
+}
+Once the payload stub is decoded, it represents itself as a PE-image, which is
+another .NET 4.0 assembly with the internal name binaryreader.dll.
+This second-stage DLL assembly, binaryreader.dll, is heavily obfuscated. The
+DLL (MD5 hash: 7b4a8be258ecb191c4c519d7c486ed8a) is identical to the one
+reported in a malware traffic analysis blog post from March 2016 where it was used to
+deliver Qbot. Thus it is likely the code comes from a criminal exploit kit which is being
+leveraged for delivery in this campaign.
+A similarly named cambio.swf (MD5 hash:
+6dffcfa68433f886b2e88fd984b4995a) was uploaded to VirusTotal from a US IP
+address in December 2016.

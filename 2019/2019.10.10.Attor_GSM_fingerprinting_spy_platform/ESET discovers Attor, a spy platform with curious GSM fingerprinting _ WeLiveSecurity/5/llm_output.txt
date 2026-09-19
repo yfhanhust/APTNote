@@ -1,0 +1,88 @@
+
+
+
+Sentence : Network communication
+Attor’s espionage plugins collect sensitive data (such as a list of documents present on the disk)
+that are ultimately exfiltrated to a remote server, but these plugins themselves do not
+communicate over the network.
+Only two of Attor’s components communicate with its C&C server: File uploader and Command
+dispatcher.
+Files collected by the “espionage plugins” (Device monitor, Screengrabber, Audio recorder, and
+Key/clipboard logger) are uploaded to the C&C server automatically by the File uploader plugin.
+These plugins use a dedicated Upload folder as a central folder to store collected data, and other
+plugins use it to store log files.
+The Command dispatcher plugin downloads commands and additional tools from the C&C server
+and interprets them. Again, it uses dedicated folders to store its data – most prominently, freshly
+downloaded plugins and platform updates, and encrypted log data containing status/results of the
+executed commands.
+Attor’s dispatcher monitors the shared folders, and loads any new plugins and updates pushed to
+the compromised computer.
+This means that neither Attor’s dispatcher, nor espionage plugins, ever communicate with the
+C&C server – they only use local shared folders for storing data to be exfiltrated and for reading
+further instructions from the server.
+https://www.welivesecurity.com/2019/10/10/eset-discovers-attor-spy-platform/ 7/14
+10/11/2019 ESET discovers Attor, a spy platform with curious GSM fingerprinting | WeLiveSecurity
+Both File uploader, and Command dispatcher use the same infrastructure to reach the remote
+server – the network communication itself is scattered across four different Attor components,
+each implementing a different layer.
+Attor uses Tor: Onion Service Protocol, with an onion address for the C&C server. In order to
+communicate with the C&C server, any plugin must thus first establish a connection with the Tor
+client plugin (listening on the non‑default 127.0.0.1:8045) which is responsible for resolving the
+onion domain, choosing a circuit and encrypting data in layers. The Tor client plugin is based on
+the Tor client, and customized to the design of this malware (tor.exe with added interaction with
+Attor’s dispatcher).
+The Tor client plugin must communicate with the dispatcher, which implements the cryptographic
+functions. Furthermore, it communicates with the SOCKS proxy plugin (listening on
+127.0.0.1:5153) that relays communications between the Tor client and the remote server.
+Both File uploader and Command dispatcher use FTP; files are uploaded to/downloaded from an
+FTP server that is protected by credentials hardcoded in the configuration:
+C&C server: idayqh3zhj5j243t[.]onion
+Username: do
+Password: [Redacted]
+The plugins log in to the FTP server and copy the collected data to, or download commands from,
+a victim‑specific directory.
+In total, the infrastructure for C&C communication spans four Attor components – the dispatcher
+providing encryption functions, and three plugins implementing the FTP protocol, the Tor
+functionality and the actual network communication, as illustrated in Figure 5. This mechanism
+makes it impossible to analyze Attor’s network communication unless all pieces of the puzzle
+have been collected.
+https://www.welivesecurity.com/2019/10/10/eset-discovers-attor-spy-platform/ 8/14
+10/11/2019 ESET discovers Attor, a spy platform with curious GSM fingerprinting | WeLiveSecurity
+Figure 5. Four Attor components cooperate to enable communication with the C&C server
+It is important to note that Attor uses several additional tricks to hide its communications from the
+user and security products:
+First, the C&C server is a Tor service, aiming for anonymity and untraceability.
+Second, all network-communication-related plugins are only activated if running within the
+process of a web browser or an instant messaging application or other network applications (this
+is determined by checking the process name against a hardcoded list). This trick hides the
+exfiltration-related network communication in a stream of legitimate communications made by that
+application, and thus reduces the risk of raising any suspicion.
+https://www.welivesecurity.com/2019/10/10/eset-discovers-attor-spy-platform/ 9/14
+10/11/2019 ESET discovers Attor, a spy platform with curious GSM fingerprinting | WeLiveSecurity
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Attor", "type" : "ACTO"},
+        {"id": 2, "description": "espionage plugins (Device monitor, Screengrabber, Audio recorder, Key/clipboard logger)", "type" : "APPS"},
+        {"id": 3, "description": "File uploader plugin", "type" : "APPS"},
+        {"id": 4, "description": "Command dispatcher plugin", "type" : "APPS"},
+        {"id": 5, "description": "C&C server (idayqh3zhj5j243t[.]onion)", "type" : "CCSH"},
+        {"id": 6, "description": "Upload folder", "type" : "STOR"},
+        {"id": 7, "description": "FTP server", "type" : "CCSH"},
+        {"id": 8, "description": "Tor client plugin (listening on 127.0.0.1:8045)", "type" : "APPS"},
+        {"id": 9, "description": "SOCKS proxy plugin (listening on 127.0.0.1:5153)", "type" : "APPS"},
+        {"id": 10, "description": "dispatcher providing encryption functions", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 6, "rel_name" : "stores data in"},
+        {"source": 3, "target": 5, "rel_name" : "communicates with"},
+        {"source": 3, "target": 7, "rel_name" : "uploads to"},
+        {"source": 4, "target": 5, "rel_name" : "downloads from"},
+        {"source": 4, "target": 8, "rel_name" : "communicates with"},
+        {"source": 4, "target": 10, "rel_name" : "uses encryption functions from"},
+        {"source": 8, "target": 5, "rel_name" : "resolves and communicates with"},
+        {"source": 8, "target": 9, "rel_name" : "communicates through"},
+        {"source": 9, "target": 7, "rel_name" : "relays communications to"},
+        {"source": 10, "target": 4, "rel_name" : "provides encryption for"}
+    ]
+}

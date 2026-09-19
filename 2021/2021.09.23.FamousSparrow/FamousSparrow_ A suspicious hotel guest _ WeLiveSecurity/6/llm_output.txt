@@ -1,0 +1,194 @@
+
+
+
+Sentence : SparrowDoor
+Loader
+https://www.welivesecurity.com/2021/09/23/famoussparrow-suspicious-hotel-guest/ 2/12
+9/27/21, 5:36 PM FamousSparrow: A suspicious hotel guest | WeLiveSecurity
+SparrowDoor is initially loaded via DLL search order hijacking, using three elements – a legitimate K7
+Computing executable (Indexer.exe) used as the DLL hijacking host, a malicious DLL (K7UI.dll), and
+encrypted shellcode (MpSvc.dll) – all of which are dropped in %PROGRAMDATA%\Software. It can be
+assumed that the command line argument used with the initial SparrowDoor execution, in order to set up
+persistence, is either nothing or anything but -i, -k or -d (the functionalities of these three arguments are
+explained below). Once persistence is set up, SparrowDoor is executed with the -i command line argument.
+Refer to Figure 2 for a brief overview of the flow of the initial loading process. If you would like an in-depth
+look into the loading process, continue reading!
+https://www.welivesecurity.com/2021/09/23/famoussparrow-suspicious-hotel-guest/ 3/12
+9/27/21, 5:36 PM FamousSparrow: A suspicious hotel guest | WeLiveSecurity
+Figure 2. SparrowDoor staging
+The legitimate executable, Indexer.exe, requires the library K7UI.dll to operate. Therefore, the OS looks for
+the DLL file in directories in the prescribed load order. Since the directory where the Indexer.exe file is
+stored is at the top priority in the load order, it is exposed to DLL search-order hijacking. And that is
+exactly how the malware gets loaded. Indexer.exe loads the malicious K7UI.dll, which in turn patches the
+code in Indexer.exe (from call WinMain to jmp K7UI.0x100010D0) and then returns to Indexer.exe. As a
+result of this, Indexer.exe ends up running a subroutine in K7UI.dll (located in the .text section) instead of
+calling WinMain. We will refer to this subroutine as launcher . The functionality of launcher is to load
+MpSvc.dll (the encrypted shellcode) into memory from the directory that also stores Indexer.exe, decrypt
+the content and then execute the shellcode.
+The shellcode (MpSvc.dll) is encrypted using four-byte XOR with the key being the first four bytes of the
+file.
+The MpSvc.dll shellcode loads various libraries responsible for building a PE structure and locates the
+addresses of the functions to be used. After that, it allocates RWX memory and copies various locations in
+the shellcode into it (in order to build the PE structure). It also resolves the imports of several functions
+from different libraries. Finally, it executes the newly built backdoor PE from the entry point. Interestingly,
+this rebuilt executable image has no PE headers, as shown in Figure 2, so the loader executes the backdoor
+by jumping to the entry point at a hardcoded offset within the allocated memory.
+https://www.welivesecurity.com/2021/09/23/famoussparrow-suspicious-hotel-guest/ 5/12
+9/27/21, 5:36 PM FamousSparrow: A suspicious hotel guest | WeLiveSecurity
+Figure 3. The PE header is missing in the newly built backdoor from the MpSvc.dll shellcode
+Backdoor
+The arguments passed to the backdoor are inherited from the arguments passed to Indexer.exe, or to any
+other binary that gets the shellcode/backdoor injected. The tasks performed by the backdoor after an
+argument is specified are shown in Table 1.
+Table 1. Actions performed based on the command line arguments provided to SparrowDoor
+https://www.welivesecurity.com/2021/09/23/famoussparrow-suspicious-hotel-guest/ 6/12
+9/27/21, 5:36 PM FamousSparrow: A suspicious hotel guest | WeLiveSecurity
+Argument Action
+No argument
+or not
+matching the
+following
+Persistence is set through the registry Run key and a service, which is created and
+started using the configuration data (described in the next section) hardcoded in the
+binary. Finally, the backdoor is restarted with the -i switch.
+-i The backdoor is restarted with the -k switch.
+-k The backdoor interpreter (described later) is called with a kill switch .
+-d The backdoor interpreter is called without a kill switch .
+Note:
+
+The kill switch gives the backdoor the privilege to uninstall or restart SparrowDoor.
+The backdoor interpreter gets called regardless of the argument used because it will always end up
+
+with a -k or -d argument.
+Configuration data
+The configuration is found in the binary and is decrypted using the multi-byte XOR key ^&32yUgf. The
+configuration has the following format:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+struct config
+{
+char domain[64];
+char user [64];
+char pass[64];
+char ip[64];
+char port[2];
+char serviceName[64];
+char serviceDisplayName[128];
+char serviceDescription[128];
+};
+The decrypted values are shown in Table 2.
+Table 2. The key-value pairs of the configuration along with a description of their purpose
+Key Value Purpose
+domain credits.offices-analytics[.]com C&C server domain
+user user Proxy settings used to connect to C&C server
+pass pass
+ip 127.1.1.1
+port 8080
+https://www.welivesecurity.com/2021/09/23/famoussparrow-suspicious-hotel-guest/ 7/12
+9/27/21, 5:36 PM FamousSparrow: A suspicious hotel guest | WeLiveSecurity
+Key Value Purpose
+serviceName WSearchIndex Information used for creating a service to set up
+persistence. Also, note that the serviceName is
+serviceDisplayName Windows Search Index used as the value name under the Run key in
+the registry
+serviceDescription Provides content indexing,
+property caching, and search
+results for files, e-mail, and
+other content.
+The connections could be either through a proxy or not, and they connect to the C&C server over port 443
+(HTTPS). So, the communication should be encrypted using TLS. During the first attempt to contact the
+C&C server, SparrowDoor checks whether a connection can be established without using a proxy, and if it
+can’t, then the data is sent through a proxy. All outgoing data is encrypted using the XOR key hH7@83#mi
+and all incoming data is decrypted using the XOR key h*^4hFa. The data has a structure that starts with a
+Command ID, followed by the length of the ensuing encrypted data, followed by the encrypted data.
+Figure 4 shows an example of how the data is sent to the C&C server (in this case it is sending system
+information), while Figure 5 shows the plaintext form of the same data payload.
+Figure 4. A Wireshark dump showing the data POSTed by the backdoor
+https://www.welivesecurity.com/2021/09/23/famoussparrow-suspicious-hotel-guest/ 8/12
+9/27/21, 5:36 PM FamousSparrow: A suspicious hotel guest | WeLiveSecurity
+Figure 5. The decrypted data containing system information
+Victim’s local IP address in this case can be converted to decimal, giving 192.168.42.1.
+Session ID is the Remote Desktop Services session ID associated with the backdoor process, found using
+the ProcessIdToSessionId Windows API call.
+The systemInfoHash is computed via the sdbm hash algorithm, using the username, computer name,
+host addresses and the session ID.
+Backdoor interpreter function
+Privilege escalation is performed in this function by adjusting the access token of the SparrowDoor process
+to enable SeDebugPrivilege. After that, the shutdown function (Ws2_32.dll) is patched to prevent disabling
+sends and receives on a socket and the closesocket function (Ws2_32.dll) is patched to enable the
+DONT_LINGER option first to close the socket without waiting for pending data to be sent or received.
+Finally, system information is sent to the C&C server (as seen in Figures 4 and 5 above) to receive data
+back in return.
+Based on the Command ID field in the data received from the C&C server, the backdoor can perform
+different malicious actions that are detailed in Table 3.
+Table 3. Actions performed by SparrowDoor when the corresponding Command IDs are received
+Command ID Action
+0x1C615632 The current process is closed.
+0x1DE15F35 A child svchost.exe process is spawned with processToken information of the process
+(Process ID) specified by the C&C server, with argument -d and then the shellcode is
+injected into the process.
+0x1A6B561A A directory is created using the name provided by the C&C server.
+0x18695638 A file is renamed. Both the file to be renamed and the new name are provided by the
+C&C server.
+0x196A5629 A file is deleted, as specified in the incoming data.
+https://www.welivesecurity.com/2021/09/23/famoussparrow-suspicious-hotel-guest/ 9/12
+9/27/21, 5:36 PM FamousSparrow: A suspicious hotel guest | WeLiveSecurity
+Command ID Action
+0x17685647
+If length of the data is 1, and the data matches $, then the length of systemInfoHash
+along with an array of drive types are sent.
+If length of the data is greater than 2 and the first 2 bytes of data match $\, then
+information about the files in a specified directory is sent. The information included is the
+following: file attributes, file size and file write time.
+0x15665665 A new thread is created to exfiltrate the content of a specified file.
+0x16675656 If the kill switch is activated, the current persistence settings (registry and service) are
+removed and the Indexer.exe file is executed (to restart the dropper). If not, the
+backdoor loop is restarted.
+0x14655674 A new thread is created to write the data to a specified file.
+0x12635692 If the kill switch is activated, the persistence settings are removed, and all the files
+used by SparrowDoor (Indexer.exe, K7UI.dll and MpSvc.dll) are removed. If not, the
+backdoor loop is restarted.
+0x13645683
+If the data matches "switch ”, then the backdoor is restarted with the -d switch.
+If not, it spawns a cmd.exe shell, and sets up named pipes for input and output (used by
+the C&C server) to establish an interactive reverse shell.
+If the data matches Exit\r\n, then the spawned shell is terminated.
+Other Restarts the backdoor loop.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SparrowDoor", "type" : "EXEF"},
+        {"id": 2, "description": "Indexer.exe (legitimate K7 Computing executable)", "type" : "EXEF"},
+        {"id": 3, "description": "K7UI.dll (malicious DLL)", "type" : "EXEF"},
+        {"id": 4, "description": "MpSvc.dll (encrypted shellcode)", "type" : "EXEF"},
+        {"id": 5, "description": "%PROGRAMDATA%\\Software", "type" : "SYSP"},
+        {"id": 6, "description": "registry Run key", "type" : "REGI"},
+        {"id": 7, "description": "service (WSearchIndex)", "type" : "REGI"},
+        {"id": 8, "description": "credits.offices-analytics[.]com", "type" : "CCSH"},
+        {"id": 9, "description": "127.1.1.1:8080 (proxy settings)", "type" : "CCSH"},
+        {"id": 10, "description": "443 (HTTPS port)", "type" : "NETP"},
+        {"id": 11, "description": "hH7@83#mi (XOR key for outgoing data encryption)", "type" : "TAMP"},
+        {"id": 12, "description": "h*^4hFa (XOR key for incoming data decryption)", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "loads"},
+        {"source": 3, "target": 4, "rel_name" : "decrypts and loads"},
+        {"source": 1, "target": 5, "rel_name" : "dropped in"},
+        {"source": 2, "target": 6, "rel_name" : "sets persistence via"},
+        {"source": 2, "target": 7, "rel_name" : "creates and starts service"},
+        {"source": 1, "target": 8, "rel_name" : "connects to"},
+        {"source": 1, "target": 9, "rel_name" : "uses proxy settings"},
+        {"source": 1, "target": 10, "rel_name" : "communicates over port"},
+        {"source": 1, "target": 11, "rel_name" : "encrypts outgoing data with"},
+        {"source": 1, "target": 12, "rel_name" : "decrypts incoming data with"}
+    ]
+}

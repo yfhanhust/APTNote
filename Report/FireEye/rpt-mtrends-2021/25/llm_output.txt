@@ -1,0 +1,220 @@
+
+
+
+Sentence : Red Team Makes the Most of Social Engineering and System Misconfigurations
+A financial services firm engaged Mandiant to evaluate the
+effectiveness of its information security team’s detection,
+prevention and response capabilities.
+The Mandiant red team’s objectives were to avoid detection while accomplishing
+the following tasks:
+Mandiant red
+team consultants
+perform targeted,
+objective-based
+assessments using
+a combination of
+publicly available
+and internally
+developed tools.
+Once the red team
+is able to access
+an environment,
+observing how
+legitimate
+employees interact
+with workstations
+and applications
+allows the red
+team to blend in by
+adopting behaviors
+common to the
+environment.
+
+
+Access Executive Email
+
+
+Access Sensitive Production Network
+
+
+During this engagement, the red team consultants emulated advanced nationstate attackers regularly seen on the frontlines of Mandiant incident response
+engagements.
+Initial Compromise
+While performing open-source intelligence (OSINT) reconnaissance to identify,
+catalogue and analyze the client’s Internet-facing infrastructure, the red team
+discovered a job application portal through which interview candidates could
+submit documents. According to Mandiant threat intelligence, social engineering
+is one of the most common initial attack vectors used by advanced attackers.
+For this engagement, the red team used the job application portal to deliver
+malicious documents which might be opened by employees during regular
+business operations. This allowed the red team to use a trusted resource without
+having to bypass email-based security controls. To increase the chance the resume
+would be opened, the red team crafted a suitable candidate for employment
+based on common job openings published by the customer and submitted the job
+application and malicious resume through the application portal.
+SPECIAL REPORT M-TRENDS 2021 77
+The resume contained a malicious macro and a request that attempted to
+convince the user to enable macro content to allow the execution of the embedded
+code on their endpoint. Historically, the red team has found that applying personal
+touches to attempts at social engineering increases the chance of success. In this
+case, the red team sent a follow-up email to the HR department to demonstrate
+enthusiasm from the applicant and check on the status of the resume.
+Establishing a Foothold and Maintaining Access
+Shortly after sending the follow up email to HR, a recruiter working for the
+customer opened the malicious resume and enabled content, which provided
+a Cobalt Strike command and control connection. The successful pre-text and
+macro execution enabled the red team to gain a foothold into the environment.
+Once a foothold is established APT groups often prioritize creating a means
+through which consistent access to the environment can be maintained. After
+establishing a successful Cobalt Strike session Mandiant’s red team sought to do
+the same. To maintain access, the red team installed a Startup Folder persistence
+mechanism within the profile of the compromised user, which would launch the
+backdoor each time the user logged on to the compromised system.
+Escalating Privileges and Lateral Movement
+The ability to quickly reconnoiter an environment while remaining undetected
+is a capability which often separates opportunistic attackers from advanced
+attackers. The Mandiant red team uses tradecraft common to APT groups to
+profile the behaviors of legitimate users and reduce the chance of detection. The
+red team performed host-based reconnaissance on the HR user’s workstation to
+gain situational awareness regarding the user’s privileges and systems to which
+the user had access. This helped the red team identify an unquoted service
+path on the system which could be used to escalate privileges. An unquoted
+service path allows attackers to intercept execution flow by placing a binary in
+a directory higher than that of the intended executable. The red team exploited
+this misconfiguration to gain elevated access to the system. Using the elevated
+privileges, the red team used Mimikatz to access the local administrator password
+hash on the system.
+While the privileges acquired through the unquoted service path vulnerability
+provided a greater level of access to the local host, it did not directly facilitate
+moving deeper into the environment. The development and adoption of the
+Microsoft Local Administrator Password Solution (LAPS) has dramatically reduced
+the attack surface associated with the reuse of Local Administrator passwords.
+However, deployment of LAPS can be inconsistent across environments.
+Looking through the client’s Active Directory environment, the Mandiant red
+team enumerated systems that were not managed by LAPS by querying for the
+absence of the “ms-Mcs-AdmPwdExpirationTime” computer object attribute.
+This produced a list of endpoints to which the red team could potentially
+authenticate using the recently acquired local administrator password hash. The
+red team tested the validity of the compromised Local Administrator account
+and identified several servers on which the credentials were valid. One of those
+servers was configured with the unconstrained delegation property which
+can allow attackers with administrative access to impersonate any account
+which has successfully authenticated to that system. To force the client’s
+domain controller to authenticate to the just-compromised unconstrained
+delegation server, the red team used the ‘printer bug’ attack which sends an
+SPECIAL REPORT M-TRENDS 2021 78
+‘RpcRemoteFindFirstPrinterChangeNotification’ request to a domain controller
+running the Print Spooler service. As a result of this request, the domain controller
+tests the connection, which provides the Kerberos Ticket-Granting Ticket (TGT) for
+the domain controller machine account.
+The red team used the captured Kerberos TGT to impersonate the client’s domain
+controller machine account and perform a DCSync attack. A successful DCSync
+attack provides the NTLM password hashes for any account in the target domain,
+including domain administrator users. The password hashes acquired through
+DCSync allowed the red team to move through the client’s environment freely and
+focus on their access objectives.
+Accessing High-Value Objectives
+During the initial scoping for the engagement, the client tasked the Mandiant red
+team to gain access to the contents of an executive’s email account and move
+laterally into a sensitive production network.
+Executive Email Access
+Due to newly adopted work from home practices paired with heavy adoption
+of cloud services, the client’s employees were not centrally located as would
+be expected with a traditional office model. Their Office 365 email access was
+protected by multi-factor authentication (MFA), so the red team chose to target
+executive workstations for email access. The NTLM hashes gathered during the
+DCSync attack were processed and fed through an offline password-cracking
+server internal to Mandiant, which returned plain text credentials for an executive
+account. The red team then monitored the environment to see when executive
+workstations were connected to the internal network either directly or through a
+Virtual Private Network (VPN) concentrator. Once an executive’s workstation was
+connected to the internal network, the red team tested the validity of credentials
+by mapping the C$ share and gained interactive access to the endpoint—and the
+user’s email—with the executive’s compromised credentials.
+Accessing Sensitive Production Network
+Access to the production network also presented substantial obstacles for the
+red team. The customer required all connections between the corporate and
+production networks to traverse a jumphost protected by MFA. To identify the
+jumphosts that bridged the corporate and production environments, the red team
+performed reconnaissance within Active Directory and identified a jumphost that
+allowed inbound Remote Desktop Protocol (RDP) and Windows Management
+Instrumentation (WMI) connections. While RDP would require the use of MFA,
+access via WMI was not similarly constrained. Using the Domain Administrator
+account, the red team queried WMI on the jumphost to identify a list of users
+who had recently authenticated to the server. The red team then conducted
+DCSync attacks against the list of recently authenticated users to obtain the
+NTLM hashes for each account, which were submitted to a Mandiant-internal
+password cracking service. The cracking service successfully identified the plain
+text credentials of multiple users from the list, giving the red team the first element
+needed to authenticate to RDP. While MFA provides a high degree of security
+for environments, convenience features that help improve adoption rates are
+often built into the products. One such feature is the ability to generate a push
+notification on the user’s device and request authorization. Advanced attackers
+and red teams alike can use this feature and hope that a busy employee may
+assume a request is legitimate and authorize the request.
+SPECIAL REPORT M-TRENDS 2021 79
+In this case, the red team initiated a Duo Push request that was accepted by the
+end user, which gave the red team interactive access to the jumphost through an
+RDP connection. To perform follow-on actions efficiently and move further into
+the sensitive production network, the red team needed to place a Cobalt Strike
+beacon on the jumphost but firewall policy restricted the transfer of files to the
+jumphost. Using a compromised user workstation, the red team temporarily stored
+a DLL sideloading payload on a corporate-wide file share which could then be
+accessed from the jumphost while the red team was connected through RDP.
+With a Cobalt Strike beacon in place, the red team could maintain access to the
+jumphost and complete the client’s requested objective.
+Outcomes
+In this case study, at the client’s request, the Mandiant red team gained a
+foothold in the client’s environment, obtained full administrative control of the
+company domain, accessed executive email and connected to the sensitive
+production network without any software or operating system exploits. Instead,
+the red team focused on identifying system misconfigurations, conducting social
+engineering attacks and using the client’s internal tools. They were able to achieve
+their objectives despite the obstacles presented by the client’s MFA, network
+segmentation and employee social engineering awareness.
+SPECIAL REPORT M-TRENDS 2021 80
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Mandiant red team", "type" : "ACTO"},
+        {"id": 2, "description": "financial services firm", "type" : "COUN"},
+        {"id": 3, "description": "job application portal", "type" : "URLS"},
+        {"id": 4, "description": "malicious resume", "type" : "DOCF"},
+        {"id": 5, "description": "HR department", "type" : "ACTO"},
+        {"id": 6, "description": "Cobalt Strike command and control connection", "type" : "CCSH"},
+        {"id": 7, "description": "Startup Folder persistence mechanism", "type" : "TTPS"},
+        {"id": 8, "description": "unquoted service path vulnerability", "type" : "CVES"},
+        {"id": 9, "description": "local administrator password hash", "type" : "IOCS"},
+        {"id": 10, "description": "Microsoft Local Administrator Password Solution (LAPS)", "type" : "APPS"},
+        {"id": 11, "description": "Mimikatz", "type" : "APPS"},
+        {"id": 12, "description": "domain controller machine account", "type" : "ACTO"},
+        {"id": 13, "description": "DCSync attack", "type" : "TTPS"},
+        {"id": 14, "description": "NTLM password hashes for any account in the target domain", "type" : "IOCS"},
+        {"id": 15, "description": "executive workstations", "type" : "SYSP"},
+        {"id": 16, "description": "Office 365 email access", "type" : "MAIL"},
+        {"id": 17, "description": "Virtual Private Network (VPN) concentrator", "type" : "NETP"},
+        {"id": 18, "description": "jumphost protected by MFA", "type" : "SYSP"},
+        {"id": 19, "description": "Remote Desktop Protocol (RDP)", "type" : "NETP"},
+        {"id": 20, "description": "Windows Management Instrumentation (WMI)", "type" : "APPS"},
+        {"id": 21, "description": "Duo Push request", "type" : "TTPS"},
+        {"id": 22, "description": "Cobalt Strike beacon", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "assessed by"},
+        {"source": 3, "target": 4, "rel_name" : "delivered through"},
+        {"source": 5, "target": 4, "rel_name" : "received and opened"},
+        {"source": 6, "target": 1, "rel_name" : "established by"},
+        {"source": 7, "target": 1, "rel_name" : "used by"},
+        {"source": 8, "target": 9, "rel_name" : "exploited to gain"},
+        {"source": 9, "target": 10, "rel_name" : "bypassed"},
+        {"source": 11, "target": 9, "rel_name" : "used to obtain"},
+        {"source": 12, "target": 13, "rel_name" : "attacked using"},
+        {"source": 13, "target": 14, "rel_name" : "obtained through"},
+        {"source": 15, "target": 16, "rel_name" : "accessed"},
+        {"source": 17, "target": 15, "rel_name" : "connected through"},
+        {"source": 18, "target": 20, "rel_name" : "allowed access using"},
+        {"source": 19, "target": 18, "rel_name" : "required for connection to"},
+        {"source": 21, "target": 1, "rel_name" : "initiated by"},
+        {"source": 22, "target": 18, "rel_name" : "placed on"}
+    ]
+}

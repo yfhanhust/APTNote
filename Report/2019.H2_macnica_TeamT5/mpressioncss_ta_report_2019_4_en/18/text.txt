@@ -1,0 +1,178 @@
+Tick
+Evolving Downloader
+In September 2019, attack on Japanese company’ s office in China was observed. Analysis of the techniques (the
+functions of the malware, the characteristics of the code level, the exploitation of the legitimate Websites as C2 servers)
+and the targeted industry suggests that these attack was made by the Tick group. The malware used incorporated the
+anti-virus product deactivation and encryption implementation seen in downloader malwares previously used by Tick,
+and it seems that Tick has been carrying out continual update of their downloaders. A particularly significant
+characteristic is the implementation of a remote shell feature. Previously, target verification with a downloader had been
+carried out using the information automatically collected from an infected device. The collected information was
+uploaded to external server. If the uploaded information fulfills the condition implemented in the server, next payload
+would be delivered. This was the first time for us to observe that Tick implemented remote shell feature in its
+downloader. This is thought to be used for gathering a greater amount of information to increase the precision of target
+verification. Based on the remaining debug information file (pdb) name and functions, We named this malware “version
+RAT” .
+May-2018 Aug-2018 May-2019 Aug-2019 Sep-2019
+ABKDLL ABK Avenger Ravirra version
+CPU CPU CPU CPU
+Anti-Virus Anti-Virus Anti-Virus
+Volume
+OS version
+Information
+Hostname
+NIC MAC
+Address
+Figure 4. Evolution of the Information Collecting Functions of Downloaders
+Remote
+Shell
+In this attack, we discovered that version RAT was installed on several devices. One characteristic was that C2 servers of
+each RAT were different. This meant that even if the RAT was detected on a single device, only C2 server indicator
+would not be enough to identify other infected devices, which was probably intended to extend the period of stay in
+the target network as long as possible. Because the pdb path left in each RAT was different, it is considered that source
+code sets were shared among several developers belonging to Tick group and tuning was carried out for the settings of
+C&C, etc, in each operation. The pdb path of one sample contained Hangul characters. Because of this, and because
+Tick also targets South Korean organizations, it is suspected that person well versed in the Korean language may be
+employed as a developer of the group.
+Table 2. Discovered Version RAT
+This malware was in a DLL file format and had the same file name as the legitimate version.dll preinstalled in Windows.
+When the malicious DLL file was installed in the folder containing the legitimate Fortigate EXE which loads version.dll,
+the malicious DLL would be loaded instead of the version.dll in the System32 folder. (DLL Search Order Hijacking)
+Using this technique, the malware would be automatically run and remain in the infected device even after the device
+was rebooted.
+Figure 5. DLL Search Order Hijacking
+DLL Search Order Hijacking is a technique that has been used for a long time, and the fact that it is still being used by
+numerous groups to this day indicates that it remains an effective technique for avoiding a number of security solutions
+such as anti-virus products and whitelist protection.
+Also, it uses a unique technique to identify the OS of the infected device.
+The malware loads the legitimate version.dll in the System32 folder and verifies whether a particular API can be loaded.
+The GetFileVersionInfoExA function is exported via the version.dll of Windows10, and cannot be loaded on any other
+OS. In this way, this malware is prevented from running on any OS other than Windows 10. This technique is especially
+effective to circumvent dynamic analysis and sandbox base security.
+Figure 6. Checking Windows 10 Environment
+Characteristics of version RAT communications
+C2 servers were exploited legitimate Websites and the protocol is HTTP. some User-Agent strings are embedded in the
+malware, and picks up one of the strings based on the mshtml.dll version in the infected device (Table 3).
+Table 3. Fixed User Agent Strings (version RAT)
+The communication data is encrypted by combining AES CBC mode (key and initialization vector [IV] generated using
+two fixed character strings, '!@#$%^$$#$%^%$#@' and 'sdjfiejkflmvjfkd', and random values) and base64.
+All of the C2 servers were compromised legitimate Websites in Japan. In terms of signature creation to detect C2 traffic,
+although there do exist fixed URL parameters embedded in malware that could be used as detection conditions,
+because they are frequently changed, it is considered difficult to achieve traffic detection using signatures soon after
+malware has been used. Because of that, although it means taking delayed action, we recommend that when a
+downloader C2 URL used by Tick is published by security vendors, etc, network logs should be examined using the
+fixed URL pattern part as a detection condition.
+URL pattern examples (blue, bold characters are fixed)
+http://www..com/banner/acom/list.php? =usq
+version RAT SHA256: ec052815b350fc5b5a3873add2b1e14e2c153cd78a4f3cc16d52075db3f47f49
+http://www..com/img/home/index.php? =google
+down_new SHA256: 80ffaea12a5ffb502d6ce110e251024e7ac517025bf95daa49e6ea6ddd0c7d5b
+Observed internal activity
+After confirming communication with the target device via a ping command using the version RAT remote shell, the
+attacker attempted lateral movement with a net use command.
+net group “domain admins” /domain
+ping -n 1 
+net use \ [redacted] /u:\administrator
+C2
+A PHP file was installed on compromised Websites. The PHP file’ s code is only around 200 lines, without obfuscation,
+and was designed to perform branch processing according to the URL parameters set by version RAT or attacker at the
+time of access. This PHP code does not implement user interface and decryption processing of encrypted data. Its main
+role is relay point of encrypted data between the attacker and the infected devices. Because of this, it is thought that
+the user interface enabling the attacker to carry out operations was implemented on the attacker’ s operation device or
+on another server. The attacker gained access to the compromised Web site via a servers set up on the platforms of
+overseas VPS services. It is thought that the reason why the PHP code was made so simple was that the attacker
+considered that if the code were obfuscated as with a WebShell, it would produce a lot of distinctive codes and would
+increase the likelihood of being detected by anti-virus products. Data communication between the attacker and the C2
+server is carried out via the same mechanism as for communications between the RAT and the C2 server (AES +
+base64). Because the key and initialization vector (IV) are included in the communication data (Figure 7 and Figure 8),
+decryption can be performed if the URL parameters and POST data remain in the log. IV and Data are split in 2 parts.
+An exclamation mark (!) is attached to the end of the data transmitted to the RAT as an identifier to verify the validity of
+the data.
+16bytes
+16bytes
+Key IV
+Data1
+base64 base64 base64
+IV1 Key IV2 Data2
++‘!’
+3bytes 5bytes 24bytes 19bytes Data Len - 3bytes
+Figure 7. Communication Data Format
+AES and base64 are used for file transfer, too. However the encryption process and data format are slightly altered.
+16bytes
+16bytes
+Key IV
+Data1
+10bytes
+base64 base64 base64
+IV1 Key IV2 Data2
+15bytes 24bytes 9bytes Data Len - 10 bytes
+xxxxxxxx
+Data Format:
+e.g. aaa.exexxxxxxxxMZ...
+Figure 8. File Transfer Data Format
+Table 4. List of Version RAT C2 PHP URL Parameters
+Commands issued by the attacker are made in the following format.
+MMddHHmmss[Sub Command ID][Parameter]
+*Sub Command ID and Parameter can be omitted.
+
+Target ID is AAAAA: Target device is unspecified.
+
+Command example 1) 0330170142SAAAAA
+Show list of installed applications
+Command example 2) 0330170142DAAAAA0BLc:¥intel¥logs
+Download file, expand file size, save to c:¥intel¥logs
+The version RAT decrypts the beacon’ s response data, extracts the Command ID, Sub Command ID, and Parameter,
+and performs reading processing.
+Table 5. List of Version RAT Commands
+Figure 9. Remote Control Flow (Showing Installed Applications)
+Figure 10. PHP Code Installed on a Regular Web Site
+down_new
+In November 2019, two files considered to be Tick’s downloaders were uploaded to the public malware repository.
+The encryption method was the same as that of the version RAT, AES + base64, and the two character strings used to
+create the key were the same. Rather than a DLL file, these malwares are EXE file which, when executed, copies itself to
+a specified location and adds a log-on script registry as a persistence. automatically run when a user logs in to an
+infected device.
+These samples also had the distinctive pdb file path left in samples used by Tick.
+SHA256: 80ffaea12a5ffb502d6ce110e251024e7ac517025bf95daa49e6ea6ddd0c7d5b
+PDB: C:\Users\jack\Desktop\test\ec_new\down_new\Release\down_new.pdb
+Additional registry value: HKEY_CURRENT_USER\Environment\UserInitMprLogonScript = "C:\Users\<User
+name>\AppData\Roaming\Microsoft\winlogon.exe"
+SHA256: 2411d1810ac1a146a366b109e4c55afe9ef2a297afd04d38bc71589ce8d9aee3
+PDB: C:\Users\jack\Desktop\test\ec_new\down_new\Release\down_new.pdb
+Additional registry value: HKEY_CURRENT_USER\Environment\UserInitMprLogonScript = "C:\Users\<User
+name>\AppData\Local\Microsoft\Internet Explorer\wuauct.exe"
+A major difference between these two down_new samples and version RAT is that a remote shell function is not
+implemented. Considering the fact that they have few functions compared with version RAT, the sample compilation
+date and time, and passive DNS information, it is thought that these two down_new samples are version RAT
+development bases and were used some time before August 2019.
+User-Agent string set in HTTP header is fixed, as with the version RAT, but is decided which one is used according to the
+OS CPU information (32bit/64bit).
+Table 6. Fixed User Agent Strings (down_new)
+Table 7. Comparison of Down_new and Version RAT Functions
+ShadowPAD
+In late 2019, while we were analyzing an attack from Tick, something interesting happened. After running the ABK
+downloader [9] found in that case, a ShadowPAD RAT, also known as POISONPLUG, was downloaded as its 2nd-stage
+backdoor. Though ShadowPAD is a shared tool among Chinese APT groups, this is the first time we observed Tick using
+it. As ABK downloader is widely regarded as Tick’ s exclusive tool, this phenomenon confirms that Tick also uses
+ShadowPAD as their weapon.
+The downloaded sample is a dropper, which drops a legitimate EXE file and a DLL named mscoree.dll containing the
+ShadowPAD RAT. The DLL contains a “loader” module, five other functional modules, and a shellcode segment, all
+encrypted with binary operations. These modules are DLLs with the PE header replaced with random data. The
+shellcode is first used to reflectively inject the “loader” module into memory and then used by the “loader” module to
+inject other modules. The shellcode itself is heavily obfuscated using fake instructions, making it difficult to analyze. In
+addition to obfuscation, all the strings are encrypted and WinAPIs are dynamically linked either through hash or
+encrypted strings, leaving an empty import table and no readable strings to analyze.
+Figure 11. Obfuscation in the shellcode. On the left, the ‘E8’ byte cause the debugger to misinterpret
+the code as CALL instructions. The image on the right shows the real code after removing the ‘E8’ bytes.
+9 https://nao-sec.org/2020/01/an-overhead-view-of-the-royal-road.html
+In this case, the five functional modules are the “main” module, the “registry” module that monitors registry changes, 2
+C2 connection modules, and a module providing miscellaneous functions for other modules. Thanks to the modular
+design, the threat actor can change the function provided by the ShadowPAD RAT by adding / replacing the modules.
+The main module establishes persistence through registry key and inject itself along with other modules into a
+svchost.exe process. Once inside the svchost.exe process, the main module will start the other module and connect to
+the C2 server.
+Figure 12. Modular structure of the ShadowPAD RAT sample. Different samples may contain different modules,
+depending on the functionalities implemented by the actor.
+The C2 server of this incident, 114.118.21[.]146, is an IP address located in Beijing, China. The traffic goes through port
+443 but the actual contents are plaintext HTTP POST requests. Judging by the C2 module, the type of traffic may vary
+between different ShadowPAD samples, as one of two the C2 modules contains functions for multiple connection
+methods, while the other specifies the domain or IP address of the C2 server and which connection method it uses.

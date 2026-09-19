@@ -1,0 +1,170 @@
+
+
+
+Sentence : Key Findings
+ASERT has discovered a new domain associated with the actors behind the
+Musical Chairs campaign.
+This long-standing actor is known for maintaining static command-andcontrol infrastructure such as domains for long periods of time, even when
+they have been discovered and widely publicized in the community.
+With moderate con�dence, ASERT expects this domain to be used in new
+intrusions.
+Multiple (http://malware-unplugged.blogspot.com/2015/01/hunting-anddecrypting-communications.html) articles (https://www.sans.org/readingroom/whitepapers/detection/gh0st-dshell-decoding-undocumented-protocols-
+37032) have been written about Gh0st over the years, including this one
+discussing the Musical Chairs campaign
+(https://researchcenter.paloaltonetworks.com/2015/09/musical-chairs-multi
+interestingly, a new domain that we have associated with the
+corresponding actor.
+(https://www.arbornetworks.com/blog/asert/wpcontent/uploads/2018/02/domain_tools_etybh_com.png)
+The sample appears to be delivered via an email according to artifacts provided
+by malware-tra�c-analysis (http://www.malware-tra�canalysis.net/2018/01/04/index.html), which is consistent with documented tactics
+for this group (https://researchcenter.paloaltonetworks.com/2015/09/musical-
+chairs-multi-year-campaign-involving-new-variant-of-gh0st-malware/).
+Gh0st variants are proli�c as they can be found in a popular open-source source
+code repository – this blog provides the basis for our association with the actor.
+(https://www.arbornetworks.com/blog/asert/wpcontent/uploads/2018/02/gh0st_pcap.png)
+Some other behavior of interest observed while reviewing this actor’s specimen
+is they appear to be moving away from BAT and JS �les as part of the infection
+process[i] to using DLL side loading. This is just one sample though, so take this
+for what it is.  As part of the DLL side-loading, they make use of a signed
+executable to load a DLL which in turn is used to launch the actual Gh0st DLL.
+They are not the only malware authors who use this trick.
+The observed functionality in this sample maps directly to public documentation
+for Gh0st, so this blog will not rehash that.
+Starting with the known C2 servers for this group, we can check to see if the new
+domain has any ties to them. Two of their C2s were registered back in 2013 and
+the campaign has been around even longer than that per
+Known Domains
+yourbroiler[.]com
+meitanjiaoyiwang[.]com
+New Domain
+etybh[.]com
+Looking at DomainTools, we learn that all three share the same IP, 45.34.148.126,
+and the same registrar, Jiangsu Bangning Science & Technology Co. LTD.
+(https://www.arbornetworks.com/blog/asert/wpcontent/uploads/2018/02/musical_chairs_CNCs.png)
+The newest domain, etybh[.]com, was registered in December of 2017. Looking
+at PassiveTotal, all three domains appeared to have switched from
+98.126.223.218 to 45.34.148.146 sometime in the middle of January 2018. This is
+our �rst clue that they are related.
+This one comes from looking at behavior when the �le is attached to a debugger.
+First, let us back up a step. Observing behaviors of our suspected Musical Chairs
+Gh0st sample via a sandbox, we see that it creates a folder called “Win32Tetris”.
+Let’s see if there are any other Gh0st samples that do this as well. Taking a look
+through ASERT’s malware corpus we �nd this sample,
+11fe12bbb479b4562c1f21a74e09b233ed41c41b7c4c0cad73692�4672fb86a,
+which also creates that folder. Using clues left by another researcher[ii], we can
+con�rm that this more recent sample is from the Musical Chairs group due to the
+C2 and some other characteristics we’ll go over. The most promising correlation
+is that this sample’s C2 is www.yourbroiler[.]com which is a known C2 for this
+actor. Next, we �nd similarities from a di�erent dropped �le called
+C:\microsoft\lib\ki\vv.js whose content reads as such:
+(https://www.arbornetworks.com/blog/asert/wpcontent/uploads/2018/02/vv_js_snippet.png)
+The content is similar to samples identi�ed back in 2015[iii], which also used
+rundll32 to call a mystart method. And, �nally, this sample makes use of the
+same mutex tied to this actor’s Gh0st variant: dafewewrw.
+To summarize the pivot sample
+Property Value
+Load the dll via a script file called C:\microsoft\lib\ki\vv.js
+Domain www.yourbroiler[.]com
+Mutex dafewewrw
+Now that we have con�rmed that this sample appears to be a Musical Chairs
+actor Gh0st variant, let’s work the pivot (going to refer to this sample as the
+“pivot” sample).
+The pivot sample, when attached to a debugger, will launch what appears to be a
+fully functional Tetris game (very friendly of them to provide us reverse engineers
+with a short break):
+(https://www.arbornetworks.com/blog/asert/wp
+not hide the PEB. For what it is worth, after checking out one of the prior
+samples from 2015[iv], it exhibited similar behavior; just not a Tetris game.
+(https://www.arbornetworks.com/blog/asert/wpcontent/uploads/2018/02/spy_lite.png)
+The �nal observation is the fact that the payload dropped on the �le system as
+RasTls.dat is in fact an obfuscated DLL �le. When looking at the DLL properties
+the mystart function is exported. Again, mystart is the exported DLL function
+which the samples back in 2015 called.
+(https://www.arbornetworks.com/blog/asert/wpcontent/uploads/2018/02/dll_properties.png)
+While it should not surprise us when a long-standing actor switches things up,
+this speci�c actor is known for not really changing much. The use of a di�erent
+Gh0st variant in addition to the new domain may be indicative of additional
+changes coming or the actor may be just keeping up with the times. Given
+previously observed behavior, it is likely that this indicator will be used in the
+campaign for the foreseeable future and ASERT is making it available to enable
+visibility for the broader security research community.
+[i] https://researchcenter.paloaltonetworks.com/2015/09/musical-chairs-multiyear-campaign-involving-new-variant-of-gh0st-malware/
+[ii] https://researchcenter.paloaltonetworks.com/2015/09/musical-chairs-multiyear-campaign-involving-new-variant-of-gh0st-malware/
+[iii] https://researchcenter.paloaltonetworks.com/2015/09/musical-chairs-multiyear-campaign-involving-new-variant-of-gh0st-malware/
+[iv] Hash:
+50f08f0b23fe1123b298cb5158c1ad5a8244ce272ea463a1e4858d12719b337f
+Share Share 11
+content%2Fuploads%2F2018%2F02%2Fdomain_tools_etybh_com-300x242.png&description=Musical%20Chairs%20Playing%20Tetris)
+Posted in analysis
+(https://www.arbornetworks.com/blog/asert/category/analysis/), Malware
+(https://www.arbornetworks.com/blog/asert/category/malware/) |
+No Comments (https://www.arbornetworks.com/blog/asert/musical-chairsplaying-tetris/#respond)
+Leave a Reply
+Your email address will not be published. Required �elds are marked *
+Comment
+**Name ***
+**Email ***
+Website
+POST COMMENT
+« The ARC of Satori
+(https://www.arbornetworks.com/blog/asert/the-
+arc-of-satori/)
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "ASERT", "type": "ACTO"},
+        {"id": 2, "description": "Musical Chairs campaign", "type": "TTPS"},
+        {"id": 3, "description": "long-standing actor", "type": "ACTO"},
+        {"id": 4, "description": "Gh0st", "type": "EXEF"},
+        {"id": 5, "description": "http://malware-unplugged.blogspot.com/2015/01/hunting-anddecrypting-communications.html", "type": "URLS"},
+        {"id": 6, "description": "https://www.sans.org/readingroom/whitepapers/detection/gh0st-dshell-decoding-undocumented-protocols-37032", "type": "URLS"},
+        {"id": 7, "description": "https://researchcenter.paloaltonetworks.com/2015/09/musical-chairs-multi-interestingly-a-new-domain-that-we-have-associated-with-the-corresponding-actor.", "type": "URLS"},
+        {"id": 8, "description": "http://www.malware-traffic-analysis.net/2018/01/04/index.html", "type": "URLS"},
+        {"id": 9, "description": "https://researchcenter.paloaltonetworks.com/2015/09/musical-chairs-multi-year-campaign-involving-new-variant-of-gh0st-malware/", "type": "URLS"},
+        {"id": 10, "description": "BAT files", "type": "EXEF"},
+        {"id": 11, "description": "JS files", "type": "EXEF"},
+        {"id": 12, "description": "DLL side loading", "type": "TTPS"},
+        {"id": 13, "description": "signed executable", "type": "EXEF"},
+        {"id": 14, "description": "Gh0st DLL", "type": "EXEF"},
+        {"id": 15, "description": "yourbroiler[.]com", "type": "CCSH"},
+        {"id": 16, "description": "meitanjiaoyiwang[.]com", "type": "CCSH"},
+        {"id": 17, "description": "etybh[.]com", "type": "CCSH"},
+        {"id": 18, "description": "45.34.148.126", "type": "CCSH"},
+        {"id": 19, "description": "Jiangsu Bangning Science & Technology Co. LTD.", "type": "ACTO"},
+        {"id": 20, "description": "98.126.223.218", "type": "CCSH"},
+        {"id": 21, "description": "45.34.148.146", "type": "CCSH"},
+        {"id": 22, "description": "Win32Tetris folder", "type": "SYSP"},
+        {"id": 23, "description": "11fe12bbb479b4562c1f21a74e09b233ed41c41b7c4c0cad7369284672fb86a", "type": "IOCS"},
+        {"id": 24, "description": "C:\\microsoft\\lib\\ki\\vv.js", "type": "EXEF"},
+        {"id": 25, "description": "www.yourbroiler[.]com (known C2)", "type": "CCSH"},
+        {"id": 26, "description": "mutex dafewewrw", "type": "REGI"},
+        {"id": 27, "description": "RasTls.dat", "type": "DOCF"},
+        {"id": 28, "description": "obfuscated DLL file", "type": "EXEF"},
+        {"id": 29, "description": "mystart function", "type": "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name": "discovered association with"},
+        {"source": 3, "target": 4, "rel_name": "uses malware"},
+        {"source": 3, "target": 2, "rel_name": "conducts campaign"},
+        {"source": 5, "target": 4, "rel_name": "discusses about"},
+        {"source": 6, "target": 4, "rel_name": "discusses about"},
+        {"source": 7, "target": 2, "rel_name": "documents campaign"},
+        {"source": 8, "target": 3, "rel_name": "provides artifacts for"},
+        {"source": 9, "target": 2, "rel_name": "documents tactics of"},
+        {"source": 10, "target": 11, "rel_name": "used in infection process by"},
+        {"source": 3, "target": 12, "rel_name": "uses technique"},
+        {"source": 12, "target": 13, "rel_name": "uses to load"},
+        {"source": 13, "target": 14, "rel_name": "loads"},
+        {"source": 15, "target": 3, "rel_name": "used by actor"},
+        {"source": 16, "target": 3, "rel_name": "used by actor"},
+        {"source": 17, "target": 3, "rel_name": "new domain used by actor"},
+        {"source": 18, "target": 19, "rel_name": "registered by"},
+        {"source": 20, "target": 21, "rel_name": "switched to IP"},
+        {"source": 3, "target": 22, "rel_name": "creates folder"},
+        {"source": 3, "target": 23, "rel_name": "uses sample with hash"},
+        {"source": 3, "target": 24, "rel_name": "drops file"},
+        {"source": 24, "target": 25, "rel_name": "communicates with C2"},
+        {"source": 26, "target": 3, "rel_name": "uses mutex"},
+        {"source": 27, "target": 28, "rel_name": "drops as"}
+    ]
+}

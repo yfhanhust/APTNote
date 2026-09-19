@@ -1,0 +1,145 @@
+
+
+
+Sentence : MESSAGETAP Overview
+APT41's newest espionage tool, MESSAGETAP, was discovered during a 2019 investigation at a
+telecommunications network provider within a cluster of Linux servers. Specifically, these Linux
+servers operated as Short Message Service Center (SMSC) servers. In mobile networks, SMSCs
+are responsible for routing Short Message Service (SMS) messages to an intended recipient or
+storing them until the recipient has come online. With this background, let's dig more into the
+malware itself.
+MESSAGETAP is a 64-bit ELF data miner initially loaded by an installation script. Once installed,
+the malware checks for the existence of two files: keyword_parm.txt and parm.txt and attempts to
+read the configuration files every 30 seconds. If either exist, the contents are read and XOR
+decoded with the string:
+http://www.etsi.org/deliver/etsi_ts/123000_123099/123040/04.02.00_60/ts_123040v040200p.pdf
+Interestingly, this XOR key leads to a URL owned by the European
+Telecommunications Standards Institute (ETSI). The document explains the Short
+Message Service (SMS) for GSM and UMTS Networks. It describes architecture as
+well as requirements and protocols for SMS.
+These two files, keyword_parm.txt and parm.txt contain instructions for MESSAGETAP to target
+and save contents of SMS messages.
+The first file ( parm.txt ) is a file containing two lists:
+imsiMap : This list contains International Mobile Subscriber Identity (IMSI) numbers.
+IMSI numbers identify subscribers on a cellular network.
+phoneMap : The phoneMap list contains phone numbers.
+The second file ( keyword_parm.txt ) is a list of keywords that is read into keywordVec .
+https://www.fireeye.com/blog/threat-research/2019/10/messagetap-who-is-reading-your-text-messages.html 1/5
+11/1/2019 MESSAGETAP: Who’s Reading Your Text Messages? | FireEye Inc
+Both files are deleted from disk once the configuration files are read and loaded into memory.
+After loading the keyword and phone data files, MESSAGETAP begins monitoring all network
+connections to and from the server. It uses the libpcap library to listen to all traffic and parses
+network protocols starting with Ethernet and IP layers. It continues parsing protocol layers
+including SCTP, SCCP, and TCAP. Finally, the malware parses and extracts SMS message data
+from the network traffic:
+
+
+SMS message contents
+
+
+The IMSI number
+
+
+The source and destination phone numbers
+
+
+The malware searches the SMS message contents for keywords from the keywordVec list,
+compares the IMSI number with numbers from the imsiMap list, and checks the extracted phone
+numbers with the numbers in the phoneMap list.
+Figure 1: General Overview Diagram of MESSAGETAP
+If the SMS message text contains one of the keywordVec values, the contents are XORed and
+saved to a path with the following format:
+/etc//kw_.csv
+https://www.fireeye.com/blog/threat-research/2019/10/messagetap-who-is-reading-your-text-messages.html 2/5
+11/1/2019 MESSAGETAP: Who’s Reading Your Text Messages? | FireEye Inc
+The malware compares the IMSI number and phone numbers with the values from the imsiMap
+and phoneMap lists. If found, the malware XORs the contents and stores the data in a path with
+the following format:
+/etc//.csv
+If the malware fails to parse a message correctly, it dumps it to the following location:
+/etc//_.dump
+Significance of Input Files
+The configuration files provide context into the targets of this information gathering and monitoring
+campaign. The data in keyword_parm.txt contained terms of geopolitical interest to Chinese
+intelligence collection. The two lists phoneMap and imsiMap from parm.txt contained a high
+volume of phone numbers and IMSI numbers.
+For a quick review, IMSI numbers are used in both GSM (Global System for Mobiles) and UMTS
+(Universal Mobile Telecommunications System) mobile phone networks and consists of three
+parts:
+
+
+Mobile Country Code (MCC)
+
+
+Mobile Network Code (MNC)
+
+Mobile Station Identification Number (MSIN)
+
+The Mobile Country Code corresponds to the subscriber’s country, the Mobile Network Code
+corresponds to the specific provider and the Mobile Station Identification Number is uniquely tied
+to a specific subscriber.
+Figure 2: IMSI number description
+The inclusion of both phone and IMSI numbers show the highly targeted nature of this cyber
+intrusion. If an SMS message contained either a phone number or an IMSI number that matched
+the predefined list, it was saved to a CSV file for later theft by the threat actor.
+Similarly, the keyword list contained items of geopolitical interest for Chinese intelligence
+collection. Sanitized examples include the names of political leaders, military and intelligence
+organizations and political movements at odds with the Chinese government. If any SMS
+https://www.fireeye.com/blog/threat-research/2019/10/messagetap-who-is-reading-your-text-messages.html 3/5
+11/1/2019 MESSAGETAP: Who’s Reading Your Text Messages? | FireEye Inc
+messages contained these keywords, MESSAGETAP would save the SMS message to a CSV
+file for later theft by the threat actor.
+In addition to MESSAGETAP SMS theft, FireEye Mandiant also identified the threat actor
+interacting with call detail record (CDR) databases to query, save and steal records during this
+same intrusion. The CDR records corresponded to foreign high-ranking individuals of interest to
+the Chinese intelligence services. Targeting CDR information provides a high-level overview of
+phone calls between individuals, including time, duration, and phone numbers. In contrast,
+MESSAGETAP captures the contents of specific text messages.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "APT41", "type" : "ACTO"},
+        {"id": 2, "description": "MESSAGETAP", "type" : "EXEF"},
+        {"id": 3, "description": "Linux servers (SMSC)", "type" : "SYSP"},
+        {"id": 4, "description": "keyword_parm.txt", "type" : "DOCF"},
+        {"id": 5, "description": "parm.txt", "type" : "DOCF"},
+        {"id": 6, "description": "http://www.etsi.org/deliver/etsi_ts/123000_123099/123040/04.02.00_60/ts_123040v040200p.pdf", "type" : "URLS"},
+        {"id": 7, "description": "European Telecommunications Standards Institute (ETSI)", "type" : "ORG"},
+        {"id": 8, "description": "/etc//kw_.csv", "type" : "SYSP"},
+        {"id": 9, "description": "/etc//.csv", "type" : "SYSP"},
+        {"id": 10, "description": "/etc//_.dump", "type" : "SYSP"},
+        {"id": 11, "description": "libpcap library", "type" : "APPS"},
+        {"id": 12, "description": "Ethernet and IP layers", "type" : "NETP"},
+        {"id": 13, "description": "SCTP, SCCP, and TCAP", "type" : "NETP"},
+        {"id": 14, "description": "SMS message contents", "type" : "TAMP"},
+        {"id": 15, "description": "IMSI number", "type" : "TAMP"},
+        {"id": 16, "description": "source and destination phone numbers", "type" : "TAMP"},
+        {"id": 17, "description": "keywordVec list", "type" : "DOCF"},
+        {"id": 18, "description": "imsiMap list", "type" : "DOCF"},
+        {"id": 19, "description": "phoneMap list", "type" : "DOCF"},
+        {"id": 20, "description": "FireEye Mandiant", "type" : "ORG"},
+        {"id": 21, "description": "call detail record (CDR) databases", "type" : "SYSP"},
+        {"id": 22, "description": "Chinese intelligence collection", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "installed on"},
+        {"source": 2, "target": 4, "rel_name" : "reads configuration from"},
+        {"source": 2, "target": 5, "rel_name" : "reads configuration from"},
+        {"source": 6, "target": 7, "rel_name" : "hosted by"},
+        {"source": 2, "target": 8, "rel_name" : "saves to"},
+        {"source": 2, "target": 9, "rel_name" : "saves to"},
+        {"source": 2, "target": 10, "rel_name" : "dumps to"},
+        {"source": 2, "target": 11, "rel_name" : "uses library"},
+        {"source": 2, "target": 12, "rel_name" : "parses protocol layers"},
+        {"source": 2, "target": 13, "rel_name" : "parses protocol layers"},
+        {"source": 2, "target": 14, "rel_name" : "extracts data from"},
+        {"source": 2, "target": 15, "rel_name" : "extracts data from"},
+        {"source": 2, "target": 16, "rel_name" : "extracts data from"},
+        {"source": 4, "target": 17, "rel_name" : "contains list of"},
+        {"source": 5, "target": 18, "rel_name" : "contains list of"},
+        {"source": 5, "target": 19, "rel_name" : "contains list of"},
+        {"source": 20, "target": 21, "rel_name" : "interacts with"},
+        {"source": 21, "target": 22, "rel_name" : "targeted by"}
+    ]
+}

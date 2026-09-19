@@ -1,0 +1,91 @@
+Novel C2 Using Exchange Web Services and Steganography
+The novel C2 channel in the RDAT sample uses email for a C2 channel by interacting with
+the local Exchange server with the EWS API. There are two hardcoded actor-controlled
+email addresses: koko@acrlee[.]com and h76y@acrlee[.]com. These two email addresses
+are used by the RDAT payload to send and receive emails to facilitate C2. To send emails
+from the compromised host, the payload uses the email associated with the account
+logged into the compromised host, as it uses the WinHTTP library to make requests to the
+API with the “WINHTTP_OPTION_AUTOLOGON_POLICY” field set to
+‘WINHTTP_AUTOLOGON_SECURITY_LEVEL_LOW’, which automatically attempts to
+log onto Exchange using the default credentials.
+The actor communicates with the payload by sending emails from one of two email
+addresses to the email address of the compromised account. To receive emails from the
+actor, the payload will:
+https://unit42.paloaltonetworks.com/oilrig-novel-c2-channel-steganography/ 6/18
+7/23/2020 OilRig Targets Middle Eastern Telecommunications Organization and Adds Novel C2 Channel with Steganography to Its Inventory
+Initially create an inbox rule to move actor’s emails to the junk folder.
+Continually look in the junk folder for actor-sent emails that have attachments.
+Process attachments for inbound commands hidden within BMP images.
+To communicate with the actor, the payload sends emails from the account logged into
+the compromised system and performs the following actions:
+Creates a draft email with the actor-controlled email address in the “To” field.
+Attaches a BMP image with a hidden message or data to exfiltrate to the draft.
+Sends the draft to the actor’s email address.
+To show this channel, we analyzed the outbound HTTP POST requests to the EWS API
+and took screenshots of the requests. The POST requests all have an anomalous “UserAgent” of “firefox” and use Simple Object Access Protocol (SOAP) messages to interact
+with the Exchange server. The first request has a SOAP message to create an inbox rule
+named “ExchangeRule” that moves all inbound emails from the C2 email addresses to the
+“junkemail” folder. Figure 3 shows the HTTP POST request containing the SOAP message
+that creates this inbox rule. The rule name is highlighted in the red box, the condition that
+includes the actor’s email address in the blue box and the action to move it to the junk
+folder in the green box.
+Figure 3. HTTP POST request creating the inbox rule to move emails from actor to the
+junk folder
+The payload will then continually look for new emails from the actor in the junk folder.
+The payload will issue a request to the EWS API to check for unread emails from the
+actor’s email addresses with an attachment. Figure 4 shows the HTTP POST the payload
+issues to check for inbound emails from the actor, with the actor’s email address in the
+red box, the check for an attachment in the blue box and the junk folder specified in the
+green box.
+https://unit42.paloaltonetworks.com/oilrig-novel-c2-channel-steganography/ 7/18
+7/23/2020 OilRig Targets Middle Eastern Telecommunications Organization and Adds Novel C2 Channel with Steganography to Its Inventory
+Figure 4. HTTP POST request sent to the Exchange server looking for inbound emails
+from actor
+If the payload obtains an email sent by the actor, the payload will process the response to
+the SOAP request and send additional requests to the EWS API to get the email, the
+attachment and the contents of the attachment. The payload processes the responses to
+these requests using regular expressions to find specified values within the XML. The
+payload uses the regular expressions to find the following values within the server’s
+response:
+Id and ChangeKey to get the specified email.
+AttachmentId Id to get the attachment from the email.
+ and  to get the contents of the attachment.
+It then saves this content to a file in the %TEMP% folder with a “.bmp” file extension. It
+then issues a SOAP request to delete the processed email. This completes the process in
+which the payload receives inbound communications from the actor.
+To send its beacon and exfiltrate data to the actor, the payload will interact with the EWS
+API to perform the following three steps:
+
+
+Save a draft email with the actor’s email address in the “To” field.
+
+
+Attach the BMP image containing the hidden data to the saved draft email.
+
+Send the saved draft email.
+
+Figure 5 shows the draft email with the BMP image attached immediately prior to being
+sent. The figure shows the actor’s email address in the “To” field, the BMP image with
+hidden data as the attachment, and subjects and message bodies containing strings of an
+unknown purpose.
+https://unit42.paloaltonetworks.com/oilrig-novel-c2-channel-steganography/ 8/18
+7/23/2020 OilRig Targets Middle Eastern Telecommunications Organization and Adds Novel C2 Channel with Steganography to Its Inventory
+Figure 5. Screenshot of Outlook Web App showing the email draft created by the
+payload prior to it being sent to the actor
+To carry out this functionality, the payload creates an email and saves it as a draft. This
+allows it to attach the image containing the hidden data prior to sending the email. Figure
+6 shows the SOAP request to the EWS API, specifying that the server should save the
+email to the drafts folder in the red and blue boxes and the actor’s email address in the
+green box.
+Figure 6. HTTP POST request creating the email draft prior to attaching the image
+With the email saved in the drafts folder, the payload will then attach the BMP image to
+the email using an HTTP POST request to the EWS API. Figure 7 shows the request to the
+EWS API that includes the filename of the attachment in the red box and the base64
+content of the attachment in the blue box.
+Figure 7. HTTP POST request attaching the image to the email draft
+https://unit42.paloaltonetworks.com/oilrig-novel-c2-channel-steganography/ 9/18
+7/23/2020 OilRig Targets Middle Eastern Telecommunications Organization and Adds Novel C2 Channel with Steganography to Its Inventory
+The payload issues one last request to the EWS API to send the email draft with the
+attached BMP image to the actor. Figure 8 shows the HTTP POST request issued by the
+payload to send the email with the SendItem action highlighted in the red box.
+Figure 8. HTTP POST request sending the email draft to the actor’s email address

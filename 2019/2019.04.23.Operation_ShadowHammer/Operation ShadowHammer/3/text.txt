@@ -1,0 +1,56 @@
+Technical details
+The research started upon the discovery of a trojanized ASUS Live Updater file (setup.exe), which
+contained a digital signature of ASUSTeK Computer Inc. and had been backdoored using one of the two
+techniques explained below.
+In earlier variants of ASUS Live Updater (i.e. MD5:0f49621b06f2cdaac8850c6e9581a594), the attackers
+replaced the WinMain function in the binary with their own. This function copies a backdoor executable
+from the resource section using a hardcoded size and offset to the resource. Once copied to the heap
+memory, another hardcoded offset, specific to the executable, is used to start the backdoor. The offset
+points to a position-independent shellcode-style function that unwraps and runs the malicious code further.
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 1/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+Some of the older samples revealed the project path via a
+PDB file reference:
+“ D:\C++\AsusShellCode\Release\AsusShellCode.pdb “.
+This suggests that the attackers had exclusively prepared the
+malicious payload for their target. A similar tactic of precise
+targeting has become a persistent property of these attackers.
+A look at the resource section used for carrying the malicious
+payload revealed that the attackers had decided not to change
+the file size of the ASUS Live Updater binary. They changed
+the resource contents and overwrote a tiny block of the code
+in the subject executable. The layout of that patched file is
+shown below.
+Backdoored WinMain function in ASUS Live Utility
+Execution passed from the original code to the embedded payload
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 2/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+We managed to find the original ASUS Live Updater executable which had been patched and abused by
+the attackers. As a result, we were able to recover the overwritten data in the resource section. The file we
+found was digitally signed and certainly had no infection present.
+Both the legitimate ASUS executable and the resource-embedded updater binary contain timestamps from
+March 2015. Considering that the operation took place in 2018, this raises the following question: why did
+the attackers choose an old ASUS binary as the infection carrier?
+Original ASUS Live Updater (above) and the trojanized executable (below)
+Another injection technique was found in more recent samples. Using that technique, the attackers patched
+the code inside the C runtime (CRT) library function “___crtExitProcess”. The malicious code executes a
+shellcode loader instead of the standard function “___crtCorExitProcess”:
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 3/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+Backdoored (on the left) and original code (on the right)
+This way, the execution flow is passed to another address which is located at the end of the code section.
+The attackers used a small decryption routine that can fit into a block at the end of the code section, which
+has a series of zero bytes in the original executable. They used the same source executable file from
+ASUS (compiled in March 2015) for this new type of injection.
+Improved code injection with encrypted payload
+Injected code (left) and the same place in legitimate ASUS binary (right)
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 4/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+The loader code copies another block of encrypted shellcode from the file’s resource section (of the type
+“EXE”) to a newly allocated memory block with read-write-execute attributes and decrypts it using a custom
+block-chaining XOR algorithm, where the first dword is the initial seed and the total size of the shellcode is
+stored at an offset of +8.
+Shellcode decryption routine
+We believe that the attackers changed the payload start routine in an attempt to evade detection.
+Apparently, they switched to a better method of hiding their embedded shellcode at some point between the
+end of July and September 2018.

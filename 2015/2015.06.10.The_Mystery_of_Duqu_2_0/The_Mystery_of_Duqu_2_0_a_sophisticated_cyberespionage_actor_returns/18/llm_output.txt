@@ -1,0 +1,55 @@
+
+
+
+Sentence : 11 Technical Details
+However, before passing execution to klif.dll, the code attempts alternative routes.
+First, it attempts to find the name of the following format “api-ms-win-shell-XXXX.
+dll”, where “X” can be any decimal number. The name is valid if there is no module with
+such filename loaded into current process. The code attempts to iteratively find such
+name starting from api-ms-win-shell-0000.dll, api-ms-win-shell-0001.dll, api-ms-winshell-0002.dll and so on. This may be a dependency to the Duqu platform component
+that is yet to be discovered.
+Right after this, if the name was found, the code attempts to map a section kernel object
+by name, which is generated using a PRNG-based algorithm. The name of the section
+has the following template: “\BaseNamedObjects{XXXXXXXX-XXXX-XXXX-XXXXXXXXXXXX}”, where “X” is any hexadecimal digit that is generated based on current
+system boot time. So far, the name of the section is “machine/boot time” dependent,
+which makes it unique but allows other processes of modules to locate such section if
+they use the same name generation algorithm. This section is accessed in different other
+parts of the code and modules. Lets refer to this section as OSBoot-section from now.
+Once the section name is generated the code tries to open such section and, if it is
+found, it takes some values from it and attempts to open a specific device and issue a
+number of IOCTL codes to the driver. The name of the driver device as well as IOCTL
+codes are located inside a section of the kernel mode driver KMART.dll that is described
+below.
+The code developer has a preference for using sections to any other ways to access
+data. Another use of sections appears to be in mapping the part of code/data where
+klif.dll is embedded and then finding that section using a hardcoded magic QWORD
+number: 0xA1B5F8FC0C2E1064. Once the section is found in address space of current
+process the code attempts to pass execution to it. This alternative execution route is
+not applicable to current MSI file package but simply exists in the code probably due
+to common code template used for building current MSI package. It may also be an
+indicator of another Duqu platform component that wasn’t used in the attacks that we
+observed.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "klif.dll", "type" : "EXEF"},
+        {"id": 2, "description": "api-ms-win-shell-XXXX.dll", "type" : "EXEF"},
+        {"id": 3, "description": "OSBoot-section", "type" : "SYSP"},
+        {"id": 4, "description": "KMART.dll", "type" : "EXEF"},
+        {"id": 5, "description": "0xA1B5F8FC0C2E1064", "type" : "TAMP"},
+        {"id": 6, "description": "Duqu platform component", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "searches_for"},
+        {"source": 2, "target": 1, "rel_name" : "not_loaded_into_process"},
+        {"source": 1, "target": 3, "rel_name" : "maps_section"},
+        {"source": 3, "target": 1, "rel_name" : "accessed_by"},
+        {"source": 1, "target": 4, "rel_name" : "interacts_with"},
+        {"source": 1, "target": 5, "rel_name" : "uses_magic_number"},
+        {"source": 6, "target": 1, "rel_name" : "contains"},
+        {"source": 6, "target": 2, "rel_name" : "related_to"},
+        {"source": 6, "target": 3, "rel_name" : "related_to"},
+        {"source": 6, "target": 4, "rel_name" : "related_to"},
+        {"source": 6, "target": 5, "rel_name" : "related_to"}
+    ]
+}

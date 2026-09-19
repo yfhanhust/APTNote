@@ -1,0 +1,49 @@
+The Dropper
+Cylance identified an executable dropper:
+b65125ee14f2bf12a58f67c623943658dd457e5b40b354da0975d7615fe9d932
+The dropper planted a version of RedControle on the system as well as another interesting
+binary while showing the potential victim a nice picture of a holiday present. The dropper
+was relatively uninteresting; however, a Sticky Keys backdoor would also be placed on the
+system, which warranted additional analysis.
+Dropper SHA256 Hash:
+b65125ee14f2bf12a58f67c623943658dd457e5b40b354da0975d7615fe9d932
+Associated RedControle SHA256:
+8f7cf81d8bfb3780b48693020a18071a9fd382d06b0b7932226b4d583b03c3af
+Associated StickyKeys SHA256:
+5/14
+6e476a2ef02986a13274fb2a126ed60a1ede252919d6993de03622aaa7fe6228
+The dropper created two executable files within the folder
+“%ALLUSERSPROFILE%\Documents”, “svhost.exe” and “system.exe” and created two
+associated Run keys to maintain persistence for both executables. The program
+“svhost.exe” was the aforementioned RedControle variant with network callbacks to the
+domain “trstorg[.]ru” and the IP address “83.166.243[.]48”.
+The “system.exe” file was a StickyKeys backdoor programmed in Delphi. It first opened
+TCP port 3389 in the Windows Firewall and then set the following Registry Keys:
+HKLM\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution
+Options\sethc.exe\Debugger -> C:\WINDOWS\system32\taskmgr.exe
+HKLM\System\CurrentControlSet\Control\Terminal Server\fDenyTSConnections ->
+null value
+The file was primarily responsible for enabling RDP on the target system and performing a
+sticky keys hijack to point to the legitimate “taskmgr.exe” binary.
+If our readers are unfamiliar with StickyKeys, it was originally designed for people who
+have difficulty holding down two or more keys simultaneously. StickyKeys can be enabled
+on Windows by rapidly pressing the shift key five times. The registry key above will
+simultaneously launch the Task Manager binary “taskmgr.exe” along with the intended
+StickyKeys binary. The StickyKeys backdoor can then test corresponded to “google.ru” and
+various subdomains. If the test is successful, it will make the following HTTP request to
+“trstorg[.]ru” on TCP port 80:
+GET /bas.php HTTP/1.1
+User-Agent: DMFR
+Host: trstorg.ru
+Cache-Control: no-cache
+HTTP/1.1 200 OK
+Server: nginx
+Date: Thu, 19 Jan 2017 17:18:48 GMT
+Content-Type: text/html
+Content-Length: 0
+Connection: keep-alive
+Keep-Alive: timeout=60
+X-Powered-By: PHP/5.5.9-1ubuntu4.
+Figure 3: Example Request and Server Response from StickyKeys Backdoor
+This particular sample will no longer work as the IP address “80.254.96[.]251” appeared to
+have been reassigned to another party and no longer operates a webserver.

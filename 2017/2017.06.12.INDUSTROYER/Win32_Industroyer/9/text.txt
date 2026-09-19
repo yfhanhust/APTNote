@@ -1,0 +1,63 @@
+61850 payload component
+Unlike the 101 and 104 payloads, this payload component exists as a
+standalone malicious tool comprising an executable named 61850.exe
+and the DLL 61850.dll. It is named after the IEC 61850 standard. This
+standard describes a protocol used for multivendor communication among
+devices that perform protection, automation, metering, monitoring, and
+control of electrical substation automation systems. The protocol is very
+complex and robust, but the 61850 payload uses only a small subset of the
+protocol to produce its disruptive effect.
+Once executed, the 61850 payload DLL attempts to read the configuration
+file, the path to which is supplied by the Launcher component. The
+standalone version defaults to reading its configuration from i.ini. The
+configuration file is expected to contain a list of IP addresses of devices
+capable of communicating via the protocol described in the IEC 61850
+standard.
+If the configuration file is not present, then this component enumerates all
+connected network adaptors to determine their TCP/IP subnet masks. The
+61850 payload then enumerates all possible IP addresses for each of these
+subnet masks, and tries to connect to port 102 on each of those addresses.
+Therefore, this component has the ability to discover relevant devices in the
+network automatically.
+Otherwise, if a configuration file is present and it contains target IP
+addresses, this component connects to port 102 on those IP addresses and
+on IP addresses that were discovered automatically.
+Once this component connects to a target host, it sends a Connection
+Request packet using the Connection Oriented Transport Protocol, as seen
+in Figure 12.
+Figure 12. A Connection Request packet, after dissection by Wireshark.
+If the target device responds appropriately, the 61850 payload then sends
+an InitiateRequest packet using the Manufacturing Message Specification
+(MMS). If the expected answer is received, it continues, sending an MMS
+getNameList request. Thereby, the component compiles a list of object
+names in a Virtual Manufacturing Device (VMD).
+Next, this component enumerates the objects discovered in the previous
+step and sends the device domain-specific getNameList requests with
+each object name. This enumerates named variables in a specific domain.
+Win32/Industroyer 11
+Figure 13. The dissected MMS getNameList request in Wireshark.
+Afterwards, the 61850 payload parses data received in response to these
+requests, searching for variables that contain following combinations of
+strings:
+
+
+CSW, CF, Pos, and Model
+
+
+CSW, ST, Pos, and stVal
+
+
+CSW, CO, Pos, Oper, but not $T
+
+
+CSW, CO, Pos, SBO, but not $T
+
+
+The string CSW is a name for logical nodes, which are used to control
+circuit breakers and switches.
+For variables that contain the Model or stVal string the 61850 payload sends
+an additional MMS Read request. For some of the variables this component
+may also issue an MMS Write request that will change its state.
+The 61850 payload produces a log file of its operations that contains the IP
+addresses, MMS domains, named variables and the node states (open or
+closed) of its targets.

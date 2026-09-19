@@ -1,0 +1,161 @@
+
+
+
+Sentence : Kavach payload analysis
+As mentioned above in the distribution mechanism section, this threat actor uses various
+malvertising methods to lure unsuspecting Indian government employees to download a
+backdoored version of the Kavach multi-factor authentication (MFA) application.
+For the purpose of technical analysis we will consider the fake installer with the MD5
+hash: faeb19cd668de953afd6f2c953251665
+https://www.zscaler.com/blogs/security-research/apt-36-uses-new-ttps-and-new-tools-target-indian-governmental-organizations 12/25
+1/30/24, 2:11 PM Indian Governmental Organizations Targeted by APT-36
+Stage-1: Fake Installer
+The fake installer is a .NET binary which masquerades as a legit Kavach application
+installer and uses fake metadata information. Moreover, the binary uses an icon related to
+the National Informatics Center(NIC) which is an Indian government department under
+the Ministry of Electronics and Information Technology.
+On execution, the binary performs following operations:
+
+Performs the time zone check and executes further only if the time zone matches
+
+Indian Standard Time (IST).
+2. Extracts and drops the legit Kavach installer in the path "C:\ProgramData\KavachAuth\". The installer is extracted from the resource section of the binary.
+
+
+Downloads and drops the Stage-2 payload from the URL
+"http://139.59.79[.]86/hardwell.mp3" in the path "C:\ProgramData\KavachAuth\hardwell.mp3"
+
+
+Executes the dropped legit Kavach installer
+
+
+Moves the dropped Stage-2 payload to the path "C:\ProgramData\Kavach
+Auth\archiveviewer.scr"
+
+
+Executes the dropped Stage-2 payload
+
+
+Stage-2: PyInstaller compiled binary
+The Stage-2 payload is a Python script compiled to an executable using PyInstaller. For
+analysis we extracted the Python script which we have included in the Appendix section.
+The script on execution does following major operations:
+
+Creates the directory "c:\programdata\WUDFHost"
+Creates a log file in the path "c:\programdata\WUDFHost\logs.txt" which is updated
+
+according to the operations performed during further execution.
+
+
+Performs the time zone check.
+
+
+Downloads, drops and executes the next stage payload.
+
+
+For the next stage payload, if the path
+"C:\Windows\Microsoft.NET\Framework\v4.0.30319" exists, then the payload is
+downloaded from the URL "http://139.59.79[.]86/WUDFHost45.zip" in the path
+"c:\programdata\WUDFHost45.zip" else it is downloaded from the URL
+"http://139.59.79[.]86/WUDFHost35.zip" in the path "c:\programdata\WUDFHost35.zip"
+The downloaded payload which is a ZIP file is extracted to path
+“c:\programdata\WUDFHost”. For the payload analyzed, the archive contained three
+components:
+https://www.zscaler.com/blogs/security-research/apt-36-uses-new-ttps-and-new-tools-target-indian-governmental-organizations 13/25
+1/30/24, 2:11 PM Indian Governmental Organizations Targeted by APT-36
+
+Executable (WUDFAgent.exe) - The loader binary
+
+DLL (oraclenotepad45.dll) - Main backdoor
+
+
+DLL (dotsqueeze.dll) - Helper DLL
+
+
+Stage-3: Loader
+The Stage-2 Python script executes the loader binary. The loader pretends to be a POS
+application which on execution does following operations:
+
+
+Creates a log file in the path "c:\programdata\WUDFHost\process.txt"
+
+
+Loads the assembly from the path "c:\programdata\WUDFHost\oraclenotepad45.dll"
+
+Creates a fake file in the path "c:\\programdata\\Expense_Account_Hierarchy.csv"
+
+and writes fake information to it. The information written is extracted from the resource
+section.
+
+Pass the execution control to the loaded assembly
+
+Stage-4: Backdoor
+The assembly loaded by the loader is the main backdoor of the infection chain. Similar to
+Python script. We will not cover the full technical analysis for the backdoor payload since
+it's already covered in some public blog posts but in brief, it contains following
+functionalities:
+
+
+Taking snapshots
+
+
+Downloading new payloads and executing them
+
+Creating persistence
+
+Exfiltrating user and system information
+
+
+Exfiltrating file and directory information
+
+
+The backdoor also uses a helper DLL where the malware author has delegated
+functionalities like file download from network, writing file to disk, creating new processes.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Kavach multi-factor authentication (MFA) application", "type" : "APPS"},
+        {"id": 2, "description": "Fake installer .NET binary", "type" : "EXEF"},
+        {"id": 3, "description": "faeb19cd668de953afd6f2c953251665", "type" : "IOCS"},
+        {"id": 4, "description": "National Informatics Center (NIC)", "type" : "COUN"},
+        {"id": 5, "description": "Indian Standard Time (IST)", "type" : "TAMP"},
+        {"id": 6, "description": "C:\\ProgramData\\KavachAuth\\", "type" : "SYSP"},
+        {"id": 7, "description": "http://139.59.79[.]86/hardwell.mp3", "type" : "URLS"},
+        {"id": 8, "description": "C:\\ProgramData\\KavachAuth\\hardwell.mp3", "type" : "DOCF"},
+        {"id": 9, "description": "139.59.79[.]86", "type" : "CCSH"},
+        {"id": 10, "description": "C:\\ProgramData\\Kavach Auth\\archiveviewer.scr", "type" : "DOCF"},
+        {"id": 11, "description": "c:\\programdata\\WUDFHost", "type" : "SYSP"},
+        {"id": 12, "description": "c:\\programdata\\WUDFHost\\logs.txt", "type" : "DOCF"},
+        {"id": 13, "description": "http://139.59.79[.]86/WUDFHost45.zip", "type" : "URLS"},
+        {"id": 14, "description": "c:\\programdata\\WUDFHost45.zip", "type" : "DOCF"},
+        {"id": 15, "description": "http://139.59.79[.]86/WUDFHost35.zip", "type" : "URLS"},
+        {"id": 16, "description": "c:\\programdata\\WUDFHost35.zip", "type" : "DOCF"},
+        {"id": 17, "description": "C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319", "type" : "SYSP"},
+        {"id": 18, "description": "WUDFAgent.exe (Loader binary)", "type" : "EXEF"},
+        {"id": 19, "description": "oraclenotepad45.dll (Main backdoor DLL)", "type" : "EXEF"},
+        {"id": 20, "description": "dotsqueeze.dll (Helper DLL)", "type" : "EXEF"},
+        {"id": 21, "description": "c:\\programdata\\WUDFHost\\process.txt", "type" : "DOCF"},
+        {"id": 22, "description": "c:\\programdata\\Expense_Account_Hierarchy.csv", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "has_hash"},
+        {"source": 2, "target": 4, "rel_name" : "masquerades_as"},
+        {"source": 2, "target": 6, "rel_name" : "drops_in"},
+        {"source": 7, "target": 8, "rel_name" : "downloads_to"},
+        {"source": 9, "target": 7, "rel_name" : "hosted_by"},
+        {"source": 8, "target": 10, "rel_name" : "moved_to"},
+        {"source": 2, "target": 6, "rel_name" : "executes_in"},
+        {"source": 10, "target": 2, "rel_name" : "executed_by"},
+        {"source": 10, "target": 11, "rel_name" : "creates_directory"},
+        {"source": 10, "target": 12, "rel_name" : "creates_file"},
+        {"source": 9, "target": 13, "rel_name" : "hosted_by"},
+        {"source": 9, "target": 15, "rel_name" : "hosted_by"},
+        {"source": 10, "target": 17, "rel_name" : "checks_path"},
+        {"source": 13, "target": 14, "rel_name" : "downloads_to"},
+        {"source": 15, "target": 16, "rel_name" : "downloads_to"},
+        {"source": 18, "target": 19, "rel_name" : "loads"},
+        {"source": 18, "target": 20, "rel_name" : "loads"},
+        {"source": 18, "target": 21, "rel_name" : "creates_file"},
+        {"source": 18, "target": 22, "rel_name" : "creates_fake_file"}
+    ]
+}

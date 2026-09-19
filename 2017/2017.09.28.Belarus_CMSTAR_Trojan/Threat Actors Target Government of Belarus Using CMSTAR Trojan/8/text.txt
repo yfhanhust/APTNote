@@ -1,0 +1,44 @@
+Werow Macro Analysis
+The attacker used the same macro dropper all of the observed Microsoft Word documents we
+analyzed for this campaign. It begins by building the following path strings:
+%APPDATA%\d.doc
+%APPDATA%\Microsoft\Of�ce\WinCred.acl
+The ‘d.doc’ path will be used to store a copy of the Word document, while the ‘WinCred.acl’ will
+contain the dropped payload, which is expected to be a DLL.
+Figure 11 Macro used to drop CMSTAR
+Werow uses rudimentary obfuscation to hide and re-assemble the following strings:
+HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WinCred
+rundll32 %APPDATA%\Microsof\Of�ce\WinCred.acl,WinCred
+These strings will be used at the end of the macro’s execution to ensure persistence via the Run
+registry key.
+The malware proceeds to read an included overlay within the original Word document from a given
+offset. This data is decoded using and XOR operation, as well as an addition operation. It can be
+represented in Python as follows:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+def decrypt_xor(data, key, key_offset):
+""
+output =
+seed = ord(key)
+for d in data:
+ord_d = ord(d)
+if ord_d != 0 and ord_d != seed:
+nvalue = ord_d ^ seed
+seed = (seed + key_offset) % 0x100
+output += chr(nvalue)
+else:
+output += d
+return output
+Once this overlay is decoded, it is written to the ‘WinCred.acl’ �le and loaded with the ‘WinCred’
+export. A script has been provided in the Scripts section that, in conjunction with oletools, can
+statically extract the embedded DLL payload from these documents.

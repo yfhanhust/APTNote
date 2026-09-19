@@ -1,0 +1,66 @@
+
+
+
+Sentence : Backdoor （ Ihelp.exe ）
+文件名 ihelp.exe
+MD5 46173adc26721fb54f6e1a1091a892d4
+加壳信息 Enigma Virtual Box
+https://ti.360.net/blog/articles/suspected-molerats-new-attack-in-the-middle-east/ 3/13
+2/15/2019 360威胁情报中心
+最终执行的木马后门是 ihelp.exe ，该样本使用 Enigma Virtual Box 加壳：
+该后门对应的 C2 被加密存放在配置文件中，样本运行时首先会解密自身的配置文件，得到 C2
+地址（ smartweb9.com ）：
+而该域名后续已经被 Sinkhole 到了 IP 地址： 198.54.117.244 ，不过截止文章完成时攻击者的服
+务器（ 79.124.60.40 ）尚未关闭，所以可以通过指定 C2 域名到攻击者的服务器 IP 地址
+（ 79.124.60.40 ）继续进行分析。通过其数据包和相关代码可以看出网络通信使用的是 SFML
+库（一个游戏开发使用的库： https://github.com/SFML ）：
+https://ti.360.net/blog/articles/suspected-molerats-new-attack-in-the-middle-east/ 4/13
+2/15/2019 360威胁情报中心
+该后门通过一个内置的关键字表，构造格式化的请求上线数据，通信中所使用的字段都与这个
+关键字表有关系。该表中的内容都与一些人名或歌剧电影名相关，这种方式和 Talos 之前的一
+篇报告中 [13] 提到的样本也有相似之处。
+Jessie Lilliana Jocelynn Londyn
+Ari Paloma Carmen Cassandra
+Zachariah Randy Charlee Demi
+Annika Brice Alyssa Erik
+https://ti.360.net/blog/articles/suspected-molerats-new-attack-in-the-middle-east/ 5/13
+2/15/2019 360威胁情报中心
+Ariel Juniper Moises Jeremy
+Hunter Jaydon Freya Regina
+Janelle Lillian Aniyah Kenia
+Estelle Mara Daisy Guadalupe
+Demetrius
+上线数据由多个子块构成，子块中的部分数据进行 Base64 编码后拼接在对应选择的字符串
+后。
+所有子块准备完毕后，对整个块再次进行加密和 Base64 编码，最后通过 HTTP POST 发送给
+C2 。
+随后将接收并解密 C2 返回的数据，解密后的数据中包含关键字 Demi ，猜测是其目的是通知客
+户端上传用户数据。
+接着样本会获取本机的一些信息，如用户名和计算名等，以及一个类似 UUID 的字符串，随后
+https://ti.360.net/blog/articles/suspected-molerats-new-attack-in-the-middle-east/ 6/13
+2/15/2019 360威胁情报中心
+从 C2 返回的数据可能包含一些配置信息，后门程序在处理完这些数据后开始周期性的获取攻
+击者的指令，完成文件管理、远程 SHELL 等功能。以下是一些还原的木马功能代码片段。
+远程 SHELL
+https://ti.360.net/blog/articles/suspected-molerats-new-attack-in-the-middle-east/ 7/13
+2/15/2019 360威胁情报中心
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "ihelp.exe", "type" : "EXEF"},
+        {"id": 2, "description": "46173adc26721fb54f6e1a1091a892d4", "type" : "IOCS"},
+        {"id": 3, "description": "Enigma Virtual Box", "type" : "APPS"},
+        {"id": 4, "description": "smartweb9.com", "type" : "CCSH"},
+        {"id": 5, "description": "198.54.117.244", "type" : "CCSH"},
+        {"id": 6, "description": "79.124.60.40", "type" : "CCSH"},
+        {"id": 7, "description": "SFML", "type" : "APPS"},
+        {"id": 8, "description": "HTTP POST", "type" : "NETP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "packed with"},
+        {"source": 4, "target": 5, "rel_name" : "sinkholed to"},
+        {"source": 4, "target": 6, "rel_name" : "redirected to"},
+        {"source": 1, "target": 7, "rel_name" : "uses library"},
+        {"source": 1, "target": 8, "rel_name" : "sends data via"}
+    ]
+}

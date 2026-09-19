@@ -1,0 +1,426 @@
+
+
+
+Sentence : Lateral Movement TA0008
+Remote Services T1021
+Basic description
+Contents 243
+The Remote Services T1021 technique exploits a large number of remote connection services that attackers
+use to move through the victim's network. Valid user accounts are required for lateral movement. The most
+popular remote connection services are RDP and SSH.
+APT groups often use the SMB protocol to interact with shared file folders, which enables attackers to move
+deeper into the network.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Remote Services: SMB/Windows Admin Shares T1021.002
+Remote Services: SMB/Windows Admin Shares T1021.002
+Basic description
+Contents 244
+This technique is most frequently used by Asian APT groups for lateral movement. SMB (Server Message
+Block) is a network protocol intended for access to files and printers. Attackers use SMB and a user account to
+move through the network.
+For remote access to a host connected over SMB, the administrative network folders C$, ADMIN$, and IPC$
+are used to drop malicious files that are then run on the target system. Many Asian APT groups use SMB/RPC
+to create Windows services, scheduled tasks, and WMI tasks. Let's examine a few examples of this method in
+action.
+Examples of procedures
+Example 1
+In the attack targeting Malaysia, scheduled tasks were created on the hosts that the attackers were able to
+connect to over SMB:
+schtasks /s  /tn one /u \ /p  /create /ru system /sc
+DAILY /tr "cmd /c start /b PowerShell.exe -exec bypass -c 'C:\programdata\intel\mvl.ps1 20'" /f
+To create a task on a remote host, the hostname is passed as an argument with the /s parameter.
+Sometimes the attackers created Windows services on remote hosts instead of scheduled tasks:
+sc \ create ctt binpath= "cmd /c start /b PowerShell.exe -exec bypass -c
+'C:\programdata\intel\mvl.ps1 30'"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Remote Services: SMB/Windows Admin Shares T1021.002
+Example 2
+The WMIC utility was used in the incident involving WebDav-O:
+Contents 245
+wmic /node: /user:[REDACTED] /password:[REDACTED] process call create “”
+Example 3
+Asian APT groups also use the popular tool known as PsExec:
+Ps2.exe -accepteula -h \ -u  -p  cmd
+The executable file of PsExec on the attacker's machine creates the Psexesvc service and copies it to the
+open administrator folder Admin$ on the remote system. Then the Windows Service Control Manager API
+is used to start the service on the remote machine. The named pipe psexecsvc is created on the attacker's
+machine and is used to interact with the victim's computer. Then the service on the remote machine executes
+the transmitted commands.
+Example 4
+We also observed the APT group Dark Seoul using the SMBExec module from the Impacket framework.
+%COMSPEC% /Q /c echo  ^> \127.0.0.1\C$__out 2^>^&1 > %TEMP%\e.bat &
+%COMSPEC% /Q /c %TEMP%\e.bat & del %TEMP%\e.bat
+SMBExec does not actually create an executable file. Instead, it uses that same Windows Service Control
+Manager API to create a service named BTOBTO (the name can be changed). This service starts a command
+line using %COMSPEC% . In the figure below, the Service File Name field shows the necessary command to be
+executed, stdout and stderr are redirected to a temporary BAT file, then this BAT file is executed and deleted.
+A script on the attacker's machine then uses SMB to download the temporary file containing the command
+execution results and displays its contents on the screen. This procedure essentially runs a shell that the
+attacker can use to execute commands without actually having the executable file in the system. Each time
+the command is executed, a new service is created and the procedure repeats.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Remote Services: SMB/Windows Admin Shares T1021.002 Contents 246
+Figure 64 Service creation event 4697
+Figure 65 Using impacket-smbexec on Kali Linux
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Remote Services: SMB/Windows Admin Shares T1021.002
+Example 5
+Contents 247
+In addition to using the utilities listed above, attackers also mounted shares using the net.exe utility.
+net use \ /u:\ 
+Detection
+To detect lateral movement through the network, you need to track interactions with shared network folders,
+remote login events, and unusual connections over SMB. As illustrated in the examples, you must track
+events involving the creation of services and scheduled tasks via SMB, and monitor execution of the net use
+command.
+Event source Log Event ID
+Windows Security 4688, 4624
+Sysmon Sysmon 1, 3, 17, 18
+SIGMA rules
+
+
+Sigma-Generic-Remote Windows Service Creation or Modification via sc.exe
+
+
+Sigma-Generic-Mounting Shares via net
+
+
+Sigma-Generic-Suspicious Schtasks.exe Arguments
+
+
+Sigma-Generic-Suspicious PsExec Execution
+
+
+Sigma-Generic-PsExec Pipes Artifacts
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Lateral Tool Transfer T1570
+Lateral Tool Transfer T1570
+Basic description
+Contents 248
+After establishing persistence on a host, attackers transfer utilities, scripts, malicious software or other files
+between hosts in the infrastructure as part of their lateral movement within the network. Attackers use file
+transfer protocols such as SMB or RDP.
+Threat actors deliver their toolsets by using utilities that are already available on the compromised host,
+including scp, rsync, curl, sftp and ftp.
+Examples of procedures
+Example 1
+An APT group moved utilities and other files from one host to another via SMB:
+C:\Windows\system32\cmd.exe /C copy * \\C$\windows\help\help
+Example 2
+After copying a compressed Install.exe.cab file to a remote host, the attackers used the expand command to
+unpack the file:
+expand "\\c$\programdata\microsoft\AppV\Setup\Install.exe.cab"
+"\\c$\programdata\microsoft\AppV\Setup\Install.exe"
+Example 3
+Using the xcopy command, attackers from the ToddyCat group moved their collected files from a remote host
+to a local host for subsequent exfiltration:
+xcopy \\c$\programdata\intel\ c:\intel\ /h /s /f
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Lateral Tool Transfer T1570
+Detection
+Contents 249
+The attacker activity examined above can be detected based on process creation events. The command line in
+the provided examples contains "\", which is typical for use of the SMB protocol.
+However, this may not be enough if the computer that initiated the file transfer is not connected to the
+monitoring system and no logs are received from it. One of the ways to detect file creation via SMB is to
+correlate two events: a network connection via SMB and the creation of an executable file.
+Some EDR solutions provide the capability to track events involving file creation via SMB.
+Besides the SMB protocol, attackers may also use HTTP or RDP.
+To detect this technique, you can also track the execution of utilities and commands that could be used to
+transfer files from one host to another, such as:
+
+
+copy, xcopy, move, expand
+
+
+PowerShell
+
+
+bitsadmin
+
+
+curl
+
+
+This list is not exhaustive.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 3
+Microsoft-Windows-PowerShell/
+Windows 4103, 4104
+Operational
+SIGMA rules
+
+
+Sigma-Generic-File Download via Bitsadmin
+
+
+Sigma-Generic-Bitsadmin Job via PowerShell
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Replication Through Removable Media T1091
+Replication Through Removable Media T1091
+Basic description
+Contents 250
+When trying to obtain secret information, APT groups look for ways to reach physically isolated systems. One
+way is to spread malware through removable drives.
+By copying malware to removable drives and using autorun functions, attackers can run programs on a system
+where an infected drive is connected. During lateral movement, this may be done by modifying the executable
+files stored on removable drives, or by copying malware and renaming it so that it looks like a legitimate file. This
+way, users are tricked into running the malware on a standalone system.
+Removable drives can also be used as proxies between an isolated system and a system with internet access
+so that sensitive information can be copied from a company.
+Examples of procedures
+While investigating an attack on an industrial company in Russia, the ICS CERT team detected second-stage
+implants intended for collecting data from isolated systems.
+The primary module of the detected malware was intended for working with removable drives as follows:
+
+
+Infect the connected drive.
+
+
+Copy files from the connected drive to the local system.
+
+
+Log information about connected drives and their contents.
+
+
+The behavior of the module is configured using a configuration file dropped onto the host at the static path
+"C:\Users\Public\Libraries\main.ini".
+On each removable drive, the implant creates a hidden folder named $RECYCLE.BIN in the root directory of
+the drive and an empty file named S-1-5-21-963258 in the hidden folder. This file marks the drive as infected.
+To infect a removable drive, the primary module simply copies two files named mcods.exe and McVsoCfg.dll
+into the root directory and sets the "Hidden" attribute for both files.
+Then the primary module analyzes the contents of the root directory of the drive to create a decoy file with
+the name of a document or folder. The document is dropped into the $RECYCLE.BIN folder, or, if a folder name
+was used instead of a document name, the "Hidden" attribute is set for the folder.
+[name of document or folder].lnk
+Target: “rundll32.exe url.dll,FileProtocolHandler mcods.exe”
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Replication Through Removable Media T1091
+Contents 251
+When the user clicks the decoy LNK file, the McVsoCfg.dll implant is executed via rundll32 proxy execution and
+DLL side-loading. The implant infects the host, then attempts to delete itself from the infected drive:
+cmd /c ping localhost & del $selfpath
+Immediately after that, a third-stage implant is extracted from memory, saved to %APPDATA% folder with the
+name msgui.exe on the attacked host, and then executed. The msgui.exe file is intended for collecting data
+and saving its results to the $RECYCLE.BIN folder on the drive so that it can be later collected by the primary
+malware module (when connecting to the originally infected host).
+Detection
+EPP solutions help detect malware-infected removable drives. State-of-the-art solutions scan newly
+connected drives for malware and can block their execution.
+You must also take into account the host telemetry and events involving the creation of new drives, creation
+of executable files on removable drives, and process creation initiated by the files residing on the removable
+drive.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 11
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Taint Shared Content T1080
+Taint Shared Content T1080
+Basic description
+Contents 252
+This technique delivers utilities and malware to targeted hosts via shared network resources, such as a readaccessible network folder on a domain controller like SYSVOL.
+Asian APT groups frequently drop into the SYSVOL folder their files, which may include archives whose files
+are then copied to the file system, scripts that can be executed on hosts without being directly copied, or
+other relevant tools.
+Examples of procedures
+Example 1
+An Asian APT group uses a BAT script residing in a shared network folder of the domain controller. The
+following arguments are passed to the BAT script:
+$system32\cmd.exe /c \\sysvol\\scripts\versions.bat taskhostw.exe
+AsusLinkNear|$(Arg0)
+Example 2
+Asian threat actors often use archives to store and transfer their tools within the target infrastructure. Here is
+an example of unpacking archives residing in a shared network folder and transferring their files to the victim's
+file system:
+expand \\sysvol\\scripts\oci.zip $system32\oci.dll
+expand \\sysvol\\scripts\versions.zip $system32\versions.dll
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Taint Shared Content T1080
+Example 3
+BAT script in the domain controller shared folder SYSVOL:
+\\sysvol\run.bat
+Detection
+Contents 253
+This technique can be detected based on the profile of the activities within the particular company:
+
+
+How often are GPOs created? Which users can do so?
+
+
+How frequently are GPOs and legitimate scripts modified in SYSVOL? Which users can do so?
+
+
+What other files are shared in SYSVOL? How frequently are they added or modified?
+
+
+Detection rules will be generated based on the specific activity that is considered normal for the company.
+For example, creation of a file in the SYSVOL directory will be deemed suspicious in a company in which group
+policies are extremely rarely created or modified.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Pass the Hash T1550.002
+Pass the Hash T1550.002
+Basic description
+Contents 254
+The Pass-the-Hash technique enables attackers to move through a network by using the NTLM protocol
+without having an actual user password. Instead of a cleartext password, attackers pass the hashes of
+passwords for authentication. Besides the NTLM protocol, attackers may also use Kerberos and implement
+the Over-Pass-the-Hash technique. Asian APT groups receive these hashes during the Credential Access
+stage. For example, they get them from the address space of the lsass.exe process or from the registry (SAM,
+SECURITY, SYSTEM). Many frameworks, including Cobalt Strike, Crack Map Exec, Mimikatz, and Rubeus, allow
+conducting Pass-the-Hash attacks.
+Examples of procedures
+Example 1
+When analyzing the activity of Asian APT groups, we observed their implementation of the Pass-The-Hash
+technique after they successfully dumped password hashes from the lsass.exe process:
+m.exe "privilege::debug" "sekurlsa::logonpasswords" exit > out.txt
+m.exe "privilege::debug" "sekurlsa::pth /user: /domain: /ntlm:" exit
+After receiving user password hashes and successfully completing authentication, the attackers most
+frequently used PsExec for a connection on the remote host:
+PsExec.exe /accepteula \ cmd.exe
+Example 2
+In another attack involving an Asian APT group, we observed the use of user hashes in the secretsdump utility
+from the Impacket toolset:
+nat.exe -hashes: -just-dc @ -pwd-last-set -user-status -justdc-user 
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Lateral Movement TA0008  |  Pass the Hash T1550.002
+Example 3
+Using Rubeus for Kerberoasting:
+cmd /C "C:\ClusterStorage\Rubeus.exe -help"
+cmd /C "C:\ClusterStorage\Rubeus.exe kerberoast"
+cmd /C "C:\ClusterStorage\Rubeus.exe kerberoast /outfile:hashes.txt"
+cmd /C "RENAME C:\ClusterStorage\Rubeus.exe C:\ClusterStorage\r.exe"
+Detection
+Contents 255
+Although it is difficult to guarantee unequivocal detection of the Pass-the-Hash technique using standard
+tools, there are some effective approaches that can detect anomalies in user behavior and system
+interactions with a certain degree of probability. [15] One of these detection methods, which involves receiving
+events from two sources (the source host and the target host), is described in the research paper titled "PassThe-Hash Detection With Windows Event Viewer" [16] . You can also track NTLM connections in network traffic. In
+a company that has completely migrated to the Kerberos protocol, NTLM authentication may indicate a Passthe-Hash attack.
+Another way to detect this type of activity is to track the startup of utilities that are intended to receive
+hashes and support NTLM authentication hashes as arguments. Some utilities employ a standard "-hashes"
+option for passing hashes.
+Event source Log Event ID
+Windows Security 4688, 4624, 4648, 4672, 4776
+Sysmon Sysmon 1
+15
+For more details about these approaches, see the Mitigation section.
+16
+DuplicateDump
+Learn more
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Collection TA0009  |  Archive Collected Data T1560
+Output : 
+To create a structured representation of the provided text, we can organize it into a JSON format. This will help in clearly defining the different techniques, their descriptions, examples, and detection methods. Here is a JSON representation:
+
+```json
+{
+  "techniques": [
+    {
+      "name": "Remote Services",
+      "id": "T1021",
+      "tactic": "Lateral Movement",
+      "description": "Adversaries may use valid accounts to log into remote services, such as secure shell (SSH) or a virtual private network (VPN), to move laterally within a network.",
+      "examples": [
+        {
+          "description": "Asian APT groups have been known to use SSH and VPNs to access remote systems."
+        }
+      ],
+      "detection": {
+        "sources": ["Windows Security", "Sysmon"],
+        "event_ids": ["4624", "4625", "4771"]
+      }
+    },
+    {
+      "name": "Pass the Hash",
+      "id": "T1550.002",
+      "tactic": "Lateral Movement",
+      "description": "The Pass-the-Hash technique enables attackers to move through a network by using the NTLM protocol without having an actual user password. Instead of a cleartext password, attackers pass the hashes of passwords for authentication.",
+      "examples": [
+        {
+          "description": "When analyzing the activity of Asian APT groups, we observed their implementation of the Pass-The-Hash technique after they successfully dumped password hashes from the lsass.exe process."
+        },
+        {
+          "description": "In another attack involving an Asian APT group, we observed the use of user hashes in the secretsdump utility from the Impacket toolset."
+        },
+        {
+          "description": "Using Rubeus for Kerberoasting to obtain service account credentials."
+        }
+      ],
+      "detection": {
+        "sources": ["Windows Security", "Sysmon"],
+        "event_ids": ["4688", "4624", "4648", "4672", "4776"]
+      }
+    },
+    {
+      "name": "Taint Shared Content",
+      "id": "T1080",
+      "tactic": "Lateral Movement",
+      "description": "This technique delivers utilities and malware to targeted hosts via shared network resources, such as a read-accessible network folder on a domain controller like SYSVOL.",
+      "examples": [
+        {
+          "description": "An Asian APT group uses a BAT script residing in a shared network folder of the domain controller."
+        },
+        {
+          "description": "Asian threat actors often use archives to store and transfer their tools within the target infrastructure."
+        }
+      ],
+      "detection": {
+        "sources": ["Windows Security", "Sysmon"],
+        "event_ids": ["4688"]
+      }
+    },
+    {
+      "name": "Replication Through Removable Media",
+      "id": "T1091",
+      "tactic": "Lateral Movement",
+      "description": "When trying to obtain secret information, APT groups look for ways to reach physically isolated systems. One way is to spread malware through removable drives.",
+      "examples": [
+        {
+          "description": "While investigating an attack on an industrial company in Russia, the ICS CERT team detected second-stage implants intended for collecting data from isolated systems."
+        }
+      ],
+      "detection": {
+        "sources": ["Windows Security", "Sysmon"],
+        "event_ids": ["4688", "1", "11"]
+      }
+    },
+    {
+      "name": "Lateral Tool Transfer",
+      "id": "T1570",
+      "tactic": "Lateral Movement",
+      "description": "Adversaries may transfer tools or other files from one system to another and execute them on the remote system. This is useful for maintaining access, persistence, or furthering their objectives.",
+      "examples": [
+        {
+          "description": "Asian APT groups have been known to use scripts and executables stored in shared network folders to infect multiple systems."
+        }
+      ],
+      "detection": {
+        "sources": ["Windows Security", "Sysmon"],
+        "event_ids": ["4688"]
+      }
+    },
+    {
+      "name": "Archive Collected Data",
+      "id": "T1560",
+      "tactic": "Collection",
+      "description": "Adversaries may archive collected data for exfiltration. Archiving can make the exfiltration process more efficient by reducing the number of packets required to transfer the data.",
+      "examples": [
+        {
+          "description": "Asian APT groups have been observed compressing stolen data into archives before exfiltration."
+        }
+      ],
+      "detection": {
+        "sources": ["Windows Security", "Sysmon"],
+        "event_ids": ["4688"]
+      }
+    }
+  ]
+}
+```
+
+This JSON structure provides a clear and organized way to represent the techniques, their descriptions, examples, and detection methods. Each technique is an object within the `techniques` array, containing fields for the name, ID, tactic, description, examples, and detection details.

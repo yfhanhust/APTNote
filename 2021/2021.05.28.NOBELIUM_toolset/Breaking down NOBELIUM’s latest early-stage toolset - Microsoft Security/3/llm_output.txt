@@ -1,0 +1,93 @@
+
+
+
+Sentence : EnvyScout: NV.html (malicious HTML file)
+NV.html, tracked by Microsoft as EnvyScout, can be best described as a malicious dropper capable of de-obfuscating and writing a
+malicious ISO file to disk. EnvyScout is chiefly delivered to targets of NOBELIUM by way of an attachment to spear-phishing emails.
+The HTML  section of NV.html contains four notable components:
+Component #1: Tracking and credential-harvesting URLs
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 2/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+In one variant of EnvyScout, the  section contains two URLs, as shown above.
+The first, prefixed with a file:// protocol handler, is indicative of an attempt to coax the operating system to send sensitive NTLMv2
+material to the specified actor-controlled IP address over port 445. It is likely that the attacker is running a credential capturing service,
+such as Responder, at the other end of these transactions. Later, brute-forcing of these credentials may result in their exposure.
+The second URL, which resolves to the same IP address as the former at the time of analysis, remotely sources an image that is part of
+the HTML lure. This technique, sometimes referred to as a “web bug”, serves as a read receipt of sorts to NOBELIUM, validating that the
+prospective target followed through with opening the malicious attachment.
+Component #2: FileSaver JavaScript helper code
+The second portion of EnvyScout is a modified version of the open-source tool FileSaver, which is intended to assist in the writing of
+files to disk via JavaScript. The code is borrowed directly from the publicly available variants with minor alterations, including
+whitespace removal, conversion of hex parameters to decimal, and renamed variables. By combining this code with components #3 and
+#4 detailed below, NOBELIUM effectively implements a methodology known as HTML smuggling. This methodology may circumvent
+static analysis of known malicious file types by obscuring them within dynamically altered content upon execution. When combined
+with dynamic analysis guardrails, this can be an effective way to subvert detections of both types.
+Component #3: Obfuscated ISO file
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 3/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+The third section of EnvyScout contains a payload stored as an encoded blob. This payload is decoded by XOR’ng each character with a
+single-byte key, which then leads to a Base64 payload that is then decoded and written to disk via components #2 and #4.
+Component #4: De-obfuscator and dropper script
+The final component of EnvyScout is a short code snippet responsible for decoding the ISO in the Base64 encoded/XOR’d blob, and
+saving it to disk as NV.img with a mime type of “application/octet-stream”. At this stage of infection, the user is expected to open the
+downloaded ISO, NV.img, by double clicking it.
+As Microsoft has been tracking waves of this campaign for months, we have identified various modifications to the actor’s toolkit that
+were not present in every instance of EnvyScount but are nonetheless notable for defenders:
+EnvyScout variation #1:
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 4/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+In some iterations of the actor’s phishing campaigns, EnvyScout contained execution guardrails wherein window.location.pathname
+was called, and its values were leveraged to ensure that the first two entries in the array of characters returned were “C” and “:”. If this
+condition was not met—indicating the sample was not being executed from the C: drive—the embedded ISO was not written to disk.
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 5/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+As the attacker had gathered qualities from detonations of previous entries in the campaign via the Firebase fingerprinting JavaScript
+detailed in a prior blog post, this was assessed to be an execution guardrail to deter analysis and dynamic execution of the samples
+bearing these guardrails. Having witnessed both iterations of EnvyScout in the wild allows us to infer the intent of some of the
+information gathered from earlier instances.
+EnvyScout variation #2:
+In at least one instance of EnvyScout delivery, we observed further enumeration of the executing browser’s environment, wherein the
+user-agent was used to determine whether a Windows machine received an ISO payload. If the visitor arrived via iOS, they were
+redirected to external infrastructure.
+https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/ 6/28
+6/1/2021 Breaking down NOBELIUM’s latest early-stage toolset - Microsoft Security
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "EnvyScout: NV.html", "type" : "DOCF"},
+        {"id": 2, "description": "NOBELIUM", "type" : "ACTO"},
+        {"id": 3, "description": "malicious ISO file", "type" : "DOCF"},
+        {"id": 4, "description": "spear-phishing emails", "type" : "MAIL"},
+        {"id": 5, "description": "https://www.microsoft.com/security/blog/2021/05/28/breaking-down-nobeliums-latest-early-stage-toolset/", "type" : "URLS"},
+        {"id": 6, "description": "file:// protocol handler", "type" : "NETP"},
+        {"id": 7, "description": "actor-controlled IP address over port 445", "type" : "CCSH"},
+        {"id": 8, "description": "Responder (credential capturing service)", "type" : "APPS"},
+        {"id": 9, "description": "web bug URL", "type" : "URLS"},
+        {"id": 10, "description": "FileSaver JavaScript helper code", "type" : "EXEF"},
+        {"id": 11, "description": "HTML smuggling methodology", "type" : "TTPS"},
+        {"id": 12, "description": "Obfuscated ISO file (encoded blob)", "type" : "DOCF"},
+        {"id": 13, "description": "De-obfuscator and dropper script", "type" : "EXEF"},
+        {"id": 14, "description": "NV.img", "type" : "DOCF"},
+        {"id": 15, "description": "C: drive", "type" : "SYSP"},
+        {"id": 16, "description": "Firebase fingerprinting JavaScript", "type" : "EXEF"},
+        {"id": 17, "description": "Windows machine", "type" : "OPPS"},
+        {"id": 18, "description": "iOS device", "type" : "OPPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "delivered by"},
+        {"source": 1, "target": 3, "rel_name" : "writes"},
+        {"source": 1, "target": 4, "rel_name" : "delivered via"},
+        {"source": 5, "target": 2, "rel_name" : "tracked by"},
+        {"source": 6, "target": 7, "rel_name" : "sends sensitive material to"},
+        {"source": 7, "target": 8, "rel_name" : "runs"},
+        {"source": 9, "target": 2, "rel_name" : "used by"},
+        {"source": 10, "target": 3, "rel_name" : "assists in writing to disk"},
+        {"source": 10, "target": 11, "rel_name" : "part of"},
+        {"source": 12, "target": 13, "rel_name" : "decoded by"},
+        {"source": 13, "target": 14, "rel_name" : "saves as"},
+        {"source": 15, "target": 1, "rel_name" : "checks if executed from"},
+        {"source": 16, "target": 2, "rel_name" : "gathers qualities from"},
+        {"source": 17, "target": 3, "rel_name" : "receives payload on"},
+        {"source": 18, "target": 2, "rel_name" : "redirects to external infrastructure if visitor is using"}
+    ]
+}

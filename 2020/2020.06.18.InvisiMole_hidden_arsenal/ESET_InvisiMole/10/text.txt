@@ -1,0 +1,139 @@
+5 LATERAL MOVEMENT
+Once in the compromised network, InvisiMole uses two methods to move laterally—actively by exploiting
+vulnerabilities in network protocols, and passively by deploying trojanized applications and documents, while
+relying on them to be shared and executed by the victims themselves.
+5.1 Network vulnerabilities
+We have observed InvisiMole using the BlueKeep and EternalBlue vulnerabilities (CVE-2019-0708 and
+CVE‑2017‑0144, respectively) to spread within the network and deploy InvisiMole’s backdoors or downloaders.
+Three of InvisiMole’s components assist by scanning the compromised network:
+  - The Portscan plugin searches for open ports; see Figure 9 for examples of strings extracted from the plugin.
+
+
+   - The BlueKeep plugin searches for hosts vulnerable to the BlueKeep vulnerability in the RDP protocol.
+
+
+  - The RC2CL backdoor searches for hosts vulnerable to the EternalBlue vulnerability in the SMB protocol.
+
+Figure 9 // Selected strings extracted from the Portscan plugin
+5.1.1 EternalBlue exploit chain
+InvisiMole deploys its RC2CL backdoor and TCP downloader on hosts vulnerable to EternalBlue, using
+components shown in Figure 10.
+Figure 10 // InvisiMole’s lateral movement via the EternalBlue exploit
+Reconnaissance
+To identify vulnerable hosts in the compromised network, InvisiMole uses the added functionality in the
+RC2CL backdoor. Its command 222 was previously used for controlling backdoor configuration values—now
+the attackers use it to send a range of IP addresses to the compromised computer.
+The backdoor first tests whether these addresses are active by sending them ICMP echo requests, and
+retrieves their MAC addresses using the ~~SendARP~~ API.
+TLP: WHITE
+19 InvisiMole: The hidden part of the story
+To determine whether the host supports the vulnerable SMBv1.0 protocol, the backdoor:
+  - Opens SMB session on port 445 (and optionally on another port).
+
+
+  - Sends **SMB_COM_NEGOTIATE** packet (0x72) to negotiate the SMB protocol (see Figure 11). It only
+
+lists “NT LM 0.12” as a supported dialect, forcing the server to choose SMBv1.0 protocol for the session,
+as long it is supported by the server.
+Figure 11 // SMB_COM_NEGOTIATE packet
+  - Sends **SMB_COM_SESSION_SETUP_ANDX** packet (0x73) to setup the SMB session (see Figure 12).
+
+The only command in the packet is No further commands (0xFF). The backdoor doesn’t send any more
+commands within the session.
+Figure 12 // SMB_COM_SESSION_ANDX packet
+  - Logs off the session by sending **SMB_COM_LOGOFF_ANDX** packet (0x74) with the command
+
+No further commands (0xFF), as shown in Figure 13.
+Figure 13 // SMB_COM_LOGOFF_ANDX packet
+The results of this scan are reported back to the C&C server.
+After identifying vulnerable hosts, we assume the attackers push a tool that tries to exploit the vulnerability
+via the same backdoor—RC2CL already has mechanisms in place to download and execute additional code.
+TLP: WHITE
+20 InvisiMole: The hidden part of the story
+Exploit
+We haven’t seen the actual code used by the attackers to exploit the vulnerability. However, on multiple
+computers within one of the targeted networks, we detected DoublePulsar, a backdoor typically deployed by
+the EternalBlue exploit.
+Moreover, we reviewed Windows Security Logs from the network and identified the following sequence
+of events:
+  - An SMB session was created.
+
+
+  - A few seconds later, InvisiMole’s loader [6] was executed.
+
+As shown in Figure 14, the loader’s internal name is ~~PULSAR_LOADER.DLL~~, likely referring to being deployed
+by the DoublePulsar backdoor.
+Figure 14 // InvisiMole’s component with internal name PULSAR_LOADER.dll
+Payload
+The loader deployed by the DoublePulsar backdoor is bundled with an InvisiMole blob that is the
+TCP downloader, used to download and execute additional InvisiMole blobs.
+We also detected another loader [7] with the same internal name ~~PULSAR_LOADER.DLL~~ ~~,~~ this time bundled
+with InvisiMole’s RC2CL backdoor .
+5.1.2 BlueKeep exploit chain
+As another lateral movement technique, InvisiMole exploits the BlueKeep vulnerability in the RDP protocol
+to deploy InvisiMole’s TCP downloader on the target machines, as illustrated in Figure 15. In this case, all
+parts of the exploit—from identifying the vulnerable hosts to deploying the malicious payload—are bundled
+in a single component, the BlueKeep plugin, which is implemented as a 64-bit InvisiMole blob. Figure 16
+shows a fragment of the strings extracted from the plugin, referring to exploiting the vulnerability.
+Figure 15 // Three parts of BlueKeep plugin
+6 SHA-1: 02F4242F7CA7289C8EDFA7B4F465C62C7A6815E2
+7 SHA-1: 00EA86AAB3D616A24A5E13D592FABC26416DFDBD
+TLP: WHITE
+21 InvisiMole: The hidden part of the story
+Reconnaissance
+Reconnaissance is implemented in the first part of the BlueKeep plugin, which scans the network for hosts
+vulnerable to the BlueKeep vulnerability.
+Exploit
+The main part is ported from the open-source Metasploit implementation of the BlueKeep exploit.
+Payload
+As the user-mode code, the plugin finally executes the embedded InvisiMole TCP downloader.
+Figure 16 // Selected strings hardcoded in the BlueKeep plugin
+5.2 Trojanized software and documents
+Apart from exploiting network vulnerabilities, the attackers also use a more passive approach to move
+laterally. They use trojanized files—SFX archives bundling InvisiMole malware with a benign software
+installer or, in one instance, a PDF document.
+When executed, the SFX archive drops and executes or opens the benign file, while it also loads an
+embedded InvisiMole blob that drops InvisiMole components and installs them on the system. Trojanized
+files are used to distribute two of InvisiMole’s execution chains, as illustrated in Figure 17 and described in the
+Control Panel misuse chain and SMInit exploit chain sections.
+TLP: WHITE
+22 InvisiMole: The hidden part of the story
+Figure 17 // Two InvisiMole execution chains delivered by trojanized files
+We have detected almost 30 different trojanized applications—among them Bitdefender USB Immunizer, 7-Zip,
+remote desktop and employee monitoring utilities, but also region-specific software and software specific
+to the organization’s sector. Along with the PDF document, the benign versions of these applications were
+clearly stolen from the compromised organization.
+InvisiMole replaces the original files on the compromised computer with the trojanized versions,
+while preserving their names, icons and metadata. This is both a lateral movement and persistence
+technique, as users naturally open and share their own documents.
+This technique is especially powerful if the trojanized file happens to be a software installer placed on
+a central server—a common way to deploy software in larger organizations. That way, InvisiMole is
+organically distributed to many computers that use this server.
+TLP: WHITE
+23 InvisiMole: The hidden part of the story
+Table 5 // Examples of trojanized software, stolen from the compromised organization and bundled with InvisiMole.The
+list excludes documents and software specific to the affected organization.
+SHA-1 Filename Application
+125FCA6EBD82682E51364CF93C9FFA8EB4F6CA5F WebComponents.exe Web Components (Hikvision)
+3B923FA1E5DCB4F65DAA138BECEB123D7C431D1B AIDA64.exe AIDA64 Network Audit
+3BB2C05DEA077835A79499A0BB81410D27EEBFAF poweriso6-full.exe PowerISO Setup
+4C13AD9AD9C134DE15F3AE5E2F0D2EC1E290DEE8 SamsungUniversalPrintDriver3.exe Samsung Universal Print Driver
+728386C6D6EAF43148FE25F86E6AF248019D9842 Daemon.Tools.Lite.v5.0.1.0407.exe DAEMON Tools
+793F4DD2B765ECD962A053246646ED0D6144D249 adberdr11000_ru_ru.exe Adobe Reader
+UltraVNC (remote desktop
+8147E85E13B3624FA290F1F218647A0D1FD70204 UltraVNC_1_2_24_X86_Setup.exe
+software utility)
+8C5F463FA79601DE38D0A77808226B1A8E67459A 7-Zip.exe 7-Zip
+9B1E0A22DEB124FF36FCF7ED2EA82E799B49B070 lanscope_setup.exe LanScope (employee monitoring)
+UltraVNC (remote desktop
+9B48090704C3F62D6B768780845E2D04862F5219 UltraVNC_1_2_24_X64_Setup.exe
+software utility
+CD3419B4B3958BE5BE1CAEA60A4EE98E4D427A6D epson373260eu.exe Epson (printer driver)
+D5D3A01A5944D55E5DDF1F915E88043691BE6F58 putty.exe Putty
+D8EB2429253E82729F34373068EC350D1B2DA8AB WinSetupFromUSB-1-6.exe WinSetupFromUSB
+BitDefender USB Immunizer
+DDB871AD5823BE31F5176F2B0CE149D4B6E44F24 BDUSBImmunizerLauncher.exe
+Launcher
+Geovision DMmultiview Software
+E936E857A812690178ED049FD4A1766E281B9F1D DMMultiView.exe
+for Remote Monitoring

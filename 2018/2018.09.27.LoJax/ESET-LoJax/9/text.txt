@@ -1,0 +1,197 @@
+5. LOJAX TECHNICAL ANALYSIS
+While the tool to dump, patch and write to the SPI flash memory is customized for a particular firmware
+image and cannot be re-used easily on any given system, the full UEFI module can be extracted from it. The
+first step we did after recovering this module was to go through our telemetry to see whether we had seen
+this module before. However, as this is a UEFI module, we had to rely on the new ESET UEFI scanner that is
+able to access and scan a system’s firmware. Using telemetry coming from this module, we were able to find
+at least one case where the Sednit’s UEFI module was installed on a system, meaning that this UEFI rootkit
+was truly deployed in the wild.
+We do not know for sure how the different tools ended up on the compromised systems. The most likely
+guess at this point is that it was dropped by another tool, likely XAgent, as part of the post-compromise
+steps done by the operators. Since the dumper and the writer tools were found on the same system but
+at different times, it is likely the operators worked in two steps. First, they dumped the firmware on the target
+machine, made sure that their patching tool would work fine before uploading it again and patching
+the firmware for real. While we were able to find only one version of the dumper and writer tools, there
+is a possibility that different versions exist for different vulnerable firmware they were able to locate.
+Figure 14 gives a high-level overview of the UEFI rootkit workflow until the OS boots. First, SecDxe DXE driver
+is loaded by the DXE dispatcher. It sets a Notify function callback on the ~~EFI_EVENT_GROUP_READY_TO_BOOT~~
+event group. When the firmware is about to choose a boot device and to run the OS loader, the Notify
+function is called. The callback does three things:
+   - It loads an embedded NTFS DXE driver to be able to access and write to NTFS partitions
+
+   - It writes two files to the Windows NTFS partition: ~~`rpcnetp.exe`~~ and ~~`autoche.exe`~~
+
+   - It modifies this registry key ~~`‘HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\`~~
+
+~~Session Manager\BootExecute’~~ ~~:~~
+     - Before: ~~`‘autocheck autochk *’`~~
+
+
+     - After: ~~`‘autocheck autoche *’`~~ .
+
+15 LoJax // First UEFI rootkit found in the wild, courtesy of the Sednit group
+Security (SEC)
+Pre EFI
+Initialization (PEI)
+Driver
+Execution Environment
+(DXE)
+Boot Device Selection
+(BDS)
+Transient System Load
+(TSL)
+Run Time (RT)
+|Col1|Col2|
+|---|---|
+|~~Drop~~|~~Drop~~|
+Figure 14 // Boot process of a system infected by the UEFI rootkit
+SecDxe: The malicious DXE driver
+Now that we have covered the details of the deployment of the UEFI rootkit, this section focuses on the
+chain of events that occurs on a compromised machine. We adopt a bottom-up approach where we begin
+by describing the UEFI rootkit itself and then follow the chain of events up to the final payloads that are
+deployed at the operating system level.
+Sednit’s UEFI rootkit is a DXE driver, identified by the GUID ~~682894B5-6B70-4EBA-9E90-A607E5676297~~ .
+It is unsigned; thus it cannot run on a system with Secure Boot enabled. Once deployed in one
+of the firmware volumes, the DXE Foundation loads it every time the system boots.
+SecDxe is a small DXE driver that mainly does two things. It installs a protocol identified by the GUID
+~~832d9b4d-d8d5-425f-bd52-5c5afb2c85dc~~ that is never used. Then, it creates an event associated with
+a Notify function. The Notify function is set to be called when the ~~EFI_EVENT_GROUP_READY_TO_BOOT~~
+event group is signaled. This event group is signaled by the boot manager when it is about to choose
+a device to boot from.
+16 LoJax // First UEFI rootkit found in the wild, courtesy of the Sednit group
+Figure 15 // Hex-Rays decompiler output for the routine creating the event
+The Notify function implements the malicious behavior of Sednit’s UEFI rootkit. It writes the payloads
+to Windows’ NTFS file system. Since UEFI firmware normally deals solely with the EFI system partition,
+an NTFS driver usually is not included. Only FAT-based file systems are supported as boot partitions. Thus,
+it is not mandatory for a UEFI firmware to ship with NTFS drivers. For that reason, SecDxe embeds its own
+NTFS driver. This driver is first loaded and connected to the disk device. Hence, it installs an ~~EFI_SIMPLE_~~
+~~FILE_SYSTEM_PROTOCOL~~ on disk devices with NTFS partitions, enabling file-based access to it.
+Now that everything is in place to write files on the Windows partition, SecDxe drops ~~rpcnetp.exe~~
+and ~~autoche.exe~~ . Next, ~~rpcnetp.exe~~ is installed to ~~%WINDIR%\SysWOW64~~ on 64-bit Windows versions
+or to ~~%WINDIR%\System32~~ on 32-bit versions. As for ~~autoche.exe~~, it is installed to ~~%WINDIR%\SysWOW64~~ .
+Figure 16 shows the routine responsible for writing these files to disk.
+17 LoJax // First UEFI rootkit found in the wild, courtesy of the Sednit group
+i
+i
+Figure 16 // Hex-Rays decompiler output for the routine writing files to disk
+SecDxe then opens ~~%WINDIR%\System32\confg\SYSTEM~~ i ~~,~~ which is the file backing the ~~HKLM\SYSTEM~~
+registry hive. It parses the file until it finds ~~‘autocheck autochk *’~~ and replaces the ~~‘k’~~ of ~~‘autochk’~~
+with ~~‘e’~~ . This sets ~~‘HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\~~
+~~BootExecute’~~ to ~~‘autocheck autoche *’~~ . Next time Windows boots, autoche.exe will be launched
+instead of ~~autochk.exe~~ .
+Hacking Team’s NTFS driver
+As previously discussed, SecDxe module embeds an NTFS driver. There is strong evidence that Sednit’s
+operators did not write their own driver, but rather compiled their own copy of Hacking Team’s leaked
+NTFS DXE driver.
+Hacking Team’s NTFS driver uses the ntfs-3g open source project at its core. It is merely a wrapper around
+it to make it work as a UEFI DXE Driver. As such, the INF file build information of Hacking Team’s driver lists
+filenames from the ntfs-3g project. SecDxe’s NTFS driver strings also lists many of these filenames:
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\inode.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\volume.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\bootsect.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\unistr.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\attrib.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\mft.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\index.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\cache.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\misc.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\dir.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\runlist.c`
+
+
+   c:\edk2\NtfsPkg\NtfsDxe\ntfs\logfile.c
+
+
+   c:\edk2\NtfsPkg\NtfsDxe\ntfs\uefi_io.c
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\ntfsinternal.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\mst.c`
+
+18 LoJax // First UEFI rootkit found in the wild, courtesy of the Sednit group
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\lcnalloc.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\compress.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\bitmap.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\collate.c`
+
+
+   - `c:\edk2\NtfsPkg\NtfsDxe\ntfs\security.c`
+
+Another interesting thing to note is that the project path is the same as those found in vector-edk, Hacking
+Team’s EFI development leaked project. In vector-edk, there is a subproject ~~NtfsPkg~~ with the exact same
+directory layout. The ntfs-3g source code files are located in the same path. While these paths are generic,
+we believe this is not a coincidence.
+Comparing the leaked source code with Hex-Rays decompiler output, it becomes evident that it is the
+same project. Figure 17 is an example comparing the function ~~NtfsDriverBindingStart~~ took from
+~~vector-edk/NtfsPkg/NtfsDxe/Ntfs.c~~ ~~.~~ Comments have been removed from the original HT’s source
+code for clarity. The logic and the order of the function calls are the same. Both projects even use the same
+variable (LockedByMe) to keep the state of the lock.
+Figure 17 // Comparison between Hex-Rays decompiler output of Sednit’s NTFS driver (left) and HT’s NTFS driver (right)
+The comparison above shows code from Hacking Team developers and is not present in the ntfs-3g open
+source code.
+As mentioned in the ~~ReWriter_binary~~ section, when parsing the firmware file system the executable
+tries to remove the AMI NTFS driver. We wanted to understand why they remove it instead of using it.
+We analyzed the driver and found out that it can only perform read operations. As writing to the file system
+is not supported, they couldn’t use it for their purposes. It is also likely that Sednit’s operators may have run
+into some issues when another NTFS driver was already present in the firmware, so they simply decided to
+remove it. In addition to implementing read and write operations, Hacking Team’s driver does not enforce
+file permissions. For instance, it is possible to overwrite a read-only file without raising any error.
+19 LoJax // First UEFI rootkit found in the wild, courtesy of the Sednit group
+At this point in this paper, we have described the various operations performed by the UEFI rootkit
+to compromise the host operating system. We also discussed the reasons why we believe that Sednit
+operators used the source code of Hacking Team’s vector-edk to build their NTFS driver to write files
+on the Windows NTFS partition. In the following sections, we will provide our analysis of the payloads
+dropped by SecDxe.
+autoche.exe vs. autochk.exe
+The malicious ~~autoche.exe~~ is used to set up persistence for the small agent ~~rpcnetp.exe~~ . As can be seen
+in Figure 18, it uses native Windows API calls to create this service.
+Figure 18 // Malicious autoche.exe setting up rpcnetp.exe persistence
+It should be noted that the service name is the same as the one used by the legitimate Computrace agent.
+Once the service is created, it then restores the ~~BootExecute~~ registry key to its previous value.
+Figure 19 // Malicious autoche.exe restoring BootExecute’s original registry value
+Since this process takes place while Windows is booting, the user can hardly notice the ~~BootExecute~~
+registry key value modification. It should be noted that autoche.exe shows some similarities with Compu­
+trace’s ~~autochk.exe~~ module, such as the API calls used and the service registration, but the rest is quite
+different. Computrace’s module is bigger and restores the original autochk.exe executable instead
+of changing the registry key. It is also responsible for dropping the small agent on disk, while this
+is handled by the UEFI rootkit in the LoJax case.
+20 LoJax // First UEFI rootkit found in the wild, courtesy of the Sednit group
+rpcnetp.exe
+While the small agent ~~rpcnetp.exe~~ can be dropped by the UEFI rootkit, it is probable that most instances
+we saw of a trojanized LoJack small agent did not use this component. It is likely that they were opportunistic
+and installed the UEFI rootkit only when possible and in organizations of high importance.
+Throughout our investigation, we were able to uncover different LoJax small agent versions. The IOC section
+lists their hashes and the associated malicious domains/IPs. As discussed previously, all LoJax small agent
+samples we were able to recover were a trojanized version of the same old Computrace small agent
+compiled in 2008.
+While we never witnessed LoJax agent download and install additional modules, we do know
+that this functionality exists. As LoJax’s best quality is to be stealthy and persistent, it could definitely
+be used to help ensure that access to key resources is maintained.

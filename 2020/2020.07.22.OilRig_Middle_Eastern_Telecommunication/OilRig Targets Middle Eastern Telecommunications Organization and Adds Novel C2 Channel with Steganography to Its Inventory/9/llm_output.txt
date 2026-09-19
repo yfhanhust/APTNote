@@ -1,0 +1,181 @@
+
+
+
+Sentence : HTTP and DNS Tunneling C2 Channels
+The RDAT sample with the novel EWS C2 channel also had HTTP and DNS tunneling as
+C2 channels as well, which are very similar to other RDAT samples we collected. The
+HTTP C2 channel uses HTTP POST requests to transmit data to the C2 server. The code
+contains the following two domains:
+allsecpackupdater[.]com
+tacsent[.]com
+It should be noted that the code only attempts to use the tacsent[.]com domain for its
+HTTP C2 channel. We are unsure why the code contains the allsecpackupdater[.]com
+domain as it does not attempt to communicate with it, but it is possible that it is an
+https://unit42.paloaltonetworks.com/oilrig-novel-c2-channel-steganography/ 12/18
+7/23/2020 OilRig Targets Middle Eastern Telecommunications Organization and Adds Novel C2 Channel with Steganography to Its Inventory
+artifact from a previous version of the tool. This domain was previously tied to the OilRig
+threat group, as ClearSky discovered this domain in 2017 and noted its relation to
+Greenbug’s ISMDOOR tool.
+The HTTP POST requests have a custom “From:” field in the header that has a unique
+identifier assigned to the infected system. The HTTP POST request will contain a “v”
+parameter and a random number in the URL and a user-agent of “chrome.” Figure 13
+shows an example of an HTTP POST issued by the payload as its initial beacon to the C2,
+which shows the anomalous user-agent “chrome” and custom “From” field.
+Figure 13. Initial beacon sent by RDAT sample over its HTTP C2 channel
+The payload encrypts the data sent in the POST request using the AES cipher, specifically
+in CBC mode. To decrypt this data, the data itself is first converted from the URL-safe
+hexadecimal percent encoded characters to their /, + and = character equivalent. After
+this conversion, the resulting data is decoded using base64 and then decrypted using AES
+and the value in the From field as a key and initialization vector (IV). For instance, using
+the From value for the key and IV to decrypt the POST data with the AES cipher produces
+the following cleartext:
+1,1543511637567325,12031\x08\x08\x08\x08\x08\x08\x08\x08
+The payload will check the C2 server’s response to this HTTP POST for a, using a regular
+expression [^,]+ to determine if the C2 provided a command. The payload can only
+exfiltrate 102,400 bytes of data at a time, which it uses a field in the exfiltrated response
+to notify the C2 of the offset of the data so the C2 can reconstruct it.
+The DNS tunneling protocol is very similar to the protocol discussed earlier in this blog,
+as it uses the second level subdomain for its AES key but uses four characters instead of
+two. It also uses the same character replacement of = with -, / with _ and + with -a to
+remove characters that are not allowed in domain names, as did the RDAT sample used in
+the attacks on the Middle Eastern telecommunications organization. The DNS tunnel for
+this sample used DNS A record queries and the same domain as the HTTP C2 channel,
+which generates an initial beacon that will resemble the following:
+https://unit42.paloaltonetworks.com/oilrig-novel-c2-channel-steganography/ 13/18
+7/23/2020 OilRig Targets Middle Eastern Telecommunications Organization and Adds Novel C2 Channel with Steganography to Its Inventory
+P9rktZsukI5RVAdZWSR-a6uVYKeQJ-azhVLzUUfGs1TDQ-.fN26.tacsent[.]com
+To decrypt this beacon, the C2 uses the second level subdomain to create an AES key and
+IV of fN26fN26fN26fN26, which is the second-level domain used four times to create a
+16-byte string. The resulting cleartext would contain the following message, which is a
+comma-separated string that includes communication type and a unique system
+identifier:
+3,1543511637567325,0\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c
+To exfiltrate data using this DNS tunneling protocol, the payload will add additional
+subdomains to query, specifically a field for the data sequence number and a field for the
+exfiltrated data. For instance, the following DNS query sends system information to the
+C2:
+1.44gkxXizTF3QJU0F2AllV_0qhr1xcYmy8GeMB6nnGNSw0bls7JpP0zIqvnyO.xEZlrurmSHgf
+uoAcqi9blguWDzwH9oQCWZ-aTeBSBE2M-.tJ8z.tacsent[.]com
+The fifth-level subdomain is a data sequence number that allows the C2 server to
+reassemble the data, which will start with 1 and increment by 60 as the DNS tunneling
+protocol sends 60-bytes of encoded ciphertext within each DNS request. The fourth-level
+subdomain contains the 60-bytes of encoded ciphertext that RDAT sends to the C2, while
+the third- and second-level subdomains are the same as the beacon. In the above
+example, the AES key and IV would be tJ8ztJ8ztJ8ztJ8z, which would decrypt the thirdlevel subdomain to the following cleartext:
+2,1543511637567325,0\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c
+Using the same AES key and IV, the cleartext in the fourth-level subdomain includes the
+system information, which in the above example would produce:
+1:|2:MicrosoftWindows7Professionw\x01
+Regardless of the C2 channel used, the RDAT sample parses responses using a command
+handler to determine the course of action to take. Table 3 shows the commands available
+within the command handler, as well as the structure of the response message the
+payload would send to the C2. The command handler in this RDAT sample has more
+capabilities compared to the three commands available in the sample seen in the attacks
+on the Middle Eastern telecommunications organization.
+Com-
+mand
+Struc-
+ture
+Response
+structure
+Description
+0, Idle.
+https://unit42.paloaltonetworks.com/oilrig-novel-c2-channel-steganography/ 14/18
+7/23/2020 OilRig Targets Middle Eastern Telecommunications Organization and Adds Novel C2 Channel with Steganography to Its Inventory
+1,<task
+number>,
+<base64
+encoded
+com
+mand to
+exe
+cute>
+2,<task
+number>,
+<cleart
+ext
+file
+name>
+3,<task
+number>,
+,
+<file
+size>
+5,<task
+num
+ber>
+6,<task
+num
+ber>
+7,<task
+num
+ber>
+2,<16-char system
+identifier>,,,
+,
+
+3,<16-char system
+identifier>,,,,
+4,<16-char system
+identifier>,,,
+6,<16-char system
+identifier>,,,
+7,<16-char system
+identifier>,,””
+7,<16-char system
+identifier>,,””
+Executes command using “cmd.exe /c”
+Uploads a specified file from the system.
+Downloads a file from the C2 response to a temporary
+file named %TEMP%\tmp. Downloads 81,920 bytes at a time by sending HTTP POST
+requests with a communications type of “4” with the
+offset in the data it wishes to receive and parsing the
+response for data it will write to the file. Payload then
+opens the file, base64 decodes and decrypts its contents with AES CBC. Sends “-1” as the offset to C2 to
+notify the C2 that it decoded/decrypted the temporary
+file and wrote it to the specified file.
+Takes a screenshot, encodes it as a JPEG, base64 encodes the JPEG image.
+Kills the payload’s process and reruns it using the “-r”
+command line switch by running the following on the
+command line: taskkill /f /pid  &&
+
+Uninstalls the payload by running the following on the
+command line: taskkill /f /pid  && del
+/f 
+Table 3. Commands available within the RDAT sample that used the novel EWS C2
+channel
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RDAT sample", "type" : "EXEF"},
+        {"id": 2, "description": "HTTP POST requests", "type" : "NETP"},
+        {"id": 3, "description": "tacsent[.]com", "type" : "CCSH"},
+        {"id": 4, "description": "allsecpackupdater[.]com", "type" : "URLS"},
+        {"id": 5, "description": "OilRig threat group", "type" : "ACTO"},
+        {"id": 6, "description": "Greenbug’s ISMDOOR tool", "type" : "EXEF"},
+        {"id": 7, "description": "AES cipher in CBC mode", "type" : "TTPS"},
+        {"id": 8, "description": "custom 'From:' field in the header", "type" : "TTPS"},
+        {"id": 9, "description": "HTTP C2 channel", "type" : "NETP"},
+        {"id": 10, "description": "DNS tunneling protocol", "type" : "NETP"},
+        {"id": 11, "description": "DNS A record queries", "type" : "NETP"},
+        {"id": 12, "description": "%TEMP%\\tmp", "type" : "SYSP"},
+        {"id": 13, "description": "cmd.exe /c", "type" : "EXEF"},
+        {"id": 14, "description": "screenshot as a JPEG", "type" : "DOCF"},
+        {"id": 15, "description": "Middle Eastern telecommunications organization", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "communicates_with"},
+        {"source": 1, "target": 9, "rel_name" : "uses"},
+        {"source": 1, "target": 10, "rel_name" : "uses"},
+        {"source": 2, "target": 8, "rel_name" : "contains"},
+        {"source": 2, "target": 7, "rel_name" : "encrypts_with"},
+        {"source": 9, "target": 10, "rel_name" : "similar_to"},
+        {"source": 3, "target": 10, "rel_name" : "used_in"},
+        {"source": 4, "target": 5, "rel_name" : "associated_with"},
+        {"source": 4, "target": 6, "rel_name" : "related_to"},
+        {"source": 1, "target": 13, "rel_name" : "executes"},
+        {"source": 1, "target": 12, "rel_name" : "downloads_to"},
+        {"source": 1, "target": 14, "rel_name" : "captures_and_encodes"}
+    ]
+}

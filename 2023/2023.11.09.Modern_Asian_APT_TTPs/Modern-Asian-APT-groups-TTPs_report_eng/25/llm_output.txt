@@ -1,0 +1,623 @@
+
+
+
+Sentence : Privilege Escalation TA0004
+Create or Modify System Process T1543
+Basic description
+Contents 126
+After the operating system is loaded, services are started. These services are essentially processes that
+perform system functions in the background. APT actors may create or modify services to repetitively execute
+malicious payloads for privilege elevation and persistence.
+Services can be used to configure the execution of malicious code at system startup or at a repeated interval
+to ensure persistence.
+Services can be created with administrator privileges and then run with SYSTEM privileges, which is how
+attackers can achieve privilege elevation.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Privilege Escalation TA0004  |  Create or Modify System Process: Windows Service T1543.003
+Create or Modify System Process: Windows Service T1543.003
+Basic description
+Contents 127
+Threat actors mostly use Windows services to elevate their privileges, including for persistence in the system.
+With local administrator rights, an attacker can create a service that will be run under the NT AUTHORITY\
+SYSTEM account.
+Windows services are processes that are managed via the Service Control Manager (SCM), which starts,
+stops, suspends, and resumes services. Information about services is stored in the Windows registry:
+HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services
+In this registry tree, each service has its own subkey containing configuration settings such as the service
+name, description, executable file path, task type, and other settings.
+Normally, the sc.exe utility for interaction with the SCM is used to create a new service or modify an existing
+service:
+sc  create   
+sc  config  binpath= “”
+Asian APT groups usually modify the registry for this purpose. A service can be created by adding a new
+registry key to the Services tree:
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\" /v ImagePath /d "C:\evil.exe"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Privilege Escalation TA0004  |  Create or Modify System Process: Windows Service T1543.003
+Contents 128
+A very popular technique among Asian APT groups is to add a service that runs in the context of svchost.exe.
+For the service running in the context of svchost.exe, they usually specify a ServiceDLL parameter containing
+the path to the DLL file that implements the service and will be loaded into the svchost.exe process specified
+in ImagePath:
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\\ImagePath:
+“%systemroot%\system32\svchost.exe -k ”
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\\Parameters\
+ServiceDll: “”
+Examples of procedures
+Example 1
+Asian APT groups typically create a malicious service that runs in the context of the svchost.exe process.
+As mentioned in the description of the first incident, attackers added the SQLReader service name to the
+registry key HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Svchost**
+netsvcs and specified the path to the DLL in the corresponding registry key of the SQLReader** service:
+reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Svchost" /v
+netsvcs /t REG_MULTI_SZ /d AeLookupSvc\0 ... \0SQLReader
+sc create SQLReader binpath= "С:\Windows\System32\svchost.exe -k netsvcs" start= auto
+displayname= "SQL Server VSS Reader"
+reg add HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SQLReader /v Description /t
+REG_SZ /d "SQL Server VSS Reader"
+reg add HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SQLReader\Parameters /v
+ServiceDll /t REG_EXPAND_SZ /d "С:\Windows\System32\sqlrder.dll"
+sc start SQLReader
+Example 2
+ToddyCat actively used various persistence methods, including Create or Modify System Process:
+Windows Service T1543.003. While concealing their malicious services in the context of the svchost.exe
+process, they also added a new service name to fontcsvc and specified the ServiceDLL:
+Registry key: HKLM\System\ControlSet001\Services\FontCacheSvc\Parameters\ServiceDll
+Registry value: C:\Program Files\Common Files\System\apibridge.dll
+MD5: BB08CAE5C2C741BC040C9EC6E046BCAC
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Privilege Escalation TA0004  |  Create or Modify System Process: Windows Service T1543.003
+The service was created remotely by using the sc create command:
+Contents 129
+sc \ create FontCacheSvc binpath= “С:\Windows\system32\svchost.exe
+-k fontcsvc”
+Example 3
+There is another example of creating a service in the context of svchost.exe disguised as the Windows
+Push Notification Service. The legitimate variant has 5 random characters at the end (for example,
+WpnUserService_562df), which makes it easier for an attacker to conceal a malicious service.
+Service_name: WpnUserService_2727f.dll
+С:\Windows\System32\svchost.exe -k WpnUserService_2727f
+Example 4
+In addition to services in the context of svchost.exe, we also encountered legitimate executable files running
+as services used to side-load a malicious library (the DLL Side-loading technique). When alerted to the creation
+of a service, SOC analysts check the executable file of the service and may overlook malicious activity if the
+name and hash of the executable file are legitimate.
+Fortunately, we saw that the service was created from a remote host, which is definitely suspicious:
+sc \ create ct binpath= “С:\Windows\system32\vlc.exe start”
+sc \ create VLCMediaSvc binpath= “"C:\Program Files\Common Files\VLCMedia\
+vlc.exe" service”
+Example 5
+In another example, we also encountered the DLL Side-loading technique while observing the creation of a
+service. In this case, a legitimate file was specified as the executable file of the service:
+sc create "server power" binpath= "С:\Windows\system32\cmd.exe /c
+start С:\Windows\Help\help\MEUpdate.exe"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Privilege Escalation TA0004  |  Create or Modify System Process: Windows Service T1543.003
+Example 6
+Contents 130
+Another pattern observed among Asian APT groups is their tendency to delete and rewrite a service.
+In this example, a BAT file is run with system privileges to create a service using the sc command, and
+the net.exe utility is started. Notably, the attackers changed the standard function ServiceMain to the
+GetPrivateContextsPerfCounters function.
+"С:\Windows\system32\cmd.exe" /c “C:\Windows\temp_lpih.bat C:\Windows\temp\sessionenv.dll”
+sc delete "SessionEnvSvc"
+reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost" /v "SessionEnvSvc"
+/f
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost" /v "SessionEnvSvc" /t
+REG_MULTI_SZ /d "SessionEnvSvc" /f
+sc create "SessionEnvSvc" binPath= "$system32\svchost.exe -k SessionEnvSvc" type= share start=
+auto error= ignore DisplayName= "Remote Desktop Configuration Manager"
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\SessionEnvSvc\Parameters" /v "ServiceDll" /t
+REG_EXPAND_SZ /d "$windir\AppPatch\sessionenv.dll" /f"
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\SessionEnvSvc\Parameters" /v "ServiceMain" /t
+REG_SZ /d "GetPrivateContextsPerfCounters" /f" - changing default name of ServiceMain
+net start "SessionEnvSvc"
+Example 7
+We encountered similar activity when analyzing an incident in Kyrgyzstan in which a BAT file was run on a host
+remotely using WMI.
+In contrast to the previous example, here the attackers add a value defining actions to be taken in response
+to errors (FailureActions). However, just like in the previous example, they change the standard function
+ServiceMain to another function (CreateConfigStream in this case).
+cmd /c c:\programdata\saL_L.bat c:\programdata\fdeploy.dll
+sc stop "AudioSrvSrv"
+sc delete "AudioSrvSrv"
+reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost" /v "AudioSrvSrv" /f
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost" /v "AudioSrvSrv" /t
+REG_MULTI_SZ /d "AudioSrvSrv" /f
+sc create "AudioSrvSrv" binPath= "$system32\svchost.exe -k AudioSrvSrv" type= share start= auto
+error= ignore DisplayName= "Windows Audio Manager"
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\AudioSrvSrv" /v "FailureActions" /t REG_
+BINARY /d "0000000000000000000000000300000014000000010000000000000001000000
+000000000100000000000000" /f
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\AudioSrvSrv\Parameters" /v "ServiceDll" /t
+REG_EXPAND_SZ /d "$system32\wbem\audiosrv.dll" /f
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\AudioSrvSrv\Parameters" /v "ServiceMain" /t
+REG_SZ /d "CreateConfigStream" /f
+net start "AudioSrvSrv"
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Privilege Escalation TA0004  |  Create or Modify System Process: Windows Service T1543.003
+Detection
+Contents 131
+Although it is rather easy to track the creation of a new service, this activity is generated by most legitimate
+applications. Therefore, each organization must ensure thorough filtering of the applications that are used in
+their organization.
+The primary way to detect this technique is to monitor any modifications made to the Services tree of the
+Windows registry, including the following:
+
+
+Changes to the ImagePath parameter value
+
+
+Changes to the ServiceDLL parameter value
+
+
+Whatever method the attacker uses, the creation of a new service is reflected in the Services registry tree.
+However, if an attempt to create a service was unsuccessful, we will not see this failure in the registry. Even
+though the service was not created, attempts to create one cannot be ignored, so you are advised to track the
+creation of services via the command line, including the following events:
+
+
+Creation or modification of a service via sc.exe
+
+
+Creation or modification of a service via reg.exe
+
+
+Creation or modification of a service via PowerShell, and Win API calls, for example, in EPP/EDR solutions
+
+
+Please keep in mind that legitimate software often creates Windows services to ensure proper functioning of
+the application. Malicious services typically have their executable files in shared directories, while legitimate
+software is usually run from the Program Files directory.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 13
+Microsoft-Windows-PowerShell/
+PowerShell 4103, 4104
+Operational
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Privilege Escalation TA0004  |  Create or Modify System Process: Windows Service T1543.003
+SIGMA rules
+
+
+Sigma-Generic-Windows Service Creation or Modification via sc.exe
+
+
+Sigma-Generic-Remote Windows Service Creation or Modification via sc.exe
+
+
+Sigma-Generic-Windows Service Creation or Modification via PowerShell.exe
+
+
+Sigma-Generic-Service manipulations via net.exe
+
+
+Sigma-Generic-Windows Service Creation from non-system directory via Registry
+
+
+Sigma-Genetic-Modification of SvcHost Group in Registry
+
+
+Sigma-Generic-Windows Service Path Modification in Registry
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Contents 132
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Hijack Execution Flow T1574
+2
+Contents 134
+If an application calls a function that is implemented in a malicious DLL by an attacker, the attacker's code
+is executed, then execution of the function is redirected to a legitimate library. For example, it is directly
+loaded into the address space of a process (LoadLibrary), then the address of the original legitimate function
+(GetProcAddress) is found. This function is then executed.
+3
+If a different function is called, execution is simply redirected to a legitimate DLL.
+When creating a DLL, the actor indicates that it must export specific functions and redirect their execution to
+the original library, which the attacker usually renames.
+The add_numbers and ordinals_test functions in ProxyLib.dll are
+Figure 46
+redirected to the identically named functions in SimpleLib_1.dll
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Hijack Execution Flow: DLL Search Order Hijacking T1574.001
+Hijack Execution Flow: DLL Search Order Hijacking T1574.001
+Basic description
+Contents 135
+Threat actors often use this method to load a malicious DLL into a legitimate process according to the
+standard procedure for searching for DLLs in a Windows operating system. When attempting to load a specific
+library into the address space of a process, the Windows OS checks for it in the following directories:
+3
+16-bit system directory (for
+example, C:\Windows\System)
+6
+Directories listed in the PATH
+environment variable
+1
+Directory containing the
+executable file of the running
+application
+4
+Windows directory (for example,
+C:\Windows)
+2
+System directory (for example,
+C:\Windows\System32)
+5
+Current directory
+If an attacker has permissions to write to a directory located higher on the list than the directory containing
+the legitimate DLL, they can drop a malicious library into it. In this case, the attacker’s DLL will be loaded into
+the process. This technique is often accompanied by the use of DLL Redirection to avoid errors and prevent
+the process from crashing.
+Examples of procedures
+In an attack on the entitites in the APAC region at the end of October of 2022, attackers made several
+attempts to use the DLL Hijacking technique:
+MSDTC
+Known misconfiguration of MSDTC (Distributed Transaction Coordinator). MSDTC is a Windows service
+responsible for coordinating transactions between databases (SQL Server) and a web server. When started, it
+attempts to find and load the following three libraries:
+
+
+oci.dll
+
+
+SQLLib80.dll
+
+
+xa80.dll
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Hijack Execution Flow: DLL Search Order Hijacking T1574.001
+Contents 136
+The oci.dll library is not present in the standard distribution of Windows. This provides the opportunity for
+attackers with local administrator rights on a host to create a malicious oci.dll and execute code from it by
+starting a service.
+An Asian APT group copied a malicious library to the directory %SystemRoot%\System32\oci.dll on a host and
+started the Distributed Transaction Coordinator service using sc.exe:
+sc start msdtc
+IKEEXT
+In the second case, malicious code was located in the C:\Windows\System32\wlbsctrl.dll library, which was
+loaded into a process when the IKEEXT service started. The wlbsctrl.dll library is absent from the standard
+distribution of Windows OS. We presume that the attackers transferred a malicious DLL from a remote host so
+that they could implement DLL Search Order Hijacking to move laterally through the network.
+Actors do this by using Service Control Manager and the console-based utility for working with it (sc.exe).
+Attack sequence:
+On the remote machine, sc.exe is used to stop the target service, which is most often IKEEXT or SessionEnv
+sc.exe \TARGET stop IKEEXT
+A DLL with a malicious payload is copied to the system directory of the remote host. The library name
+matches the names of DLLs that the service attempts to load (IKEEXT attempts to load wlbsctrl.dll
+(MD5:04BDD31D97C4E49720F2B117562639C0), and SessionEnv attempts to load TSMSISrv.dll and
+TSVIPSrv.dll)
+copy wlbsctrl.dll \TARGET\C$\Windows\System32\wlbsctrl.dll
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Hijack Execution Flow: DLL Search Order Hijacking T1574.001
+Contents 137
+As the last step, the attackers start the service on the remote host, and the service automatically loads the
+malicious DLL.
+sc.exe \TARGET start IKEEXT
+After the attackers were able to execute the code of wlbsctrl.dll in the address space of the svchost.exe
+process, it made a DNS request to resolve the malicious domain boxilv.metuboss[.]com. Then the child process
+cmd.exe was created by svchost.exe.
+Detection
+Although it can be difficult to manually detect DLL Hijacking, you can use an EPP solution. You can also take
+several actions to help in the detection:
+System profiling
+A system profile is compiled by determining what is normal for a system and what is abnormal for the system.
+This is a continual process that is complicated by additional software installed on hosts. However, you can
+distinguish the common locations or applications that are exposed to DLL Hijacking attacks most often. For
+example, standard executable files in the System32 and SysWOW64 directories are prone to these attacks.
+One way to generate a profile on the executable files in these directories is to run them from a non-standard
+location on the system (for example, C:\Temp) and use tools such as ProcMon to view the events that occur.
+This will help find out which DLLs are missing from the system and identify the applications that load DLLs
+based on a relative path. The latter is used by attackers to conduct DLL Side-loading attacks. Likewise, it
+is also advisable to copy the DLLs loaded by an executable file into a non-standard directory to see what
+happens and identify this type of vulnerability.
+The next step is to write correlation rules based on the data you obtained:
+a. Loading a DLL that is absent from the system (Phantom DLL Hijacking)
+b. Loading a standard DLL from a non-standard directory (Search Order Hijacking, DLL Side-Loading)
+c. Loading a standard executable file from a non-standard directory (DLL Side-Loading, Masquerading)
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Hijack Execution Flow: DLL Search Order Hijacking T1574.001
+Monitoring research and vulnerabilities
+Contents 138
+The security community frequently publishes data on newly detected applications that are vulnerable to DLL
+Hijacking. By monitoring this data, you can do the following:
+a. Write correlation rules to quickly detect a new procedure.
+b. Run the Threat Hunting process to confirm or disprove that a system was compromised using this
+procedure.
+c. Enrich the knowledge base of the DFIR team, which can simplify the search for artifacts on a compromised
+system, especially if DLL Hijacking is typical for the group that conducted the attack.
+Monitoring attack reports
+This pertains to much more than just DLL Hijacking. Data obtained from these reports not only helps SOC, TH,
+and DFIR teams, but also enriches the Cyber Threat Intelligence knowledge base with information about the
+use of specific techniques by attackers and the procedures that were employed.
+SIGMA rules
+
+
+Sigma-Generic-IKEEXT service DLL Hijacking
+
+
+Sigma-Generic-SessionEnv service DLL Hijacking
+
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Hijack Execution Flow: DLL Side-Loading T1574.002
+Hijack Execution Flow: DLL Side-Loading T1574.002
+Basic description
+Contents 139
+When using the DLL Side-Loading subtechnique (sometimes called Relative Path DLL Hijacking), an attacker
+brings in their own executable files of applications that are often legitimate but vulnerable to DLL Hijacking
+together with malicious DLLs and then run a file. This leads to execution of code from the malicious DLL in
+the context of a legitimate process whose image is the executable file brought in by the attacker. DLL SideLoading is very popular among attackers because it lets them take advantage of DLL Search Order Hijacking
+and avoid dependencies on the particular software installed in the victim's infrastructure.
+The attack procedure is simple:
+1
+Find an application that is vulnerable to DLL Hijacking (usually a legitimate application with a valid signature)
+2
+The attacker copies this application together with the malicious DLL to a directory on the victim's machine
+where the attacker has write permissions.
+3
+The attacker starts the copied application and the malicious DLL is loaded into the virtual address space of
+the running process. This way, the attacker gets to execute code in the context of a legitimate process.
+Examples of procedures
+Example 1
+Asian APT groups use the DLL Side-loading technique very often. In an attack targeting an organization in
+Indonesia, attackers used an application called meupdate.exe, which is vulnerable to DLL Hijacking. They
+copied this application into the directory %SystemRoot%\help\help\meupdate.exe together with a malicious
+library named msedgeupdate.dll. After the application was started, the malicious DLL was loaded into the
+address space of the meupdate.exe process. Then the malicious code created the svchost.exe process (see
+Process Hollowing).
+Example 2
+In an attack targeting a Malaysian organization, attackers used the popular legitimate application VLC
+Media Player, which was put into a directory together with a malicious library. After the application
+was started, a malicious DLL was loaded into its address space. This DLL was named libvlc.dll (MD5:
+CBE5AEB8D809C4E09C7C2B7705C35F95).
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Hijack Execution Flow: DLL Side-Loading T1574.002
+Command_line: “C:\Program Files\Common Files\VLCMedia\vlc.exe service”
+Example 3
+Contents 140
+Side-loading enabled an Asian APT group to execute code from a malicious DLL named sqlite.dll in the
+context of a service. As a result, the acrobroker.exe process was started with the command-line option "--i" .
+The malicious DLL was loaded into a new process and initiated startup of netsh.exe. Then code was injected
+into this process. After the code injection, the netsh.exe process connected to the attackers' administrative
+control console at "www.zemelya67[.]ru" to receive commands.
+Implants encountered in attacks conducted by Asian threat actors:
+MD5 File name
+C706F39B9323D6A8BEFEFD445583D099 cclib.dll
+A375266904647D5F5D26613C31881385 sqlite.dll
+DE8804CBA58C70659134E03CADDE6146 libvlc.dll
+F36A6A1B48D379FFCD1A78A5FA3460D7 libvlc.dll
+—
+c:\ProgramData\intel\shadercache\colorui.dll
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Hijack Execution Flow: DLL Side-Loading T1574.002
+Other files:
+MD5 File name Verdict
+t
+Contents 141
+t
+B13C355F6A5EDC9E
+dbhelp.dll Trojan.Win32.APosT.nyb
+3067EC76D7CF04ED
+C19B5F9BF1CD6BC5
+mpclient.dll Trojan.Win64.Agentb.bvf
+C9F9EE554B0C2665
+t
+2358CA2BE24DD767
+F4997C315203B7AA t
+c:\Program Files\nvidia corporation\
+nvstreamsrv\steamlauncher\ Backdoor.Win64.MysterySnail.c
+suppor t ool\cryptbase.dll
+t
+B65F28835D13F17E C:\Users\User\AppData\Local\cef\ Backdoor.
+D7EAC5EEB0D4C662 cryptbase.dll Win64.MysterySnail.e
+Example 4
+In another attack, an Asian APT group used Side-loading for code execution that was less noticeable. The
+malicious DLL C:\ProgramData\oracle\mpsvc.dll was loaded into the process C:\ProgramData\oracle\taskhost.
+exe, which was started while running a postponed task (the parent process was C:\Windows\System32\
+taskeng.exe). After it is loaded, the malicious DLL initiates startup of the msiexec.exe process. Asian threat
+actors often execute their payload in the context of this process.
+Implants also encountered in attacks conducted by Asian threat actors:
+MD5 Path
+BB02A5D3E8807D7B13BE46AD478F7FBB c:\ProgramData\intel\wireless\cclib.dll
+7332710D10B26A5970C5A1DDF7C83FBA c:\ProgramData\oracle\mpsvc.dll
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Hijack Execution Flow: DLL Side-Loading T1574.002
+Contents 142
+Below are some examples of libraries that attackers loaded into legitimate processes using the Side-loading
+technique:
+MD5 File name
+11955356232dcf6834515bf111bb5138 McUtil.dll
+149f35aaa7f6c065e7562850d6968683 McUtil.dll.
+aa7231904a125273f5e5ee55a1441ba4 TmDbgLog.dll
+87AA0BEDF293E9B16A93E4411353F367 hccutils.dll
+Detection
+Approaches to detecting DLL Hijacking are described in Hijack Execution Flow: DLL Search Order Hijacking
+T1574.001.
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Indicator Removal: File Deletion T1070.004
+Indicator Removal: File Deletion T1070.004
+Basic description
+Contents 144
+Malware and various tools may leave entries in event logs or in temporary files and therefore indicate
+suspicious behavior on the network or directly on the victim's machine. These files are often deleted for the
+purpose of covering the tracks of attackers in the system.
+Although operating systems have standard commands that let you delete files, attackers may also use their
+own tools. Examples of "native" commands in Windows are the command "del".
+Examples of procedures
+Example 1
+Attackers deleting traces of their presence after exfiltration of data to an external server:
+cmd.exe /c C: & cd\ & cd "" & del \\c$\windows\temp\temp.txt
+cmd.exe /c cd /d $appdata\proDAD\Adorage && del c.rar && dir
+cmd.exe /c cd /d $appdata\proDAD\Adorage && del "kmt.xlsx" && dir
+sc delete "SessionEnvSvc"
+reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost" /v "SessionEnvSvc"
+/f
+cmd.exe /C del /f /q "*"
+cmd.exe /C del /f /q "\10.188.1.250\C$\windows\help\help*”
+Example 2
+In an incident investigated by ICS CERT, after successfully infecting a system and downloading the next
+implant, malware deleted itself via delayed execution using the ping command:
+cmd /c ping localhost & del $selfpath
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Indicator Removal: File Deletion T1070.004 Contents 145
+Example 3
+Impacket modules also delete scripts after a command is executed:
+%COMSPEC% /Q /c echo  ^> \127.0.0.1\C$__out 2^>^&1 > %TEMP%\e.bat &
+%COMSPEC% /Q /c %TEMP%\e.bat & del %TEMP%\e.bat
+Detection
+The main way to detect the Indicator Removal: File Deletion T1070.004 technique is to look for process
+creation events that you can use to detect suspicious command-line arguments such as "del" in Windows.
+EDR solutions also monitor file deletion events. For example, the Sysmon monitoring agent can be configured
+to log events for the deletion of only executable files to reduce the volume of logs.
+Detection rules can be created based on creation and deletion events over a specific time interval. For
+example, you can have a rule that is triggered when an executable file is deleted within 24 hours of its creation.
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1, 11, 23, 26
+SIGMA rules
+
+Sigma-Generic-File Deletion Using Ping.exe
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Indicator Removal: Network Share Connection Removal T1070.005
+Indicator Removal: Network Share Connection Removal T1070.005
+Basic description
+Contents 146
+Threat actors may unmount previously mounted network folders. Mounted network folders may indicate that
+additional systems were infected. A connection to shared network resources can be deleted by using the "net"
+utility.
+Examples of procedures
+Examples of attackers deleting traces of their presence:
+net use \\ipc$ /del
+net use * /del /y
+Detection
+The main way to detect the technique known as Indicator Removal: Network Share Connection Removal
+T1070.005 is to look for process creation events that have suspicious command-line arguments such as "net
+use \system\share /delete".
+Event source Log Event ID
+Windows Security 4688
+Sysmon Sysmon 1
+SIGMA rules
+
+Sigma-Generic-Network Share Deleted
+
+Modern Asian APT Groups: Tactics, Techniques and Procedures
+Technical details  |  Defense Evasion TA0005  |  Process Injection T1055
+Process Injection T1055
+Basic description
+Contents 147
+The Process Injection technique enables attackers to execute code in the context of a legitimate process and
+elevate their privileges in the system, thereby making life even more difficult for security teams. Asian APT
+groups often utilize the Process Injection technique, especially Process Hollowing. There are also other variants
+of this technique, such as DLL Injection and PE Injection.
+In some cases, attackers attempt to execute their code by directly querying the address space of the target
+process and writing commands to it. This activity can be detected by analyzing the sequence of WinAPI
+functions that are used.
+For example, the basic mechanism for implementing a DLL Injection attack looks as follows:
+Output : 
+### **Process Injection T1055**
+
+#### **Basic Description**
+The Process Injection technique allows attackers to execute arbitrary code within the context of a legitimate process. This can help them elevate privileges and evade detection by security solutions, making it more challenging for defenders to identify malicious activities. Asian Advanced Persistent Threat (APT) groups frequently employ this technique, with particular emphasis on methods such as Process Hollowing, DLL Injection, and PE Injection.
+
+#### **Mechanisms of Process Injection**
+1. **Process Hollowing**:
+   - **Description**: Involves creating a new process in a suspended state, replacing its memory with malicious code, and then resuming the process.
+   - **Detection**: Look for processes that are created in a suspended state followed by memory modifications and resumption of execution.
+
+2. **DLL Injection**:
+   - **Description**: Injects a Dynamic Link Library (DLL) into the address space of another process, allowing the injected code to run with the permissions of the target process.
+   - **Basic Mechanism**:
+     1. The attacker calls `CreateRemoteThread` or `NtCreateThreadEx` to create a new thread in the target process.
+     2. This thread is used to call `LoadLibrary` with the path to the malicious DLL.
+     3. The DLL's entry point (`DllMain`) is executed in the context of the target process.
+   - **Detection**: Monitor for calls to `CreateRemoteThread`, `VirtualAllocEx`, `WriteProcessMemory`, and `QueueUserAPC`.
+
+3. **PE Injection**:
+   - **Description**: Involves writing a Portable Executable (PE) file into the memory of another process and executing it.
+   - **Detection**: Look for processes that write executable code to another process's memory and then execute it.
+
+#### **Examples of Procedures**
+- **Process Hollowing Example**:
+  ```bash
+  cmd.exe /c "C:\Windows\System32\rundll32.exe" C:\malicious.dll,EntryPoint
+  ```
+- **DLL Injection Example**:
+  ```cpp
+  HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, targetPid);
+  LPVOID pLibPath = VirtualAllocEx(hProcess, NULL, strlen("C:\\malicious.dll") + 1, MEM_COMMIT, PAGE_READWRITE);
+  WriteProcessMemory(hProcess, pLibPath, "C:\\malicious.dll", strlen("C:\\malicious.dll") + 1, NULL);
+  HANDLE hThread = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryA, pLibPath, 0, NULL);
+  ```
+
+#### **Detection**
+- **Event Monitoring**:
+  - **Windows Security Log (4688)**: Process creation events.
+  - **Sysmon Events**:
+    - **Event ID 1**: Process creation.
+    - **Event ID 10**: Network connection.
+    - **Event ID 13**: File creation time change.
+    - **Event ID 14**: Registry value set.
+    - **Event ID 272**: Image loaded.
+
+- **Behavioral Analysis**:
+  - Look for processes that are created with unusual command-line arguments.
+  - Monitor for API calls indicative of process injection, such as `CreateRemoteThread`, `VirtualAllocEx`, and `WriteProcessMemory`.
+
+- **Anomaly Detection**:
+  - Identify processes that exhibit behavior inconsistent with their normal operation, such as unexpected network connections or file modifications.
+
+#### **SIGMA Rules**
+- **Example SIGMA Rule for Process Hollowing**:
+  ```yaml
+  title: Detect Process Hollowing
+  id: 1a2b3c4d-e5f6-7890-a1b2-c3d4e5f6g7h8
+  status: experimental
+  description: Detects process hollowing techniques by monitoring for processes created in a suspended state and memory modifications.
+  references:
+    - https://attack.mitre.org/techniques/T1055/
+  logsource:
+    category: process_creation
+    product: windows
+  detection:
+    selection1:
+      CommandLine|contains: "rundll32.exe"
+      CommandLine|contains: ".dll,EntryPoint"
+    selection2:
+      ParentImage|endswith: "\\svchost.exe"
+      Image|endswith: "\\malicious.exe"
+      Suspended: true
+    condition: 1 of them
+  falsepositives:
+    - Legitimate use of rundll32.exe for legitimate DLLs
+  level: high
+  ```
+
+- **Example SIGMA Rule for DLL Injection**:
+  ```yaml
+  title: Detect DLL Injection
+  id: 8f7e6d5c-4b3a-2910-e1d2-c3f4e5g6h7i8
+  status: experimental
+  description: Detects DLL injection by monitoring for calls to CreateRemoteThread and WriteProcessMemory.
+  references:
+    - https://attack.mitre.org/techniques/T1055/
+  logsource:
+    category: process_creation
+    product: windows
+  detection:
+    selection1:
+      Image|endswith: "\\malicious.exe"
+      OriginalFileName|contains: "CreateRemoteThread"
+    selection2:
+      Image|endswith: "\\malicious.exe"
+      OriginalFileName|contains: "WriteProcessMemory"
+    condition: all of them
+  falsepositives:
+    - Legitimate use of CreateRemoteThread and WriteProcessMemory in development environments
+  level: medium
+  ```
+
+By monitoring for these events and behaviors, security teams can more effectively detect and respond to process injection techniques used by APT groups.

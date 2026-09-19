@@ -1,0 +1,111 @@
+Appendix A - Other variant method of installation
+
+Enumerates all services with the following characteristics:
+
+```
+   ServiceType = SERVICE_WIN32
+ServiceState = 3
+```
+
+Searches for services with the SERVICE_RUNNING state or the service name Brower [ sic ].
+
+a.The malware checks the service configuration for the following ImagePatch value:
+```
+       svchost.exe -k netsvcs
+```
+( It searches for services with this value as a command line parameter)
+b. If the ImagePath value is found, it checks the registry key below and retrieves the
+value of ServiceDll registry entry:
+```
+    HKLM\SYSTEM\CurrentControlSet\Services\\Parameters
+```
+c. The malware modifies the service's configuration, modifying the service Start and Type
+characteristics to the following:
+```
+      Start - 2 SERVICE_AUTO_START
+   Type - 110
+          SERVICE_INTERACTIVE_PROCESS|SERVICE_WIN32_OWN_PROCESS
+```
+These service modifications enable the service to start automatically, interact with the desktop, and run in its own process.
+
+If Step 2 is successful, the malware performs the following instructions:
+
+a. Loads the resource file in memory and writes the resource's content to a file in "%USER-
+PROFILE%\<service name>.dll" .
+This behavior drops the DLL component in the directory,
+```
+   "%USERPROFILE%\.dll"
+```
+Note: %USERPROFILE% is "C:\Documents and Settings\<username>" .
+b. As part of its anti-forensic discovery, the malware modifies the DLL file time attributes to
+be the same as kernel32.dll.
+The date created, last accessed, and last modified will be modified in this case.
+c. The Hydraq dropper modifies the registry key of the target service:
+```
+    HKLM\SYSTEM\CurrentControlSet\Services\\Parameters\ServiceDll =
+    "%USERPROFILE%\.dll"
+```
+This automatically executes the DLL component on system start.
+d.The malware starts the target service to execute the DLL component.
+CA ISBU-ISI WHITE PAPER: IN-DEPTH ANALYSIS OF HYDRAQ 31
+
+If Step 2 is NOT successful, the malware performs the following instructions:
+
+a. Loads the malware's resource file in memory and writes the resource's content to a file in
+```
+   "%USERPROFILE%\.dll".
+```
+This behavior drops the DLL component file in the directory "%USERPROFILE%\<random
+```
+   name>.dll"
+```
+Note:
+%USERPROFILE% is "C:\Documents and Settings\<username>" .
+<random characters> is based on the result of GetTickCount API.
+b. The malware creates a service with the same name as the generated filename of the
+DLL component and with the following characteristics:
+```
+    DesiredAccess = SERVICE_ALL_ACCESS
+    ServiceType = SERVICE_WIN32_OWN_PROCESS|SERVICE_INTERACTIVE_PROCESS
+    StartType = SERVICE_AUTO_START
+    ErrorControl = SERVICE_ERROR_NORMAL
+    BinaryPathName = "%SystemRoot%\System32\svchost.exe -k "random name""
+HKLM\SYSTEM\CurrentControlSet\Services\<random name>\Type =
+SERVICE_WIN32_OWN_PROCESS|SERVICE_INTERACTIVE_PROCESS
+
+HKLM\SYSTEM\CurrentControlSet\Services\<random name>\Start = SERVICE_AUTO_START
+HKLM\SYSTEM\CurrentControlSet\Services\<random name>\ErrorControl = dword:00000001
+HKLM\SYSTEM\CurrentControlSet\Services\<random name>\ImagePath =
+%SystemRoot%\System32\svchost.exe -k "<random name>"
+
+HKLM\SYSTEM\CurrentControlSet\Services\<random name>\DisplayName = "<random name>"
+HKLM\SYSTEM\CurrentControlSet\Services\<random name>\ObjectName = "LocalSystem"
+HKLM\SYSTEM\CurrentControlSet\Services\<random name>\Description = "<random name>"
+HKLM\SYSTEM\CurrentControlSet\Services\<random name>\Parameters\ServiceDll = "%US    ERPROFILE%\<random name>.dll"
+HKLM\SYSTEM\CurrentControlSet\Services\<random name>\Parameters\StubPath = <drop    per component filename>
+
+```
+It also adds the service name in the registry key below so the service will be executed on
+start as a system service.
+```
+    HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost\ = <random
+name>
+
+```
+c. The malware starts the created service to execute the DLL component.
+If the malware fails to create the service it adds the following registry entry:
+```
+    HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\ = rundll32.exe
+    "%USERPROFILE%\.dll", Launch
+```
+It then executes the process with the parameters below. If this fails the malware will delete
+the DLL component file.
+```
+   rundll32.exe "%USERPROFILE%\.dll", Launch
+```
+Lastly the malware executes the file cmd.exe with the command line parameters below.
+The purpose of this is to delete the dropper component.
+```
+   "%system%\cmd.exe /c del "" > nul"
+```
+CA ISBU-ISI WHITE PAPER: IN-DEPTH ANALYSIS OF HYDRAQ 32

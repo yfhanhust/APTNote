@@ -1,0 +1,99 @@
+DEAD BEEF ON A COOL BASE
+As the driver intercepts all connections (e.g. on TDI_RECEIVE TDI event or ClientEventReceive() event notification triggered
+through its TDI Filter Driver), it parses all incoming HTTP and SMTP traffic to see if it can be authenticated as Snake traffic.
+The authentication is implemented by decrypting the data and making sure it starts with the markers 0xDEADBEAF and
+0xC001BA5E (which appear to derive from ‘DEAD BEEF’ and ‘COOL BASE’).
+Here are specific steps:
+
+
+The data it accepts should start from a 10 byte signature with the following rules:
+
+the first 8 bytes must all be ASCII characters, the parser calculates their total sum ( sum ):
+
+
+
+9th byte must be equal to sum / 26 + 65
+
+
+10th byte must be equal to 122 - sum % 26
+
+
+Starting from the 11th byte, the data must be base64-encoded; the parser decodes that data
+
+
+Once decoded, the decrypted data should contain the aforementioned markers:
+
+
+.text:F6751426   lea   eax, [ebp+dwMarker]       ; return marker here
+.text:F6751429   push   eax
+.text:F675142A   mov   ecx, [ebp+buf_len]
+; traffic’s buffer length
+.text:F675142D   push   ecx
+.text:F675142E   mov   edx, [ebp+abyBuffer]
+; traffic’s buffer pointer
+.text:F6751431   push   edx
+.text:F6751432   call ;
+decrypt_traffic decrypt traffic first
+.text:F6751437   test   eax, eax
+.text:F6751439   jz    short exit            ; if failed, exit
+.text:F675143B   mov   eax, [ebp+dwMarker]       ; check the returned marker
+.text:F675143E   cmp   eax, _DEADBEAF ; _DEADBEAF dd 0DEADBEAFh
+.text:F6751444   jnz   short exit            ; if not 0xDEADBEAF, exit
+.text:F6751446   cmp   [ebp+dwNextDword], 0C001BA5Eh  ; check next DWORD
+.text:F675144D   jnz   short next            ; if not 0xC001BA5E, exit
+
+
+When the traffic is authenticated, its contents is then parsed by using “GET”, “POST”, “http://”, “HTTP/”,
+“Content-Length”, “Connection”, “close” tags, in order to retrieve HTTP requests
+
+
+SMTP traffic is also parsed, only by using “MAIL “, “RCPT “ tags in order to retrieve SMTP characteristics
+
+
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 18
+By observing such behaviour, one might wonder why the driver is expecting HTTP or SMTP clients? Why does it act like HTTP/SMTP
+server processing client traffic, and serving back normal responses as per the protocol?
+For example, in HTTP the driver will respond with messages like “HTTP/1.1 200 OK” or “HTTP/1.1 500 Server Error”.
+For SMTP traffic, it communicates back normal SMTP server responses, such as “250 Sender OK”, “503 Bad sequence of
+commands ”, etc.
+The reason behind such behaviour is that the driver is acting in this mode like a proxy, routing requests from other infected hosts to
+a remote C&C server.
+Another opportunity this mode unlocks is a peer-to-peer network mode with no centralised C&C. The infected hosts are capable
+of transferring the following peer-2-peer commands defining fragment size, reliability parameters, new peer information, peer
+impersonation flags, etc.:
+• frag_size
+• frag_no_scrambling
+• peer_frag_size
+```
+  • read_peer_nfo
+```
+• write_peer_nfo
+• imp_level
+• reliable_n_tries
+• reliable_keepalive
+• reliable_rtt
+• reliable_padding
+• reliable_no_keepalive
+• m2b_raw
+```
+  • psk
+```
+• key
+Once the incoming data is authenticated and decrypted, the driver passes it to the DLL by using memory pipes.
+For example, on HTTP traffic arrival it may send traffic data into a memory pipe \Device\NamedPipe\isapi_http, and then,
+send a received peer-2-peer command message write_peer_nfo=[IP_ADDRESS:PORT]0frag_no_scrambling=Y0 into
+another memory pipe called \Device\NamedPipe\isapi_dg.
+In order to log its activity, the driver writes log data into the pipe \Device\NamedPipe\isapi_log, so that the DLL could log the
+data into the log files.
+Full list of the named pipes used for communications is provided below:
+• \Device\NamedPipe\isapi_http
+• \Device\NamedPipe\isapi_log
+• \Device\NamedPipe\isapi_dg
+• \Device\NamedPipe\services_control
+Messages submitted into the pipes are wrapped into the structures. The structures appear to contain headers to allow the pipe
+server, that runs within an infected userland module, to identify the messages first and then unwrap the structures accordingly.
+For example, the message headers could be:
+• domc.np
+• frag.np
+Once received from the pipes and unwrapped/decoded, the data is then handled by the usermode DLL as per the data intention whether it’s a traffic sniffing task, a peer-2-peer client logic, a logging task, or a task of saving received files into the virtual volumes.
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 19

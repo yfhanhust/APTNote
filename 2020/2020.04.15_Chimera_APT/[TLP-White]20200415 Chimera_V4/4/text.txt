@@ -1,0 +1,55 @@
+Case A:
+In this case, the victim company had already subscribed to our continuous threat hunting
+2
+service. Our investigation revealed malicious activities occurring between 2019-12-09 ~
+2019-12-10. Meanwhile, in this incident, 15 endpoints and 6 user accounts were compromised, and
+4 malwares and 8 C2 servers were found.
+To help better depict the operational details of this case, the cyber situation graph and storyline
+is respectively shown in Fig 1. Note that all the server/user names are de-identified, and replaced
+with names that can represent their roles.
+Figure 1: Storyline in Case A
+3
+The same APT malware - GoogleUpdate.exe - was found on two endpoints. On the day we
+discovered this malware, no information could be found on VirusTotal (VT). To confuse security
+products and analysts, the malware replaced the original GoogleUpdate binary and functioned as a
+mutated Cobalt Strike beacon to inject payloads into other processes. Moreover, network security
+devices had difficulty detecting the associated C2 servers, as they were located in the Google Cloud
+Platform. The C2 server domains are listed in Appendix I of the IoC section.
+After successfully connecting back to the C2, the attacker used RECORDEDTV.MS to archive
+the stolen data for data exfiltration. It is worthy to note that even without the .exe file extension, the
+data exfiltration process could still be executed. Identical binaries were found in several machines,
+but under different names, e.g. RECORDEDTV.MS, uncheck.dmp, and jucheck.exe. This aroused
+our suspicions and prompted us to suspect the binary was masquerading as a Java Update program.
+Inserting malware in a location where legal software is stored seems to be a characteristic tactic of
+Chimera ​. For this case, it was found that the disguised program, which was a modified RAR
+software, had a one-byte discrepancy from the original version. We are still ascertaining the reasons
+behind this difference.
+To track the root cause, we found that the first Cobalt Strike backdoor was located at
+NB-CLAIR, and was then remotely copied to Server-LAUREN. A valid account was used to invoke
+Cobalt Strike via schtasks (Fig 2).
+​
+Figure 2: schtask is used to lateral movement
+4
+The recon activities in Server-LAUREN are illustrated in the figure below. Several "net user”
+commands were executed for recon purposes, and the results were saved to the RecordedTV_lib.log
+(Fig 3).
+Figure 3: Reconnaissance commands
+Our analysis also showed that Server-LAUREN used wmic to remotely execute various
+commands in another endpoint to check if there was an Internet connection (Fig 4).
+Figure 4: Reconnaissance via wmic
+5
+Server-LAUREN also archived the registry and ntds.dit to other hosts for offline breaking. The
+latter is an AD database, which contains information about domain hosts and users, e.g. id, name
+and password hash. Since this file was encrypted, and the key was stored in the SYSTEM registry,
+the threat actor needed to archive both ntds.dit and the registry to both decrypt the file and remotely
+brute-force the password hash. The control of Server-LAUREN, which was also achieved via
+schtasks, was traced back to the NB-CLAIR machine. From the NB-CLAIR timeline, we noticed
+that a remote desktop program (RDP) from a certain IP was run just six minutes before the schtasks
+was executed (Fig 5). Since this IP was a VPN server, and a valid account was used to log in to it,
+we believe the actor acquired the password from a separate data breach.
+​
+Figure 5: Overall activities
+At the end of the attack, the wlanapi.dll malware, which we dubbed SkeletonKeyInjector, was
+used for persistence. More details of the malware reversing will be provided in ​ Sec. 4 Malware
+Reversing .
+6

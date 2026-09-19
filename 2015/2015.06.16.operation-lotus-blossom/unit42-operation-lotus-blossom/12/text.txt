@@ -1,0 +1,79 @@
+Variant C
+The third variant of Elise has its earliest compile timestamp in mid-2013 and has been
+used in attacks periodically since that time. This variant has been the most prevalent
+overall, accounting for roughly 75 percent of all samples identified by Unit 42. The
+most recent sample of variant C was compiled in late March of 2015. Additionally,
+variant C uses a 336-byte configuration structure.
+Similar to variant B, variant C is often delivered via a file exploiting a client-side
+vulnerability, such as CVE-2012-0158. This particular variant is delivered as a single
+DLL with two exported functions — ‘Setting’ and ‘Update’
+When the ‘Setting’ export is called, the malware will copy itself to the following
+location:
+
+%APPDATA%\Microsoft\Network\rasphone.dll
+
+This new file is then called via the following command:
+
+Rundll32.exe %APPDATA%\Microsoft\Network\rasphone.dll,Update
+
+When the ‘Update’ export is called on rasphone.dll, the malware will begin by checking
+if a debugger is attached via a call to IsDebuggerPresent(). In the event it is not
+detected, the malware will then check to ensure the DLL has been loaded by Rundll32.
+exe by comparing the current filename against ‘dll32’. rasphone.dll uses a simple string
+encryption routing. The following code can decrypt encountered strings:
+void decrypt_string(char encrypted, int size)
+{
+int i;
+if ( encrypted )
+{
+for ( i = size - 1; i > 0; --i )
+encrypted[i] ^= encrypted[i - 1];
+encrypted ^= 0xA0;
+}
+}
+The malware continues to identify the location of iexplore.exe (%PROGRAM FILES%\
+Internet Explorer\iexplore.exe) and spawn a new instance of this process. The malware
+will proceed to inject itself into iexplore.exe. Finally, the malware will decrypt an
+embedded DLL located in its resource section (‘XDATA’) and write this DLL to a new
+section of memory in iexplore.exe. A configuration blob of 336 bytes is subsequently
+written to this DLL, and the DLL is loaded into iexplore.exe via a call to LoadLibraryA.
+The injected DLL (hereafter referred to as xdata) begins by spawning a new
+thread where all further actions will be taken. The malware writes its encrypted
+configuration to the following location:
+
+%APPDATA%\Microsoft\Network\6B5A4606.CAB
+
+The following script can be used to decrypt this CAB file.
+Additionally, this CAB file is “time stomped” to a Create/Modify time of Sunday,
+November 21, 2010, 10:29:33 UTC. This malware also writes to a log file located at
+the following path.
+
+%TEMP%\00EL225AF.TMP
+
+Data in this file is not obfuscated or encrypted in any way. The malware proceeds
+to enter in a loop, where it will attempt to communicate with the specified URLs
+via either HTTP or HTTPS. The following has been identified about the structure of
+the binary data submitted via POST requests. This structure is consistent with all
+previous Elise variants discussed.
+FIGURE 20 + Elise Variant C Data Encoding.
+When an initial communication is made to the remote server, the malware will
+execute the following commands to conduct basic network reconnaissance:
+
+
+net user
+
+
+ipconfig /all
+
+
+net start
+
+
+systeminfo
+
+
+This data is exfiltrated using a POST request, as seen below.
+FIGURE 21 + Elise Variant C POST Request.
+In the above example, the ‘2320’ value in the URI is generated using the victim’s
+MAC address. The ‘00320511’ value in the URI is generated using the current time.
+This allows each request to be unique and also identify the victim machine.

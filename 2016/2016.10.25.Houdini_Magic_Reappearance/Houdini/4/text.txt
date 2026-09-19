@@ -1,0 +1,93 @@
+Analyzing the Hworm Malcode:
+Upon configuring and building a server, the builder prompts the user to save a VBS file and modifies a stub file to create the
+implant. The VBS file is used to load and inject the implant. It appears that the operators behind the above attack either
+chose to not use the VBS loader or the newer versions of the builder no longer produce a VBS script.
+The VBS Loader:
+The script contains three files encoded in base64. The first file is DynamicWrapperX (http://www.script­
+coding.com/dynwrapx_eng.html) (DCOM_DATA), the second file is the RunPE shellcode (LOADER_DATA), and the third file
+is the file which gets injected into host process (FILE_DATA). DynamicWrapperX provides access to all Windows APIs from
+a Visual Basic Script providing a wide range of functionality to this VBS script.
+The configuration of the script is at the beginning of the file (Figure 5).
+(http://researchcenter.paloaltonetworks.com/wp­
+content/uploads/2016/10/Houdini_7.png)
+Figure 5 Script configuration section
+In the above example, the script will use the registry as a startup method, it will drop itself into the system’s %appdata%
+directory using the filename myhworm.exe and it will inject itself into svchost.exe.
+As the script executes it first adds one of three startup methods which will execute the script on Windows startup:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+Registry Run in HKCU
+Path: HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+EntryData Wscript.exe //b //e:vbscript 
+/b Specifies batch mode, which does not display alerts, scripting errors, or
+input prompts.
+/e Specifies the engine that is used to run the script.
+Define startup directory
+Startup task (not implemented yet)
+Following the installation of persistence, the script checks if the current environment is WOW64. If so, the script will execute:
+1 %windir%\syswow64\wscript.exe /b /e:vbscript 
+The script then drops DynamicWrapperX in the configured installation directory with file extension “.bin”.
+1 \.bin
+It will then register DynamicWrapperX:
+1 regsvr32.exe /I /S 
+Next, the script will load the registered object:
+1 “set DCOM = CreateObject("DYNAMICWRAPPERX")”
+It registers /load VirtualAlloc and CallWindowProcW as functions which can be directly called in the script using
+“dcom.VirtualAlloc ”.
+Using VirtualAlloc it will allocate new memory and copy RunPE shellcode (LOADER_DATA, loader.hex) and the to­be­
+injected binary (FILE_DATA) into memory.
+Using CallWindowProcW the script will jump to the RunPE shellcode and the shellcode will inject the file (FILE_DATA) into
+the host process. The host process is by default svchost.exe but for .NET files injection can occur into the file:
+1 %windir%\Microsoft.Net\Framework\v2.0.50727\msbuild.exe
+Figure 6 shows the main routine of the script:
+(http://researchcenter.paloaltonetworks.com/wp­content/uploads/2016/10/Houdini_8.png)
+Figure 6 Main routine
+Figure 7shows a hex dump of LOADER_DATA (RunPE shellcode):
+(http://researchcenter.paloaltonetworks.com/wp­content/uploads/2016/10/Houdini_9.png)
+Figure 7 Hex dump of LOADER_DATA
+Similarities in comments and coding styles between previous versions of the Hworm VBS script and the VBS script provided
+in this beta builder can be seen in Figure 1. Top is the VBS file from the HTTP version of Hworm, compared with the VBS
+script produced by the beta builder of Hworm (below).
+(http://researchcenter.paloaltonetworks.com/wp­content/uploads/2016/10/Houdini_10.png)
+(http://researchcenter.paloaltonetworks.com/wp­content/uploads/2016/10/Houdini_11.png)
+Figure 8 Similarities between HWorm versions
+The Beta Server:
+The main server which the builder produces is developed in Delphi and is not encrypted. Unit 42 has seen variants packed
+with VMProtect and ASPack. In some versions of the Delphi Hworm implants discovered (unpacked beta versions) the
+settings are stored in the resource section RCData\“CONFIG” and are in clear text (Figure 9).
+(http://researchcenter.paloaltonetworks.com/wp­content/uploads/2016/10/Houdini_12.png)
+Figure 9 Settings
+Some versions also have an unfinished PE spreader in the resource section
+(a65fd78951590833904bd27783b1032b7cc575220a12c6d6f44cb09061999af3). The spreader will terminate all running
+processes named “sm?rtp.exe” and execute a VBS file using wscript.exe:
+1 “wscript.exe /e:vbscript \$RECYCLE.BIN\u vbs name here”.
+(http://researchcenter.paloaltonetworks.com/wp­content/uploads/2016/10/Houdini_13.png)
+Figure 10 Spreader
+The server exports some unused functions (they all just have RET instruction). We have seen “wrom.exe” and “server.exe”
+used as the name in the export table (Figure 11).
+(http://researchcenter.paloaltonetworks.com/wp­content/uploads/2016/10/Houdini_14.png)
+Figure 11 Export table
+The author used the open source library Indy Components for network communication. They also used BTMemoryModule to
+load DLLs from memory (without saving it on the disc).
+The Hworm implants use a connect­back communication. This means the server (implant) connects back to the client
+(remotely controlling system). It also has some modules implemented in the server and each module uses its own socket for
+communication (on the same port defined in the configuration).
+The following modules provide features of this malware:
+Screenshot : Provides the ability to capture screenshots in JPEG/BMP formats
+Keylogger : Provides the ability to log key strokes
+Internet IO : Provides the ability to download and execute files from the internet. It also provides the ability to load the
+executables via the RunPE technique
+File Manager : Provides the ability to list files and directories, delete, rename, and execute files, and upload or
+download files via TCP or HTTP
+Password : Provides the ability to steal passwords from Firefox, Opera, and Chrome browsers
+Misc : Provides the ability to list processes or modules and kill running processes
+USB Notifier : Provides the ability to notify the controller when a USB device is attached
+Houdini Client : Provides the main client, which contains the server’s configuration.

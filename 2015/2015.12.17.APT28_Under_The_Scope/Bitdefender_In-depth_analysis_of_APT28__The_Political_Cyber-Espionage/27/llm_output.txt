@@ -1,0 +1,120 @@
+
+
+
+Sentence : Appendix 6 - Additional module
+The final component installed by APT28 is a module named pr.dll . This file was compiled 5 hours after the system was compromised.
+This discrepancy in time prompts us that the file is individually crafted for each target system.
+The file seems to be a modular framework that can accommodate different modules. It stores its configuration in an encrypted format, and
+saves it in the Registry key “HKU\S-1-5-19_Classes\Software\Microsoft\MediaPlayer{some_clsid}\chnnl” .
+Once executed, the malware checks for the presence of a mutex (XSQWERSystemCriticalSection_for_1232321) to make sure that another
+instance of itself is not already running. After that, it contacts the server (the IP: 198.[redacted].74 or the domain name sec[redacted]win.
+com). During the initial communication, the backdoor sends an encrypted buffer to the C&C server that contains a RC4 key and the IDs of
+the plugins it has installed. The buffer is shown below:
+03 33 02 03 33 23 03 21 23 06 21 23 3A 66 95 64 4B 56 FF 22 4D 81 4F
+We can identify plugins with the following ids from the buffer above: 0x3302, 0x3303, 0x2103, 0x2106
+An interesting aspect of the pr.dll is that it creates two pipes that are presumably used to collect data sent by other processes.
+The pr.dll seems to be a Windows version of a Linux file found on the server. The server hosts 4 elf files, two built for the x86
+architecture ( 075b6695ab63f36af65f7ffd45cccd39, f3bf929a35c3f198226b88537d9ccb1a ) and two for the x64 architecture
+( 2683624eacc490238e98c449bddbb573, 5bf524a4860f3c33e3ad77b6b625db37 ). The elf file uses SQLite3 rather than Registry
+to store its configuration. The database named My_BD holds two values chnnl and prms.
+The files attempt to contact the server by constructing random requests. Each request is made of one of the verbs (watch/, search/,
+results/, search/, close) and two to nine arguments (selected from the list: text=, from=, itwm=, ags=, oe=, aq=, btnG=, oprnd=, utm=,
+channel=). The values of the arguments are randomly generated.
+An example of a request is given below:
+h[tt]p:// 198...74/ watch/?aq=JTfJRp-s&oprnd=Dwtee&itwm=niKMuGE9Mp9Md9vHdggZMS16YlSTx&btnG=t&oprnd=FbLtw&AVVAT=m
+8I2tN
+The elf files contain the following modules:
+1. AgentModule
+2. KernelProvider
+
+AgentKernel
+
+ChannelController
+
+
+Cryptor
+
+LocalStorage (sqlite3)
+ReserverApi
+AgentChannel
+HttpChannel
+
+FSModule
+
+
+RemoteShell
+
+
+RemoteKeylogger
+
+
+As stated above, there are two versions for each architecture. The only difference between them is that one version does not include the
+last two modules.
+[24]
+White Paper
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "APT28", "type": "ACTO"},
+        {"id": 2, "description": "pr.dll", "type": "EXEF"},
+        {"id": 3, "description": "HKU\\S-1-5-19_Classes\\Software\\Microsoft\\MediaPlayer{some_clsid}\\chnnl", "type": "REGI"},
+        {"id": 4, "description": "XSQWERSystemCriticalSection_for_1232321", "type": "TAMP"},
+        {"id": 5, "description": "198.[redacted].74", "type": "CCSH"},
+        {"id": 6, "description": "sec[redacted]win.com", "type": "CCSH"},
+        {"id": 7, "description": "0x3302", "type": "TAMP"},
+        {"id": 8, "description": "0x3303", "type": "TAMP"},
+        {"id": 9, "description": "0x2103", "type": "TAMP"},
+        {"id": 10, "description": "0x2106", "type": "TAMP"},
+        {"id": 11, "description": "075b6695ab63f36af65f7ffd45cccd39", "type": "IOCS"},
+        {"id": 12, "description": "f3bf929a35c3f198226b88537d9ccb1a", "type": "IOCS"},
+        {"id": 13, "description": "2683624eacc490238e98c449bddbb573", "type": "IOCS"},
+        {"id": 14, "description": "5bf524a4860f3c33e3ad77b6b625db37", "type": "IOCS"},
+        {"id": 15, "description": "My_BD", "type": "TAMP"},
+        {"id": 16, "description": "chnnl", "type": "TAMP"},
+        {"id": 17, "description": "prms", "type": "TAMP"},
+        {"id": 18, "description": "h[tt]p:// 198...74/ watch/?aq=JTfJRp-s&oprnd=Dwtee&itwm=niKMuGE9Mp9Md9vHdggZMS16YlSTx&btnG=t&oprnd=FbLtw&AVVAT=m8I2tN", "type": "URLS"},
+        {"id": 19, "description": "AgentModule", "type": "TAMP"},
+        {"id": 20, "description": "KernelProvider", "type": "TAMP"},
+        {"id": 21, "description": "AgentKernel", "type": "TAMP"},
+        {"id": 22, "description": "ChannelController", "type": "TAMP"},
+        {"id": 23, "description": "Cryptor", "type": "TAMP"},
+        {"id": 24, "description": "LocalStorage (sqlite3)", "type": "TAMP"},
+        {"id": 25, "description": "ReserverApi", "type": "TAMP"},
+        {"id": 26, "description": "AgentChannel", "type": "TAMP"},
+        {"id": 27, "description": "HttpChannel", "type": "TAMP"},
+        {"id": 28, "description": "FSModule", "type": "TAMP"},
+        {"id": 29, "description": "RemoteShell", "type": "TAMP"},
+        {"id": 30, "description": "RemoteKeylogger", "type": "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "installs"},
+        {"source": 2, "target": 3, "rel_name": "stores in"},
+        {"source": 2, "target": 4, "rel_name": "checks for"},
+        {"source": 2, "target": 5, "rel_name": "contacts"},
+        {"source": 2, "target": 6, "rel_name": "contacts"},
+        {"source": 2, "target": 7, "rel_name": "sends ID of"},
+        {"source": 2, "target": 8, "rel_name": "sends ID of"},
+        {"source": 2, "target": 9, "rel_name": "sends ID of"},
+        {"source": 2, "target": 10, "rel_name": "sends ID of"},
+        {"source": 2, "target": 11, "rel_name": "hosts"},
+        {"source": 2, "target": 12, "rel_name": "hosts"},
+        {"source": 2, "target": 13, "rel_name": "hosts"},
+        {"source": 2, "target": 14, "rel_name": "hosts"},
+        {"source": 11, "target": 15, "rel_name": "uses"},
+        {"source": 15, "target": 16, "rel_name": "contains"},
+        {"source": 15, "target": 17, "rel_name": "contains"},
+        {"source": 2, "target": 18, "rel_name": "constructs"},
+        {"source": 11, "target": 19, "rel_name": "contains"},
+        {"source": 11, "target": 20, "rel_name": "contains"},
+        {"source": 11, "target": 21, "rel_name": "contains"},
+        {"source": 11, "target": 22, "rel_name": "contains"},
+        {"source": 11, "target": 23, "rel_name": "contains"},
+        {"source": 11, "target": 24, "rel_name": "contains"},
+        {"source": 11, "target": 25, "rel_name": "contains"},
+        {"source": 11, "target": 26, "rel_name": "contains"},
+        {"source": 11, "target": 27, "rel_name": "contains"},
+        {"source": 11, "target": 28, "rel_name": "contains"},
+        {"source": 11, "target": 29, "rel_name": "contains"},
+        {"source": 11, "target": 30, "rel_name": "contains"}
+    ]
+}

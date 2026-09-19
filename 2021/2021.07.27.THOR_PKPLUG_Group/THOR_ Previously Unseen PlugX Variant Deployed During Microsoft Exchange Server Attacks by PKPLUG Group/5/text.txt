@@ -1,0 +1,44 @@
+Aro.Dat: Overview
+The first one thousand bytes of Aro.dat (see Figure 2) indicate the file might be encrypted or possibly compressed. As it turns out, this
+data is nothing but random padding data likely added as a file header to evade AV signatures to thwart detection. The end of the filler
+data is null-terminated, which provides an identifier to the actual data entry point. Immediately following the NULL byte (0x00) is a set
+of x86 assembly instructions to unpack the file. In this sample, the x86 assembly starts at file offset 0x4EC with opcode 0x77. This
+translates to assembly mnemonic of JA (jump if above unsigned).
+Figure 2 illustrates the Aro.dat file header up until the NULL byte. The data was truncated for brevity, as the bytes up until the NULL
+are meaningless. Red denotes the NULL byte, and green is where code execution begins.
+0000h: 49 79 7A 45 48 4C 4B 78 75 77 55 48 66 77 46 65 IyzEHLKxuwUHfwFe
+0010h: 6C 46 44 6D 6D 55 6E 42 50 47 76 63 70 75 68 50 lFDmmUnBPGvcpuhP
+0020h: 78 57 5A 67 45 48 62 66 4A 45 57 53 76 74 44 6E xWZgEHbfJEWSvtDn
+0030h: 75 61 75 72 56 4C 63 77 41 79 44 58 6A 72 6E 69 uaurVLcwAyDXjrni
+0040h: 6F 74 70 77 67 73 71 52 67 7A 4D 64 50 6D 46 6A otpwgsqRgzMdPmFj
+0050h: 5A 4E 64 6F 70 72 50 77 70 68 6C 42 6E 6E 56 43 ZNdoprPwphlBnnVC
+0060h: 79 6B 52 45 59 6B 75 50 61 75 63 56 54 55 73 51 ykREYkuPaucVTUsQ
+https://unit42.paloaltonetworks.com/thor-plugx-variant/ 4/29
+8/3/2021 THOR: Previously Unseen PlugX Variant Deployed During Microsoft Exchange Server Attacks by PKPLUG Group
+0070h: 68 73 41 4A 4E 7A 4F 49 61 51 75 4D 46 6C 54 42 hsAJNzOIaQuMFlTB
+0080h: 77 42 44 6B 4A 55 76 43 6C 51 47 68 46 66 69 56 wBDkJUvClQGhFfiV
+0090h: 66 62 6A 4C 46 77 78 41 68 50 67 44 46 6F 47 44 fbjLFwxAhPgDFoGD
+.
+.
+.
+.
+.
+04B0h: 37 35 38 37 35 35 30 39 37 38 32 36 39 30 33 36 7587550978269036
+04C0h: 39 39 33 32 33 32 36 38 39 36 33 30 35 35 39 30 9932326896305590
+04D0h: 37 35 35 35 37 39 35 32 39 38 30 32 33 35 38 33 7555795298023583
+04E0h: 30 36 32 37 36 36 30 32 35 37 36 00 77 06 81 EE 06276602576.w.
+Figure 2. Aro.dat file header
+Aro.dat is designed to remain undetected and cannot run without the aid of a specific loader. As with previous PlugX variants, code
+execution is achieved via a technique known as DLL side loading. Static analysis reveals that once loaded into memory, Aro.dat begins to
+unpack itself and initiates communication with a C2 server.
+Aro.dat is, in fact, an encrypted and compressed PlugX payload. The decryption routine within Aro.dat closely resembles that of older
+PlugX variants (see Figure 3 below) in that it involves multiple decryption keys and bit shift operations. Once decrypted, it gets
+decompressed via the Windows API RtlDecompressBuffer into a Windows module (DLL). The compression algorithm is LZ
+compression (COMPRESSION_FORMAT_LZNT1).
+https://unit42.paloaltonetworks.com/thor-plugx-variant/ 5/29
+8/3/2021 THOR: Previously Unseen PlugX Variant Deployed During Microsoft Exchange Server Attacks by PKPLUG Group
+Figure 3. Comparison of PlugX decryption routines
+The highlighted entries shown in Figure 3 are the static decryption keys used by Aro.dat and an older 2012 PlugX sample (SHA256:
+A68CA9D35D26505A83C92202B0220F7BB8F615BC1E8D4E2266AADDB0DFE7BD15). The decryption routine differs slightly with
+each PlugX build by using different static keys and varying the use of addition and subtraction.
+The decrypted, decompressed Aro.dat is an x86 Windows DLL or PE file.

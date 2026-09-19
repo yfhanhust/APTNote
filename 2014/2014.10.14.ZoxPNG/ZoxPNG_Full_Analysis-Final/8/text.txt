@@ -1,0 +1,22 @@
+Command 0x80061003: Download File
+The Download File command, as the name implies, is responsible for transferring a file from
+the C2 server to the victim’s machine. The payload of the data blob contains a data structure
+defining the filename (and destination) of the file being transferred, the number of bytes within
+the payload to write to the victim’s machine and the offset (if any) to start writing the payload
+data. The format of the command’s argument structure is as follows:
+|Offset in Field Name DescriptionPayload|Col2|Col3|
+|---|---|---|
+|0 (WORD)|wFilenameLength|Length of theszFilename field|
+|2 (variable)|szFilename|Full filename and path of file to write|
+|2+szFilename(DWORD)|dwDataOffset|Offset within file to begin writing data|
+|6+szFilename(DWORD)|dwBytesToWrite|Number of bytes to write to disk|
+|10+szFilename(variable)|(data)|Bytes to write to disk|
+If the dwDataOffset field is non-zero, then the disposition for the CreateFile call is set to
+OPEN_EXISTING whereas if the field is zero, then a new file is created by using
+CREATE_ALWAYS . If the CreateFile call is successful, the command handler calls
+SetFilePointer to the value specified by dwDataOffset and then calls WriteFile in
+order to write the dwBytesToWrite number of bytes to disk.
+The command handler returns a CommandHeader structure with the dwCommandID field of the
+CommandData structure set to 0x80061003 to the command dispatch. If the CreateFile call
+is successful then the dwLastError field is set to 0 otherwise the field is set to the value
+returned by GetLastError .

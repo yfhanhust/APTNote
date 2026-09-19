@@ -1,0 +1,33 @@
+SYSTEM HOOKS
+The first API it hooks is IoCreateDevice(). The installed hook handler calls the original API and then checks if the name of the
+device is netbt or afd . If so, it will install a TDI filter driver. If the device name is Null, Beep, tcpip or Nsiproxy, it will activate
+itself by enabling its hooks designed to hide the presence of Snake on a system, set up its access control lists and the messaging
+system.
+In order to hide its components, the driver hooks the following APIs:
+• ZwQueryKey
+• ZwEnumerateKey
+• ZwCreateKey
+• ZwSaveKey
+• ZwReadFile
+• ZwQuerySystemInformation
+• ZwQueryInformationProcess
+• ZwClose
+• ZwTerminateProcess
+• ZwShutdownSystem
+• ObOpenObjectByName
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 14
+For example, the hook handlers of the registry-related APIs will block access to the registry entries that contain the name of the
+driver. In one example, the rootkit blocks access to registry entries that contain the strings “Ultra3” and “~ROOT”.
+The ZwReadFile() hook handler will block access to the home directory where the rootkit keeps its file. In one of the analysed
+kernel-centric Snake samples the home directory was hard-coded as %windows%\$NtUninstallQ817473$, so it blocked file
+read access from that directory.
+The ZwClose() hook handler is used to inject the DLL module into the userland processes.
+The hook handler for ZwTerminateProcess() checks if the process being shut down is svchost.exe. If so, it considers
+it to be a system shutdown, so it unloads its usermode DLL and deactivates its own network drivers, just like it does when its
+ZwShutdownSystem() hook handler gets invoked.
+The ObOpenObjectByName() hook is designed to hide the presence of its virtual partitions (described later).
+To encrypt data stored on its virtual partitions, the driver sets a hook for another API:
+IofCallDriver()
+To re-infect the usermode process svchost.exe and to re-enable its network drivers, the rootkit hooks these APIs:
+• ZwCreateThread
+• ZwCreateUserProcess

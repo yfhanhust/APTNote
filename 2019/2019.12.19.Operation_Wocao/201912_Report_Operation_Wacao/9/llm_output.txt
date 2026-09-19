@@ -1,0 +1,762 @@
+
+
+
+Sentence : 5 Custom tooling
+This chapter describes tooling that appears to be unique to this actor. This
+assessment is based on the fact that Fox-IT was unable to find tools similar to
+the ones described in this chapter in any of our binary sources or investigations
+into other actors. We have also worked with a number of industry partners to
+verify this also.
+The tools below are described in the order in which the actor would typically deploy them, starting
+with the webshells used for initial access. It is interesting to mention that Fox-IT has observed the
+actor leveraging already existing JexBoss⁴ webshells, placed there by completely different threat
+actors, for reconnaissance activity.
+5.1 File upload webshell
+A simple password protected file uploader shell. The webshell is merely a form with a path and text
+input field. A password is required and given using a URL parameter.
+5.2 File upload and command execution webshell
+A webshell with more features than the one described above. It supports command execution on
+both Unix and Windows hosts. The overall layout and some of the code matches the file upload shell.
+For example, a password is required in the same manner.
+This and the previous shell were uploaded shortly after each other. Once this shell was deployed,
+all interaction with the existing JexBoss shell stopped.
+
+https://github.com/joaomatosf/jexboss
+
+12 | Fox-IT | Operation Wocao
+5.3 Socket tunnel
+A modified version of a publicly available socket tunnel⁵. Some print statements were changed and
+all comments were removed.
+This shell was uploaded not long after the two previously described webshells. All further interaction
+with the target system appears to have taken place through this socket tunnel. This was likely done
+to easily interact with other systems inside the internal network using more conventional tooling,
+such as PsExec and smbexec.
+5.4 Reconnaissance script
+The actor makes use of a reconnaissance script, written in Visual Basic Script (VBS), to retrieve
+detailed information from a system that the actor wants to use for lateral movement or to
+exfiltrate files from.
+The script has support for the following functions, which retrieves:
+• Volume drives and the type of drives (Removable disk, network disk, local disk etc.)
+• List of accounts that have Administrator rights
+• Device information (Manufacturer, Model etc.)
+• Overview of installed software
+• Recently executed software (MuiCache)
+• Running processes
+• Internet connectivity check
+• Connection to www.bing.com and www.google.com via WMI service winmgmts to check
+if a system has a connection to the internet
+Additionally the following information is retrieved:
+• List active user sessions
+• List users in the administrator group
+• Retrieve local network configuration
+• Display all open connections and listening ports and corresponding processes
+• List installed Windows patches, on which dates they were installed and by which user
+
+https://github.com/sensepost/reGeorg/blob/master/tunnel.jsp
+
+Fox-IT | Operation Wocao | 13
+5.5 XServer
+XServer is a custom backdoor, written in C#, which is executed on a system using PowerShell,
+as described in chapter 6.2.2. The backdoor is typically Base64 encoded and zlib compressed.
+The backdoor listens for connections on a specific hardcoded local port. Fox-IT observed multiple
+variants using port 25667 and port 47000. By default, XServer binds to 0.0.0.0, meaning it could
+theoretically be accessible from the internet. Using internet scan data Fox-IT was unable to identify
+any internet accessible XServer instances, likely because it is deployed as a backdoor for use in an
+internal network.
+XServer has two main functions. One is to provide simple backdoor functionality and the other is
+to function as a proxy. The proxy functionality has support for proxying through multiple infected
+systems. It also has a feature to exit after a specified amount of time. This feature was not enabled
+in any of the variants observed by Fox-IT.
+When XServer is started, it will wait for incoming connections. Depending on the “command” packet
+that is received, it will either act as a proxy for that connection or it will start a backdoor session.
+Each of the command packets is described in the table below.
+The SOCKS5 proxy functionality of the Xserver backdoor has as a very simple (unauthenticated)
+implementation and simply proxies data between the incoming connection and the requested
+destination (see figure 5).
+When using the proxy chain functionality, the connecting client provides a list of hops as byte
+encoded IPs and port numbers. XServer will take one IP and port from the list and transmit the
+remainder to this IP and port – the next hop. From there on, any traffic between the incoming
+client and next hop is proxied.
+When starting a command & control session, the session is upgraded to TLS and XServer will act
+as the TLS client, requesting a specific SNI “Root”. After successfully setting up the TLS connection,
+XServer replies with the victim type (hardcoded to “WIN”) and the current directory of the backdoor.
+After which it’s possible to issue backdoor commands, which are detailed in table 7.
+The download command has a few additional features. For example, it supports setting a file transfer
+speed. This will limit the amount of data sent at once, as well as sleep intermittently. The XServer
+backdoor protocol actually uses DEFLATE to compress most of its communication, but the download
+command has the option to omit compression for the file transfer.
+14 | Fox-IT | Operation Wocao
+Figure 4 – Network traffic between an operator and the XServer backdoor
+Figure 5 – Network stream of XServer traffic, utilizing the proxy chain functionality
+First a SOCKS5 proxy is
+established to ~~10.120.3.178~~
+on port ~~25667.~~
+XServer replies with
+a success, any further
+traffic is now proxied to
+this host. The operator
+now initiates the command
+& control functionality
+with ~~CMD 0x18~~ .
+XServer on ~~10.120.3.178~~
+replies by upgrading to a
+TLS socket and sending a
+ClientHello with SNI ~~Root.~~
+The operator side responds
+by sending the appropri­
+ate ServerHello. The TLS
+handshake is finished and all
+command & control traffic is
+now tunneled over TLS.
+Fox-IT | Operation Wocao | 15
+When uploading a file through the XServer backdoor, it’s actually saved to a temporary filename
+before being moved to the intended filename. The temporary filename is simply the intended
+filename with the extension “.CT” appended to it.
+The command execution functionality also implements two different methods. The first method
+utilizes the ShellExecute Windows API, whereas the other method spawns a new cmd.exe
+process for every command executed. The latter method is the only method Fox-IT observed, and
+also has a specific way of setting up its arguments. Every cmd.exe spawned will be according to
+the following template:
+```
+ cmd.exe /c cd /d  & 
+```
+The actor consistently uses C:\Windows\Temp as the working directory.
+Though this version of the XServer backdoor has been on VirusTotal for more than a year, at the time
+of writing only one of the anti-virus engines has marked it as malicious:
+Figure 6 – VirusTotal XServer detection rate
+The hashes provided in the table below are for the deobfuscated C# code of the XServer backdoor,
+as is the version uploaded to VirusTotal.
+5.6 Agent
+Agent is a custom proxy implementation that has support for multiple hops. It supports two modes:
+to backconnect to a hardcoded IP and port or to act as a server and listen for incoming connections.
+The only difference is the method used to setup new connections, the rest of the functionality is
+similar to the equivalents found in XServer.
+16 | Fox-IT | Operation Wocao
+When using the backconnect mode, Agent sends a small “hello” packet, 0x16XX, to the hardcoded IP
+and port. Worth noting is that legitimate TLS traffic also begins with 0x16. Whatever the backconnect
+server replies with is interpreted as a “command”. In server mode, any connecting client can
+immediately send a “command”. The command bytes are described in the table below.
+The proxy functionality is nearly identical to that of XServer, with a few exceptions. The most
+prominent change is that IP addresses for the hops are encrypted using RC4 with a hardcoded RC4
+key. Interestingly, the ports of the hops are not encrypted. Another major change is that the final
+hop will upgrade the socket to a TLS socket, so that all proxied data is encrypted.
+In one of the investigations a Python variant of the Agent proxy was observed, compiled using
+py2exe. It appeared to have been minified, as all whitespaces were stripped and some function
+names had single character names. Other than being written in Python instead of C#, it is nearly
+identical to the C# variant of Agent. It consists of the exact same functionality, including the
+hardcoded RC4 key. One notable difference is that this version takes the backconnect IP from an
+argument. The argument should be the hex encoding of “:”.
+The following hashes are for the C# variant of Agent.
+The hashes provided in the table below are for the Python variant of Agent.
+5.7 Directory list tool
+This custom tool is used by the actor to create an orderly overview of all files in a given directory,
+recursively.
+A directory is specified as an argument, which the tool will recursively walk. For each directory,
+file information is retrieved, such as timestamps, and stored in a file as specified by an argument.
+Maximum recursion depth can also be specified using an argument.
+Fox-IT | Operation Wocao | 17
+```
+ Usage:
+```
+dir.exe [TargetPath]  
+An example of this tool in action can be found in chapter 6.7.3.
+5.8 Process launcher
+The actor often used a custom process launcher tool, for example to launch a keylogger as a child
+process from explorer.exe. It injects code into a selected process that ends up using CreateProcessA
+to launch the command as a child process of the selected process.
+5.9 CheckAdmin
+The actor occasionally uses a custom tool that is capable of enumerating sessions and users on
+remote hosts, to identify if privileged users are logged in on a target system. This tool is named
+CheckAdmin, according to a help message in an older version. This chapter describes two versions,
+a new version which is used most often, and an older version.
+18 | Fox-IT | Operation Wocao
+Old version
+The older version of CheckAdmin, compiled as early as 2014, is started from the command line
+with one or multiple IP addresses as argument, or a path to a file containing IP addresses. The older
+version helpfully includes a message that explains how to use it:
+```
+ C:\Users\user\Desktop>checkadmin.exe
+CheckAdmin Usage:
+checkadmin.exe [host|host.txt] <-kw [UserKey|UserKey.txt]> <-u user> <-p password>
+<-admin | -all | -dump | -active> <-s [Result.txt]> <-ht [num]>
+Example:
+checkadmin.exe 192.168.1.100 -s result.txt
+checkadmin.exe ip.txt -kw user.txt -ht 20
+checkadmin.exe 192.168.1.1/24 -kw user.txt -all -s result.txt
+```
+Below you can find an example of the tool’s output when scanning a host (localhost in this case):
+```
+ C:\Users\user\Desktop>checkadmin.exe 127.0.0.1 -all
+127.0.0.1   DESKTOP-E21RATO\Administrator  
+127.0.0.1   DESKTOP-E21RATO\user  
+```
+Fox-IT | Operation Wocao | 19
+New version
+The newer version of the tool is less verbose in its output. For example, there’s still a function call to
+where the help message would be, but the function is empty in this newer version. Some flags have
+also been changed:
+• The “-active” flag has also been renamed to “-session”
+• The “-all” flag has been removed
+Additionally, a new mode was added:
+Otherwise, the functionality is the same as the older version. Below is an example of the output
+given by this tool, when executed locally in a testing environment:
+```
+ C:\Users\user\Desktop>checkadmin.exe 127.0.0.1
+127.0.0.1   DESKTOP-E21RATO\Administrator  
+127.0.0.1   DESKTOP-E21RATO\user  
+```
+5.10 OS scanner
+The actor sometimes used a custom tool to determine OS versions of systems connected to the
+network. It accomplishes this by sending SMB packets to every IP in the specified range and parsing
+the response. Like many other tools from this actor, it's a Python script inside a py2exe binary.
+Usage: getos.py  [save-path]
+The output is written to a file in the following format: IP address, hostname, Windows version. An
+example of the output:
+```
+          10.199.4.101   DESKTOP-E21RATO  Windows 10 Pro 14393
+```
+20 | Fox-IT | Operation Wocao
+5.11 Keylogger
+The actor uses a custom keylogger to obtain the password for the victim’s password manager. This is
+a relatively simple keylogger written in Python and compiled to an executable using py2exe. It logs
+the victim’s keystrokes and clipboard data in plaintext to a specific file. The file location can be given
+as an argument, but a default location is hardcoded in the Python code.
+• c:\windows\temp\tap.tmp
+• c:\windows\temp\mrteeh.tmp
+Hashes for the keylogger outputting its data to mrteeh.tmp:
+Fox-IT | Operation Wocao | 21
+~~Initial Access~~
+Drive-by Compromise
+Exploit Public-Facing
+Application
+Hardware Additions
+Replication Through
+Removable Media
+Spearphishing
+Attachment
+Spearphishing Link
+Spearphishing via Service
+Supply Chain
+Compromise
+Trusted Relationship
+Valid Accounts
+22 | Fox-IT | APT20
+~~Execution~~
+AppleScript
+CMSTP
+Command-Line
+Interface
+Compiled HTML File
+Control Panel Items
+Dynamic Data Exchange
+Execution through API
+Execution through
+Module Load
+Exploitation for Client
+Execution
+Graphical User Interface
+InstallUtil
+Launchctl
+Local Job Scheduling
+LSASS Driver
+Mshta
+~~PowerShell~~
+Regsvcs/Regasm
+Regsvr32
+Rundll32
+~~Scheduled Task~~
+Scripting
+~~Service Execution~~
+Signed Binary Proxy
+Execution
+Signed Script Proxy
+Execution
+Source
+Space after Filename
+Third-party Software
+Trap
+Trusted Developer
+Utilities
+User Execution
+Windows Management
+Instrumentation
+Windows Remote
+Management
+XSL Script Processing
+~~Persistence~~
+.bash_profile and .bashrc
+Accessibility Features
+Account Manipulation
+AppCert DLLs
+AppInit DLLs
+Application Shimming
+Authentication Package
+BITS Jobs
+Bootkit
+Browser Extensions
+Change Default File
+Association
+Component Firmware
+Component Object
+Model Hijacking
+Create Account
+DLL Search Order
+Hijacking
+Dylib Hijacking
+External Remote
+Services
+File System Permissions
+Weakness
+Hidden Files and
+Directories
+Hooking
+Hypervisor
+Image File Execution
+Options Injection
+Kernel Modules and
+Extensions
+Launch Agent
+Launch Daemon
+Launchctl
+LC_LOAD_DYLIB
+Addition
+Local Job Scheduling
+Login Item
+Logon Scripts
+LSASS Driver
+Modify Existing Service
+Netsh Helper DLL
+New Service
+Office Application Startup
+Path Interception
+Plist Modification
+Port Knocking
+Port Monitors
+Rc.common
+Re-opened Applications
+Redundant Access
+Registry Run Keys /
+Startup Folder
+Scheduled Task
+Screensaver
+Security Support Provider
+Service Registry
+Permissions Weakness
+Setuid and Setgid
+Shortcut Modification
+SIP and Trust Provider
+Hijacking
+Startup Items
+System Firmware
+Time Providers
+Trap
+~~Valid Accounts~~
+Web Shell
+Windows Management
+Instrumentation Event
+Subscription
+Winlogon Helper DLL
+~~Privilege Escalation~~
+Access Token
+Manipulation
+Accessibility Features
+AppCert DLLs
+AppInit DLLs
+Application Shimming
+Bypass User Account
+Control
+DLL Search Order
+Hijacking
+Dylib Hijacking
+Exploitation for Privilege
+Escalation
+Extra Window Memory
+Injection
+File System Permissions
+Weakness
+Hooking
+Image File Execution
+Options Injection
+Launch Daemon
+New Service
+Path Interception
+Plist Modification
+Port Monitors
+~~Process Injection~~
+Scheduled Task
+Service Registry
+Permissions Weakness
+Setuid and Setgid
+SID-History Injection
+Startup Items
+Sudo
+Sudo Caching
+~~Valid Accounts~~
+Web Shell
+~~Defense Evasion~~
+Access Token
+Manipulation
+Binary Padding
+BITS Jobs
+Bypass User Account
+Control
+Clear Command History
+CMSTP
+Code Signing
+Compiled HTML File
+Component Firmware
+Component Object
+Model Hijacking
+Control Panel Items
+DCShadow
+Deobfuscate/Decode
+Files or Information
+Disabling Security Tools
+DLL Search Order
+Hijacking
+DLL Side-Loading
+Exploitation for Defense
+Evasion
+Extra Window Memory
+Injection
+~~File Deletion~~
+File Permissions
+Modification
+File System Logical
+Offsets
+Gatekeeper Bypass
+Hidden Files and
+Directories
+Hidden Users
+Hidden Window
+HISTCONTROL
+Image File Execution
+Options Injection
+Indicator Blocking
+Indicator Removal
+from Tools
+Indicator Removal on
+Host
+Indirect Command
+Execution
+Install Root Certificate
+InstallUtil
+Launchctl
+LC_MAIN Hijacking
+Masquerading
+~~Modify Registry~~
+Mshta
+Network Share
+Connection Removal
+NTFS File Attributes
+Obfuscated Files or
+Information
+Plist Modification
+Port Knocking
+Process Doppelgänging
+Process Hollowing
+Process Injection
+~~Redundant Access~~
+Regsvcs/Regasm
+Regsvr32
+Rootkit
+Rundll32
+Scripting
+Signed Binary Proxy
+Execution
+Signed Script Proxy
+Execution
+SIP and Trust Provider
+Hijacking
+Software Packing
+Space after Filename
+Template Injection
+Timestomp
+Trusted Developer
+Utilities
+~~Valid Accounts~~
+Web Service
+XSL Script Processing
+~~Credential Access~~
+Account Manipulation
+Bash History
+Brute Force
+~~Credential Dumping~~
+Credentials in Files
+Credentials in Registry
+Exploitation for
+Credential Access
+Forced Authentication
+Hooking
+~~Input Capture~~
+Input Prompt
+~~Kerberoasting~~
+Keychain
+LLMNR/NBT-NS
+Poisoning
+Network Sniffing
+Password Filter DLL
+~~Private Keys~~
+Securityd Memory
+Two-Factor
+Authentication
+Interception
+i ~~Command and Control~~
+Commonly Used Port
+Communication Through
+Removable Media
+~~Connection Proxy~~
+Custom Command and
+Control Protocol
+i Custom Cryptographic
+Protocol
+Data Encoding
+Data Obfuscation
+Domain Fronting
+Fallback Channels
+~~Multi-hop Proxy~~
+Multi-Stage Channels
+Multiband
+Communication
+Multilayer Encryption
+Port Knocking
+Remote Access Tools
+Remote File Copy
+Standard Application
+Layer Protocol
+Standard
+Cryptographic
+Protocol
+Standard Non-Application
+Layer Protocol
+Uncommonly Used
+Port
+Web Service
+~~Discovery~~ i
+~~Account Discovery~~
+Application Window
+Discovery
+Browser Bookmark
+Discovery
+Domain Trust
+Discovery i
+File and Directory
+Discovery
+Network Service
+Scanning
+Network Share
+Discovery
+Network Sniffing
+Password Policy
+Discovery
+Peripheral Device
+Discovery
+Permission Groups
+Discovery
+~~Process Discovery~~
+~~Query Registry~~
+Remote System
+Discovery
+Security Software
+Discovery
+System Information
+Discovery
+System Network
+Configuration Discovery
+System Network
+Connections Discovery
+System Owner/User
+Discovery
+System Service
+Discovery
+~~System Time Discovery~~
+~~Exf~~ i ~~ltration~~
+Automated Exfiltration
+~~Data Compressed~~
+Data Encrypted
+Data Transfer Size Limits
+Exfiltration Over
+Alternative Protocol
+~~Exf~~ i ~~ltration Over~~
+Command and Control
+Channel
+Exfiltration Over Other
+Network Medium
+Exfiltration Over Physical
+Medium
+Scheduled Transfer
+~~Lateral Movement~~ i
+AppleScript
+Application Deployment
+Software
+Distributed Component
+Object Model
+Exploitation of Remote
+Services i
+Logon Scripts
+Pass the Hash
+Pass the Ticket
+Remote Desktop Protocol
+~~Remote File Copy~~
+~~Remote Services~~
+Replication Through
+Removable Media
+Shared Webroot
+SSH Hijacking
+Taint Shared Content
+Third-party Software
+Windows Admin
+Shares
+Windows Remote
+Management
+~~Collection~~ i
+Audio Capture
+Automated Collection
+~~Clipboard Data~~
+Data from Information
+Repositories
+Data from Local
+System i
+Data from Network
+Shared Drive
+Data from Removable
+Media
+Data Staged
+Email Collection
+Input Capture
+Man in the Browser
+Screen Capture
+Video Capture
+i
+i
+Output : 
+### Overview of APT20 Techniques and Tools
+
+**Initial Access:**
+- **Drive-by Compromise:** Exploiting vulnerabilities on public-facing applications to gain initial access.
+- **Hardware Additions:** Physically adding hardware to compromise systems.
+- **Replication Through Removable Media:** Using USB drives or other removable media to spread malware.
+- **Spearphishing Attachment/Link/Service:** Sending targeted emails with malicious attachments, links, or through trusted services.
+- **Supply Chain Compromise:** Compromising the supply chain to infect targets.
+- **Trusted Relationship:** Exploiting existing relationships between organizations.
+- **Valid Accounts:** Using legitimate credentials to gain access.
+
+**Execution:**
+- **AppleScript:** Executing scripts on macOS.
+- **CMSTP:** Using the Connection Manager Profile Installer for execution.
+- **Command-Line Interface:** Running commands through command-line interfaces.
+- **Compiled HTML File (CHM):** Exploiting CHM files to execute code.
+- **Control Panel Items:** Using Control Panel items for execution.
+- **Dynamic Data Exchange (DDE):** Executing commands via DDE in Office documents.
+- **Execution through API/Module Load:** Using APIs or module loading mechanisms for execution.
+- **Exploitation for Client Execution:** Exploiting client-side vulnerabilities to execute code.
+- **Graphical User Interface (GUI):** Using GUI applications for execution.
+- **InstallUtil:** Using the .NET installation utility for execution.
+- **Launchctl:** Executing tasks on macOS using launchd.
+- **Local Job Scheduling:** Scheduling local jobs for execution.
+- **LSASS Driver:** Exploiting the Local Security Authority Subsystem Service (LSASS) driver.
+- **Mshta:** Using the Microsoft HTML Application Host for execution.
+- **PowerShell:** Running PowerShell scripts.
+- **Regsvcs/Regasm:** Registering .NET assemblies for execution.
+- **Regsvr32:** Registering COM objects for execution.
+- **Rundll32:** Using rundll32 to execute code from DLLs.
+- **Scheduled Task:** Scheduling tasks for execution.
+- **Scripting:** Running scripts (e.g., batch, PowerShell).
+- **Service Execution:** Executing code through services.
+- **Signed Binary/Script Proxy Execution:** Using signed binaries or scripts as proxies for execution.
+- **Third-party Software:** Exploiting third-party software for execution.
+- **Trusted Developer Utilities:** Using trusted developer utilities for execution.
+- **User Execution:** Inducing users to execute malicious files.
+- **Windows Management Instrumentation (WMI):** Using WMI for execution.
+- **Windows Remote Management (WinRM):** Executing commands remotely using WinRM.
+- **XSL Script Processing:** Using XSL scripts for execution.
+
+**Persistence:**
+- **.bash_profile and .bashrc:** Modifying shell configuration files for persistence on Unix systems.
+- **Accessibility Features:** Exploiting accessibility features to maintain access.
+- **Account Manipulation:** Creating or modifying accounts for persistent access.
+- **AppCert DLLs/AppInit DLLs:** Using AppCert or AppInit DLLs for persistence.
+- **Application Shimming:** Using application shimming to inject code into applications.
+- **Authentication Package:** Exploiting authentication packages for persistence.
+- **BITS Jobs:** Using Background Intelligent Transfer Service (BITS) jobs for persistence.
+- **Bootkit:** Installing bootkits to maintain access across reboots.
+- **Browser Extensions:** Using browser extensions for persistence.
+- **Change Default File Association:** Changing file associations to execute malicious code.
+- **Component Firmware/COM Hijacking:** Exploiting component firmware or COM objects for persistence.
+- **Create Account:** Creating new accounts for persistence.
+- **DLL Search Order Hijacking:** Exploiting the DLL search order to load malicious DLLs.
+- **Dylib Hijacking:** Exploiting dylibs on macOS for persistence.
+- **External Remote Services:** Using external remote services for persistence.
+- **File System Permissions Weakness:** Exploiting weak file system permissions.
+- **Hidden Files and Directories/Hidden Users:** Hiding files, directories, or users to maintain access.
+- **Hooking:** Using hooks to intercept and modify function calls.
+- **Hypervisor:** Installing hypervisors for persistence.
+- **Image File Execution Options Injection:** Modifying Image File Execution Options (IFEO) for persistence.
+- **Kernel Modules/Extensions:** Loading kernel modules or extensions for persistence.
+- **Launch Agent/Launch Daemon:** Using launch agents or daemons on macOS for persistence.
+- **LC_LOAD_DYLIB Addition:** Adding dylibs to Mach-O binaries for persistence.
+- **Local Job Scheduling/Login Item/Logon Scripts/LSASS Driver:** Scheduling local jobs, login items, logon scripts, or LSASS drivers for persistence.
+- **Modify Existing Service/New Service:** Modifying existing services or creating new ones for persistence.
+- **Netsh Helper DLL:** Using Netsh helper DLLs for persistence.
+- **Office Application Startup/Path Interception/Plist Modification/Port Monitors:** Exploiting Office application startup, path interception, plist modification, or port monitors for persistence.
+- **Re-opened Applications/Redundant Access/Registry Run Keys/Startup Folder/Scheduled Task:** Ensuring applications are re-opened, maintaining redundant access, using registry run keys, startup folders, or scheduled tasks for persistence.
+- **Screensaver/Security Support Provider/Service Registry Permissions Weakness/Setuid and Setgid/Shortcut Modification/SIP and Trust Provider Hijacking/Startup Items/System Firmware/Time Providers/Trap:** Using screensavers, security support providers, service registry permissions, setuid/setgid, shortcut modification, SIP and trust provider hijacking, startup items, system firmware, time providers, or traps for persistence.
+- **Web Shell:** Using web shells for persistent access.
+
+**Privilege Escalation:**
+- **Access Token Manipulation/Accessibility Features/AppCert DLLs/AppInit DLLs/Application Shimming/Bypass User Account Control (UAC)/DLL Search Order Hijacking/Dylib Hijacking/Exploitation for Privilege Escalation/Extra Window Memory Injection/File System Permissions Weakness/Hooking/Image File Execution Options Injection/Launch Daemon/New Service/Path Interception/Plist Modification/Port Monitors/Process Injection/Scheduled Task/Service Registry Permissions Weakness/Setuid and Setgid/SID-History Injection/Startup Items/Sudo/Sudo Caching:** Techniques to gain higher privileges.
+
+**Defense Evasion:**
+- **Access Token Manipulation/Binary Padding/BITS Jobs/Bypass UAC/Clear Command History/CMSTP/Code Signing/Compiled HTML File/Component Firmware/Component Object Model Hijacking/Control Panel Items/DCShadow/Deobfuscate/Decode Files or Information/Disabling Security Tools/DLL Search Order Hijacking/DLL Side-Loading/Exploitation for Defense Evasion/Extra Window Memory Injection/File Deletion/File Permissions Modification/File System Logical Offsets/Gatekeeper Bypass/Hidden Files and Directories/Hidden Users/Hidden Window/HISTCONTROL/Image File Execution Options Injection/Indicator Blocking/Indicator Removal from Tools/Indicator Removal on Host/Indirect Command Execution/Install Root Certificate/InstallUtil/Launchctl/LC_MAIN Hijacking/Masquerading/Modify Registry/Network Share Connection Removal/NTFS File Attributes/Obfuscated Files or Information/Plist Modification/Port Knocking/Process Doppelgänging/Process Hollowing/Process Injection/Redundant Access/Regsvcs/Regsvr32/Rootkit/Rundll32/Scripting/Signed Binary Proxy Execution/Signed Script Proxy Execution/SIP and Trust Provider Hijacking/Software Packing/Space after Filename/Template Injection/Timestomp/Trusted Developer Utilities/Web Service/XSL Script Processing:** Techniques to evade detection.
+
+**Credential Access:**
+- **Account Manipulation/Bash History/Brute Force/Credential Dumping (Credentials in Files, Credentials in Registry, Exploitation for Credential Access)/Forced Authentication/Hooking/Input Capture/Kerberoasting/Keychain/LLMNR/NBT-NS Poisoning/Network Sniffing/Password Filter DLL/Private Keys/Securityd Memory/Two-Factor Authentication Interception:** Techniques to gain credentials.
+
+**Command and Control:**
+- **Commonly Used Port/Communication Through Removable Media/Connection Proxy/Custom Command and Control Protocol/Custom Cryptographic Protocol/Data Encoding/Data Obfuscation/Domain Fronting/Fallback Channels/Multi-hop Proxy/Multi-Stage Channels/Multiband Communication/Multilayer Encryption/Port Knocking/Remote Access Tools/Remote File Copy/Standard Application Layer Protocol/Standard Cryptographic Protocol/Standard Non-Application Layer Protocol/Uncommonly Used Port/Web Service:** Techniques to establish and maintain command and control.
+
+**Discovery:**
+- **Account Discovery/Application Window Discovery/Browser Bookmark Discovery/Domain Trust Discovery/File and Directory Discovery/Network Service Scanning/Network Share Discovery/Network Sniffing/Password Policy Discovery/Peripheral Device Discovery/Permission Groups Discovery/Process Discovery/Query Registry/Remote System Discovery/Security Software Discovery/System Information Discovery/System Network Configuration Discovery/System Network Connections Discovery/System Owner/User Discovery/System Service Discovery/System Time Discovery:** Techniques to gather information about the environment.
+
+**Exfiltration:**
+- **Automated Exfiltration/Data Compressed/Data Encrypted/Data Transfer Size Limits/Exfiltration Over Alternative Protocol/Exfiltration Over Command and Control Channel/Exfiltration Over Other Network Medium/Exfiltration Over Physical Medium/Scheduled Transfer:** Techniques to exfiltrate data.
+
+**Lateral Movement:**
+- **AppleScript/Application Deployment Software/Distributed Component Object Model (DCOM)/Exploitation of Remote Services/Logon Scripts/Pass the Hash/Pass the Ticket/Remote Desktop Protocol/Remote File Copy/Remote Services/Replication Through Removable Media/Shared Webroot/SSH Hijacking/Taint Shared Content/Third-party Software/Windows Management Instrumentation (WMI):** Techniques to move laterally within a network.
+
+### Specific Tools and Techniques Used by APT20
+
+1. **Web Shells:**
+   - **China Chopper:** A lightweight web shell used for remote command execution and file manipulation.
+   - **Webacl:** A web shell that provides a web-based interface for command execution and file management.
+
+2. **Backdoors:**
+   - **PlugX:** A sophisticated backdoor known for its modular architecture, capable of various malicious activities including keylogging, screenshot capturing, and file theft.
+   - **Chrysaor:** A spyware variant used to target mobile devices, primarily Android.
+
+3. **Exploits:**
+   - **CVE-2017-11882:** An OLE (Object Linking and Embedding) memory corruption vulnerability in Microsoft Office.
+   - **CVE-2019-0604:** A remote code execution vulnerability in SharePoint.
+
+4. **Phishing Campaigns:**
+   - **Spearphishing Emails:** Targeted emails with malicious attachments or links, often masquerading as legitimate documents or updates.
+
+5. **Malware:**
+   - **DTrack:** A malware family used for data theft and espionage.
+   - **MyTic:** A remote access trojan (RAT) used to gain persistent access to target systems.
+
+6. **Persistence Mechanisms:**
+   - **Registry Keys:** Modifying registry keys to ensure malware runs at system startup.
+   - **Scheduled Tasks:** Creating scheduled tasks to execute malware periodically.
+
+7. **Data Exfiltration:**
+   - **File Compression and Encryption:** Using tools like 7-Zip or AES encryption to compress and encrypt exfiltrated data.
+   - **Steganography:** Hiding data within images or other files to evade detection.
+
+8. **Network Scanning:**
+   - **Nmap:** Used for network scanning to identify potential targets.
+   - **Advanced Port Scanner:** Used to scan open ports and services on target systems.
+
+### Conclusion
+
+APT20 employs a wide range of sophisticated techniques and tools to gain initial access, maintain persistence, escalate privileges, evade detection, gather information, exfiltrate data, and move laterally within networks. Understanding these methods is crucial for developing effective defense strategies and mitigating the risks associated with APT20's activities.

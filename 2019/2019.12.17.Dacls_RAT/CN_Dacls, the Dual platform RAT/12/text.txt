@@ -1,0 +1,93 @@
+插件模块
+Linux.Dacls Bot 采⽤静态编译的⽅式将插件和 Bot 本体代码编译在⼀起，通过发送不同的指令调⽤
+不同的插件可以完成多种任务。我们分析的样本中共包含 6 个插件，由于插件的配置信息是⼀块连
+续的结构体数组 (0x00~0x0e) 。我们猜测 Bot 可能存在更多的插件。
+每个插件都会有相应的配置信息，它们会保存在 Bot 的配置⽂件 $HOME/.memcache 中，在插件初
+始化时，加载这些配置信息。
+Bash 插件
+Bash 插件是编号为 0 的插件，主要⽀持两个功能：接收 C2 服务器的下发的系统命令并执⾏； C2 通
+过指令下发临时 C2 ， Bot 然后连接到临时 C2 并执⾏临时 C2 下发的系统命令。
+File 插件
+File 插件主要功能是⽂件管理，除了⽀持对⽂件的读，写，删除，查找操作，还可以从指定的下载
+服务器下载⽂件。
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 13/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+Process 插件
+Process 插件的主要功能是进程管理，包括：杀死指定进程，创建 daemon 进程，获得当前进程的
+PID 和 PPID ，以及获取进程列表信息。
+如果 Linux 进程中的 PID 对应的 /proc//task ⽬录存在， Bot 样本会收集如下进程信息：
+从 /proc//cmdline 读取命令⾏全名
+从 /proc//status 中读取 :
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 14/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+Name   // 进程名
+Uid    // ⽤户 ID
+Gid    // ⽤户组 ID
+PPid   // ⽗进程 ID
+Test 插件
+Test 插件的主要功能是通过连接 C2 指定的 IP 地址和端⼝，测试其⽹络连通性。
+Reverse P2P 插件
+Reverse P2P 插件实际上是⼀种 C2 连接代理（ Connection Proxy ），它通过下发控制命令可以将指
+定的 C2 数据完整的转发到指定 IP 端⼝。这在 Lazarus Group 中是⼀种常⻅的降低被检测⻛险的技术
+⼿段，既可以减少⽬标主机连接数⼜可以隐藏⽬标主机和真实 C2 的通信数据，在某些场合还可以
+利⽤被感染的内⽹主机进⼀步渗透⾄隔离⽹段。
+reverse_p2p 插件初始化
+当 Bot 收到指令后，先尝试连接指定的 C2 端⼝并发送 0x21000 指令，如果 C2 返回 0x21300 说明 C2 连
+接成功。此时 Bot 会连接指令中指定的⽬标主机端⼝，如果连接成功会返回 0x21100 给 C2 说明转发
+连接已经建⽴可以转发数据。接下来 Bot 会将 C2 发送过来的数据完整的转发给⽬标主机，同时将⽬
+标主机的返回数据完整的返回给 C2 ，直⾄任何⼀⽅中断连接。
+以下是 Reverse P2P 插件⼯作流程图：
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 15/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+LogSend 插件
+LogSend 插件主要包括 3 个功能：测试连接 Log 服务器，随机扫描全⽹ 8291 端⼝并上报给 Log 服务
+器，执⾏耗时较⻓的系统命令并将控制台输出结果实时上报给 Log 服务器。
+LogSend 插件初始化
+LogSend 相关操作回调函数
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 16/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+测试连接 Log 服务器
+Bot 收到指令后会向 Log 服务器发送⼀个测试请求。如果 Log 服务器返回 {"result":"ok"} 说明测
+试成功，此时 C2 就可以下发更多的 LogSend 指令。
+使⽤ C2 指定的 HTTP 接⼝地址，内置的 User-Agent ，发送 POST 请求
+POST /%s HTTP/1.0
+Host: %s
+Content-Length: 9
+Content-Type: application/x-www-form-urlencoded
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like
+Gecko) Chrome/65.0.3325.181 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,/;q=0.8
+Accept-Language: en-us,en;q=0.5
+Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.7
+Cache-Control: no-cache
+Connection: close
+log=check
+随机扫描全⽹ 8291 端⼝并上报给 Log 服务器。
+当 Bot 收到该指令后会按照 3 种规则随机⽣成公⽹ IP 地址并尝试连接 8291 端⼝，如果连接成功就向
+log server 回传扫描结果。
+IP ⽣成规则：
+ip = ...
+rule1: part1 != 127
+rule2: part1 == 172 and (part2 <= 15 or part2 > 31)
+rule3: part1 != 192 and part2 != 168
+rule4: part1 != 10
+随机 IP ⽣成算法如下
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 17/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+我们可以看到 Bot 硬编码 TCP/8291 端⼝，并调⽤系统 connect 函数进⾏端⼝扫描，只检测端⼝是否
+开放，不发送 Payload 数据。我们知道 MikroTik Router 设备的 Winbox 协议⼯作在 TCP/8291 端⼝
+上，并暴露在互联⽹上，之前我们也披露了 2 篇⽂章关于 TCP/8291 端⼝威胁事件 [1][2] 。
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 18/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+执⾏耗时较⻓的 bash 命令，并将控制台输出实时上报给 Log 服务器。
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 19/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+执⾏ bash 命令并转发输出给 Log 服务器
+所有上报的 Log 数据都以 HTTP POST 的⽅式提交。 Payload 部分的格式如下：
+log=save&session_id=&value=
+https://blog.netlab.360.com/dacls-the-dual-platform-rat/ 20/22
+1/9/2020 Lazarus Group使⽤Dacls RAT攻击Linux平台
+我们建议 Confluence ⽤户及时更新补丁，并根据 Dacls RAT 创建的进程，⽂件名以及 TCP ⽹络连接
+特征，判断是否被感染，然后清理它的相关进程和⽂件。
+我们建议读者对 Dacls RAT 相关 IP ， URL 和域名进⾏监控和封锁。
+相关安全和执法机构，可以邮件联系 netlab[at]360.cn 交流更多信息。

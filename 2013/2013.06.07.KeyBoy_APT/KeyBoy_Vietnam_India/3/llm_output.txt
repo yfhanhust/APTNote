@@ -1,0 +1,64 @@
+
+
+
+Sentence : Analysis of the Backdoor
+For the sake of this analysis we'll take the Vietnamese backdoor as an example; the one found in the
+Indian attack operates in the exact same way.
+As mentioned, when the exploit is opened a dropper is created and launched, which then takes care of
+creating a Windows service called MdAdum, which is then visible in the registry as follows:
+The dropper then launches the service with the DLL located at
+C:\WINDOWS\system32\CREDRIVER.dll and deletes itself. Resilience on the system is guaranteed
+by the use of such service which will be executed at every start up.
+Note that the Indian attack does not make use of this middle-stage dropper, but directly installs and
+launches the Windows service instead.
+This backdoor has several features including:
+
+
+Steal credentials from Internet Explorer
+
+
+Steal credentials from Mozilla Firefox
+
+
+Install a keylogger for intercepting credentials on Google Chrome
+
+
+Operate in an interactive mode to allow the attacker to perform additional investigation on the
+
+
+compromised system and exfiltrate data.
+Following you can see the portion of the code where the backdoor, after having verified which version of
+Mozilla Firefox is installed on the system, decides which technique to use to recover the credentials from
+the browser's local storage.
+In older versions of Firefox, credentials were stored in several .txt files in %AppData%\Mozilla\Firefox,
+while in most recent ones they are stored in a SQLite database. In the following snipped you see the SQL
+statement to extract the data:
+Just in the same way, the backdoor attempts to collect password autocomplete from Internet Explorer:
+The backdoor also creates a separate thread that installs a Windows hook procedure on message
+WH_KEYBOARD_LL, through which it can intercept keystrokes. We believe this is mainly used to
+intercept credentials from other browsers, specifically Google Chrome:
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Vietnamese backdoor", "type" : "EXEF"},
+        {"id": 2, "description": "Indian attack", "type" : "ACTO"},
+        {"id": 3, "description": "Windows service MdAdum", "type" : "REGI"},
+        {"id": 4, "description": "C:\\WINDOWS\\system32\\CREDRIVER.dll", "type" : "SYSP"},
+        {"id": 5, "description": "Internet Explorer credentials", "type" : "TAMP"},
+        {"id": 6, "description": "Mozilla Firefox credentials", "type" : "TAMP"},
+        {"id": 7, "description": "%AppData%\\Mozilla\\Firefox .txt files", "type" : "DOCF"},
+        {"id": 8, "description": "SQLite database (Firefox)", "type" : "DOCF"},
+        {"id": 9, "description": "Google Chrome credentials", "type" : "TAMP"},
+        {"id": 10, "description": "WH_KEYBOARD_LL Windows hook procedure", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "creates service"},
+        {"source": 1, "target": 4, "rel_name" : "uses DLL"},
+        {"source": 1, "target": 5, "rel_name" : "steals credentials from"},
+        {"source": 1, "target": 6, "rel_name" : "steals credentials from"},
+        {"source": 1, "target": 7, "rel_name" : "reads data from"},
+        {"source": 1, "target": 8, "rel_name" : "queries database in"},
+        {"source": 1, "target": 9, "rel_name" : "installs keylogger for"},
+        {"source": 1, "target": 10, "rel_name" : "installs Windows hook procedure"}
+    ]
+}

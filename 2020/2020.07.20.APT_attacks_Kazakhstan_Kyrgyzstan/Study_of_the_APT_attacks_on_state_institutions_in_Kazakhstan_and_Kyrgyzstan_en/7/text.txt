@@ -1,0 +1,83 @@
+Operating routine
+Using the 5-byte magic number, the installer checks whether the configuration embedded in
+it has encryption. The configuration is then used for the payload functioning. If there is no
+encryption, the program shuts down.
+After that, the malware receives information about the OS version, UAC settings and checks
+whether the user has administrative privileges. A string is formed from obtained data:
+```
+ admin:%d,dwCPBA:%d,dwLUA:%d,om:%d-%d
+```
+Then, the program outputs it via the OutputDebugStringA function.
+Next, the trojan attempts to install its driver. In case of failure, an attempt is made to install
+the module using COM Hijacking.
+After that, the program deletes its file from the disk and terminates its process.
+Driver installation
+It deletes the yyyyyyyyGoogle.sys file from the %WINDIR%\\tracing\\ directory. It
+extracts the desired driver version from its body, depending on the system architecture bit
+widths, and saves it to the specified path. Drivers are stored in the sample being compressed
+via the APLib library and are additionally encrypted by an algorithm based on the XOR
+operation with a single-byte key.
+It then stores its payload in the registry as three modules. It uses [HKLM\\SOFTWARE\
+\Microsoft\\LoginInfo] as its working registry branch. It creates keys in it and saves
+the payload there:
+Video — configuration;
+
+DirectShow — XPath module;
+
+DirectDraw — PayloadDll module.
+The modules are hardcoded in the trojan’s body in a similar form to the driver (using APLib
+and XOR) and are present in two versions — for both 32-bit and 64-bit systems. Each
+module uses its own single-byte key. The modules are saved as a structure:
+```
+ #pragma pack(push,1)
+struct mod
+{
+_DWORD compressed_size;
+ _DWORD decompressed_size;
+ _BYTE data[compressed_size];
+ };
+#pragma pack(pop)
+```
+The data module is decoded, but remains compressed.
+The program then attempts to create a service with autorun and ImagePath to the extracted
+driver. The driver file name is used as the service name.
+If the service cannot be launched via SCManager and the service has already been created,
+an attempt is made to start the driver via ZwLoadDriver .
+To check if the driver is working, the malware attempts to open the \\.\BaiduHips
+device. In case of failure, a second attempt is made after 100 milliseconds. A total of 15
+attempts are made, after which the driver installation is considered incomplete.
+If the driver is running, it sequentially starts the [ %WINDIR%\\System32\\ping.exe],
+[%WINDIR%\\System32\\rundll32.exe %WINDIR%\\System32\\svchost.exe]
+and [%WINDIR%\\System32\\lsass.exe] processes.
+COM Hijacking
+The program saves its modules in the registry the same way as when installing the driver, but
+this time using [HKCU\\SOFTWARE\\Microsoft\\LoginInfo] as the home branch.
+It iterates through the registry keys in the HKU section and searches for a key with a name
+containing the S-1-5-21- substring and does not contain the _Classes substring. Inside
+this key, it creates the Software\\Classes\\CLSID\\{ECD4FC4D-521C-11D0-B792-
+00A0C90312E1}\\ key for Windows 2000, Windows XP, Windows Server 2003, and the
+Software\\Classes\\CLSID\\{B12AE898-D056-4378-A844-6D393FE37956}\\
+key for Windows Vista or later. For this key it sets the %TMP%\\Microsoft\
+\ReplaceDll.dll path as the parameter value (by default). It also creates the
+ThreadingModel parameter with the Apartment value.
+After that, it unpacks the PayloadDll module into the %TMP%\\Microsoft\
+\ReplaceDll.dll directory.
+Artifacts
+The Trojan.XPath.1 file contains leftover debugging information that reveals the paths and
+source code file names:
+```
+ z:\desk_codes\project_xpath\xpathinstaller\client_files.h
+ z:\desk_codes\project_xpath\xpathinstaller\MemLoadDll.h
+xPathInstaller.c
+```
+The original function names are:
+```
+ InstallSecFunDriver
+MyZwLoadDriver
+SetMyLoginInfo
+InstallDrv
+```
+The file also contains various debugging messages:
+The setinfo false string is the most interesting. It contains the 0xACA3 sybmol, which in
+Unicode corresponds to the hieroglyph. This hieroglyph is used in South and North Korean
+writing.

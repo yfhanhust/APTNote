@@ -1,0 +1,134 @@
+
+
+
+Sentence : Kernel-mode networking module
+Cahnadr hooks the following routines in order to hide its traffic, perform different tasks and provide
+additional functionality for the user mode components:
+
+
+ndis!NdisMSendNetBufferListsComplete
+
+
+ndis!NdisMIndicateReceiveNetBufferLists
+
+
+These routines are callbacks run by network drivers to notify handlers with all data sent or received.
+The function lists in PNET_BUFFER_LIST all packets and their related event. Cahnadr checks if there
+are Slingshot-related packets in this list, and if so, removes them. Let´s explain this in more detail:
+The trick is that all the malware is allocated to a particular pool that allows discriminating it from
+other benign calls. NdisAllocateNetBufferListPool creates NET_BUFFER_LIST, that is initialized calling
+NdisAllocateNetBufferAndNetBufferList. When the network driver sends data, it gets into such a
+NET_BUFFER structure, which in turn, gets into NET_BUFFER_LIST. The callbacks routine
+NdisMSendNetBufferListsComplete, that gets the NET_BUFFER_LISTs with data successfully sent, is
+hooked. Malware simply checks if any entry in NET_BUFFER_LIST was allocated from the malware
+pool and, if so, will simply not return it to the original handler.
+This sniffer has a list of tasks, each one associated with a list of handlers. Inbound and outbound
+packets are examined and passed to the appropriate task’s processor, which calls all handlers
+associated with the task. The result determines whether malware should hide the package.
+We have seen three types of task:
+HTTP: This is the only handler that notifies GollumApp (user mode payload, described below) that
+HTTP data is being transferred.
+ARPf: (two handlers for this type). The first one notifies GollumApp when an ARP-request is received
+and/or when an ARP-response is sent.
+The second one stores this information in its internal storage, collecting information about the
+network structure. This task is enabled by default.
+IP2f: (two handlers of this type). The first one checks if the package comes from the malware
+operators, only to decide whether the package should be hidden. This is decided by XORing two
+Timestamps values from the Options field in the TCP-header (RFC1323, code 0x080A). If the result is
+equal to 0xDEADFOOD then this package should be hidden.
+The second one notifies GollumApp that some TCP/UDP or ICMP packets that suit malicious filters
+were found.
+For instance, for TPC traffic this filter uses the same described XOR procedure with the constant
+0xDADAE000, sending GollumApp the seqNumber, askNumber and src port values.
+For UDP, packets with a length of 0x55 bytes containing DNS responses, it checks that the field
+dns.Identifier equals 0x212. In that case, the packet is hidden and GollumApp is notified with the
+resolved IP and TTL of the packet.
+For ICMP, packets containing the «Destination port unreachable» error it checks that the overlying
+protocol contains the constant 0xE17F (57727). In that case, GollumApp is notified with
+ip.Destination, ip.identification, ip.length.
+This task is enabled by default.
+The malware identifies HTTP traffic by checking the ASK flag in TCP protocol, and by finding the HTTP
+signature in the TCP package body. This task is disabled by default, however GollumApp can enable
+it.
+Additionally, this kernel mode module provides the following functionality for user mode
+components:
+
+ARP-query: obtains the MAC-address for a specified IP address. Requires network interface as a
+
+parameter
+
+
+ARP-reply: sends its own MAC address as a response to a specified ARP-request, regardless of
+whether the IP from the request and the infected computer are the same or not
+
+
+Sends custom network package, where all fields can be customized from the Ethernet-layer
+
+
+Sends custom IPV4 package
+
+
+Cahnadr supports IEEE 802.11 standard, allowing it to operate with WiFi frames.
+Network interfaces are traced using Plug-and-Play notifications with EventCategory PNPNOTIFY_DEVICE_INTERFACE_INCLUDE_EXISTING_INTERFACES. When a network interface
+change event happens, all hooks listed above apply and Cahnadr checks the category of the new
+interface (bridge/wan/lan). Depending on the type of interface, it gets different data that is written
+in thee malware´s storage:
+
+
+Ethernet: MAC-address and maximum frame size
+
+
+Wireless (802.11) Access Point MAC-address and authentication state
+
+
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Kernel-mode networking module", "type" : "EXEF"},
+        {"id": 2, "description": "Cahnadr", "type" : "ACTO"},
+        {"id": 3, "description": "ndis!NdisMSendNetBufferListsComplete", "type" : "TAMP"},
+        {"id": 4, "description": "ndis!NdisMIndicateReceiveNetBufferLists", "type" : "TAMP"},
+        {"id": 5, "description": "PNET_BUFFER_LIST", "type" : "TAMP"},
+        {"id": 6, "description": "NET_BUFFER_LIST", "type" : "TAMP"},
+        {"id": 7, "description": "NdisAllocateNetBufferListPool", "type" : "EXEF"},
+        {"id": 8, "description": "NdisAllocateNetBufferAndNetBufferList", "type" : "EXEF"},
+        {"id": 9, "description": "NET_BUFFER structure", "type" : "TAMP"},
+        {"id": 10, "description": "GollumApp (user mode payload)", "type" : "EXEF"},
+        {"id": 11, "description": "HTTP data transfer handler", "type" : "TTPS"},
+        {"id": 12, "description": "ARP-request handler", "type" : "TTPS"},
+        {"id": 13, "description": "ARP-response handler", "type" : "TTPS"},
+        {"id": 14, "description": "IP2f: TCP traffic handler", "type" : "TTPS"},
+        {"id": 15, "description": "IP2f: UDP traffic handler", "type" : "TTPS"},
+        {"id": 16, "description": "IP2f: ICMP traffic handler", "type" : "TTPS"},
+        {"id": 17, "description": "HTTP signature in TCP package body", "type" : "TAMP"},
+        {"id": 18, "description": "ARP-query functionality", "type" : "TTPS"},
+        {"id": 19, "description": "ARP-reply functionality", "type" : "TTPS"},
+        {"id": 20, "description": "Custom network package sending functionality", "type" : "TTPS"},
+        {"id": 21, "description": "Custom IPV4 package sending functionality", "type" : "TTPS"},
+        {"id": 22, "description": "IEEE 802.11 standard support", "type" : "NETP"},
+        {"id": 23, "description": "Plug-and-Play notifications with EventCategory PNPNOTIFY_DEVICE_INTERFACE_INCLUDE_EXISTING_INTERFACES", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "hooks"},
+        {"source": 2, "target": 4, "rel_name" : "hooks"},
+        {"source": 6, "target": 9, "rel_name" : "contains"},
+        {"source": 7, "target": 6, "rel_name" : "creates"},
+        {"source": 8, "target": 9, "rel_name" : "initializes"},
+        {"source": 3, "target": 6, "rel_name" : "calls"},
+        {"source": 2, "target": 10, "rel_name" : "notifies"},
+        {"source": 2, "target": 11, "rel_name" : "uses_handler_for"},
+        {"source": 2, "target": 12, "rel_name" : "uses_handler_for"},
+        {"source": 2, "target": 13, "rel_name" : "uses_handler_for"},
+        {"source": 2, "target": 14, "rel_name" : "uses_handler_for"},
+        {"source": 2, "target": 15, "rel_name" : "uses_handler_for"},
+        {"source": 2, "target": 16, "rel_name" : "uses_handler_for"},
+        {"source": 2, "target": 17, "rel_name" : "checks_for"},
+        {"source": 2, "target": 18, "rel_name" : "provides_functionality"},
+        {"source": 2, "target": 19, "rel_name" : "provides_functionality"},
+        {"source": 2, "target": 20, "rel_name" : "provides_functionality"},
+        {"source": 2, "target": 21, "rel_name" : "provides_functionality"},
+        {"source": 2, "target": 22, "rel_name" : "supports"},
+        {"source": 2, "target": 23, "rel_name" : "uses_notifications"}
+    ]
+}

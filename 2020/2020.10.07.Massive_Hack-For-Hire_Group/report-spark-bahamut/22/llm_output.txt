@@ -1,0 +1,252 @@
+
+
+
+Sentence : Kaspersky’s “InPage” — Access to Zero-Day Exploits
+We began with some of the earliest research that could be directly connected to BAHAMUT:
+Kaspersky’s 2016 InPage vulnerability research (Legezo, 2016). In their write-up, Kaspersky revealed
+that an unnamed group was using a zero-day exploit that took advantage of a vulnerability in a word
+processor called InPage. InPage is popular in Urdu, Persian, and Arabic speaking countries. The
+targets of the vulnerability were noteworthy because the software company listed most of the major
+newspapers in both India and Pakistan among its users (http://www.inpage.com/Home/Users).
+Figure 26: Screenshot of news organizations using the InPage word processing software as reflected on the InPage website
+in August 2020
+Despite the significance of their findings, Kaspersky did not attribute the attack to any group. As
+discussed below, BlackBerry was able to directly link two samples mentioned in the InPage write-up
+to some of the most recent BAHAMUT Windows samples we identified separately.
+In their report, Kaspersky disclosed that the vulnerability they identified was eventually assigned
+the designation “CVE-2017-12824” even though they appeared to have reported it to the vendor and
+CERT-IN sometime in the latter half of 2016 (Legezo, 2016). Initially, BlackBerry was only able to
+trace this exploit to June 1, 2016 based upon the following sample listed in Kaspersky’s write-up:
+9bf55fcf0a25a2f7f6d03e7ba6123d5a31c3e6c1196efae453a74d6fff9d43bb
+However, BlackBerry noticed an intriguing response to the research in the comment section of the
+webpage left there by a user calling him/herself “engineer,” who suggested the exploit had been
+used even earlier in time. This turned out to be a decisive clue, one BlackBerry pursued further.
+Figure 27: Comment posted by “engineer” on Kaspersky’s InPage blog
+By leveraging QiAnXian’s deeper analysis of the InPage exploit published two years later (奇安信威
+胁情报中心, 2018), BlackBerry learned that the last modification time of the “InPage100” stream in
+the samples they documented was December 17, 2009 09:47AM. The researchers at QiAnXian did
+not adjust for the time zone of their analysis machine, and the true UTC datetime was “12/17/09
+1:47:53 AM”. This timestamp could very well have indicated the actual development date, although
+the researchers did not state as much. A simple command to convert Microsoft timestamps to a
+human readable date is: “w32tm.exe /ntte {decimal datetime} ”, where the decimal datetime is the
+decimal value of the hex timestamp in this case “0x01CA7EBAF2A7F1F0”.
+Timestamps are easily changed, and are often modified to thwart analysis. We wanted to see
+whether any other documents could be found with the timestamp unchanged. BlackBerry developed
+a simple YARA signature to identify InPage documents with the same time/date stamp:
+rule inPage_exploit_timestamp
+{
+strings:
+$dt = {F0 F1 A7 F2 BA 7E CA 01}
+$inp = {49 00 6E 00 50 00 61 00 67 00 65 00 31 00 30 00 30}
+condition:
+$dt and $inp
+}
+Figure 28: YARA rule to identify timestamped InPage documents
+Using the rule above, BlackBerry confirmed the hypothesis by locating the sample:
+“f1fa2da3ad8ec31e16e560eb716c9e83a797bf870ab84ec147489a15894da1d2”. This sample
+established that the InPage exploit went even further back than first posited by “engineer”, who
+suggested it dated to circa 2014. The file referenced above was first submitted to a commonly used
+malware repository on March 18, 2010. This confirmed that the zero-day was used for at least six
+years prior to being discovered by Kaspersky. In the context of the information security community,
+that is an extremely long time.
+With that startling revelation in hand, BlackBerry considered why it took so long to find. One
+possibility is that it was used only in highly targeted instances and the victims noticed no discernable
+effects to their systems. An extremely limited scope in targeting would prevent the samples from
+being discovered and analyzed. Another possibility is that more than one actor including BAHAMUT
+may have discovered, co-opted, and utilized the exploit before it was ultimately discovered by
+Kaspersky. BlackBerry decided to explore this a bit more.
+A Slight Detour on the Silk Road
+BlackBerry took a deeper look at the “f1fa…” sample. To begin with, we noticed the marker of the first
+significant piece of shellcode was “Y!ngY!ng”. Instead of using a download-and-execute shellcode,
+as was typical in many of the later exploits, the document carried its own embedded and encoded
+payload. The payload was extracted from the document by carving, starting at offset 0x2800 with
+a size of 0x6400. The payload was encoded using a simple ROR against 0x1 followed by an XOR
+against the byte 0xEC. Once extracted this executable had the following hash:
+     - e67404fe5863f92cabc51e842683a2c02eb1f6707fb6ddfddaf847aa1eaca643
+
+This binary payload contained yet another encoded payload within it beginning at file offset 0x3630.
+The binary would have to be launched with administrative privileges from the exploit because it
+attempted to read the first 0x400 bytes of the C: drive. The binary used the first value it read in as
+an XOR key to decode more shellcode within itself. If the C: drive was not bootable on the hard
+drive this payload would likely fail to function properly. But, if the C: drive was the first partition on
+disk and bootable, the byte “0xEB” would be used as the XOR key.
+What Is Dead May Never Die
+The first stage of shellcode then decrypted a second stage using the XTEA algorithm. This final stage
+of shellcode communicated with the domain “leelee.dnset[.]com” and appeared to spawn a popular
+Chinese RAT that hasn’t died off despite being known to the security community for many years:
+PoisonIvy. Based upon crossover with the IP address 63.251.21[.]135 and similarities in malware, this
+particular sample was easily linked to the targeting a group in diaspora perceived to be a potential
+threat to the power of the Chinese Communist Party. Specifically, the domain “uyghuri.51vip[.]biz”
+can be linked via a shared IP address “68.68.47[.]153” to a handful of targeted attacks and other
+related dynamic DNS domains that spanned the time period from early 2010 into mid 2016:
+uygur.eicp[.]net uyghurie.51vip[.]biz uygur.51vip[.]biz
+uygur.xicp[.]net uygur.5166[.]info
+The domain “leelee.dnset[.]com” was even explicitly associated with a human-rights NGO
+representing a minority living in China within an academic paper presented at the USENIX Conference
+in 2014 (Le Blond, et al., 2014).
+Later, BlackBerry identified a second early InPage document that leveraged the same exploit:
+99e274c1bc0b12f2d7b0bdf36ae515af8ba3bbb1d788806ddb7908f239bff985
+This document was submitted to a commonly used malware repository in March of 2011.
+It used the same shellcode marker as described above and also contained an embedded
+payload, although it was encoded this time with a ROR 0x1 and XOR with 0xB1. The decoded
+payload, “fb4e97bdffe2ad617cd42d5ef5e9bed60b9422db3375acd91b043b33b71776e3” carried a
+functionally similar PoisonIvy sample within its resource section. The final payload used a different
+XTEA key and communicated to the domains “kannat.ns01[.]us” and “aspnet.dyndns[.]info”.
+BlackBerry took another brief detour to go search for the aforementioned shellcode marker found
+in the 2009 document: “Y!ngY!ng”. BlackBerry identified three additional InPage exploit documents
+with this seemingly unique marker:
+013417bd5465d6362cd43c70015c7a74a1b8979785b842b7cfa543cb85985852
+a7a746881aed3442af5f2568632ecc2c9a20dc40887287791a0911d5943903a4
+b32faeb66cffd6a380b6b0094918a21e44357b85f91029030e956a24bed67f5c
+The binary beginning “01341” was mentioned in a Microsoft blog in late 2018 (Office 365 Threat
+Research Team, 2018). BlackBerry tracks the payload described in that research as associated
+with yet another Chinese threat actor described publicly as BANECHANT or MM-CORE. All of this
+suggests that Chinese authors were likely the first to find and exploit the InPage vulnerability inthe-wild in pursuit of surveilling a particular population of interest.
+After careful consideration, BlackBerry assesses with high confidence that BAHAMUT likely found
+and co-opted the InPage exploit in-the-wild, as it retained the same exact timestamp found in
+the earlier Chinese developed exploit documents. While it would be trivial to modify timestamps
+to impede analysis and attackers usually do this, all of the InPage exploits BlackBerry identified
+contained this same, unmodified timestamp. The failure to change this one, seemingly small detail
+proved to be highly unique and enormously consequential. From the attacker perspective, this was
+a game-changing oversight, one that ultimately contributed to our high confidence assessment.
+These findings should additionally give readers pause to question previous community findings
+about how all the things are “connected” through the use of CVE-2017-12824.
+Tenuous Connections
+BlackBerry assesses that the continued use of CVE-2017-12824 is an unreliable indicator to
+connect attack groups to one another following Kaspersky’s 2016 publication. This is especially
+true considering the high likelihood that BAHAMUT co-opted the exploit from its original Chinese
+authors. Other threat groups with an interest in Urdu speaking countries could do exactly the same.
+BAHAMUT’s documented propensity for mimicking other groups’ methods also casts some doubt
+on Trend Micro’s connection to CONFUCIUS based on the identical use of the filename “winopen.
+exe”. This postulate becomes even more poignant when considering that the exploit essentially
+became public knowledge following Kaspersky’s 2016 publication.
+Kaspersky: Under the Microscope
+Returning now to the Kaspersky write-up, BlackBerry took note of the fact that the InPage documents
+described were used to target both “financial and governmental institutions.” Kaspersky identified
+banks in Asia and Africa as specific targets, and they provided a screenshot showing a relevant
+phishing email from April 10, 2013:
+Figure 29: Phishing email from Kaspersky’s 2016 InPage blog
+Curiously, the date of this phishing email predates other time references within the text of the article
+by nearly three years. This prompted BlackBerry to examine the samples Kaspersky had listed much
+more closely, specifically:
+085de1580421aefe1d581f4b6012a485e2665cee78630b6a0c311ee3bc8409b6
+43ffd4791798059b29170fe9b6d37cb3a18b1907c2b58a3c804973ca1d656505
+The sample beginning “085” communicated directly to an IP address “91.219.238[.]246”. This IP
+was significant because BlackBerry noted that recently developed and undisclosed BAHAMUT
+malware samples communicated with the same exact IP address. We then identified eleven other
+samples in total that communicated with this IP. They were all Windows malware:
+1305e7aea00eadecdc6fe143c0e91f93e9b6d5dc13407375e0e3dab7e5b99072
+20862996f0511f9a3bd1d92c690bb499a6fbb07683889cba2c2d574a34d881da
+541cb62c5a9583f82b89c73b47b495be2485b20d95120aab7e3552ce71fc0774
+7b3a0273ca92cb17656df4522779b92d43bdbee1980eb4302c949f30dae8d0fa
+9c03e5e4fb8774b28a56ca519e8a9de0f5704674d91bac6ffb129426b830755e
+a2f40cf78a5f595409d5bc714abb09f62f2322a5e486687c43ef7d2b5f436f00
+c1330eb733712935f47a125704c11149a1e09601791bce44ccb067bf19d43bb0
+c2454805fa90df13253d0bf20ddaab92c1c13e04b72cf74ad0998b76d4efc67c
+c8cc9ac7895717e1e82ec02d2787b910eca81e906c0c1da2896fc1c0a34f6e83
+e48a58d0f5d5fb8aa7c96c7b47afc7a6b682078797caef53e7d353483f10e82a
+f816bcbb61d0bd495ea9e920c52825b020bd38dbc4f42c05f955ed34f7207ac3
+It’s not entirely clear why BAHAMUT would use this particular IP address for more than four
+years. It was highly unlike them to do so. BlackBerry speculates that this address was likely a
+component of BAHAMUT’s C2 infrastructure, only used in secondary or tertiary payloads. Directto-IP communication in BAHAMUT-related malware is relatively uncommon. Taking advantage of
+the discovery of IP crossover between recent BAHAMUT malware C2 and malware described in the
+Kasperksy write-up, BlackBerry linked three other recent samples conclusively as being delivered
+from the following URLs. Note that they are also included in the block of hashes above:
+Table 7: Recently delivered Windows malware samples
+BlackBerry pinpointed another dozen URLs by investigating the domains above. Analysis of
+these samples expanded our understanding of other current and recently lapsed Windows C2
+infrastructure. BlackBerry located more samples based on unique strings and code similarities
+present in these binaries. As discussed, these recent Windows samples all used a rather unique
+trick, wielding Intel 8087 floating point calculations to perform sensitive string decoding with use
+of a position-based cipher.
+Cisco Talos — Another Link in the Chain
+The hash beginning “43ff” in the Kaspersky write-up provided another useful link in BlackBerry’s
+analysis. While the majority of the group’s backdoors were programmed in Delphi or Visual Basic,
+this particular sample was programmed in C++. Upon deeper inspection, we found the binary’s
+primary function was to log keystroke data and communicate it back periodically to the domain
+“leastinfo[.]com”. Strings in the binary were encoded using one of two different position-based
+addition-subtraction routines:
+Figure 30: Python snippets to decode strings in sample 433f…
+By employing some rudimentary code matching techniques, BlackBerry located several additional
+samples including the following:
+8e858381add55cc83390fc323856cb5da5295f2e82f8e66cbfb943e1e2df2af8
+eb1ff2f9639c33deb1d1db234f42d19add9cfcb8a5d8c8776a052600368622e2
+Both samples communicated to the domain “techwach[.]com”.
+This particular domain was explicitly mentioned in Cisco Talos’s second MDM writeup (Mercer,
+Rascagneres, & Williams, Advanced Mobile Malware Campaign in India uses Malicious MDM — Part
+2, 2018). According to Talos, this particular domain resolved to an IP address that directly overlapped
+with their unnamed threat actor’s mobile device management scheme in May of 2018. In their first
+“Malicious MDM” article, Talos identified malicious iOS applications which communicated directly
+to the same domain. Although they did not state what that IP address was, BlackBerry determined
+it was almost surely “217.147.168[.]29” based upon historical passive DNS information.
+All of the above led BlackBerry to assesses with high confidence that the activity described by
+Cisco Talos was performed by the same group that employed the InPage exploit in Kaspersky’s
+write-up: BAHAMUT.
+Next, using other code-based similarities and unique string-based similarities, BlackBerry was able
+to directly tie BAHAMUT’s more recent Windows backdoors to Trend Micro’s URPAGE. Much like
+the shellcode in some of the group’s more sophisticated exploits, BAHAMUT’s malware attempted
+to identify and evade a number of antivirus products and other security solutions simultaneously.
+The binaries stored these particularly sensitive strings in a common fashion: “@t@s@a@v@a@”.
+Readers will recognize that the string contained the word “avast” (a popular antivirus product) in
+reverse, with each character separated by the @ symbol. The following list of strings representing 15
+different antivirus and security products was observed in more than 40 different samples deployed
+throughout 2017 and 2018:
+Avast f-secure Quickheal
+Avg kaspersky Sophos
+avira mcafee symantec
+bitdefen microsoftsecur trendmicro
+comodointer norton vba32
+BlackBerry found the following hash in the Appendix of both the Cisco Talos “Malicious MDM 2”
+research as well as in Trend Micro’s URPAGE research, further establishing the direct BAHAMUT
+relationship between them:
+6f362bc439ce09c7dcb0ac5cce84b81914b9dd1e9969cae8b570ade3af1cea3d
+Quick Heal caught our attention in the list above, because it is deployed predominantly in India,
+whereas the rest of the products enjoy a wider global adoption rate.
+Output : 
+### Summary and Analysis
+
+#### Overview
+This detailed analysis explores the connections between various cybersecurity incidents involving the threat actor group known as BAHAMUT. The analysis draws on multiple sources, including Kaspersky, Cisco Talos, and Trend Micro reports, to identify overlaps in infrastructure, code, and techniques used by BAHAMUT. Key findings include:
+
+1. **InPage Exploit Analysis**:
+   - **Kaspersky Report**: Describes InPage documents targeting financial and governmental institutions, with specific references to banks in Asia and Africa.
+   - **Phishing Email**: A phishing email from April 10, 2013, predates other time references by nearly three years, prompting further investigation.
+
+2. **IP Address Crossover**:
+   - **91.219.238[.]246**: This IP address was used by both Kaspersky-described malware and recent BAHAMUT samples, suggesting a shared C2 infrastructure.
+   - **11 Samples Linked**: These Windows malware samples communicated with the same IP address, indicating prolonged use of this infrastructure.
+
+3. **Code Similarities**:
+   - **Position-Based Cipher**: Recent BAHAMUT malware used Intel 8087 floating point calculations for string decoding, a unique technique.
+   - **String Encoding**: Common strings like "avast" in reverse with @ symbols were observed in multiple samples, indicating evasion techniques.
+
+4. **Cisco Talos and Trend Micro Connections**:
+   - **techwach[.]com**: This domain was mentioned in both Cisco Talos's Malicious MDM write-up and linked to BAHAMUT through IP address 217.147.168[.]29.
+   - **Shared Hashes**: The hash `6f362bc439ce09c7dcb0ac5cce84b81914b9dd1e9969cae8b570ade3af1cea3d` was found in both Cisco Talos and Trend Micro research, further confirming the BAHAMUT connection.
+
+5. **Targeting Specific Antivirus Products**:
+   - **Quick Heal**: Notably included in the list of targeted antivirus products, suggesting a focus on India due to its predominant deployment there.
+
+#### Detailed Analysis
+
+1. **InPage Exploit and Phishing Email**:
+   - Kaspersky's 2016 blog post detailed InPage documents used in phishing campaigns targeting financial and governmental institutions.
+   - The phishing email from April 10, 2013, was a key piece of evidence that predates other references by nearly three years, indicating early BAHAMUT activity.
+
+2. **IP Address Crossover**:
+   - The IP address `91.219.238[.]246` was used in both Kaspersky-described malware and recent BAHAMUT samples.
+   - Eleven Windows malware samples were identified that communicated with this IP, suggesting it was part of BAHAMUT's C2 infrastructure.
+
+3. **Code Similarities and Techniques**:
+   - Recent BAHAMUT malware used a unique technique involving Intel 8087 floating point calculations for string decoding.
+   - Common strings like "avast" in reverse with @ symbols were observed, indicating evasion techniques to avoid detection by security products.
+
+4. **Cisco Talos and Trend Micro Connections**:
+   - The domain `techwach[.]com` was mentioned in both Cisco Talos's Malicious MDM write-up and linked to BAHAMUT through the IP address 217.147.168[.]29.
+   - Shared hashes between Cisco Talos and Trend Micro research further confirmed the BAHAMUT connection.
+
+5. **Targeting Specific Antivirus Products**:
+   - The inclusion of Quick Heal in the list of targeted antivirus products suggests a focus on India, where it is predominantly deployed.
+
+#### Conclusion
+The analysis provides strong evidence that the activity described by Kaspersky, Cisco Talos, and Trend Micro was performed by BAHAMUT. Key indicators include shared IP addresses, code similarities, and targeting specific antivirus products like Quick Heal in India. This comprehensive approach highlights the interconnected nature of BAHAMUT's operations and their sophisticated techniques for evasion and persistence.

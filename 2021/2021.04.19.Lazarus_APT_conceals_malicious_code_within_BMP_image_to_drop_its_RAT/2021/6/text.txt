@@ -1,0 +1,69 @@
+Second stage payload Analysis
+This payload is loaded into memory by AppStore.exe and has not been written to disk. It
+starts by performing an initialization process which includes the following steps:
+10/19
+Figure 14: Initialization process
+Create Mutex: Checks if a mutex with “Microsoft32” name exist on machine or not
+and if it exists, it exits. Otherwise, It means the machine has not been infected with
+this RAT and it starts its malicious activities.
+Resolve API calls: All important API calls have been base64 encoded and RC4
+encrypted which will be decoded and decrypted at run time. The key for RC4
+decryption is “MicrosoftCorporationValidation@#$%^&*()!US” .
+11/19
+12/19
+Figure 15: API resolver
+Makes HTTP requests to command and control servers: The server addresses have
+been base64 encoded and encrypted using a custom encryption algorithm. You can
+find the decoder/decryptor here. This custom encryption algorithm is similar to the
+encryption algorithm used by BISTROMATH RAT associated to Lazarus reported by
+US-CERT.
+Figure 16: Custom decryption algorithm
+http://mail.namusoft.kr/jsp/user/eam/board.jsp
+http://www.jinjinpig.co.kr/Anyboard/skin/board.php
+After the initialization process has finished, it checks if the communications to C&C
+servers were successful or not and if they were successful it goes to the next step in which
+it receives the commands from the server and performs different actions based on the
+commands.
+The commands received from the C&C are base64 encoded and encrypted using its
+custom encryption algorithm (Figure 16). After deobfuscation, it performs the following
+commands based on the command codes. The communications to the server have been
+done through send and recv socket functions.
+8888: It tries to execute the command it has received after command code in two
+different ways. At first it tries to execute the command by creating a new thread
+(Figure 17). This thread gets the command after command code and executes it
+using cmd.exe . This process has been done through using CreatePipe and
+CreateProcessA. Then it uses ReadFile to read the output of cmd.exe.
+13/19
+Figure 17: Create thread
+Output of cmd.exe has been encoded and encrypted and is sent to the server as test.gif
+using an HTTP POST request (Figure 18).
+14/19
+15/19
+Figure 18: Send the output of cmd.exe as test.gif
+If the CreateThread process was not successful, it executes the command by calling
+WinExec and then sends the “”8888 Success!” message after encrypting it using its
+custom encryption and then encoding it using base64 to the server as test.gif .
+Figure 19: WinExec
+1234: It calls CreateThread to execute the buffer(third stage payload) it received
+from the server. At the end it encodes and encrypts “1234 Success!” and sends it to
+the server as test.gif .
+2099: It creates a batch file and executes it and then exits. This batch file deletes the
+AppStore.exe from the victim’s machine.
+16/19
+Figure 20: Creates batch file
+8877: It stores the buffer received from server in a file.
+1111: It calls The shutdown function to disables sends or receives on a socket.
+This second stage payload has used custom encoded user agents for its communications.
+All of these user agents have been base64 encoded and encrypted using the same custom
+encryption algorithm used to encrypt the server addresses. Here is the list of the different
+user agents used by this RAT.
+```
+Mozilla/%d.0 (compatible; MSIE %d.0; Windows NT %d.%d; WOW64; Trident/%d.0;
+Infopath.%d)
+Mozilla/18463680.0 (compatible; MSIE -641.0; Windows NT 1617946400.-858993460;
+WOW64; Trident/-858993460.0; Infopath.-858993460)
+Mozilla/18463680.0 (compatible; MSIE -641.0; Windows NT 1617946400.-858993460;
+Trident/-858993460.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR
+3.0.30729; Media Center PC 6.0; Infopath.-858993460)
+Mozilla/%d.0 (Windows NT %d.%d%s) AppleWebKit/537.%d (KHTML, like Gecko)
+Chrome/%d.0.%d.%d Safari/%d.%d Infopath.%d

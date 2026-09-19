@@ -1,0 +1,770 @@
+
+
+
+Sentence : 6 EXECUTION CHAINS
+For execution and persistence, InvisiMole’s operators use long execution chains and rely on living-off-the
+‑land. We have observed the attackers using a BYOVD technique, and the aforementioned BYOVS technique,
+to deliver vulnerable components to the system and then exploit their vulnerabilities— not to gain initial
+access to the system, but to achieve covert code execution and long-term persistence.
+Their tactic is exclusively to install legitimate tools, and reserve malicious components for later
+stages within the execution chain.
+Moreover, the later stages are encrypted using DPAPI, to make it harder to reconstruct the full chain outside
+the victim’s computer. Despite these issues, we were able to reconstruct four distinct types of InvisiMole
+execution chains in cooperation with the compromised organizations, as illustrated in Figure 18.
+We named the four chains by the component that InvisiMole misuses or exploits to achieve covert
+execution. Attackers use these methods in various situations:
+  - _Control Panel misuse chain_ is the least elaborate, possibly used in earlier stages of development, when
+
+the attackers tested the use of DPAPI and InvisiMole blob structure. This is the only chain where the
+attackers used a malicious PE file—all the other chains were crafted by combining legitimate tools
+and encrypted shellcode stored in registry keys.
+  - _SMInit exploit chain_ exploits a vulnerability in _Total Video Player_ software, and is used on systems where
+
+the attackers don’t have administrative privileges.
+  - _Speedfan exploit chain_ exploits a vulnerability in Windows ~~`speedfan.sys`~~ driver, and is used on older
+
+32‑bit systems where the attackers have managed to gain administrative privileges.
+TLP: WHITE
+24 InvisiMole: The hidden part of the story
+  - _Wdigest exploit chain_ exploits a vulnerability in Windows ~~`wdigest.dll`~~ library. This is InvisiMole’s
+
+flagship chain, the most elaborate, used on the newest versions of Windows, where the attackers
+have administrative privileges.
+Figure 18 // Four reconstructed InvisiMole execution chains
+5 Note we haven’t observed InvisiMole’s RC2FM backdoor executed by these chains. On the other hand,
+we were not able to obtain one of the three final stages in the Speedfan exploit chain, and it is possible the
+unknown component is precisely RC2FM backdoor.
+This backdoor may also be is executed by another, yet undiscovered execution chain. As seen in Figure 19,
+the debug artifacts in one of InvisiMole’s components reveal other possible execution methods.
+Figure 19 // Debug artifact suggesting other possible execution methods
+6.1 Control Panel misuse chain
+The specialty of the Control Panel misuse chain is a rare technique known from Vault 7 leaks, used to achieve
+covert execution. InvisiMole installs one of its components as a control panel item, thus forcing Control Panel
+to load it every time it is executed. The malicious control panel item then loads InvisiMole’s TCP downloader.
+Overview of the chain is illustrated in Figure 20.
+TLP: WHITE
+25 InvisiMole: The hidden part of the story
+6.1.1 Installation
+Figure 20 // Control Panel misuse chain
+The chain is set up by a patched RAR SFX dropper with an added InvisiMole blob. As a decoy, it uses a
+software installer, or a document previously stolen from the victim .
+The dropper encrypts the final stage—InvisiMole’s TCP downloader—with ~~CryptProtectData~~ API and
+drops it along with Stage 4. Then, it registers Stage 4 as a control panel item under this registry key:
+```
+    HKCU\Software\Microsoft\Windows\CurrentVersion\Control Panel\CPLs
+ “infocard” = “%APPDATA%\Microsoft\AddIns\infocardadd.cpl”
+
+```
+and opens the Control Panel which (as detailed in Stage 3 part) triggers execution of Stage 4 for the first time.
+On the first execution, Stage 4 sets up persistence for the chain, so it subsequently starts from Stage 1.
+Table 6 // Components used in InvisiMole’s Control Panel misuse chain
+SHA-1 File path Comment
+N/A %STARTUP%\Control Panel.lnk Stage 1—LNK file
+2402765EA67E04F151D32BF2B749B150BBD3993E %APPDATA%\Control\Control.js Stage 2—JavaScript
+9F64FEC50D4447175459AAB33BC9126F9A3370D8
+                             %APPDATA%\Microsoft\AddIns\
+Stage 4—InvisiMole blob loader
+```
+                             infocardadd.cpl
+A3AFF8CE55907DAA1F3360DED01BCF3F6F9D0CF2
+```
+%APPDATA%\Microsoft\AddIns\ Stage 5—InvisiMole’s TCP
+N/A (unique per victim)
+imageapplet.dat downloader
+6.1.2 Stage 1—Control Panel.lnk
+The first stage is an LNK file dropped in the Startup folder, pointing to the file ~~%APPDATA%\Control\~~
+~~Control.js~~ ~~.~~
+6.1.3 Stage 2—Control.js
+Stage 2 is a malicious JavaScript file with this script:
+```
+    WScript.CreateObject(“WScript.Shell”).Run(“::{20d04fe0-3aea-1069
+    a2d8-08002b30309d}\::{21EC2020-3AEA-1069-A2DD-08002B30309D}”, 0)
+```
+Although it is not clear at first glance, this script opens the Control Panel in a new hidden window, as the
+CLSIDs used in the script refer to the This PC [8] folder and the Control Panel, respectively.
+8 Alternatively, this folder is known as My Computer or Computer on older Windows versions
+TLP: WHITE
+26 InvisiMole: The hidden part of the story
+6.1.4 Stage 3—Control Panel
+In Stage 3, the legitimate, preinstalled Control Panel is misused to automatically load Stage 4, which is
+masked as a CPL file.
+CPL files are a special type of Windows executable file—a DLL file with .cpl extension, exporting a function
+named ~~CPlApplet~~ that matches a specific prototype. Unlike standard DLL files, CPL files can be executed
+directly. When a CPL file is executed, Windows automatically executes the Control Panel ~~(~~ ~~control.exe~~ )
+with this file as an argument, and Control Panel loads the CPL and calls its ~~CPlApplet~~ function.
+This feature made CPL files popular among malware authors in the past—as a way to disguise DLL files and
+to bypass simple email filters. For example, massively distributed banking trojans in a campaign targeting Brazil
+have been delivered as CPL files with deceptive names (e.g. ~~Invoice.cpl~~ ~~)~~, attached to malicious emails, in
+an attempt to trick potential victims into executing them.
+Another method attackers have used to leverage CPL files is to register a malicious CPL file as a control
+panel item, under the ~~HKCU\Software\Microsoft\Windows\CurrentVersion\Control Panel\CPLs~~
+registry key. Whenever the Control Panel is executed, it automatically loads all such CPL files and calls their
+~~CPlApplet~~ functions. This technique is described in the MITRE ATT&CK knowledge base and is also used by
+InvisiMole—but with a surprising twist.
+InvisiMole takes advantage of an anomaly in how Windows handles files with .cpl extensions that don’t
+comply with the CPL specification . Stage 4 is registered as a control panel item, but it is not a genuine
+CPL file—instead, it is a standard DLL with its extension changed to .cpl. If the user executes the InvisiMole
+.cpl file directly, it won’t be loaded because of the missing ~~CPlApplet~~ function, and an error may be
+triggered, as seen in Figure 21.
+Figure 21 // As InvisiMole’s .cpl file does not support the CPL interface, on Windows 7, it triggers an error when double-clicked
+However, when the Control Panel is executed, the same file is loaded successfully, and thus InvisiMole is able
+to execute any DLL file under the context of the Control Panel. This trick has been briefly documented in the
+Vault 7 leak of CIA capabilities.
+Overall, the benefit of this persistence technique for the attackers is that there is no obvious connection
+between the LNK file dropped in the Startup folder and the malicious file that is ultimately loaded—
+seemingly, only the Control Panel is executed on system startup.
+TLP: WHITE
+27 InvisiMole: The hidden part of the story
+6.1.5 Stage 4—infocardadd.cpl
+Stage 4 is a malicious control panel item dropped under the name ~~infocardadd.cpl~~ ~~,~~ which mimics the
+name of its legitimate ~~infocard.cpl~~ counterpart.
+On its first execution, this component drops Stages 1 and 2 to set up persistence for the chain.
+Subsequently, it is used to load the final stage of the chain, which is InvisiMole’s TCP downloader [9] . It obtains
+the downloader from the ~~imageapplet.dat~~ file, decrypts it using ~~CryptUnprotectData~~ and loads it in a
+new thread.
+6.2 SMInit exploit chain
+In the SMInit exploit execution chain, the attackers bring a legitimate, but vulnerable piece of software to the
+compromised system and then exploit its vulnerability to load InvisiMole’s TCP downloader.
+This technique can help avoid application whitelisting or detection, as the malware is running under the
+context of a legitimate process.
+For the exploitation, the attackers use the quite outdated Total Video Player [10] software by EffectMatrix Inc . This
+software was released back in 2007 and has a stack overflow vulnerability. The attackers deploy it under the
+name ~~SMInit.exe~~ ; thus the name of this execution chain, illustrated in Figure 22.
+Figure 22 // InvisiMole’s SMinit exploit chain
+Note that this execution method does not require administrative privileges, so the attackers can use it on
+compromised computers where they didn’t manage to obtain those rights.
+6.2.1 Installation
+This chain is set up by a dropper, which is a patched RAR SFX archive with an added InvisiMole blob. As a
+decoy, it uses a software installer previously stolen from the compromised organization. This decoy software
+installer is unrelated to the Total Video Player software.
+The dropper delivers a set of files related to the vulnerable software, as listed in Table 7, and drops them in
+the ~~%USERPROFILE%\AppData\Roaming\Microsoft\Sessions~~ folder.
+Apart from that, it uses ~~CryptProtectData~~ to encrypt Stage 2 and 3, and stores the encrypted blobs in the
+registry, as listed in Table 8.
+Table 7 // Files related to Total Video Player software misused by InvisiMole
+SHA-1 Filename Comment
+```
+       2161A471B598EA002FC2A1CC4B65DBB8DA14A88E SMInit.exe
+```
+355F026D6F8C43956B8D326026038BF809F7350D hskin.dll Legitimate Total Video Player software
+```
+       9091BE6630AD170D15CA6A6722CE53619AC61229 TVPSkin.dll
+```
+E85D7F0564771C9396FDCDB9877DB0FF61C1D515 Settings.ini File with exploit
+9 SHA-1 of decrypted InvisiMole blob: DBD21EF03CCC3A985D808B0C5EC7AC54DED5D1C9
+10 The full name of the software is E.M. Total Video Player
+TLP: WHITE
+28 InvisiMole: The hidden part of the story
+Table 8 // Registry entries with stages of SMInit exploit chain
+Registry key Comment
+HKCU\Software\Microsoft\Feeds\SyncData Stage 2—task scheduler
+HKCU\Software\Microsoft\Feeds\SyncImage Stage 3—InvisiMole’s TCP downloader
+On the first execution, the chain starts from Stage 1 and sets up persistence, so that it is triggered on each
+system start by a scheduled task.
+6.2.2 Stage 0—scheduled task
+This chain is installed as a task named ~~MSST~~ ~~.~~ This task executes the first stage ~~—~~ ~~SMInit.exe~~ —using this
+uncommon command line:
+```
+        rundll32.exe shell32.dll,ShellExec_RundDLL “C:\Users\Admin\AppData\
+    Roaming\Microsoft\Sessions\SMInit”
+
+```
+This combination of rundll32.exe and shell32.dll tricks Sysinternals Autoruns tool into hiding this task from the
+list of programs configured to run during system bootup when the Hide Windows Entries option is enabled
+in the tool. This option is part of the default settings.
+6.2.3 Stage 1—SMinit.exe
+Stage 1 is the legitimate Total Video Player software, deployed under the ~~SMInit.exe~~ [1][1] filename (see Figure 23).
+Figure 23 // SMInit.exe file properties show E.M. Total Video Player as the original name
+11 SHA-1: 2161A471B598EA002FC2A1CC4B65DBB8DA14A88E
+TLP: WHITE
+29 InvisiMole: The hidden part of the story
+Once the software is started, it attempts to parse the ~~Settings.ini~~ file, shown in Figure 24. The parsing
+function allocates a 256-byte buffer on the stack and reads a value from the file. InvisiMole uses a specifically
+crafted ~~Settings.ini~~ file, where the length of this value exceeds the length of the allocated buffer. This
+is how the stack overflow vulnerability is exploited and how the shellcode placed in the crafted settings file
+gets executed.
+i
+Figure 24 // Settings.ini file with the stack overflow exploit
+By triggering this vulnerability, InvisiMole is able to force the application to execute InvisiMole shellcode
+under its context. The shellcode reads the registry value ~~HKCU\Software\Microsoft\Feeds\SyncData~~,
+decrypts it and passes execution flow to the decrypted code.
+6.2.4 Stage 2—SyncData entry
+The Stage 2 shellcode is used to decrypt and load the final stage of this chain from ~~HKCU\Software\~~
+~~Microsoft\Feeds\SyncImage~~ ~~,~~ which is InvisiMole’s TCP downloader [12] .
+To decrypt Stage 3, and also to decrypt one part of itself, it uses the ~~CryptUnprotectData~~ API.
+During the first execution, this stage also schedules the Stage 0 task for the current user, to ensure
+persistence for the whole chain. To make the task scheduling functionality stealthier, it doesn’t utilize
+API calls; instead, it is implemented using the COM interface of the task scheduler ~~(~~ ~~ITaskService,~~
+~~ITaskDefnition, ITaskSettings~~ i COM interfaces).
+12 SHA-1 of decrypted InvisiMole blob: 2E7F737CAEB56716ACE36FADEB74EE610705283F
+TLP: WHITE
+30 InvisiMole: The hidden part of the story
+6.3 Speedfan exploit chain
+In the Speedfan exploit execution chain, InvisiMole uses the Bring Your Own Vulnerable Driver technique
+to load the ~~speedfan.sys~~ driver on the compromised system, and then exploit local privilege escalation
+vulnerability (CVE-2007-5633) to gain code execution in kernel mode.
+To get this exploit up and running, InvisiMole misuses two legitimate tools: srvany-ng and winapiexec .
+Once running in the context of the kernel, InvisiMole injects its code into a legitimate process and covertly
+loads the final stages. We have seen InvisiMole’s RC2CL backdoor and DNS downloader being loaded this way.
+This execution method, illustrated in Figure 25, is used on older 32-bit Windows systems, for the cases when
+the attackers were able to get admin privileges.
+Figure 25 // Execution chain exploiting vulnerability in the speedfan.sys driver
+6.3.1 Installation
+We don’t know exactly how this chain is set up, whether by using an InvisiMole dropper, or possibly by a
+human operator using Gamaredon’s toolset in the early stages of the attack—either way, administrative
+privileges are required for this execution method.
+Based on our post-attack analysis, we know the (unknown) installer must register the Windows service
+starting up Stage 1 and drop legitimate utilities misused in Stages 1 and 2.
+Finally, it must encrypt the rest of the components in the chain using ~~CryptProtectData~~ ~~,~~ to make sure
+they can only be decrypted on the victim’s computer.
+Some of the filenames used in the Speedfan exploit chain are listed in Table 9; others are discussed later in
+the section.
+Table 9 // Files used in InvisiMole’s Speedfan exploit chain
+SHA-1 File path Comment
+9987c0b97cb6a0239d3af6e5a70b552e1c38810f C:\Windows\system32\mscorscvs.exe Stage 1
+C:\Windows\system32\drivers\NGEN
+4a6dc6a32a777dc5dd47221bf79604bc0258a987 Framework\NGEN.exe Stage 2
+C:\Windows\system32\drivers\NGEN
+N/A (unique per victim) Framework\NGEN.cab Stages 3-6
+TLP: WHITE
+31 InvisiMole: The hidden part of the story
+6.3.2 Stage 1—mscorscvs.exe
+-
+This execution chain starts with a legitimate utility srvany ng [13], installed in ~~C:\Windows\system32\~~
+~~mscorscvs.exe~~ and registered as a Windows service under the name ~~clr_optimization_v2.0.51527_~~
+~~X86~~, as shown in Figure 26. This name is used to mimic Microsoft.NET Framework NGEN (Native Image
+Generator service) .
+Figure 26 // Properties of clr_optimization_v2.0.51527_X86 service starting up InvisiMole’s Speedfan exploit chain
+This utility is designed to run any Windows application as a service—for that, the parameters of the
+application must be specified under the service parameters . InvisiMole configures this tool so that it loads
+~~C:\Windows\system32\drivers\NGEN Framework\NGEN.exe~~ with the parameters specified under the
+~~AppParameters~~ registry value, as shown in Figure 27.
+Figure 27 // srvany-ng is configured to execute the winapiexec tool with InvisiMole’s shellcode
+6.3.3 Stage 2—NGEN.exe
+The ~~NGEN.exe~~ name of Stage 2 is used to mimic a legitimate Windows Native Image Generator tool. The file
+itself is a copy of a legitimate tool winapiexec [14] —the same tool that is misused to upgrade Gamaredon’s
+targets to InvisiMole (see the Delivery method section).
+For this execution chain, winapiexec is executed with the following command line:
+```
+        C:\Windows\system32\drivers\NGEN Framework\NGEN.exe VirtualAlloc 0
+    0x20000 0x3000 0x40, CreateFileW ‘Ngen.cab’ 0x80000000 0 0 3 0 0,
+
+    SetFilePointer $$:7 64 0 0, ReadFile $$:7 $$:1 0x20000 $b:4 0,
+
+    CloseHandle $$:7, EnumUILanguagesA $$:1 4 $$:1”
+
+```
+13 SHA-1: 9987C0B97CB6A0239D3AF6E5A70B552E1C38810F
+14 SHA-1: 4A6DC6A32A777DC5DD47221BF79604BC0258A987
+TLP: WHITE
+32 InvisiMole: The hidden part of the story
+With these parameters, winapiexec reads shellcode from the ~~C:\Windows\system32\drivers\NGEN~~
+~~Framework\Ngen.cab~~ file, starting at offset 0x40, and calls the ~~EnumUILanguagesA~~ API with the shellcode
+as a parameter. ~~EnumUILanguagesA~~ enumerates the user interface languages that are available on the
+operating system and calls the specified callback function with every language in the list—this is how the
+shellcode gets executed.
+6.3.4 Stage 3—Ngen.cab
+Stage 3 is a multilayer shellcode, serving as a container for Stages 4-6.
+It decrypts the first layer using a XOR cipher with this DWORD key:
+```
+        key = 0x1D709CA2 + (i << 4) + (i << 0x12) // i starts at 0x80 and
+    increments for each subsequent dword
+
+```
+Then, it uses ~~CryptUnprotectData~~ to decrypt the second layer with two embedded InvisiMole blobs, and
+passes execution to one of them—Stage 4.
+6.3.5 Stage 4—speedfan.sys exploit
+Stage 4 is a 32-bit shellcode [15] running in the context of the winapiexec tool.
+This component exploits a local privilege escalation vulnerability in the ~~speedfan.sys~~ driver to get code
+execution in kernel space, and uses this access to execute Stage 5 in the kernel context.
+A design flaw in ~~speedfan.sys~~ allows local users to issue privileged IOCTLs to read or write arbitrary MSRs
+via the ~~IOCTL_RDMSR (0x9C402438)~~ and ~~IOCTL_WRMSR (0x9C40243C)~~ . InvisiMole uses this vulnerability
+to replace the value of the ~~IA32_SYSENTER_EIP~~ MSR register, which holds the address of the
+SYSENTER handler .
+Then, it issues a system call to ensure the SYSENTER instruction is called from the user space, and thus the
+patched SYSENTER handler is triggered. Figure 28 illustrates the steps the patched handler takes.
+Figure 28 // Patched SYSENTER handler
+15 SHA-1 of decrypted shellcode: 10C548992567A04DA199D09E3CA4B0C47B7A136C
+TLP: WHITE
+33 InvisiMole: The hidden part of the story
+
+It uses the ~~wrmsr~~ instruction to restore the value of the ~~IA32_SYSENTER_EIP~~ MSR register (not to
+
+disturb the normal operation of the kernel), which restores the original address of the SYSENTER handler.
+
+It clears the write protection bit to allow writing to read-only memory pages (when the WP bit is set, the
+
+CPU can’t write to read-only pages when privilege level is 0).
+
+It patches the code section in ~~speedfan.sys~~ ; more specifically it patches the handler for ~~IOCTL_GET_~~
+
+~~DRIVER_VER~~ ~~(0x9C402434)~~, as shown in Figure 29.
+Figure 29 // Original and patched handler for IOCTL_GET_DRIVER_VER in speedfan.sys
+The ~~esi~~ register in this case holds ~~Irp->AssociatedIrp.SystemBuffer~~ ; that is, when
+~~IOCTL 0x9C402434h~~ is called on ~~\\.\speedfan~~ with code as an argument, this code is
+executed in kernel mode.
+
+
+It restores the original value of ~~CR0~~ (reenabling read-only protection, if applicable).
+
+
+It passes control to the original SYSENTER handler, to properly process the original SYSENTER request.
+
+
+This patched SYSENTER handler is thus only executed once, to patch a code section in ~~speedfan.sys~~ ; after
+that the original handler is restored.
+InvisiMole then leverages the created backdoor in the ~~speedfan.sys~~ driver by issuing ~~IOCTL~~
+~~0x9C402434h~~ with Stage 5 as a parameter, as illustrated in Figure 30. As a result, Stage 5 is executed
+under the kernel context .
+TLP: WHITE
+34 InvisiMole: The hidden part of the story
+i
+i
+i
+Figure 30 // InvisiMole issues the hijacked IOCTL with Stage 5 as an argument
+This exploit works on x86 systems where it is possible to execute user-mode addresses from kernel mode—
+it would be more difficult on x64 systems with SMEP mitigation in place. SMEP was launched in 2011 and
+enabled by default since Windows 8, so the exploit should work on Windows 7 or older.
+Note that the ~~IA32_SYSENTER_EIP~~ MSR register is separate per core, or per logical processor, so in order for
+this exploit to work on processors with multiple logical units, the part of the exploit that triggers the patched
+SYSENTER handler must be executed on the same unit as the part patching the handler. To ensure this,
+InvisiMole takes further steps ensuring the full exploit is executed without interruption, on a single unit :
+  - Before running the exploit, InvisiMole temporarily adjusts scheduling priority of the current thread
+
+to the highest possible priority by setting the priority class of the current process to ~~REALTIME_~~
+~~PRIORITY_CLASS~~ ( ~~SetPriorityClass~~ API) and priority level of the thread to ~~THREAD_PRIORITY_~~
+~~TIME_CRITICAL~~ ( ~~SetThreadPriority~~ API), to prevent the scheduler from interrupting it with
+some other task.
+  - Then it adjusts the processor affinity mask of the current process so that it can be executed on all
+
+logical processors, by retrieving the affinity mask for the system with the ~~GetProcessAff~~ i ~~nityMask~~
+API, and then setting this mask to the current process with the ~~SetProcessAff~~ i ~~nityMask~~ API.
+  - Finally, if there are multiple logical processors, InvisiMole starts a number of new threads and spreads
+
+them over the other logical processors using the ~~SetThreadAff~~ i ~~nityMask~~ API. By this, InvisiMole
+makes sure the shellcode is executed on one execution unit, while the other threads keep the other
+units busy by looping until triggered by the main thread that the exploit has been completed
+6.3.6 Stage 5—kernel-mode inject
+Stage 5 is shellcode executed in the context of the kernel, after the driver exploit has been completed.
+This component creates a new thread (in kernel space), attaches this thread to a ~~svchost.exe~~ process,
+and inserts Stage 6 into the thread APC queue of this process using the ~~KeInsertQueueApc~~ API.
+As a result, Stage 6 is executed asynchronously the next time the thread is scheduled.
+This technique is used in an attempt to avoid detection, as it is stealthier to do process injection from
+kernel mode.
+6.3.7 Stage 6—loader
+Stage 6 is a loader [16] of the final stages of this execution chain—InvisiMole’s payloads. It searches for
+encrypted InvisiMole blobs, decrypts them using a combination of the ~~CryptUnprotectData~~ API and the
+two-key triple DES algorithm, and loads these payloads.
+16 SHA-1 of decrypted InvisiMole blob: B988F107E5F20CDC424EC9F470D157435FC03966
+TLP: WHITE
+35 InvisiMole: The hidden part of the story
+The tricky part is that the loader doesn’t contain the full path to the encrypted files with these components;
+instead it searches for files or registry values by a list of hardcoded SHA-1 hashes of filenames and
+registry value names .
+The SHA-1 values are calculated using Microsoft CryptoAPI from lowercase versions of the names and—to
+make detection even more difficult—stored as binary data, rather than strings, as illustrated in Figure 31.
+Figure 31 // InvisiMole’s loader uses a hardcoded list of binary SHA-1 values instead of filenames
+More specifically, InvisiMole stores its final stages in registry values under specific subkeys of the ~~HKLM~~
+registry key, and in files in the ~~%TEMP%~~ or ~~%SYSTEM%~~ folder, the root folder of a system drive, or any
+~~programdata~~ subfolder under this drive.
+Thanks to the cooperation of the affected organizations, we were able to recover some of the obfuscated
+locations, and obtain and decrypt the corresponding InvisiMole components—InvisiMole’s RC2CL backdoor [17]
+and DNS downloader [18] . The recovered names of registry subkeys and values are listed in Table 10 and
+Table 11, with one of the components yet to be uncovered.
+Neither have we recovered the names of files concealed behind the SHA-1 values, as listed in Table 12.
+However, from the artifacts in the InvisiMole loader, we assume these files would contain the same three
+components as are loaded from the registry keys—the RC2CL backdoor, DNS downloader and the third,
+unknown, component.
+It remains a mystery whether the third loaded component is one of the known InvisiMole payloads (RC2FM
+backdoor or TCP downloader, Portscan or BlueKeep component), or some unknown component, or whether
+it is reserved for some yet-to-be-implemented payload.
+Table 10 // Registry keys used to store InvisiMole components. SHA-1 values were calculated from lowercase, ASCII
+versions of the registry key names
+SHA-1 of registry key name Recovered registry key name
+40D02DDB8BE27726135C4A0E20E2BBABDA84D0FF software\microsoft\drm
+5D69782FFF60365FE81C58D5887C151D326CF731 software\microsoft\windows\currentversion
+7AE0CA52F4690CA09558A94D4CE5B521B3A3E3FF software\microsoft\windows\currentversion\ext
+B7FEE003B413AF3297DB60D0FC845A054FE080D2 software\microsoft\function discovery\registrystore\publication\explorer
+17 SHA-1 of decrypted InvisiMole blob: 094DAEA5B97C510A8E9CFE3585B39B78522A2C61
+18 SHA-1 of decrypted InvisiMole blob: F67300541D769C5AA071C766198F0B7E25476B23
+TLP: WHITE
+36 InvisiMole: The hidden part of the story
+Table 11 // Properties of registry values used to store InvisiMole components. The SHA-1 values were calculated from
+lowercase, Unicode versions of registry value names.
+SHA-1 of registry value name Recovered value name Component type
+```
+       C0E73E522D09344A278D45A524A50CF4FCC87817 1Extylc8fC5X1PL
+```
+D0A769119F628FF0D5110A1E17864036FCB8BE6B 1Extylc8fC5X1HK Unknown
+```
+       065DEB443AAE29700D09CB395C928C919C3A7352 1Extylc8fC5X1RK
+   6AA50BAE4D9529A60FE566115068E6BDF418786D 1Extylc8fC5X2PL
+
+```
+5126A83A9D9B29598B36540647FFBA2834C82AE3 1Extylc8fC5X2HK DNS downloader
+```
+       371971130EE56AB5B7FEA61A80054F5E81E4027D 1Extylc8fC5X2RK
+   3E49B3DD812AAE4997C4C9FF2843EAAC32F55A94 1Extylc8fC5X3PL
+
+```
+12EBD779D5BB416D05550D9ECBADF5A9EF89436C 1Extylc8fC5X3HK RC2CL backdoor
+```
+       80D48821135D904CAF2DF0FE2883A6F104BE1639 1Extylc8fC5X3RK
+```
+Table 12 // Properties of names of the files storing InvisiMole components
+SHA-1 of filename Filename Component type
+```
+       F4A60039D7C9FC337AE2F59D09F6F6F3D1FF7DE3 Unknown
+```
+2F13F5DD481FB251991E0CC05DB9C06A4C1D6ED8 Unknown Unknown
+```
+       798AF02CA0C8F92B1623A1F1CF25DA4916C04A74 Unknown
+   6ECF2532A8E3AB1888088A503D4A7CA57A7BAA82 Unknown
+
+```
+0197D794FA28B189B3B938FB384CC94E5F1D1733 Unknown Unknown
+```
+       60197B570D2ACF93A6F92B548D08A3CAF80A1579 Unknown
+   F4F06C73A4D8091CE0C7229555921F58E735849D Unknown
+
+```
+A203A7EEF726473911031578ADBF17CB83FE214B Unknown Unknown
+```
+       C5DE2BF0E13E741508A7EB4C67DED301ABA391CE Unknown
+```
+6.3.8 Previous versions
+Note that we detected a number of InvisiMole’s loaders similar to the Stage 6 loader. While the latter loader
+is an InvisiMole blob loaded by a chain of other components, the former are standalone DLLs.
+We identified three versions of these loaders, all sharing the same functionality as the Stage 6 loader, even
+using the same list of SHA-1 hashes of final stage locations. These versions, however, vary in the level of
+obfuscation, showing a continuous development.
+We assume these loaders are the predecessors of the elaborate Speedfan exploit execution chain . The attackers
+were probably first experimenting with using execution guardrails and obfuscating the payload location,
+before they developed the full chain.
+Interestingly, most of these files have language in resources set to LANG_RUSSIAN, SUBLANG_RUSSIAN_
+RUSSIA—we don’t have this type of metadata for the rest of the InvisiMole’s toolset, developed after the
+transition to elaborate execution chains using InvisiMole blob shellcodes.
+The filenames and SHA-1 hashes of the older loaders are provided in the IoCs section .
+TLP: WHITE
+37 InvisiMole: The hidden part of the story
+6.4 Wdigest exploit chain
+Finally, in the most elaborate Wdigest exploit execution chain, InvisiMole uses another variation of
+the BYOVS technique. The attackers bring ~~wdigest.dll~~, a vulnerable Windows component from
+Windows XP, and misuse its input validation vulnerability to run shellcode, crafted to use code
+gadgets from the library .
+Running under the context of a Windows component helps the attackers avoid application whitelisting
+and adds legitimacy to the malicious code. Despite being vulnerable, the library can’t be cleaned by security
+products, as it could break the OS in previous Windows versions.
+Later in the chain, InvisiMole uses an improved version of ListPlanting, an interesting injection technique,
+to run the DNS downloader and the RC2CL backdoor within a trusted process.
+This is InvisiMole’s most recent and most elaborate execution method, used on computers with the newest
+versions of the OS, where the attackers were able to obtain administrative privileges previously. An overview
+of the chain is illustrated in Figure 32.
+i
+Figure 32 // Execution chain exploiting wdigest.dll
+6.4.1 Installation
+We analyzed multiple instances of the installer component that sets up this chain. The installer is a 64-bit
+InvisiMole blob, probably delivered and executed by one of InvisiMole’s downloaders.
+The installer decrypts an embedded zlib blob, reusing the decryption routine previously used by InvisiMole.
+After decryption, the installer decompresses eight embedded blobs with stages of this execution chain and
+installs them. Finally, it schedules and executes Stage 0 using Windows Task Scheduler.
+As you can see from Table 13 and Table 14, the only files used in this execution chain are legitimate
+Windows utilities, with all the malicious components stored in the registry. Even the small shellcode stored
+under the ~~FlashConf~~ i ~~gEnrollee~~ registry value is designed to live off the code gadgets from the legitimate
+~~wdigest.dll~~ library. Thus, all the malicious components are encrypted and stored in the registry
+(a technique some categorize as fileless) , which adds to the stealthiness of this execution chain.
+Table 13 // Legitimate Windows utilities used in InvisiMole’s Wdigest exploit chain
+SHA-1 File path
+```
+      B61A277719359582071DB4CD448D3E9D0A460B1D %WINDIR%\SysWOW64\drivers\Rundll32.exe
+  7752BD1C02E5DC7B0975FC6A1C73145A2A83D079 %WINDIR%\SysWOW64\drivers\wdigest.dll
+
+  EE7D06FC93D3C608B48823D1444148327330015A %WINDIR%\SysWOW64\wbem\setupSNK.exe
+
+```
+TLP: WHITE
+38 InvisiMole: The hidden part of the story
+Table 14 // Registry entries used in InvisiMole’s Wdigest exploit chain. Registry keys are given for both 32-bit and 64-bit OS
+versions.
+Registry key Value name Component Encryption method
+```
+       HKLM\SOFTWARE\Microsoft\
+```
+FlashConfig or
+FlashConfigEnrollee Exploit used in Stage 2 -
+```
+       HKLM\SOFTWARE\WOW6432Node\
+```
+Microsoft\FlashConfig
+M Stage 3 XOR 0x7E8B103C
+A Stage 4 CryptProtectData
+HKLM\SOFTWARE\ODBC or
+B Stage 5 CryptProtectData
+```
+       HKLM\SOFTWARE\WOW6432Node\ODBC
+```
+C Stage 6 / RC2CL backdoor CryptProtectData
+D Stage 6 / DNS downloader CryptProtectData
+UAC Bypass
+Note that the installer for this chain expects to be executed with System or Administrator privileges.
+Optionally, if it is executed as a non-elevated Administrator, it can use fileless UAC bypass to obtain elevated
+Administrator privileges.
+In that case, the installer creates a shared memory object named ~~XVD21x9DC~~ with a copy of itself and uses
+the legitimate winapiexec tool to read from the shared memory and execute the installer in a new thread.
+It first drops a copy of the winapiexec tool in ~~%APPDATA%\Microsoft\Installer\kb043921.exe~~ ~~.~~
+To execute it as an elevated process, the installer uses a registry hijacking trick for UAC bypass:
+
+It sets this registry key to register a new file type association with a malicious command line:
+
+```
+        HKCU\SOFTWARE\Classes.zeros\shell\open\command = “%APPDATA%\Microsoft\
+    Installer\kb043921.exe” OpenFileMappingW 0xF003F 0 “XVD21x9DC”,
+
+    MapViewOfFile $$:1 0xF003F 0 0 %installer_size%, CreateThread 0 0 $$:6
+
+    $$:6 0 0, WaitForSingleObject $$:13 -1
+
+```
+It sets this registry key:
+```
+        HKCU\SOFTWARE\Classes\ms-settings\Curver = “.zeros”
+```
+
+It executes ~~%SYSTEMDIR%\fodhelper.exe,~~ which is an auto-elevated application. Once executed,
+
+~~fodhelper.exe~~ reads file type association set in ~~HKCU\SOFTWARE\Classes\~~ ~~ms-settings~~ ~~\Curver~~ key
+and executes the associated command line.
+As a result, the dropped winapiexec is executed as elevated process, then it reads the installer blob from
+shared memory and starts it in a new elevated thread.
+This technique works on Windows 10. For Windows 7, the installer uses a similar trick, except it uses
+~~%SYSTEMDIR%\CompMgmtLauncher.exe~~ as the auto-elevated application and ~~HKCU\SOFTWARE\Classes\~~
+~~lnkfle\Curver~~ i as the hijacked registry key.
+TLP: WHITE
+39 InvisiMole: The hidden part of the story
+6.4.2 Stage 0—scheduled task
+For this execution chain, InvisiMole achieves persistence using a standard scheduled task, scheduled on each
+system start and registered under the name ~~\Microsoft\Windows\Autochk\Scheduled~~ .
+i
+i i
+Figure 33 // Part of XML specification of the scheduled task starting up InvisiMole’s Wdigest exploit chain
+As shown in Figure 33, this task creates a hidden system directory ~~C:\SMRTNTKY\MessageB.txt~~ (not a file)
+and executes ~~setupSNK.exe~~ [1][9] .
+The directory is created to force a specific execution path within the ~~setupSNK.exe~~ tool.
+6.4.3 Stage 1—setupSNK.exe
+Stage 1 is a copy of a legitimate Windows component— Wireless Network Setup Wizard —designed to share
+wireless connection settings on USB Flash drives.
+When launched, ~~setupSNK.exe~~ restores these settings by executing the default Flash Config Enrollee DLL
+~~(~~ ~~wzcdlg.dll~~ ~~)~~ . However, it has an undocumented feature that allows execution of a custom Flash Config
+Enrollee DLL instead of the default one. This undocumented feature is abused by InvisiMole.
+When executed, ~~setupSNK.exe~~ checks for the presence of the ~~C:\SMRTNTKY\MessageB.txt~~ directory.
+If it exists, it attempts to load the ~~FlashConfgEnrollee~~ i value from ~~HKLM\SOFTWARE\Microsoft\~~
+~~FlashConfg~~ i on 32-bit systems, or from ~~HKLM\SOFTWARE\WOW6432Node\Microsoft\FlashConfg~~ i on 64
+bit systems, and uses that value to build a command line in this format:
+```
+        rundll32.exe %s %s\SMRTNTKY\WSETTING.WFC
+```
+Note that ~~WSETTING.WFC~~ refers to a file stored in the ~~SMRTNTKY~~ folder in the root of a USB drive, which is
+used to store the wireless connection settings.
+As Figure 34 depicts, this command line is then executed via the ~~CreateProcessA~~ API that, in a legitimate
+run of ~~setupSNK.exe~~ ~~,~~ opens a benign Wizard Dialog DLL.
+19 SHA-1: EE7D06FC93D3C608B48823D1444148327330015A
+TLP: WHITE
+40 InvisiMole: The hidden part of the story
+i
+Figure 34 // Decompiled function of setupSNK.exe tool
+However, InvisiMole hijacks this function to execute its own code. On InvisiMole-compromised computers,
+the ~~FlashConf~~ i ~~gEnrollee~~ value in the registry is changed to the following value, including a 119-byte
+short shellcode:
+```
+        shell32 ShellExec_RunDLL “C:\Windows\SysWOW64\drivers\Rundll32.exe”
+    “C:\Windows\SysWOW64\drivers\wdigest.dll”,SpInitialize % SHELLCODE_BYTES %
+
+```
+As a result, ~~setupSNK.exe~~ builds and executes this command line:
+```
+        rundll32.exe shell32 ShellExec_RunDLL “C:\Windows\SysWOW64\drivers\
+    Rundll32.exe” “C:\Windows\SysWOW64\drivers\wdigest.dll”,SpInitialize
+
+    % SHELLCODE_BYTES %\SMRTNTKY\WSETTING.WFC
+
+```
+The ~~rundll32.exe~~ [2][0] and ~~wdigest.dll~~ [21], whose properties are shown in Figure 35, are both legitimate files
+from Windows XP. InvisiMole brings these versions to the compromised computer, so this execution chain
+works even on Windows 10.
+i
+i
+Figure 35 // Properties of wdigest.dll and setupSNK.exe files—two Windows components misused by InvisiMole in
+this chain
+20 SHA-1: B61A277719359582071DB4CD448D3E9D0A460B1D
+21 SHA-1: 7752BD1C02E5DC7B0975FC6A1C73145A2A83D079
+TLP: WHITE
+41 InvisiMole: The hidden part of the story
+6.4.4 Stage 2—wdigest.dll
+The ~~wdigest.dll~~ library is a legitimate Windows component that contains an implementation of a digest
+authentication protocol. When some third-party application needs to use this protocol, this library is loaded
+into the process.
+However, the attackers discovered the possibility of running ~~wdigest.dll~~ from the command line
+using ~~rundll32.exe~~ with shellcode as a parameter.
+When executed by Stage 1 with the given parameters, InvisiMole’s shellcode is copied to the ~~g_LsaFunctions~~
+global variable in the ~~SpInitialize~~ function, shown in Figure 36.
+Figure 36 // Decompiled SpInitialize function of wdigest.dll library
+The shellcode is constructed in a way so that it uses different parts of ~~wdigest.dll~~ ’s code (gadgets) to
+hijack its control flow, in order to load the next stage of this InvisiMole execution chain.
+As shown in Figure 37, the following code is executed later after the ~~SpInitialize~~ function:
+
+~~wdigest.dll~~ calls ~~[eax+14]~~, with ~~eax~~ pointing to ~~g_LsaFunctions~~, which passes control to the
+
+shellcode.
+
+
+~~[eax+14]~~ points to the ~~0x7E8BC063~~ value within the shellcode, which is an address within ~~wdigest.dll~~ .
+
+
+This address points to a ~~jmp eax~~ instruction, which passes control back to the start of the shellcode.
+
+
+The shellcode then uses other gadgets of ~~wdigest.dll~~ ~~,~~ such as the resolved address of the
+
+
+~~RegQueryValueExW~~ API (always ~~0x7e8B1040~~ ), to read the next stage from value ~~M~~ under either the
+~~HKLM\SOFTWARE\ODBC or HKLM\SOFTWARE\WOW6432Node\ODBC~~ registry key and to pass control to it.
+TLP: WHITE
+42 InvisiMole: The hidden part of the story
+Figure 37 // InvisiMole’s shellcode is crafted to use gadgets of wdigest.dll
+The shellcode can reference hardcoded addresses within ~~wdigest.dll~~ , because it is a Windows XP
+binary, so it doesn’t use ASLR and is always loaded in the same address space.
+6.4.5 Stage 3—M loader
+Stage 3 is 32-bit shellcode [22] loaded from the ~~M~~ registry key. Just like Stage 2, it uses imports from ~~wdigest.dll~~,
+using hardcoded addresses.
+This component reads the ~~A~~ value from the registry, decrypts it using the ~~CryptUnprotectData~~ API and
+passes execution flow to the blob.
+6.4.6 Stage 4—A loader
+Stage 4 is a 32-bit InvisiMole blob [23] that uses an interesting technique to inject the shellcode from the ~~B~~
+registry value to a trusted process.
+It also creates a shared memory with content of ~~C~~ and ~~D~~ registry values and injects names of the shared
+objects to the trusted process, so that ~~B~~ shellcode can access and load ~~C~~ and ~~D~~ payloads. The ~~B~~, ~~C~~ and ~~D~~
+values are all encrypted with DPAPI, so Stage 4 first decrypts them using ~~CryptUnprotectData~~ before they
+are injected/loaded.
+22 SHA-1: B894F320569286B56F4272D0CBBA4DB10C645AE0
+23 SHA-1 of decrypted InvisiMole blob: AA5E8E21C79B0B4A02726233B9F5EB4994C87AD3
+TLP: WHITE
+43 InvisiMole: The hidden part of the story
+Table 15 // Shared objects created by Stage 4
+Name format Object type Name for C payload Name for D payload
+ExMp00%.2X shared memory ExMp0043 ExMp0044
+ExMpOK%.2X event name for success ExMpOK43 ExMpOK44
+ExMpER%.2X event name for error ExMpER43 ExMpER44
+For process injection, this component uses a technique called ListPlanting [24] . This technique has been
+already documented online, but InvisiMole improves it to add even more stealthiness.
+ListPlanting is based on the possibility of providing a callback to customize the sorting algorithm in a
+ListView structure. To display a ListView structure, InvisiMole misuses a legitimate Windows library
+~~FXSCOMPOSE.dll~~, which displays contacts stored in the ~~%USERPROFILE%\Contacts~~ folder in such
+a structure.
+It first drops three XML files into this folder—only to create data for the list. Then it executes the
+~~FXSCOMPOSE.dll~~ library with the ~~HrSelectEmailRecipient~~ function.
+  - If running without admin privileges, it executes this library directly using ~~`rundll32.exe`~~ .
+
+
+  - Otherwise it creates a service named ~~`CsPower`~~, with the registry content shown in Figure 38, that
+
+executes the same library.
+Figure 38 // Properties of CsPower service in the registry
+When ~~FXSCOMPOSE.dll~~ starts, it creates a window filled with information from ~~%USERPROFILE%\~~
+~~Contacts~~ files, as shown in Figure 39. This window is displayed for so short a period of time that it may well
+go unnoticed by the user.
+24 See https://modexp.wordpress.com/2019/04/25/seven-window-injection-methods/#listplanting, http://www.hexacorn.com/blog/2019/04/25/
+listplanting-yet-another-code-injection-trick/
+TLP: WHITE
+44 InvisiMole: The hidden part of the story
+Figure 39 // Window with a contact list created when FXSCOMPOSE.dll starts
+InvisiMole enumerates windows and child windows to get the handle of the SysListView32 child
+of this window (the handle to the ListView). Then it allocates memory inside the new process using
+~~VirtualAllocEx~~, copies malicious code to the target process and triggers the shellcode by sending a
+LVM_SORTITEMS message to the ListView. Using this technique, InvisiMole is able to inject shellcode into a
+trusted process.
+It is important to add that unlike in the standard ListPlanting technique, InvisiMole does not use the
+~~WriteProcessMemory~~ API to write malicious code to the target process, as this API could be monitored by
+security solutions. InvisiMole takes this technique one step further to make the code injection stealthier.
+Instead of calling ~~WriteProcessMemory~~, it achieves the same result by using a pair of LVM_SETITEMPOSITION
+and LVM_GETITEMPOSITION messages sent to SysListView32, as shown in Figure 40 .
+  - It first sends an **LVM_SETITEMPOSITION** message to SysListView32, which moves an item to a
+
+specified position in a ListView. InvisiMole provides XXYY as the new position, where XX and YY are
+bytes of shellcode.
+  - Then it sends an **LVM_GETITEMPOSITION** message to retrieve the position of the same item
+
+The trick is that the return buffer ( POINT structure) points to an offset in a newly allocated memory, and so
+InvisiMole is able to copy two bytes at a time to the allocated memory within the legitimate ~~FXSCOMPOSE.dll.~~
+TLP: WHITE
+45 InvisiMole: The hidden part of the story
+Figure 40 // Improved part of ListPlanting technique used by InvisiMole
+After Stage 4 has successfully injected Stage 5 in a trusted process, it clears traces by removing the XML files
+from the ~~%USERPROFILE%\Contacts~~ folder, and deleting the ~~C:\SMRTNTKY\MessageB.txt~~ directory.
+Moreover, Stage 5 later deletes the ~~CsPower~~ service from the registry, if it was executed that way.
+6.4.7 Stage 5—B loader
+Stage 5 is a small InvisiMole blob [25] that is injected into a trusted process. It opens already existing shared
+memory objects with shellcodes from C and D registry values, copies them to a newly allocated memory and
+executes using the ~~CreateThread~~ API.
+Note that the C and D shellcodes could be injected directly into the trusted process, instead of the small
+Stage 5 loader. However, the modified ListPlanting technique requires a lot of operations—a pair of
+LVM_SETITEMPOSITION and LVM_GETITEMPOSITION messages sent for each pair of copied bytes.
+For larger payloads, such as the RC2CL backdoor, it is possible the window shown in Figure 39 would be
+visible for a short time. This extra stage is used to make sure the user won’t spot the window.
+As a result of this execution chain, InvisiMole’s RC2CL backdoor [26] and DNS downloader [27] are covertly
+executed under the context of a trusted process.
+Output : 
+### Summary of InvisiMole's Execution Chain
+
+#### **1. Initial Setup**
+- **Persistence Mechanism:** InvisiMole ensures persistence by creating a service named `CsPower` and using registry keys to load necessary components.
+- **UAC Bypass:** The malware uses various techniques to bypass User Account Control (UAC) to gain administrative privileges.
+
+#### **2. Stage 1: Initial Execution**
+- **Component:** A small loader or dropper.
+- **Functionality:** This stage sets up the environment and loads the next stage of the execution chain.
+- **Techniques Used:**
+  - **Service Creation:** Creates a service named `CsPower` to execute further stages.
+  - **Registry Manipulation:** Modifies registry keys to ensure the malware runs at system startup.
+
+#### **3. Stage 2: wdigest.dll Exploitation**
+- **Component:** The `wdigest.dll` library, which is a legitimate Windows component.
+- **Functionality:** This stage uses `rundll32.exe` to execute shellcode within `wdigest.dll`.
+- **Techniques Used:**
+  - **Shellcode Injection:** Injects shellcode into the `SpInitialize` function of `wdigest.dll`.
+  - **Control Flow Hijacking:** Uses hardcoded addresses and gadgets within `wdigest.dll` to control execution flow.
+
+#### **4. Stage 3: M Loader**
+- **Component:** 32-bit shellcode loaded from the `M` registry key.
+- **Functionality:** Reads, decrypts, and executes the next stage of the malware.
+- **Techniques Used:**
+  - **Registry Access:** Reads encrypted data from the `A` registry key.
+  - **Decryption:** Uses the `CryptUnprotectData` API to decrypt the data.
+
+#### **5. Stage 4: A Loader**
+- **Component:** A 32-bit InvisiMole blob that injects shellcode into a trusted process.
+- **Functionality:** Injects the shellcode from the `B` registry value into a trusted process and creates shared memory for additional payloads.
+- **Techniques Used:**
+  - **Process Injection:** Uses a modified ListPlanting technique to inject shellcode without using `WriteProcessMemory`.
+  - **Shared Memory:** Creates shared memory objects for the `C` and `D` payloads.
+  - **ListPlanting:** Misuses the `FXSCOMPOSE.dll` library to create a ListView structure, which is used to inject code into a trusted process.
+
+#### **6. Stage 5: B Loader**
+- **Component:** A small InvisiMole blob injected into a trusted process.
+- **Functionality:** Opens shared memory objects and executes the `C` and `D` payloads using the `CreateThread` API.
+- **Techniques Used:**
+  - **Memory Allocation:** Allocates memory within the target process to copy shellcode.
+  - **Thread Creation:** Uses `CreateThread` to execute the copied shellcode.
+
+#### **7. Final Payloads: RC2CL Backdoor and DNS Downloader**
+- **Components:**
+  - **RC2CL Backdoor:** A remote access tool (RAT) that allows attackers to control the infected system.
+  - **DNS Downloader:** A component that downloads additional malware or updates from a command-and-control (C2) server.
+- **Functionality:** These payloads are executed in the context of a trusted process, making them less likely to be detected by security solutions.
+
+### Key Techniques and Innovations
+- **ListPlanting Modification:** InvisiMole improves upon the ListPlanting technique by using `LVM_SETITEMPOSITION` and `LVM_GETITEMPOSITION` messages instead of `WriteProcessMemory` to inject code, making the injection more stealthy.
+- **Registry and Memory Manipulation:** Extensive use of registry keys and shared memory objects to store and execute malicious payloads.
+- **Control Flow Hijacking:** Uses hardcoded addresses within `wdigest.dll` to control execution flow, bypassing ASLR (Address Space Layout Randomization).
+
+### Conclusion
+InvisiMole's execution chain is a sophisticated multi-stage process that leverages legitimate Windows components and innovative techniques to achieve persistence, stealth, and remote access. By carefully manipulating registry keys, shared memory, and trusted processes, InvisiMole can evade detection and maintain control over infected systems.

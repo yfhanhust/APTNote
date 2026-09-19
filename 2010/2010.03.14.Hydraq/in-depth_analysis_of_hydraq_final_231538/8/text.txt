@@ -1,0 +1,91 @@
+2. How Hackers Maintain Access
+Once the exploit attack is successful, the attacker will attempt to install a backdoor to maintain
+access. In this case, the downloaded executable from the internet is a dropper component of
+Hydraq (Win32/Hydraq dropper).
+The Win32/Hydraq dropper is responsible for the installation of the DLL component, which contains all the features and functionalities for Hydraq’s remote attacker. (see Appendix A for other
+variants methods of installation)
+2.1 Win32/Hydraq (EXE) Dropper: Generating Random Service
+2.1.1 Method of Installation
+
+Upon execution, Win32/Hydraq dropper generates a random service name in the follow
+ing format:
+
+```
+              Ups<3 random characters>
+```
+
+
+It drops the DLL component from its resource to %System%\Rasmon.dll .
+
+
+It adds the generated service name to the registry entry below:
+
+
+```
+   HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost\SysIns
+```
+
+It then creates and starts a service with the following characteristics detailed below. This
+
+enables the DLL component to be executed under the context of the generic host process, Svchost.exe.
+```
+   ServiceName = "Ups<3 random characters>"
+DesiredAccess = SERVICE_ALL_ACCESS
+ServiceType = SERVICE_WIN32_SHARE_PROCESS
+StartType = SERVICE_AUTO_START
+ErrorControl = SERVICE_ERROR_NORMAL
+   BinaryPathName = "%SystemRoot%\System32\svchost.exe -k SysIns"
+```
+2.1.2 Deleting Traces of Installation
+
+Win32/Hydraq dropper’s job is to install the DLL component and remove its installation
+
+traces in the registry to avoid forensic discovery. The data added in the registry key be
+low is deleted:
+```
+   HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SvcHost\SysIns
+```
+CA ISBU-ISI WHITE PAPER: IN-DEPTH ANALYSIS OF HYDRAQ 9
+
+Furthermore, as part of clearing its traces on a compromised system, the dropper component creates and executes a batch file in %Windows%\DFS.bat . Its primary goal is to delete
+
+the Win32/Hydraq dropper file ( b.exe ).
+2.2 Win32/Hydraq (DLL) Backdoor: Method of Installation
+2.2.1 Method of Installation
+Once the ”Ups<3 random characters>” service starts to execute, it will run Win32/Hydraq
+DLL under the generic host process, Svchost.exe. The DLL component will then perform the following actions:
+
+It checks the service name it is running on. It performs a case sensitive comparison on
+
+the first three characters of the service name “ Ras” . If it is not the same, it stops the
+service operation and deletes the current service. It then registers a new service name in
+the following format: ”RaS”<random 4 characters>
+This behavior suggests that Win32/Hydraq DLL changes its service name every time an infected
+system is rebooted, or the service is restarted. The malware will never have a service name
+starting with ”Ras” due to the fact that it generates a service name starting with ”RaS” (Take
+note of the case sensitive comparison).
+
+The DLL component creates a service with the following characteristics:
+
+```
+   ErrorControl: SERVICE_ERROR_IGNORE
+Start: SERVICE_AUTO_START
+Type: SERVICE_WIN32_SHARE_PROCESS
+   ImagePath: %SystemRoot%\System32\svchost.exe -k netsvcs
+```
+
+Similar to the Win32/Hydraq dropper, the DLL component takes advantage of the available
+
+privileges running under the context of trusted Windows system processes. It adds the fol
+lowing registry entry as a parameter to the newly created service.
+```
+   HKLM\SYSTEM\CurrentControlSet\Services\RaS<4 random char
+   acters>\Parameters\ServiceDll = %system%\Rasmon.dll
+```
+
+In addition, the DLL component also adds an entry of its service name in the following registry entry below.
+
+```
+   HKLM\SOFTWARE\Microsoft\WindowsNT\CurrentVersions\Svchost\netsvcs
+```
+CA ISBU-ISI WHITE PAPER: IN-DEPTH ANALYSIS OF HYDRAQ 10

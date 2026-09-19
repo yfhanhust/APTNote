@@ -1,0 +1,132 @@
+► APPENDIX D
+THE MACFOG BOT DESCRIPTION
+The MacOS X malware uses the type “1” protocol, just as the Windows version of Icefog. It has been
+distributed on various Internet message boards and forums as an application called “Img2icns”.
+There are two known malicious bundles, one contains the launcher and the backdoor modules, and
+another contains the dropper and the backdoor modules.
+Once the user executes the malicious application bundle, the backdoor is copied to the user’s
+directory and the legitimate application is started as if there was no added malicious code.
+MACFOG — LAUNCHER MODULE
+Filename: launchd
+Location in the bundle: Img2icns.app/Contents/MacOS/launchd
+File size: 23084 bytes
+Format: Mach-O Intel 64-bit executable
+MD5: 336de9428650c46b64ff699ab4a441bb
+The module is written in Objective C language and contains 4 classes: AppDelegate, UCHostInf,
+UCNet, UCUpDownload. The latter three classes seem to be included from the backdoor’s source
+code but not used.
+All functionality is implemented in the function “AppDelegate - (void)
+applicationDidFinishLaunching:(id)”.
+The module was created from the same source code as the dropper but instead of installing the
+backdoor module, it only executes the malicious payload and the decoy application:
+“%bundle path%/Contents/Resources/.launchd.app”
+“%bundle path%/Contents/Resources/.Img2icns.app” (the original “Img2icns”
+application, http://www.img2icnsapp.com/).
+64
+Appendix D
+MACFOG — DROPPER MODULE
+Filename: Img2icns
+Location in the bundle: Img2icns.app/Contents/MacOS/Img2icns
+File size: 23236 bytes
+Format: Mach-O Intel 64-bit executable
+MD5: 9f422bb6c00bb46fbfa3918ae3e9447a
+The module is written in Objective C language and contains 4 classes: AppDelegate, UCHostInf,
+UCNet, UCUpDownload. The latter three classes seem to be included from the backdoor’s source
+code but not used.
+All functionality is implemented in the function “AppDelegate - (void)
+applicationDidFinishLaunching:(id)”.
+The module copies its malicious bundle from “Contents/Resources/.launchd.app” to user’s home
+directory “/Users/ %username% ” and launches it, effectively activating the backdoor. Then, it
+launches the legitimate part of the bundle, “Contents/Resources/Img2icns.app” that is the original
+“Img2icns” application (http://www.img2icnsapp.com/).
+MACFOG — BACKDOOR MODULE
+Filename: launchd
+Location in the bundle: Img2icns.app/Contents/Resources/.launchd.app/Contents/
+MacOS/launchd
+Location on disk: /Users/ %user name% /.launchd.app/Contents/MacOS/launchd
+File size: 32748 bytes
+Format: Mach-O Intel 64-bit executable
+MD5: cf1815491d41202eb8647341a8695e1e
+The module is written in Objective C language and contains 5 classes: AppDelegate, UCHostInf,
+UCNet, UCUpDownload, KEYLogger.
+The “KEYLogger” class appears to be incomplete. It is only able to get information about active
+modifier keys and writes data to a log file: “ $HOME /Library/log.log”
+65
+APPENDIX D
+When started, the module launches an application: “ %application’s bundle path% /Contents/
+Resources/.launchd.app” This code seems to be reused from the dropper module.
+Then, it proceeds with installation. Once the installation is finished, it starts its main thread
+(“UCServerThread” function) in an infinite loop.
+INSTALLATION
+The module checks if its bundle directory is located in “/Users/ %username% /” and if not it copies
+the bundle to that directory.
+It also writes the command “rm -rf %original bundle path% ” to the file “/Users/ %username% /.launchd.
+app/config.dat”. This command is then executed by the installed copy of the backdoor, effectively
+removing the original bundle directory.
+Then, it creates a file “ $HOME /Library/LaunchAgents/apple.launchd.plist” with all the parameters
+required to launch the backdoor every time the system starts.
+MAIN THREAD
+The module retrieves host information and host name and uploads this information to the C2 server.
+All data sent to the C&C server is encrypted with the hardcoded XOR key “*&~^%@0hh8979”.
+First, it makes a POST request with URL “hxxp://appst0re.net/upload.
+aspx?filepath=ok&filename= %hostname% .jpg”. After that, it requests commands from the C&C
+server. If no data was received, it tries again after sleeping for 120 seconds.
+The module requests new commands by making a POST request to the C&C server by URL “hxxp://
+appst0re.net/upload.aspx?filepath=order&filename= %hostname% .jpg” and then executes the
+command:
+|COMMAND|DESCRIPTION|
+|---|---|
+|upload|Download the file from the C&C server and save it to disk|
+|download|Upload the file to the C&C server|
+|cmd|Execute command via “popen” function, upload results to the C&C server|
+66
+Appendix D
+Information retrieved from the system:
+
+
+host name
+
+
+OS name
+
+
+OS version string
+
+
+process information
+
+
+IP addresses
+
+
+system uptime
+
+
+host date/time
+
+
+C&C server: hxxp://appst0re.net
+C&C URLs: hxxp://appst0re.net/upload.aspx?filepath= %order/ok/arbitrary
+name% &filename= %hostname% .jpg
+CLASS STRUCTURE
+AppDelegate (main)
+-[AppDelegate applicationDidFinishLaunching:]
+-[AppDelegate UCServerThread:]
+-[AppDelegate window]
+-[AppDelegate setWindow:]
+UCHostInf
++[UCHostInf GetHostName]
++[UCHostInf GetHostInfo]
+UCNet
++[UCNet HttpGet:PostData:Error:]
++[UCNet HttpGetSimple:Error:]
++[UCNet HttpPost:PostData:Error:]
+67
+APPENDIX D
++[UCNet HttpPostSimple:Error:]
+UCUpDownLoad
++[UCUpDownLoad UpLoadFile:FileName:FileData:]
++[UCUpDownLoad DownLoadFile:FileName:]
+KEYLogger
++[KEYLogger keyLogger]
+68

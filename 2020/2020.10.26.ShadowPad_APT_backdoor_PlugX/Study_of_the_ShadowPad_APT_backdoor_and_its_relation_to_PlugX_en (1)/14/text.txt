@@ -1,0 +1,192 @@
+Operating routine
+Export functions are absent. The timestamp from the export table is identical to that from the PE
+header.
+The first execution steps generally correspond to the BackDoor.ShadowPad.1 :
+Decrypting the shellcode and transferring control to it
+
+
+The shellcode loads the main Root module, which is stored in a special format
+
+
+The Root module loads remaining modules
+
+
+The exception is that there is no exhaustive search through the handles to find objects whose
+names contain TosBtKbd.exe .
+The string encryption algorithm is almost identical, but the constants differ:
+```
+ def decrypt(addr):
+key = get_wide_word(addr)
+result = b""
+i = 2
+b = get_wide_byte(addr + i)
+while i < 0xFFA:
+```
+```
+ result += bytes([b ^ (key & 0xFF)])
+key = (((key * 0xDB070000) - ((key
+
+
+0x10) * 0x390624F9)) - 0x71A4D6B1) & 0xFFFFFFFF
+
+
+i += 1
+b = get_wide_byte(addr + i)
+if not result[-1]:
+break
+return result[:-1]
+```
+The algorithm for loading additional modules is also similar to BackDoor.ShadowPad.1 ;
+however, there are new modules in this sample. The backdoor has 16 modules in total. A list of
+their names with codes and timestamps is provided in the following table:
+|Module name|Code|Timestamp|
+|---|---|---|
+|Config|0x66|2019-05-06 08:33:07|
+|Disk|0x12C|2019-05-06 08:29:55|
+|ImpUser|0x6A|2019-05-06 08:33:18|
+|Install|0x67|2019-05-06 08:33:34|
+|KeyLogger|0x132|2019-05-06 08:30:26|
+|Online|0x68|2019-05-06 08:33:13|
+|PIPE|0xCF|2019-05-06 08:29:11|
+|Plugins|0x65|2019-05-06 08:33:02|
+|Process|0x12D|2019-05-06 08:30:00|
+|RecentFiles|0x13D|2019-05-06 08:31:23|
+|Register|0x12F|2019-05-06 08:30:10|
+|Screen|0x133|2019-05-06 08:30:31|
+|Servcie (the original spelling)|0x12E|2019-05-06 08:30:05|
+|Shell|0x130|2019-05-06 08:30:15|
+|TCP|0xC8|2019-05-06 08:28:45|
+|---|---|---|
+|UDP|0xCA|2019-05-06 08:28:56|
+For each loadable module a structure is formed that is added to the list that modules can use to
+call each other's functions. To work with this list and for other auxiliary tasks, the Root module
+exports the function table.
+During initialization of the Plugins module, a top-level exception handler is registered. In
+BackDoor.ShadowPad.1 this handler generated a string with information about the exception
+for debugging purposes. However, in BackDoor.ShadowPad.3 it only terminates the thread
+that caused the exception. In this case, the mechanism is similar to BackDoor.PlugX.28.
+The key difference between the functions in this case is that PlugX operates on an object
+containing a linked list of all running threads, while ShadowPad directly terminates the current
+thread. However, in general, there is an analogue with the ShadowPad object, which stores
+loaded modules as a list.
+```
+ struct all_modules //shadowpad
+{
+LIST_ENTRY list;
+DWORD modules_count;
+CRITICAL_SECTION crit_sect;
+}
+struct obj_threads //plugx
+{
+CRITICAL_SECTION crit_sect;
+LIST_ENTRY list;
+DWORD threads_running;
+}
+```
+The main payload execution starts with the Install module. Similar to
+BackDoor.ShadowPad.1, at the beginning of this stage, the backdoor obtains the necessary
+privileges. It is worth noting that the first stages of operation are similar to those of the PlugX
+backdoors we studied earlier. The illustrations below show a comparison between the
+BackDoor.ShadowPad.3 and BackDoor.PlugX.38 algorithms.
+BackDoor.PlugX.38
+Then the malware initializes the configuration using the Config module. There is also a similarity
+with BackDoor.PlugX at this stage. At the beginning, the backdoor checks the first four bytes of
+the buffer where the encrypted configuration should be stored. If the bytes are 0x58585858
+( XXXX" in ASCII), then:
+
+
+In the BackDoor.ShadowPad.3 an empty configuration is initialized;
+
+
+In the BackDoor.ShadowPad.1 a default configuration is initialized.
+
+
+In BackDoor.PlugX, the first 8 bytes are checked for equality with the string XXXXXXXX.
+```
+ struct config
+{
+WORD off_id;
+WORD offset_1;
+WORD bin_path_offset;
+```
+```
+WORD svc_name_offset;
+WORD svc_display_name_svc;
+WORD svc_description_off;
+WORD reg_key_install_off;
+WORD reg_value_name_off;
+WORD inject_target_1;
+WORD inject_target_2;
+WORD inject_target_3;
+WORD inject_target_4;
+WORD off_srv_0;
+WORD off_srv_1;
+WORD off_srv_2;
+WORD off_srv_3;
+WORD off_srv_4;
+WORD off_srv_5;
+WORD off_srv_6;
+WORD off_srv_7;
+WORD off_srv_8;
+WORD zero_2A;
+WORD zero_2C;
+WORD zero_2E;
+WORD zero_30;
+WORD zero_32;
+WORD zero_34;
+WORD zero_36;
+WORD off_proxy_1;
+WORD off_proxy_2;
+WORD off_proxy_3;
+```
+```
+ WORD off_proxy_4;
+DWORD DNS_1;
+DWORD DNS_2;
+DWORD DNS_3;
+DWORD DNS_4;
+DWORD timeout_multiplier;
+DWORD field_54;
+WORD port_to_scan;
+WORD scan_by_adapter_flag;
+DWORD ip_addr_1;
+DWORD ip_addr_2;
+};
+```
+The illustrations below show a comparison between the BackDoor.ShadowPad.3 and
+BackDoor.PlugX.28 algorithms.
+After initializing the configuration, the backdoor checks the value of mode in the shellarg
+structure passed from the module loader. Actions in accordance with the value of mode are
+similar to those of BackDoor.ShadowPad.1 .
+With the mode 5 or mode 6 values, the backdoor searches the list for a module with the code
+0x6A (ImpUser) and calls a function from its table. In the
+BackDoor.ShadowPad.1 the ImpUser module was missing. This module is used for injecting
+into a process that is created either with the environment of the current session, or by a remotely
+connected user. In the context of this process, further commands from the C&C server will be
+processed, which must be received through a pipe from another running instance of the
+backdoor. Thus, the backdoor running with mode 5 or mode 6 acts as a “server” for the pipe
+connection, and its second instance relays commands to it from the C&C server. Below is a list of
+processes that the backdoor attempts to inject a payload into:
+
+
+dllhost.exe
+
+
+conhost.exe
+
+
+svchost.exe
+
+
+Similar functionality exists in the PlugX family of backdoors. For example, in
+BackDoor.PlugX.38 the named thread DoImpUserProc is responsible for this.
+BackDoor.PlugX.38
+If the values are mode 7 or mode 8, the backdoor attempts to perform a UAC Bypass using the
+DLL hijack of dpx.dll library, loaded by the wusa.exe process (it has the autoElevate
+property), and the IFileOperation COM interface. To do this, it extracts its copy— dpx.dll
+(1d4a2acc73a7c6c83a2625efa8cc04d1f312325c), which attempts to run the original copy of the
+backdoor with elevated privileges.
+The patterns of BackDoor.ShadowPad.3, depending on the value of the shellarg.mode
+parameter, are similar to the behavior of PlugX . In the shellarg structure of the
+BackDoor.PlugX.28 there is a op_mode parameter, which determines the work patterns of
+the malware (installation in the system, injection, function interception, etc.).

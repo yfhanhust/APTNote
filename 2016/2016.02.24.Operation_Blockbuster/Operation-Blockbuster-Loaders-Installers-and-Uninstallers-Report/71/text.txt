@@ -1,0 +1,62 @@
+Operation Blockbuster: Loaders, Installers and Uninstallers Report 55
+A bit of an outlier in the Lazarus Group’s collection of malware, LimaDelta blurs its categorical lines by operating as both
+a downloader and loader. Known LimaDelta samples were compiled between September 2010 and March 2011 and most
+likely only operated during that time period, making it problematic to find intelligence on the files they downloaded.
+Despite the temporal distance between LimaDelta’s usage in the wild and the analysis of the malware family for this
+report, there is evidence to suggest that LimaDelta downloaded and then loaded IndiaGolf (see Section 8). This section
+works under the assumption that the downloaded binary is, indeed, IndiaGolf.
+LimaDelta, when viewed by its primary function of downloading and loading a file into running memory, is an example
+of over-engineering a solution for a relatively simple problem. When viewed at a macro level, LimaDelta performs the
+following tasks:
+
+
+Connect to a C2 server and authenticate
+
+
+Send information about the victim’s machine and exchange LimaDelta configuration between the C2 server and the
+
+
+malware
+
+
+Receive a list of download servers and a data blob containing the data to send to the installation function
+
+
+Connect to one of the download servers and authenticate
+
+
+Send information about the victim’s machine and receive 16 bytes from the download server
+
+
+Receive file from the download server and save it to the victim’s hard drive as a randomly generated named DLL
+
+
+Load the DLL into memory and decrypt a portion of the data blob
+
+
+Call the installation function with the decoded portion of the data blob
+
+
+Report status of DLL load to the C2 server and receive response from the C2 server
+
+
+Save the configuration to disk and delete additional files
+
+
+Generate and execute suicide script.
+
+
+There are three variants of LimaDelta that differ primarily in their verification method for the files they download.
+LimaDelta-One blindly assumes the file it downloads is non-corrupt. LimaDelta-Two verifies the integrity of the
+downloaded file via a CRC32 checksum. LimaDelta-Three uses MD5 to verify the integrity of the file it downloads.
+There are subtle differences between each of the various variants that will be discussed below, but the average similarity
+between the variants (using BinDiff as the similarity engine) is roughly 94.5%, indicating very little change across the life
+span of LimaDelta.
+LimaDelta can support up to 10 C2 servers via hardcoded IP and port number structures. From this list of C2 servers,
+LimaDelta randomly selects an entry and attempts to connect to the C2 server. If a server does not respond within 15
+seconds, the C2 server entry is removed from the list, another C2 server entry is selected, and the process repeats until
+either a successful connection occurs or the list empties.
+Once connected to a C2 server, LimaDelta must authenticate with the C2 server. This authentication process (the last
+half of Task #2) is over-engineered when compared to other families within the Lazarus Group. Authentication between
+LimaDelta and the C2 server consists of constructing a variable-sized data blob that has a minimum of 70 bytes and an
+upper limit of 120 bytes, transmitting the data blob to the C2 server, receiving a 5-byte response from the C2 server, and

@@ -1,0 +1,52 @@
+New Infection Chain
+In the past, Evilnum’s infection chain started with spear phishing emails, delivering zip
+archives that contain LNK files masquerading as images. These LNK files will drop a
+JavaScript Trojan with different backdoor capabilities as described above.
+In recent weeks, we observed a change in this infection procedure: first, instead of
+delivering four different LNK files in a zip archive that in turn will be replaced by a JPG
+file, only one file is archived. This LNK file masquerades as a PDF whose content includes
+several documents, such as utility bills, credit card photos, and Drivers license photos:
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 3/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+LNK file in ZIP
+When the LNK file is executed, asin previous versions, a JavaScript file is written to disk
+and executed, replacing the LNK file with a PDF:
+Example KYC documents from the PDF
+Unlike previous versions that possessed an array of functionalities, this version of the
+JavaScript acts mainly as a dropper and lacks any C2 communication capabilities. This
+JavaScript is the first stage in this new infection chain, culminating with the delivery of
+the payload, a Python written RAT compiled with py2exe that Nocturnus researchers
+dubbed PyVil RAT:
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 4/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+Initial infection process tree
+In Cybereason, we are able to view the process tree and the extraction of the JavaScript
+from the LNK file:
+Initial infection process tree in Cybereason
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 5/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+The JavaScript is extracted by outputting all lines that contain the string “END2”
+(commented out in the script) to a file named “0.js” in the temp folder and the LNK is
+copied to the temp folder as “1.lnk”:
+Extraction of the embedded JS script
+The JavaScript file is using a similar path to previous versions to drop binaries
+("%localappdata%\Microsoft\Credentials\MediaPlayer\”):
+Snippet from JS file
+After the script replaces the LNK file with the real PDF, the JS file is copied to
+“%localappdata%\Microsoft\Credentials\MediaPlayer\VideoManager\media.js” and is
+executed again.
+In this second execution of the script, an executable file named “ddpp.exe” that is
+embedded inside the LNK file is extracted and saved to
+"%localappdata%\Microsoft\Credentials\MediaPlayer\ddpp.exe".
+Unlike previous versions where the malware used the Run registry key for persistence, in
+this new version, a scheduled task named “Dolby Selector Task” for ddpp.exe is created
+instead:
+ddpp.exe scheduled task
+With this scheduled task, the second stage of retrieving the payload begins:
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 6/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT
+Downloaders process tree
+In Cybereason, we see the attempted credential dump by the payload:
+Downloaders process tree in Cybereason
+https://www.cybereason.com/blog/no-rest-for-the-wicked-evilnum-unleashes-pyvil-rat 7/23
+9/7/2020 No Rest for the Wicked: Evilnum Unleashes PyVil RAT

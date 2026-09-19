@@ -1,0 +1,65 @@
+CASPER Goes Mobile – PWNDROID5
+BlackBerry researchers identified several implants designated as PWNDROID5 which
+masqueraded as fake Adobe Flash updates for Android in a newly identified campaign
+designated as OPERATION ANDROIDBEACON. Most were deployed in early to mid
+2016. Each made network requests to subdomains under associated CASPER/LEAD
+C2 infrastructure.
+On first glance the APKs appeared completely benign. But malicious APKs were
+encrypted and stored within the “assets” folder using a random six-character string.
+These inner APKs were encrypted using a standard DES cipher with an arbitrary key.
+For example, in the case of this sample:
+64424a7c5f0d8e1c5d64c4c6fa9bdc2987dbdcf1bafdb6f45df9e783712c5187
+The DES key was “F4o6VdRP”. The actual code to decrypt the APK was not written inside
+this particular DEX file and was instead compiled into a standard Linux library named
+“libentry.so”. The library was compiled for ARM as well as x86 and stored within the
+respectively named folders inside the standard “lib” folder. Below is a python function
+to decrypt these inner APKs. The key will always be 8-bytes in length and may need to
+be modified based upon the contents of the external library, in this case “libentry.so”:
+from Crypto.Cipher import DES
+def decrypt_apk(buf):
+key = “F4o6VdRP”
+des = DES.new(key)
+return des.decrypt(buf)
+Figure 13: Python Function to Decode CASPER APK
+D E C A D E O F T H E R A T S 27
+Many of the APKs identified used some variation of this, and either had the decryption
+code embedded within the actual APK or in an external library as in the above sample.
+The decrypted APKs would make a POST request to one of the following base URLs:
+http://app.appleadwords[.]net/s1/
+http://app.appleadwords[.]net/s2/
+A number of additional parameters would be sent along with the base URL:
+Table 4: Parameters Sent in CASPER Network Check-In
+BlackBerry researchers were unable to retrieve the follow-on payload(s) given the
+amount of time that had elapsed before discovery. It appeared that these payloads
+would likely be AES encrypted DEX or JAR files with the key “hello@#fe931AaBb” and
+use an initialization vector “0102030405060708”.
+The payloads could also potentially be wrapped in an extra layer of DES encryption
+with the key “pessword”. BlackBerry did identify a writeup by Sophos on a sample that
+appeared to be related, one they termed “Andr/Axent-DS” (SophosLabs, 2017). Upon
+looking into the IP address “114.108.185[.]113”, it was clear these were all likely part of
+the same family. With the ones beaconing to “app.appleadwords[.]net” starting about
+six months after the domain Sophos identified: “s1.deepcups[.]com”. The domains
+“psserviceonline[.]com” and associated subdomains as well as “app.aqmobi[.]com” and
+“bht.aqmobi[.]com” also appeared to be related to the same family of Android malware
+and used a similar request structure.
+BlackBerry researchers determined this family likely survived and now makes
+its home on
+Amazon AWS infrastructure using a variety of different domains:
+asense[.]in
+mobnativeads[.]com
+mobileflyx[.]com
+mydataprovider[.]in
+napiservice[.]com
+native123[.]com
+nativeload[.]com
+natureapi[.]com
+nsdknative[.]com
+ntracecloud[.]com
+p2nservice[.]com
+pdbarea[.]com
+sdatareport[.]com
+subclicktrack[.]com
+tnapiservice[.]com
+If a mobile device is in fact beaconing to one of these domains associated with
+OPERATION ANDROIDBEACON, you may want to take a closer look.
+D E C A D E O F T H E R A T S 28

@@ -1,0 +1,74 @@
+
+
+
+Sentence : Shellcode x64: stager (base backdoor)
+This shellcode is very similar to the previous one, but it deserves a separate description because
+of differences in its network code and method of launching modules. This shellcode has basic
+functions for file system interaction which are not available in the shellcode described earlier.
+Also the configuration format, network code, and network addresses used as C2 by this shellcode
+are similar to code from a 2018 blog post by NCC Group about a Gh0st RAT variant. However, we
+did not find a connection to Gh0st RAT.
+This variant of the shellcode has only one communication channel, via SSL. The shellcode imple
+ments it with two legitimate libraries, libeay32.dll and ssleay32.dll, hard-coded in the shellcode
+itself.
+First the shellcode performs a dynamic search for API functions and loads SSL libraries. The
+libraries are not saved to disk; they are read from the shellcode and mapped into memory. Next
+the malware searches the mapped image for the functions it needs to operate.
+Then it parses the configuration string, which is also hard-coded in the shellcode. The configura
+tion includes information on addresses of C2 servers and schedule for malware operation.
+Figure 20. Sample of configuration string
+
+nccgroup.trust/uk/about-us/newsroom-and-events/blogs/2018/april/
+decoding-network-data-from-a-gh0st-rat-variant/
+
+13
+After that the malware starts its main operating cycle. It checks if the current time matches the
+malware operational time. If not, the malware sleeps for about 7 minutes and checks again. This
+happens until the current time is the operational time, and only then does the malware resume
+operation. Figure 20 demonstrates an example in which the malware remains active at all times
+on all days of the week.
+When the operational time comes, the malware goes down the list of C2 servers specified in the
+configuration and tries to connect. The malware subsequently interacts with whichever of the C2
+servers it is able to successfully connect to first.
+Then the malware sends the information on the infected computer (such as computer name,
+current date, OS version, 32-bit vs. 64-bit OS and CPU, and IP addresses on network interfaces
+and their MAC addresses). After the information on the infected computer is sent, the malware
+expects a response from C2. If C2 returns the relevant code, sending is deemed successful and
+the malware proceeds. If not, the malware goes back to sequentially checking C2 addresses. Next
+it starts processing incoming commands from C2.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Shellcode x64: stager (base backdoor)", "type" : "EXEF"},
+        {"id": 2, "description": "libeay32.dll", "type" : "APPS"},
+        {"id": 3, "description": "ssleay32.dll", "type" : "APPS"},
+        {"id": 4, "description": "C2 servers", "type" : "CCSH"},
+        {"id": 5, "description": "nccgroup.trust/uk/about-us/newsroom-and-events/blogs/2018/april/decoding-network-data-from-a-gh0st-rat-variant/", "type" : "URLS"},
+        {"id": 6, "description": "Gh0st RAT variant", "type" : "EXEF"},
+        {"id": 7, "description": "configuration string", "type" : "DOCF"},
+        {"id": 8, "description": "infected computer (computer name)", "type" : "TAMP"},
+        {"id": 9, "description": "current date", "type" : "TAMP"},
+        {"id": 10, "description": "OS version", "type" : "OPPS"},
+        {"id": 11, "description": "32-bit vs. 64-bit OS and CPU", "type" : "OPPS"},
+        {"id": 12, "description": "IP addresses on network interfaces", "type" : "CCSH"},
+        {"id": 13, "description": "MAC addresses on network interfaces", "type" : "MAC"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "uses"},
+        {"source": 1, "target": 4, "rel_name" : "connects to"},
+        {"source": 1, "target": 7, "rel_name" : "parses"},
+        {"source": 1, "target": 8, "rel_name" : "collects information on"},
+        {"source": 1, "target": 9, "rel_name" : "collects information on"},
+        {"source": 1, "target": 10, "rel_name" : "collects information on"},
+        {"source": 1, "target": 11, "rel_name" : "collects information on"},
+        {"source": 1, "target": 12, "rel_name" : "collects information on"},
+        {"source": 1, "target": 13, "rel_name" : "collects information on"},
+        {"source": 4, "target": 8, "rel_name" : "receives information about"},
+        {"source": 4, "target": 9, "rel_name" : "receives information about"},
+        {"source": 4, "target": 10, "rel_name" : "receives information about"},
+        {"source": 4, "target": 11, "rel_name" : "receives information about"},
+        {"source": 4, "target": 12, "rel_name" : "receives information about"},
+        {"source": 4, "target": 13, "rel_name" : "receives information about"}
+    ]
+}

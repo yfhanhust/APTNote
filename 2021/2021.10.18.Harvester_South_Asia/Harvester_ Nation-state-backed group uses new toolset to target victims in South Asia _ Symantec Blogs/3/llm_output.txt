@@ -1,0 +1,94 @@
+
+
+
+Sentence : New toolset deployed
+The most notable thing about this campaign is the previously unseen toolset deployed by the attackers.
+The attackers deployed a custom backdoor called Backdoor.Graphon on victim machines alongside other
+downloaders and screenshot tools that provided the attackers with remote access and allowed them to
+spy on user activities and exfiltrate information.
+We do not know the initial infection vector that Harvester used to compromise victim networks, but the
+first evidence we found of Harvester activity on victim machines was a malicious URL. The group then
+started to deploy various tools, including its custom Graphon backdoor, to gain remote access to the
+network. The group also tried to blend its activity in with legitimate network traffic by leveraging
+legitimate CloudFront and Microsoft infrastructure for its command and control (C&C) activity.
+Tools used:
+Backdoor.Graphon - custom backdoor that uses Microsoft infrastructure for its C&C activity
+Custom Downloader - uses Microsoft infrastructure for its C&C activity
+Custom Screenshotter - periodically logs screenshots to a file
+Cobalt Strike Beacon - uses CloudFront infrastructure for its C&C activity (Cobalt Strike is an offthe-shelf tool that can be used to execute commands, inject other processes, elevate current
+processes, or impersonate other processes, and upload and download files)
+https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/harvester-new-apt-attacks-asia 1/4
+10/19/21, 4:22 PM Harvester: Nation-state-backed group uses new toolset to target victims in South Asia | Symantec Blogs
+Metasploit - an off-the-shelf modular framework that can be used for a variety of malicious
+purposes on victim machines, including privilege escalation, screen capture, to set up a persistent
+backdoor, and more.
+The custom downloader used by the attackers leverages the Costura Assembly Loader. Once on a victim
+machine, it checks if the following file exists:
+[ARTEFACTS_FOLDER]\winser.dll
+If the file does not exist it downloads a copy from the following URL:
+hxxps://outportal[.]azurewebsites.net/api/Values_V2/Getting3210
+Next, the sample creates the following file if it does not exist:
+"[ARTEFACTS_FOLDER]\Microsoft Services[.]vbs"
+Then it sets the following registry value to create a loadpoint:
+HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\"MicrosoftSystemServices"
+= "[ARTEFACTS_FOLDER]\Microsoft Services[.]vbs"
+Finally it opens an embedded web browser within its own UI using the following URL:
+hxxps://usedust[.]com
+While it initially appeared that this URL may have been a loadpoint for Backdoor.Graphon, upon further
+investigation it appears to be a decoy to confuse any affected users.
+Backdoor.Graphon is compiled as a .NET PE DLL with export “Main” and the following PDB file name:
+D:\OfficeProjects\Updated Working Due to Submission\4.5\Outlook_4.5\Outlook 4.5.2 32 bit New
+without presistancy\NPServices\bin\x86\Debug\NPServices[.]pdb
+When this is executed, it attempts to communicate with the attackers’ C&C servers, which are hosted on
+Microsoft infrastructure.
+hxxps://microsoftmsdn[.]azurewebsites.net/api/Values_V1/AuthAsyncComplete_V1?Identity=
+[INFECTION_ID]
+hxxps://microsoftsgraphapi[.]azurewebsites.net/api/Values_V1/AuthAsyncComplete_V1?
+Identity=[INFECTION_ID]
+hxxps://msdnmicrosoft.azurewebsites[.]net/api/Values_V1/AuthAsyncComplete_V1?Identity=
+[INFECTION_ID]
+The attackers then run commands to control their input stream and capture the output and error
+streams. They also periodically send GET requests to the C&C server, with the content of any returned
+messages extracted and then deleted.
+Data that cmd.exe pulled from the output and error streams is encrypted and sent back to the attackers’
+servers.
+The custom screenshot tool was also packed with the Costura Assembly Loader. The screenshot tool takes
+photos that it saves to a password-protected ZIP archive for exfiltration, with all archives older than a
+week deleted.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Backdoor.Graphon", "type" : "EXEF"},
+        {"id": 2, "description": "Custom Downloader", "type" : "EXEF"},
+        {"id": 3, "description": "Custom Screenshotter", "type" : "EXEF"},
+        {"id": 4, "description": "Cobalt Strike Beacon", "type" : "EXEF"},
+        {"id": 5, "description": "Metasploit", "type" : "APPS"},
+        {"id": 6, "description": "Costura Assembly Loader", "type" : "EXEF"},
+        {"id": 7, "description": "winser.dll", "type" : "DOCF"},
+        {"id": 8, "description": "[ARTEFACTS_FOLDER]\\Microsoft Services.vbs", "type" : "DOCF"},
+        {"id": 9, "description": "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\\"MicrosoftSystemServices\"", "type" : "REGI"},
+        {"id": 10, "description": "hxxps://outportal[.]azurewebsites.net/api/Values_V2/Getting3210", "type" : "URLS"},
+        {"id": 11, "description": "hxxps://usedust[.]com", "type" : "URLS"},
+        {"id": 12, "description": "D:\\OfficeProjects\\Updated Working Due to Submission\\4.5\\Outlook_4.5\\Outlook 4.5.2 32 bit New without presistancy\\NPServices\\bin\\x86\\Debug\\NPServices[.]pdb", "type" : "DOCF"},
+        {"id": 13, "description": "hxxps://microsoftmsdn[.]azurewebsites.net/api/Values_V1/AuthAsyncComplete_V1?Identity=[INFECTION_ID]", "type" : "URLS"},
+        {"id": 14, "description": "hxxps://microsoftsgraphapi[.]azurewebsites.net/api/Values_V1/AuthAsyncComplete_V1?Identity=[INFECTION_ID]", "type" : "URLS"},
+        {"id": 15, "description": "hxxps://msdnmicrosoft.azurewebsites[.]net/api/Values_V1/AuthAsyncComplete_V1?Identity=[INFECTION_ID]", "type" : "URLS"},
+        {"id": 16, "description": "Microsoft infrastructure", "type" : "CCSH"},
+        {"id": 17, "description": "CloudFront infrastructure", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 2, "target": 7, "rel_name" : "checks if exists"},
+        {"source": 2, "target": 10, "rel_name" : "downloads from"},
+        {"source": 2, "target": 8, "rel_name" : "creates file"},
+        {"source": 2, "target": 9, "rel_name" : "sets registry value"},
+        {"source": 2, "target": 16, "rel_name" : "uses for C&C activity"},
+        {"source": 4, "target": 17, "rel_name" : "uses for C&C activity"},
+        {"source": 1, "target": 12, "rel_name" : "compiled as"},
+        {"source": 1, "target": 16, "rel_name" : "communicates with"},
+        {"source": 13, "target": 1, "rel_name" : "C&C server for"},
+        {"source": 14, "target": 1, "rel_name" : "C&C server for"},
+        {"source": 15, "target": 1, "rel_name" : "C&C server for"},
+        {"source": 3, "target": 6, "rel_name" : "packed with"},
+        {"source": 3, "target": 16, "rel_name" : "uses for exfiltration"}
+    ]
+}

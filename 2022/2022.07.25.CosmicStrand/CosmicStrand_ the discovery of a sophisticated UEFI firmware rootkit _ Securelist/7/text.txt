@@ -1,0 +1,31 @@
+Kernel shellcode
+All the steps described so far only served the purpose of propagating code execution from
+the UEFI down to the Windows kernel. This shellcode is the first actually malicious
+component of the chain so far. It sets up a thread notify routine that gets invoked each
+time a new thread is created. CosmicStrand waits until one turns up in winlogon.exe, and
+then executes a callback in this high-privilege context.
+There, CosmicStrand sleeps for 10 minutes and tests the internet connectivity of the
+infected machine. CosmicStrand doesn’t rely on high-level API functions to generate
+network traffic, but instead interacts directly with the Transport Device Interface: it
+generates the needed IRPs (I/O request packets) and passes them to the network stack by
+sending IOCTLs to the TCP or UDP device object. DNS requests are performed in this
+fashion, using either Google’s DNS server (8.8.8[.]8) or a custom one (222.222.67[.]208).
+CosmicStrand retrieves its final payload by sending a specifically crafted UDP (preferably)
+or TCP packet to its C2 server, update.bokts[.]com. The reply is expected to return in one
+or several packets containing chunks of 528 bytes following this structure:
+Offset (bytes) Description
+0-4 Magic number
+4-8 Total length of the payload
+8-12 Length of the current chunk
+12-16 CRC32 checksum of the current chunk
+16-* Payload chunk
+The various chunks are reassembled into a series of bytes that are mapped into kernel
+space and interpreted as a shellcode. Unfortunately, we were not able to obtain a copy of
+data coming from the C2 server. We did, however, find a user-mode sample in-memory
+on one of the infected machines we could study, and believe it is linked with
+CosmicStrand. This sample is an executable that runs command lines in order to create a
+user (“aaaabbbb”) on the victim’s machine and add it to the local administrators group.
+https://securelist.com/cosmicstrand-uefi-firmware-rootkit/106973/ 7/12
+7/26/22, 11:13 AM CosmicStrand: the discovery of a sophisticated UEFI firmware rootkit | Securelist
+We can infer from this that shellcodes received from the C2 server might be stagers for
+attacker-supplied PE executables, and it is very likely that many more exist.

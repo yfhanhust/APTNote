@@ -1,0 +1,183 @@
+
+
+
+Sentence : 2019-2020: Hiding in plain sight using open source
+GADOLINIUM’s evolving techniques
+Two of the most recent attack chains in 2019 and 2020 were delivered from
+GADOLINIUM using similar tactics and techniques. Below is a summary view of how
+these attacks techniques have evolved followed by a detailed analysis of each step that
+security practitioners can use to better understand the threat and what defenses to
+implement to counter the attacks.
+https://www.microsoft.com/security/blog/2020/09/24/gadolinium-detecting-empires-cloud/ 3/9
+9/25/2020 Microsoft Security—detecting empires in the cloud - Microsoft Security
+Weaponization
+In the last year, Microsoft has observed GADOLINIUM migrate portions of its toolchain
+techniques based on open source kits. GADOLINIUM is not alone in this move. MSTIC
+has noticed a slow trend of several nation-state activity groups migrating to open source
+tools in recent years. MSTIC assesses this move is an attempt to make discovery and
+attribution more difficult. The other added benefit to using open-source types of kits is
+that the development and new feature creation is done and created by someone else at no
+cost. However, using open source tools isn’t always a silver bullet for obfuscation and
+blending into the noise.
+Delivery & Exploitation (2019)
+In 2019, we discovered GADOLINIUM delivering malicious Access database files to
+targets. The initial malicious file was an Access 2013 database (.accde format). This
+dropped a fake Word document that was opened along with an Excel spreadsheet and a
+file called mm.accdb.core which was subsequently executed. The file mm.accdb.core is a
+VBA dropper, based on the CactusTorch VBA module, which loads a .NET DLL payload,
+sets configuration information, and then runs the payload. Defender for Office 365
+detects and blocks malicious Microsoft Access database attachments in email. A redacted
+example of the configuration is displayed below.
+https://www.microsoft.com/security/blog/2020/09/24/gadolinium-detecting-empires-cloud/ 4/9
+9/25/2020 Microsoft Security—detecting empires in the cloud - Microsoft Security
+Figure 3: VBA setting config and calling the “Run” function of the payload
+Command and Control (2019)
+Having gained access to a victim machine the payload then uses attachments to Outlook
+Tasks as a mechanism for command and control (C2). It uses a GADOLINIUM-controlled
+OAuth access token with login.microsoftonline.com and uses it to call the Outlook Task
+API to check for tasks. The attacker uses attachments to Outlook tasks as a means of
+sending commands or .NET payloads to execute; at the victim end, the malware adds the
+output from executing these commands as a further attachment to the Outlook task.
+Interestingly, the malware had code compiled in a manner that doesn’t seem to be used in
+the attacks we saw. In addition to the Outlook Tasks API method described above, the
+extra code contains two other ways of using Office365 as C2, via either the Outlook
+Contacts API (get and add contacts) or the OneDrive API (list directory, get and add a
+file).
+Actions on Objective (2019)
+GADOLINIUM used several different payloads to achieve its exploitation or intrusion
+objectives including a range of PowerShell scripts to execute file commands
+(read/write/list etc.) to enable C2 or perform SMB commands (upload/download/delete
+etc.) to potentially exfiltrate data.
+LazyCat, one of the tools used by GADOLINIUM, includes privilege escalation and
+credential dumping capability to enable lateral movement across a victim network.
+Microsoft Defender for Endpoint detects the privilege escalation technique used:
+LazyCat performs credential dumping through usage of the MiniDumpWriteDump
+Windows API call, also detected by Microsoft Defender for Endpoint:
+https://www.microsoft.com/security/blog/2020/09/24/gadolinium-detecting-empires-cloud/ 5/9
+9/25/2020 Microsoft Security—detecting empires in the cloud - Microsoft Security
+Delivery (2020)
+In mid-April 2020 GADOLINIUM actors were detected sending spear-phishing emails
+with malicious attachments. The filenames of these attachments were named to appeal to
+the target’s interest in the COVID-19 pandemic. The PowerPoint file ( 20200423-sitrep-
+92-covid-19.ppt), when run, would drop a file, doc1.dotm . Similarly, to the 2019 example,
+Microsoft Defender for Office detects and blocks emails with these malicious PowerPoint
+and Word attachments.
+Command and Control (2020)
+The malicious doc1.dotm had two payloads which run in succession.
+The first payload turns off a type
+check DisableActivitySurrogateSelectorTypeCheck which the second stage
+needs as discussed in this blog.
+The second payload loads an embedded .Net binary which downloads, decrypts +
+runs a .png file.
+The .png is actually PowerShell which downloads and uploads fake png files using the
+Microsoft Graph API to
+https://graph.microsoft.com/v1.0/drive/root:/onlinework/contact/$($ID)_1.png:/con
+tent where $ID is the ID of the malware. The GADOLINIUM PowerShell is a modified
+version of the opensource PowershellEmpire toolkit.
+Actions on Objectives (2020)
+The GADOLINIUM PowerShell Empire toolkit allows the attacker to load additional
+modules to victim computers seamlessly via Microsoft Graph API calls. It provides
+a command and control module that uses the attacker’s Microsoft OneDrive account to
+execute commands and retrieve results between attacker and victim systems. The use of
+this PowerShell Empire module is particularly challenging for traditional SOC monitoring
+to identify. The attacker uses an Azure Active Directory application to configure a victim
+https://www.microsoft.com/security/blog/2020/09/24/gadolinium-detecting-empires-cloud/ 6/9
+9/25/2020 Microsoft Security—detecting empires in the cloud - Microsoft Security
+endpoint with the permissions needed to exfiltrate data to the attacker’s own Microsoft
+OneDrive storage. From an endpoint or network monitoring perspective the activity
+initially appears to be related to trusted applications using trusted cloud service APIs and,
+in this scenario,, no OAuth permissions consent prompts occur. Later in this blog post, we
+will provide additional information about how Microsoft proactively prevents attackers
+from using our cloud infrastructure in these ways.
+Command and Control—Server compromise
+GADOLINIUM campaigns often involve installing web shells on legitimate web sites for
+command and control or traffic redirection. Microsoft Defender for Endpoint detects web
+shells by analyzing web server telemetry such as process creation and file modifications.
+Microsoft blogged earlier in the year on the use of web shells by multiple groups and how
+we detect such activities.
+https://www.microsoft.com/security/blog/2020/09/24/gadolinium-detecting-empires-cloud/ 7/9
+9/25/2020 Microsoft Security—detecting empires in the cloud - Microsoft Security
+Figure 6: Microsoft Defender for Endpoint alerts of suspicious web shell attacks.
+Web shell alerts from Microsoft Defender for Endpoint can be explored in Azure Sentinel
+and enriched with additional information that can give key insights into the attack.
+MSTIC’s Azure Sentinel team recently published a blog outlining how such insights can
+be derived by analyzing events from the W3CIISLog.
+Microsoft’s proactive steps to defend customers
+In addition to detecting many of the individual components of the attacks through
+Microsoft’s security products and services such as Microsoft Defender for Endpoint and
+for Microsoft Defender for Office as described above, we also take proactive steps to
+prevent attackers from using our cloud infrastructure to perpetrate attacks. As a cloud
+provider, Microsoft is uniquely positioned to disrupt this attacker technique. The
+PowerShell Empire scenario is a good example of this. During April 2020, the Microsoft
+Identity Security team suspended 18 Azure Active Directory applications that we
+determined to be part of GADOLINIUM’s PowerShell Empire infrastructure (Application
+IDs listed in IOC section below). Such action is particularly beneficial to customers as
+suspending these applications protects all customers transparently without any action
+being required at their end.)
+As part of Microsoft’s broader work to foster a secure and trustworthy app ecosystem, we
+research and develop detection techniques for both known and novel malicious
+applications. Applications exhibiting malicious behavior are quickly suspended to ensure
+our customers are protected.
+GADOLINIUM will no doubt evolve their tactics in pursuit of its objectives. As those
+threats target Microsoft customers, we will continue to build detections and implement
+protections to defend against them. For security practitioners looking to expand your own
+hunting on GADOLINIUM, we are sharing the below indicators of compromise (IOCs)
+associated with their activity.
+https://www.microsoft.com/security/blog/2020/09/24/gadolinium-detecting-empires-cloud/ 8/9
+9/25/2020 Microsoft Security—detecting empires in the cloud - Microsoft Security
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "GADOLINIUM", "type" : "ACTO"},
+        {"id": 2, "description": "Access database files (.accde format)", "type" : "DOCF"},
+        {"id": 3, "description": "Fake Word document", "type" : "DOCF"},
+        {"id": 4, "description": "Excel spreadsheet", "type" : "DOCF"},
+        {"id": 5, "description": "mm.accdb.core (VBA dropper)", "type" : "EXEF"},
+        {"id": 6, "description": ".NET DLL payload", "type" : "EXEF"},
+        {"id": 7, "description": "Defender for Office 365", "type" : "APPS"},
+        {"id": 8, "description": "Outlook Tasks API", "type" : "APPS"},
+        {"id": 9, "description": "OAuth access token with login.microsoftonline.com", "type" : "CCSH"},
+        {"id": 10, "description": "Outlook Contacts API", "type" : "APPS"},
+        {"id": 11, "description": "OneDrive API", "type" : "APPS"},
+        {"id": 12, "description": "PowerShell scripts", "type" : "EXEF"},
+        {"id": 13, "description": "LazyCat (tool)", "type" : "TTPS"},
+        {"id": 14, "description": "MiniDumpWriteDump Windows API call", "type" : "APPS"},
+        {"id": 15, "description": "Microsoft Defender for Endpoint", "type" : "APPS"},
+        {"id": 16, "description": "Spear-phishing emails with malicious attachments (2020)", "type" : "MAIL"},
+        {"id": 17, "description": "PowerPoint file (20200423-sitrep-92-covid-19.ppt)", "type" : "DOCF"},
+        {"id": 18, "description": "doc1.dotm", "type" : "EXEF"},
+        {"id": 19, "description": ".png file (PowerShell script)", "type" : "DOCF"},
+        {"id": 20, "description": "Microsoft Graph API", "type" : "APPS"},
+        {"id": 21, "description": "GADOLINIUM PowerShell Empire toolkit", "type" : "EXEF"},
+        {"id": 22, "description": "Microsoft OneDrive storage", "type" : "STOR"},
+        {"id": 23, "description": "Azure Active Directory application", "type" : "APPS"},
+        {"id": 24, "description": "Web shells on legitimate web sites", "type" : "TTPS"},
+        {"id": 25, "description": "W3CIISLog (web server telemetry)", "type" : "APPS"},
+        {"id": 26, "description": "18 Azure Active Directory applications suspended by Microsoft Identity Security team", "type" : "IOCS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "delivered"},
+        {"source": 2, "target": 3, "rel_name" : "dropped"},
+        {"source": 2, "target": 4, "rel_name" : "dropped"},
+        {"source": 2, "target": 5, "rel_name" : "dropped and executed"},
+        {"source": 5, "target": 6, "rel_name" : "loads and runs"},
+        {"source": 7, "target": 2, "rel_name" : "detects and blocks"},
+        {"source": 1, "target": 8, "rel_name" : "uses for C2"},
+        {"source": 9, "target": 8, "rel_name" : "used by"},
+        {"source": 10, "target": 8, "rel_name" : "alternative method of C2"},
+        {"source": 11, "target": 8, "rel_name" : "alternative method of C2"},
+        {"source": 1, "target": 12, "rel_name" : "used for actions on objectives"},
+        {"source": 13, "target": 14, "rel_name" : "uses to perform credential dumping"},
+        {"source": 15, "target": 13, "rel_name" : "detects technique used by"},
+        {"source": 1, "target": 16, "rel_name" : "delivered via"},
+        {"source": 16, "target": 17, "rel_name" : "contains attachment"},
+        {"source": 16, "target": 18, "rel_name" : "drops"},
+        {"source": 18, "target": 20, "rel_name" : "uses to download and run .png file"},
+        {"source": 19, "target": 20, "rel_name" : "is actually"},
+        {"source": 21, "target": 22, "rel_name" : "uses for C2 and exfiltration"},
+        {"source": 23, "target": 21, "rel_name" : "configures victim endpoint with"},
+        {"source": 1, "target": 24, "rel_name" : "installs on web sites for C2 or traffic redirection"},
+        {"source": 15, "target": 24, "rel_name" : "detects by analyzing telemetry"},
+        {"source": 25, "target": 24, "rel_name" : "can be explored and enriched in"}
+    ]
+}

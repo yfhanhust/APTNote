@@ -1,0 +1,25 @@
+Persistence using Windows Print Processors
+The location where the malicious DLL is dropped was not chosen randomly. This is the path where Windows Print
+Processors are located and setup.dll registers the malicious DLL loader as an alternative Print Processor by setting one
+of the following registry values:
+https://www.welivesecurity.com/2020/05/21/no-game-over-winnti-group/ 2/16
+5/21/2020 No “Game over” for the Winnti Group | WeLiveSecurity
+HKLM\SYSTEM\ControlSet001\Control\Print\Environments\Windows x64\Print Processors\PrintFiiterPipelineSvc\Driver =
+“DEment.dll”
+or
+HKLM\SYSTEM\CurrentControlSet\Control\Print\Environments\Windows x64\Print Processors\lltdsvc1\Driver =
+“EntAppsvc.dll”
+depending on the variant. Note the typo in PrintFiiterPipelineSvc (which has no impact on the Print Processor installation
+since any name can be used).
+After having registered the Print Processor, PipeMon restarts the print spooler service (spoolsv.exe). As a result, the
+malicious print process is loaded when the spooler service starts. Note that the Print Spooler service starts at each PC
+startup, which ensures persistence across system resets.
+This technique is really similar to the Print Monitor persistence technique (being used by DePriMon, for example) and, to
+our knowledge, has not been documented previously.
+Additionally, the encrypted payload, CrLnc.dat, extracted from the RARSFX is written to the registry at the following
+location, depending on the installer:
+HKLM\SOFTWARE\Microsoft\Print\Components\DC20FD7E-4B1B-4B88-8172-61F0BED7D9E8
+HKLM\SOFTWARE\Microsoft\Print\Components\A66F35-4164-45FF-9CB4-69ACAA10E52D
+This encrypted registry payload is then loaded, decrypted and executed by the previously registered Print Processor
+library. The whole PipeMon staging and persistence is shown in Figure 1.
+Figure 1. PipeMon staging and persistence

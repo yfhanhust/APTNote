@@ -1,0 +1,73 @@
+
+
+
+Sentence : Hunting for more files
+Equipped with the information gathered so far, we went for a hunt to find more samples. Specifically, to find whether the attack on the Iranian targets was the first time that the attackers utilized these
+tools. Our queries quickly yielded results — files that were uploaded to Virus Total by three different submitters located in Syria. The files seemed to belong to three separated incidents and were
+uploaded to VT in January, February and April 2020, more than a year before the recent attacks against the entities in Iran.
+https://research.checkpoint.com/2021/indra-hackers-behind-recent-attacks-on-iran/ 9/27
+8/16/2021 Indra — Hackers Behind Recent Attacks on Iran - Check Point Research
+The main payloads ( d71cc6337efb5cbbb400d57c8fdeb48d7af12a292fa87a55e8705d18b09f516e, 6709d332fbd5cde1d8e5b0373b6ff70c85fee73bd911ab3f1232bb5db9242dd4, and
+9b0f724459637cec5e9576c8332bca16abda6ac3fbbde6f7956bc3a97a423473 ) appear to be the early versions of the Meteor wiper that was used against the targets in Iran. Similar to Meteor, they
+also contain multiple debug strings, which disclose the internal name of these versions of the wiper — Stardust and Comet . Out of these two versions, Comet is the older one, compiled back in
+September 2019. While we have the complete execution flow of the two attacks that utilized Stardust, we only have a partial view of the one where Comet was used. For this reason, we will focus
+more on the execution chain of Stardust .
+Unlike the recent attacks where the Batch files were used during early infections stages, these Stardust executions are based on multiple VBS scripts. What’s more, these scripts contain valuable
+information — the identities of the attacks’ targets.
+The execution flow of the attacks against the Syrian companies.
+The execution flows of both attacks leveled at Syria in which Stardust was deployed are very similar and thus they will be described together. The initial payload that runs on the victim’s machine
+appears to be a VBS script resolve.vbs that extracts a password-protected RAR archive to the working folder C:\\Program Files\\Windows NT\\Accessories\\ . This RAR contains another RAR
+file and three other VBS files. Then, the resolve.vbs script runs the extracted scripts in the following order:
+
+The first script iterates over the installed programs and checks if Kaspersky Antivirus is installed. If so, it tries to uninstall it using hardcoded domain credentials.
+The second script starts by checking if Kaspersky’s avp.exe process is running, and if so it tries to remove the Kaspersky license.
+The last script extracts the second-stage RAR archive and runs an executable file that the archive contains. This stage is the earlier mentioned Stardust variant of the wiper.
+
+During the execution of these scripts, several requests are made to a server in order to trace the different steps of the execution. These are GET requests to a URL with the following pattern, where C&C
+IP is different between the attacks.
+https://research.checkpoint.com/2021/indra-hackers-behind-recent-attacks-on-iran/ 10/27
+8/16/2021 Indra — Hackers Behind Recent Attacks on Iran - Check Point Research
+https:///progress.php?hn=&dt=&st=&rs=
+where:
+hn = the Host Name
+dt = the Current Date and Time
+st = the Current Step
+rs = the Kaspersky AV running information
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Iran", "type" : "COUN"},
+        {"id": 2, "description": "Syria", "type" : "COUN"},
+        {"id": 3, "description": "Virus Total", "type" : "STOR"},
+        {"id": 4, "description": "d71cc6337efb5cbbb400d57c8fdeb48d7af12a292fa87a55e8705d18b09f516e", "type" : "IOCS"},
+        {"id": 5, "description": "6709d332fbd5cde1d8e5b0373b6ff70c85fee73bd911ab3f1232bb5db9242dd4", "type" : "IOCS"},
+        {"id": 6, "description": "9b0f724459637cec5e9576c8332bca16abda6ac3fbbde6f7956bc3a97a423473", "type" : "IOCS"},
+        {"id": 7, "description": "Meteor wiper", "type" : "EXEF"},
+        {"id": 8, "description": "Stardust", "type" : "EXEF"},
+        {"id": 9, "description": "Comet", "type" : "EXEF"},
+        {"id": 10, "description": "Batch files", "type" : "DOCF"},
+        {"id": 11, "description": "resolve.vbs", "type" : "DOCF"},
+        {"id": 12, "description": "C:\\Program Files\\Windows NT\\Accessories\\", "type" : "SYSP"},
+        {"id": 13, "description": "RAR archive (password-protected)", "type" : "DOCF"},
+        {"id": 14, "description": "Another RAR file inside the first one", "type" : "DOCF"},
+        {"id": 15, "description": "Three other VBS files", "type" : "DOCF"},
+        {"id": 16, "description": "Kaspersky Antivirus", "type" : "APPS"},
+        {"id": 17, "description": "avp.exe", "type" : "EXEF"},
+        {"id": 18, "description": "Command & Control server (different IP for each attack)", "type" : "CCSH"},
+        {"id": 19, "description": "https:///progress.php?hn=&dt=&st=&rs=", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 3, "target": 4, "rel_name" : "contains"},
+        {"source": 3, "target": 5, "rel_name" : "contains"},
+        {"source": 3, "target": 6, "rel_name" : "contains"},
+        {"source": 7, "target": 8, "rel_name" : "earlier version of"},
+        {"source": 7, "target": 9, "rel_name" : "earlier version of"},
+        {"source": 10, "target": 13, "rel_name" : "used to extract"},
+        {"source": 11, "target": 13, "rel_name" : "extracts and runs"},
+        {"source": 11, "target": 14, "rel_name" : "runs from extracted archive"},
+        {"source": 11, "target": 15, "rel_name" : "runs other scripts"},
+        {"source": 16, "target": 17, "rel_name" : "includes process"},
+        {"source": 12, "target": 13, "rel_name" : "location of extracted archive"},
+        {"source": 18, "target": 19, "rel_name" : "hosts"}
+    ]
+}

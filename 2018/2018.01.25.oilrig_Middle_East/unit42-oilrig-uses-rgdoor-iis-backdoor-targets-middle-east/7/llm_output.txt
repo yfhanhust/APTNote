@@ -1,0 +1,98 @@
+
+
+
+Sentence : Interacting with RGDoor
+We created a client application to interact with the RGDoor module, specifically to issue commands to the backdoor and to
+see how it operates on the IIS server. As mentioned previously in this blog, RGDoor has three available commands,
+specifically “cmd$”, “upload$” and “download$”. We used our client to issue one of each of these commands.
+Figure 4 shows the HTTP request and response to our first interaction with the RGDoor module. The command issued in
+this request was “cmd$whoami”, which instructs RGDoor to run the ‘whoami’ command in command prompt. The key used
+to encrypt this command was “54” (0x54), which resulted in Base64 encoded string of “NzkwcCM8OzU5PQ==”. The HTTP
+response shows the RGDoor module returned the Base64 encoded string of
+“PT0ndDUkJCQ7OzgIMDEyNSE4IDUkJCQ7OzheVA==”, which when decrypted using the same “54” key is the result of the
+‘whoami’ command, specifically the string “iis apppool⧵⧵defaultapppool⧵n⧵x00”.
+Figure 4 Issuing ‘whoami’ command and RGDoor’s response
+Figure 5 shows our testing of RGDoor’s upload command, specifically “upload$c:⧵windows⧵temp⧵test.txt” that uploads a file
+from our local system to the webserver. The inbound request uses a key of “54” (0x54) that results in an encoded command
+string of “ISQ4OzUwcDduCCM9OjA7IycIIDE5JAggMScgeiAsIA=”. The request also includes the string
+“IDEnID06M2VmZ14=” within the POST data, which is the string “testing123⧵n” from the file on our local system encrypted
+using the “54” key that will be written to the “test.txt” file on the server. As you can see from the HTTP response, RGDoor
+responded to this command with “write done”, which is interesting as the response was in cleartext and not encrypted using
+the custom algorithm.
+Figure 5 Uploading a file to server via RGDoor Downloading a file from the server via RGDoor
+Figure 6 shows our testing of the download command within RGDoor, specifically a command
+“download$c:⧵windows⧵temp⧵test.txt” that downloads the file uploaded in our previous test. We chose to use the key “89”
+(0x89) in this test to showcase RGDoor’s ability to use any hexadecimal byte as a key, which resulted in an encoded
+command string of “7eb+5+Xm6O2t6rPV/uDn7eb++tX97OT51f3s+v2n/fH9”. RGDoor responds to this command with the
+encoded string “/ez6/eDn7ri7uoM=”, which when decrypted with the “89” key results in the string ‘testing123⧵n’, which is
+the contents of the “test.txt” file.
+Figure 6 Downloading a file from the server via RGDoor
+To determine how the RGDoor client requests appears within the IIS request logs, we checked the logs of our default IIS
+installation in our test environment. By default, IIS does not log the values within Cookie fields of inbound HTTP requests,
+which would contain commands issued by actors to RGDoor. To see inbound RGDoor requests, an administrator must
+configure logging of Cookie fields in IIS, which can be selected in the W3C Logging Fields dialog in IIS Manager, as seen in
+Figure 7.
+Figure 7 W3C Logging Fields dialog in IIS Manager with Cookie fields enabled
+The HTTP requests sent by the client to the RGDoor backdoor in the testing above will generate logs on the IIS server.
+Without the Cookie field logged, it is difficult to locate and analyze inbound requests related to RGDoor. Remember that
+RGDoor is an IIS module that checks all inbound POST requests for commands, so an actor does not need to use one
+particular URL to interact with RGDoor. However, the following shows the IIS log generated from the first testing request we
+made using our RGDoor client, which shows the “RGSESSIONID=” string, the “54” key and the Base64 encoded command
+within the Cookie field:
+1
+2
+3
+4
+5
+Software: Microsoft Internet Information Services 7.5
+Version: 1.0
+Date: 2017-10-03 19:30:13
+Fields: date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs(User-Agent) cs(Cookie) sc-status
+sc-substatus sc-win32-status time-taken
+2017-10-03 19:30:13 192.168.45.5 POST / - 80 - 192.168.45.1 python-requests/2.13.0 RGSESSIONID=54NzkwcCM8OzU5PQ== 200 0
+0 28
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RGDoor", "type" : "EXEF"},
+        {"id": 2, "description": "IIS server", "type" : "APPS"},
+        {"id": 3, "description": "cmd$whoami", "type" : "TTPS"},
+        {"id": 4, "description": "54 (0x54)", "type" : "TAMP"},
+        {"id": 5, "description": "NzkwcCM8OzU5PQ==", "type" : "IOCS"},
+        {"id": 6, "description": "PT0ndDUkJCQ7OzgIMDEyNSE4IDUkJCQ7OzheVA==", "type" : "IOCS"},
+        {"id": 7, "description": "iis apppool⧵⧵defaultapppool⧵n⧵x00", "type" : "TAMP"},
+        {"id": 8, "description": "upload$c:⧵windows⧵temp⧵test.txt", "type" : "TTPS"},
+        {"id": 9, "description": "ISQ8OzUwcDduCCM9OjA7IycIIDE5JAggMScgeiAsIA=", "type" : "IOCS"},
+        {"id": 10, "description": "IDEnID06M2VmZ14=", "type" : "IOCS"},
+        {"id": 11, "description": "testing123⧵n", "type" : "TAMP"},
+        {"id": 12, "description": "write done", "type" : "TAMP"},
+        {"id": 13, "description": "download$c:⧵windows⧵temp⧵test.txt", "type" : "TTPS"},
+        {"id": 14, "description": "89 (0x89)", "type" : "TAMP"},
+        {"id": 15, "description": "7eb+5+Xm6O2t6rPV/uDn7eb++tX97OT51f3s+v2n/fH9", "type" : "IOCS"},
+        {"id": 16, "description": "/ez6/eDn7ri7uoM=", "type" : "IOCS"},
+        {"id": 17, "description": "testing123⧵n (contents of test.txt)", "type" : "TAMP"},
+        {"id": 18, "description": "IIS request logs", "type" : "DOCF"},
+        {"id": 19, "description": "RGSESSIONID=54NzkwcCM8OzU5PQ==", "type" : "IOCS"},
+        {"id": 20, "description": "Microsoft Internet Information Services 7.5", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "runs on"},
+        {"source": 3, "target": 1, "rel_name" : "command issued to"},
+        {"source": 4, "target": 5, "rel_name" : "encrypts"},
+        {"source": 5, "target": 6, "rel_name" : "results in"},
+        {"source": 6, "target": 7, "rel_name" : "decrypts to"},
+        {"source": 8, "target": 1, "rel_name" : "command issued to"},
+        {"source": 4, "target": 9, "rel_name" : "encrypts"},
+        {"source": 9, "target": 10, "rel_name" : "includes"},
+        {"source": 10, "target": 11, "rel_name" : "decrypts to"},
+        {"source": 1, "target": 12, "rel_name" : "responds with"},
+        {"source": 13, "target": 1, "rel_name" : "command issued to"},
+        {"source": 14, "target": 15, "rel_name" : "encrypts"},
+        {"source": 15, "target": 16, "rel_name" : "results in"},
+        {"source": 16, "target": 17, "rel_name" : "decrypts to"},
+        {"source": 20, "target": 18, "rel_name" : "generates"},
+        {"source": 3, "target": 5, "rel_name" : "results in"},
+        {"source": 5, "target": 6, "rel_name" : "sends to server"},
+        {"source": 6, "target": 7, "rel_name" : "returns from server"}
+    ]
+}

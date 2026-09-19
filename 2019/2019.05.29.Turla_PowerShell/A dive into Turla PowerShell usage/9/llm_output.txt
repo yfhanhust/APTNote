@@ -1,0 +1,49 @@
+
+
+
+Sentence : RPC Spoof Server
+During our research, we also discovered a portable executable with the embedded pdb
+path C:\Users\Devel\source\repos\RPCSpoofer\x64\Release_Win2016_10\RPCSpoofServerInstall.pdb (SHA-1:
+9D1C563E5228B2572F5CA14F0EC33CA0DEDA3D57).
+The main purpose of this utility is to retrieve the RPC configuration of a process that has registered an interface. In
+order to find that kind of process, it iterates through the TCP table (via the GetTcpTable2 function) until it either finds
+the PID of the process that has opened a specific port, or retrieves the PID of the process that has opened a specific
+named pipe. Once this PID is found, this utility reads the remote process’ memory and tries to retrieve the registered
+RPC interface. The code for this, seen in Figure 9, seems ripped from this Github repository.
+Figure 9. Snippet of code searching for the .data section of rpcrt4.dll in a remote process (Hex-Rays screenshot)
+At first we were unsure how the retrieved information was used but then another sample, (SHA-1:
+B948E25D061039D64115CFDE74D2FF4372E83765) helped us understand. As shown in Figure 10, this sample
+retrieves the RPC interface, unsets the flag to RPC_IF_ALLOW_SECURE_ONLY , and patches the “dispatch table”
+in memory using the WriteProcessMemory function. Those operations would allow the sample to add its RPC
+functions to an already existing RPC interface. We believe it is stealthier to re-use an existing RPC interface than to
+create a custom one.
+https://www.welivesecurity.com/2019/05/29/turla-powershell-usage/ 7/11
+5/30/2019 A dive into Turla PowerShell usage | WeLiveSecurity
+Figure 10. Snippet of code retrieving the RPC dispatch table of the current process (Hex-Rays screenshot)
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RPC Spoof Server", "type" : "EXEF"},
+        {"id": 2, "description": "C:\\Users\\Devel\\source\\repos\\RPCSpoofer\\x64\\Release_Win2016_10\\RPCSpoofServerInstall.pdb", "type" : "SYSP"},
+        {"id": 3, "description": "9D1C563E5228B2572F5CA14F0EC33CA0DEDA3D57", "type" : "IOCS"},
+        {"id": 4, "description": "GetTcpTable2 function", "type" : "APPS"},
+        {"id": 5, "description": "TCP table", "type" : "NETP"},
+        {"id": 6, "description": "PID of the process that has opened a specific port", "type" : "TAMP"},
+        {"id": 7, "description": "PID of the process that has opened a specific named pipe", "type" : "TAMP"},
+        {"id": 8, "description": "rpcrt4.dll in a remote process", "type" : "APPS"},
+        {"id": 9, "description": "B948E25D061039D64115CFDE74D2FF4372E83765", "type" : "IOCS"},
+        {"id": 10, "description": "RPC interface", "type" : "TAMP"},
+        {"id": 11, "description": "WriteProcessMemory function", "type" : "APPS"},
+        {"id": 12, "description": "https://www.welivesecurity.com/2019/05/29/turla-powershell-usage/", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has embedded pdb path"},
+        {"source": 2, "target": 3, "rel_name" : "is identified by SHA-1 hash"},
+        {"source": 4, "target": 5, "rel_name" : "accesses"},
+        {"source": 6, "target": 5, "rel_name" : "finds in"},
+        {"source": 7, "target": 5, "rel_name" : "finds in"},
+        {"source": 1, "target": 8, "rel_name" : "searches .data section of"},
+        {"source": 9, "target": 10, "rel_name" : "retrieves and patches"},
+        {"source": 11, "target": 10, "rel_name" : "uses to write memory"}
+    ]
+}

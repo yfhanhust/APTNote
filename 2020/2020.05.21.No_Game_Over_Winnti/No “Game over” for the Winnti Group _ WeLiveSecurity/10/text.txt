@@ -1,0 +1,140 @@
+Updated variant
+As mentioned earlier, the attackers also use an updated version of PipeMon for which we were able to retrieve the first
+stage described above. While exhibiting an architecture highly similar to the original variant, its code was likely rewritten
+from scratch.
+The RC4 code used to decrypt the modules and strings was replaced by a simple XOR with 0x75E8EEAF as the key and
+all the hardcoded strings were removed. The named pipes used for inter-module communication are now named using
+random values instead of explicit names and conform to the format \.\pipe\%rand%, where %rand% is a
+pseudorandomly generated string of 31 characters containing only mixed case alphabetic characters.
+Here, only the main loader (i.e. the malicious DLL installed as a Print Processor) is stored as a file on disk; the modules
+are stored in the registry by the installer (from the CrLnc.dat file) and are described in Table 6.
+Table 6. Updated modules
+Module
+name Description
+CoreL‐
+nc.dll
+Loaded by the malicious Print Processor. Responsible only for loading the Core.dll module embed‐
+ded in its .data section.
+https://www.welivesecurity.com/2020/05/21/no-game-over-winnti-group/ 8/16
+5/21/2020 No “Game over” for the Winnti Group | WeLiveSecurity
+Module
+name Description
+Core.dll Loads the Net.dll module embedded in its .data section. Handles commands from the C&C server
+and communications between individual modules and the C&C server through named pipes.
+Net.dll New Communication module. Handles the networking.
+Module injection is not performed using the reflective loading technique with an export function anymore; custom loader
+shellcode is used instead and is injected along with the module to be loaded.
+The C&C message format was changed as well, and is shown in Figure 4.
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+1
+2
+3
+4
+5
+6
+7
+8
+struct CCMSG
+{
+BYTE is_compressed;
+CMD cmd;
+};
+struct CMD
+{
+QWORD cmd_type;
+DWORD cmd_size;
+DWORD cmd_arg;
+BYTE data[cmd_size - 16];
+};
+struct CCMSG
+{
+DWORD signature = 0xFA149DEB;
+DWORD not_used;
+WORD buff_size;
+WORD msgcode;
+BYTE buff[buff_size];
+};
+Figure 4. Previous (top) and updated (bottom) C&C message format
+Interestingly, the backdoor’s configuration is encrypted and embedded in the loader DLL. The configuration contains:
+Name of the registry value
+Campaign identifier
+C&C IP addresses or domain names
+https://www.welivesecurity.com/2020/05/21/no-game-over-winnti-group/ 9/16
+5/21/2020 No “Game over” for the Winnti Group | WeLiveSecurity
+Timestamp (in FILETIME format) corresponding to the date from which to start using a second C&C domain
+marked with ‘#’ in the configuration.
+An example of a configuration dump embedded in the loader DLL is shown in Figure 5. Configurations extracted from
+several loader DLLs are shown in Table 7.
+Figure 5. Example of decrypted configuration (with few zero-bytes removed because of
+image size)
+Table 7. Configuration extracted from several loaders
+Payload reg‐
+istry name
+Alternative domain
+activation
+timestamp
+0x01d637a797cf0000
+(Monday, June 1,
+2020 12:00:00am)
+0x01d637a797cf0000
+(Monday, June 1,
+2020 12:00:00am)
+Loader SHA-1
+Cam‐
+paign
+ID
+6c97039605f93ccf1afccbab8174d26a43f91b20 KOR2 DC20FD7E
+4B1B-4B88
+8172
+61F0BED7D9E8
+C&C
+IP/domains
+154.223.215.116
+ssl2.dyn-track‐
+er.com
+client.gnisoft.‐
+com
+203.86.239.113
+ssl2.dyn-track‐
+er.com
+client.gnisoft.‐
+com
+97da4f938166007ce365c29e1d685a1b850c5b‐
+b0
+KOR DC20FD7E
+4B1B-4B88
+8172
+61F0BED7D9E8
+https://www.welivesecurity.com/2020/05/21/no-game-over-winnti-group/ 10/16
+5/21/2020 No “Game over” for the Winnti Group | WeLiveSecurity
+Payload reg‐
+istry name
+Alternative domain
+activation
+timestamp
+0x01d61f4b7500c000
+(Friday, May 1, 2020
+12:00:00am)
+Loader SHA-1
+Cam‐
+paign
+ID
+7ca43f3612db0891b2c4c8ccab1543f581d0d10c kor1 DC20FD7E
+4B1B-4B88
+8172
+61F0BED7D9E8
+b02ad3e8b1cf0b78ad9239374d535a0ac57bf27e tw1 A66F35-416445FF-9CB4
+69A‐
+CAA10E52D

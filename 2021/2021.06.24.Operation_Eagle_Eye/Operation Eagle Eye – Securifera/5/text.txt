@@ -1,0 +1,19 @@
+Exploitation – Unauthenticated Remote Command Injection (CVE-2021-35047)
+After gaining initial access to the Fidelis Direct sensor appliance via SSH, I began poking around at the services
+hosted on the device and investigating what other systems it was communicating with. One of the first things I
+noticed was lots of connections back to the Fidelis CommandPost appliance on port 5556 from a rconfigc
+process. I also noticed a rconfigd process listening on the sensor, my assumption was this was some kind of
+peer-to-peer client/server setup.
+Analyzing the rconfigc/rconfigd binaries revealed they were a custom remote script execution framework. The
+framework consisted of a simple TLS-based client/server application backed mostly by Perl scripts at varying
+privilege levels, utilizing a hard-coded authentication string. I reviewed a couple of these scripts and came
+across the following code snippet.
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 10/20
+6/24/2021 Operation Eagle Eye – Securifera
+If you haven’t spotted the bug here, those back ticks in Perl mean to execute the command in the background.
+Since there are no checks sanitizing the incoming input for the user variable, additional commands can be
+executed by simply adding a single quote and a semicolon. It appears another perk to this particular command
+is that it is being run as root so we have automatic privilege escalation. I decided to test this remotely on the
+Fidelis CommandPost to confirm it actually worked.
+https://www.securifera.com/blog/2021/06/24/operation-eagle-eye/ 11/20
+6/24/2021 Operation Eagle Eye – Securifera

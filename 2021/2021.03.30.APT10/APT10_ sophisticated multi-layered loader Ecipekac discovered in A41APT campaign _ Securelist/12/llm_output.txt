@@ -1,0 +1,54 @@
+
+
+
+Sentence : FYAnti loader for QuasarRAT
+The last observed type of payload deployed by Ecipekac is a loader module named FYAnti
+loader. In the Ecipekac loader malware of the fourth layer, the DLL is loaded into memory
+and an export carrying the name “FkYAnti” is called. We named this loader “FYAnti”
+because of this distinct string. The execution flow of the FYAnti has two additional layers
+to implement the final stage, which is a QuasarRAT (a.k.a xRAT).
+Infection flow of FYAnti loader
+The first layer of the FYAnti loader decrypts an embedded .NET module and executes it
+using the CppHostCLR technique. The .NET module is packed using “ConfuserEx v1.0.0”
+and acts as yet another loader that searches for a file in the
+“C:\Windows\Microsoft.NET\” directory with file sizes between 100,000 and 500,000.
+The unpacked code is shown in the screenshot below.
+Unpacked code of the second layer loader of FYAnti to search a file
+In this instance, an encrypted file named “web_lowtrust.config.uninnstall” is found and
+used as the next stage module. The .NET module loads and decrypts this file using AES
+CBC mode. The decrypted payload is another .NET module named Client.exe which is
+QuasarRAT, a popular open-source remote administration tool. The configuration data is
+https://securelist.com/apt10-sophisticated-multi-layered-loader-ecipekac-discovered-in-a41apt-campaign/101519/ 15/21
+4/1/2021 APT10: sophisticated multi-layered loader Ecipekac discovered in A41APT campaign | Securelist
+stored in the binary with most of this data being encrypted by AES CFB mode and base64.
+The AES key is generated using the hardcoded string “KCYcz6PCYZ2VSiFyu2GU”in the
+configuration data.
+Malware configuration of QuasarRAT
+All loader modules and payloads are decrypted and executed in memory only.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Ecipekac", "type" : "ACTO"},
+        {"id": 2, "description": "FYAnti loader", "type" : "EXEF"},
+        {"id": 3, "description": "QuasarRAT (a.k.a xRAT)", "type" : "APPS"},
+        {"id": 4, "description": ".NET module", "type" : "DOCF"},
+        {"id": 5, "description": "ConfuserEx v1.0.0", "type" : "APPS"},
+        {"id": 6, "description": "C:\\Windows\\Microsoft.NET\\", "type" : "SYSP"},
+        {"id": 7, "description": "web_lowtrust.config.uninnstall", "type" : "DOCF"},
+        {"id": 8, "description": "Client.exe", "type" : "EXEF"},
+        {"id": 9, "description": "AES CBC mode", "type" : "TTPS"},
+        {"id": 10, "description": "AES CFB mode", "type" : "TTPS"},
+        {"id": 11, "description": "KCYcz6PCYZ2VSiFyu2GU", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "deployed by"},
+        {"source": 2, "target": 4, "rel_name" : "decrypts and executes"},
+        {"source": 4, "target": 5, "rel_name" : "packed using"},
+        {"source": 4, "target": 6, "rel_name" : "searches in"},
+        {"source": 4, "target": 7, "rel_name" : "finds and uses"},
+        {"source": 7, "rel_name" : "decrypts to", "target": 8},
+        {"source": 8, "rel_name" : "is", "target": 3},
+        {"source": 9, "rel_name" : "uses", "target": 7},
+        {"source": 10, "rel_name" : "encrypts data in", "target": 8}
+    ]
+}

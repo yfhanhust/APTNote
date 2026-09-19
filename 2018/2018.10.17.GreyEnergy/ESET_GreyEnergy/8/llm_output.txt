@@ -1,0 +1,385 @@
+
+
+
+Sentence : GREYENERGY MALWARE
+The GreyEnergy malware is the flagship backdoor of the GreyEnergy group. The malware samples
+analyzed here are written in C and compiled using Visual Studio, but without using the standard C
+run-time libraries (CRT) functions. Packed samples may contain a forged PE timestamp, but once the
+samples are unpacked, the PE timestamp is zero (representing 1 January, 1970).
+Figure 7. // The PE timestamp of an unpacked GreyEnergy sample
+Interestingly, one of the first GreyEnergy malware samples analyzed was digitally-signed with a code
+signing certificate belonging to a company named Advantech. Advantech is a Taiwanese company that
+produces industrial equipment and IoT hardware. Since we discovered that exactly the same certificate
+was used to sign clean, non-malicious software from Advantech, we believe that this certificate was
+likely stolen. It is worth noting that the discovered sample does not have countersignatures, which
+means that the digital signature became invalid once the certificate’s validity period had expired.
+Figure 8. // Advantech code-signing certificate used to sign a GreyEnergy malware sample
+8 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+The certificate data are as follows:
+```
+    Serial Number: 15:f4:8f:98:c5:79:41:00:6f:4c:9a:63:9b:f3:c1:cc
+Validity:
+
+Not Before: Feb 10 00:00:00 2014 GMT
+
+Not After : Feb 26 23:59:59 2017 GMT
+
+SHA1 Fingerprint=97:53:AD:54:DF:6B:D6:73:E0:6C:00:36:3D:34:6A:06:00:7A:0A:9B
+
+```
+We observed that the GreyEnergy malware is usually deployed in two modes: in-memory-only mode,
+and using Service DLL persistence. The former mode is used when attackers are confident that malware
+deployment does not require any persistence at all (e.g. servers with high uptime); the latter mode is
+used when the malware needs to be able to survive any possible reboot.
+In-memory-only mode
+For the in-memory-only mode, attackers put a DLL file in a specific folder and then execute it using the
+Windows application ~~rundll32.exe~~ ~~.~~ We have seen that the attackers are using Windows Sysinternals
+PsExec tool locally in order to execute ~~rundll32.exe~~ under the highest possible privileges ( ~~NT~~
+~~AUTHORITY\SYSTEM~~ ~~)~~ .
+Here is an actual command line used in the initial stage of GreyEnergy’s in-memory-only execution:
+```
+    cmd.exe /c “C:\Windows\System32\rundll32.exe “C:\Sun\Thumbs.db”,#1
+CAIAABBmAAAgAAAA8GFGvkHVGDtGRqcl3Z3nYJ9aXCm7TVZX8klEdjacOSU=”
+
+```
+In this example, ~~Thumbs.db~~ represents a GreyEnergy DLL file, of which the function with the first
+ordinal is called by the ~~rundll32.exe~~ process. The supplied command line parameter contains
+a base64-encoded sequence of bytes that is later used as an AES-256 key to decrypt a small stub.
+Afterwards, the code in the stub launches a new instance of the ~~svchost.exe~~ process and injects a
+GreyEnergy payload there. In the final step, the GreyEnergy ~~rundll32.exe~~ process is terminated and
+the malicious DLL file is secure-wiped from the disk. The GreyEnergy payload would therefore exist only
+in the context of its svchost.exe’s process memory.
+Apparently, the malware authors’ intention was to design the malware in such a way that without
+having the key provided on the command line, it is impossible to decrypt the stub and payload.
+Figure 9. // An internal name of GreyEnergy DLL for in-memory-only mode
+If the in-memory-only mode is used, terminating the corresponding ~~svchost.exe~~ process or rebooting
+the computer is enough to remove the GreyEnergy malware.
+Service DLL persistence
+To use this method, the malware operators deploy a GreyEnergy dropper, which must be executed
+under administrator privileges.
+The ~~ServiceDLL~~ registry key is a feature that allows starting a service DLL module in the context of the
+~~svchost.exe~~ process. This feature is not well documented by Microsoft; however, it has been used by a
+number of malware families, including the prolific Conficker worm.
+9 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+For ~~service DLL~~ persistence, the malware dropper finds an already existing service and adds a new
+ServiceDLL registry key. Since using this method could break the system, the dropper first performs a
+series of checks in order to pick a service that fulfills many requirements.
+First, the dropper enumerates all Windows services that are currently stopped, by executing the
+following WQL query:
+```
+    Select * from Win32_Service where PathName Like ‘%%svchost%%’ and State =
+‘Stopped’
+
+```
+The following conditions can be added to the query:
+~~and StartMode = ‘Disabled’~~ or ~~and StartMode = ‘Manual’~~
+~~and ServiceType = ‘Own Process’~~ or ~~and ServiceType = ‘Share Process’~~
+Next, the dropper tries to pick the right service by enumerating the results and skipping those that
+match the following conditions:
+   - Service name contains ~~`winmgmt`~~ (Windows Management Instrumentation) or ~~`BITS`~~ (Background
+
+Intelligent Transfer Service)
+   - The dropper does not have access to the service or the registry key
+
+
+   - The ~~`DependOnService`~~ registry value is not empty
+
+
+   - A registry value does not exist for ~~`ServiceDll`~~ or ~~`ImagePath`~~
+
+
+   - The service’s command line contains one of these words:
+
+
+     - ~~`DcomLaunch, LocalServiceNetworkRestricted, LocalServiceNoNetwork,`~~
+
+```
+      LocalServicePeerNet, LocalSystemNetworkRestricted,
+  NetworkServiceNetworkRestricted, secsvcs, wcssvc
+
+```
+Once a service is found that satisfies these conditions, the malware drops a DLL file into the ~~system32~~
+directory of Windows and writes the ~~ServiceDLL~~ registry key. The name of the DLL contains four
+randomly generated characters and ~~svc.dll~~ or ~~srv.dll~~ at the end. In addition, the dropper forges the
+file’s time metadata by copying it from the existing ~~user32.dll~~ file.
+The latest version of the GreyEnergy dropper supports both 32- and 64-bit operating systems.
+10 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+i
+Figure 10. // The GreyEnergy DLL deployed using the Service DLL persistence method
+The dropper uses an interesting trick to disguise the malicious DLL as a legitimate file. Specifically, the
+dropper makes a copy of the VERSIONINFO resource, which contains a detailed file description from
+the executable that belongs to the original Windows service, and writes this data into the malicious
+DLL. It’s done by using the ~~BeginUpdateResource/UpdateResource/EndUpdateResource~~ Windows
+API functions The latest versions don’t call these functions from the API; their code is implemented in
+the malware itself, in order to avoid dropping the DLL file onto the disk without the fake VERSIONINFO
+resource, presumably to evade detection by some security product. The same dropper could create
+malicious DLL files with different descriptions on different computers. Each sample deployed in this way
+will have a unique hash.
+If the malware is already present on the system, then the dropper can update it using a named pipe.
+In the final step, the dropper deletes itself securely, by overwriting the file with zeros and removing the
+file from the disk. In addition, the dropper cleans the USN journal . All these actions are performed by
+executing the following shell command:
+~~timeout 2 > nul & fsutil f~~ i ~~le setzerodata offset=0 length=%DROPPER_FILESIZE%~~
+```
+    “%DROPPER_PATH%” & timeout 2 & cmd /c del /F /Q “%DROPPER_PATH%” & fsutil usn
+deletejournal /D %DROPPER_DRIVE%
+
+```
+11 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+Configuration and communication
+The persistence mode selected by the operators does not affect the functionality of the malware, which
+remains the same in both methods.
+The malware contains an embedded configuration that is encrypted using the AES-256 algorithm and
+compressed using the LZNT1 algorithm.
+MIME multipart format is used for the malware’s embedded configuration. The malware authors didn’t
+implement their own parser for this format; instead they use the IMimeMessage and IMimeBody COM
+interfaces. Interestingly, Microsoft’s documentation recommends not using these interfaces.
+Figure 11. // Example of embedded GreyEnergy configuration
+12 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+An identical MIME format is used for external configuration; however, the malware encrypts the
+external configuration differently. The malware uses the Data Protection application programming
+interface (DPAPI) — specifically the ~~CryptProtectData~~ and ~~CryptUnprotectData~~ Windows API
+functions. The external configuration is stored in the following path ~~C:\ProgramData\Microsoft\~~
+~~Windows\%GUID%~~ ~~,~~ where ~~%GUID%~~ is a randomly generated GUID value.
+Some GreyEnergy samples contain a bit-obfuscated version of the configuration. Specifically, such a
+configurations ~~Type~~ fields contain letters instead of configuration option names.
+Figure 12. // Example of an obfuscated GreyEnergy configuration
+The configuration may contain the following values:
+Configuration option Obfuscated name Meaning
+List of C&C servers (this value can be encoded
+Type: ServerUrls Type: D
+using base64)
+User D1
+Password D2
+Access D3 1 – Don’t use Proxy, 3 – Use proxy
+List of proxy servers (this value can be encoded
+Type: ServerProxies Type: E
+using base64)
+ProxyType E1 Not used
+Type: Client Type: F Hexadecimal Campaign ID
+Time out in minutes between requests to C&C
+Sleep F1
+servers
+Time out in minutes between requests to C&C
+FSleep F2
+servers (in case of failed connection)
+F3 Not used
+Number of days the malware can tolerate with no
+Lifetime F4
+successful connection to C&C servers
+The high-order part of the time of the last
+LastrequestH F5
+successful connection to C&C servers
+The low-order part of the time of the last
+LastrequestL F6
+successful connection to C&C servers
+Number of attempts to send requests to C&C
+Attempts F7
+servers
+Number maximum attempts to send request to
+MaxAttempts F8
+C&C servers
+13 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+The malware deletes itself from the compromised computer if the number of failed connection attempts
+is greater than the ~~MaxAttempts~~ value and the last successful connection was more than ~~Lifetime~~
+days ago.
+C&C communication is usually over HTTPS; however, in some cases HTTP is used also. The same MIME
+format is encapsulated in HTTP requests. However, it should be noted that the data are encrypted using
+AES-256 and RSA-2048.
+Figure 13. // GreyEnergy communication over HTTP, captured in Wireshark
+14 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+If HTTP is used, then it’s easier to identify a compromised machine in a network by analyzing its
+network traffic. The analyzed malware samples always used the following hardcoded user agents:
+   - ~~Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko~~
+
+
+   - ~~Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like~~
+
+```
+     Gecko
+```
+To help the malware operators identify infected computes, the malware sends the results of the
+following WQL queries to a C&C server:
+   - ~~`SELECT Caption, Version, CSName, ProductType, CurrentTimeZone, LocalDateTime,`~~
+
+```
+     OSLanguage, OSType FROM Win32_OperatingSystem
+```
+   - ~~`SELECT MACAddress, IPAddress, IPSubnet, DHCPEnabled, DHCPServer, DNSDomain FROM`~~
+
+~~Win32_NetworkAdapterConf~~ i ~~guration WHERE MACAddress IS NOT NULL~~
+The C&C server’s answers are encrypted, but once an answer is decrypted, it contains the same MIME
+format, with the following possible values:
+Command Obfuscated name Meaning
+Type: Image Type: A Contains Base64 encoded and compressed binary
+Version A1 ~~Not used~~
+Option A2
+Name A3 Name of image
+Contains text of module command and
+Type: Command Type: B
+parameters
+Session B1 Sets token for impersonation
+Type: Payload Type: C Contains Base64 encoded and compressed binary
+PID C1
+The GreyEnergy malware loads additional modules and payloads into memory using its own loader for
+PE files.
+GreyEnergy modules
+Like many complex threats, the GreyEnergy malware has a modular architecture. The functionality of
+the malware can be easily extended with additional modules. A GreyEnergy module is a DLL file that
+gets executed by calling the function with the first ordinal. Each module, including the main GreyEnergy
+module, accepts text commands with various parameters.
+The malware operators do not push all modules at once to a compromised machine. The malware
+usually downloads and executes modules that are necessary for its current task.
+So far, we are aware of the existence of the following GreyEnergy modules:
+Module name Purpose
+remoteprocessexec Injects a PE binary into a remote process
+info Collects information about system, event logs, SHA-256 of malware
+file File system operations
+sshot Grabs screenshots
+keylogger Harvests pressed key strokes
+passwords Collects saved passwords from various applications
+mimikatz Mimikatz software used to collect Windows credentials
+plink Plink software used to create SSH tunnels
+3proxy 3proxy software used to create proxies
+15 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+The ~~remoteprocessexec~~ module allows the attacker to execute arbitrary binaries in the context of
+already existing processes. For example, the attackers can execute Mimikatz or a port scanner in the
+context of Windows Explorer, without dropping them on the disk. To redirect the standard output and
+to handle threads and process termination the module hooks five Windows API functions.
+Figure 14. // Windows API functions hooked by the ~~remoteprocessexec~~ module
+Since the dropped GreyEnergy DLL is unique for each infected machine, the attackers could collect their
+SHA-256 hashes using the info module. Having these hashes would allow the attackers to track whether
+the file was uploaded to one of the public “multi-scanner” web services, such as VirusTotal.
+Anti-reversing and anti-forensics techniques
+GreyEnergy malware implements several tricks to make forensic and malware analysis harder. For one,
+the malware encrypts strings. Some of the variants use the exact same algorithm as GreyEnergy mini.
+However, most of the GreyEnergy samples use a slightly different encryption algorithm. Specifically, the
+first four bytes in an encrypted blob are not used as the key for XOR operations. Instead, they are used
+to initialize the seed of a Mersenne Twister pseudorandom number generator (PRNG) algorithm and then
+the generated four bytes are used as the key. Before freeing the memory buffer holding the plaintext
+string, the malware overwrites the buffer with zeros.
+16 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+Figure 15. // Decompiled code of string -decoding function of GreyEnergy malware
+The malware hooks ~~DeleteFileA~~ and ~~DeleteFileW~~ functions in the import table of each PE binary
+loaded in memory. The hook replaces these functions with a function that wipes files securely.
+Specifically, the file is overwritten with zeroes before deleting it from the disk. Thus, each payload or
+plugin would use such a feature without the malware author’s need to implement it in each module.
+Figure 16. // Decompiled code of routine that hooks ~~DeleteFileA~~ and ~~DeleteFileW~~ functions
+17 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+Output : 
+{
+  "nodes": [
+    {
+      "id": "1",
+      "label": "GreyEnergy Malware"
+    },
+    {
+      "id": "2",
+      "label": "Modular Architecture"
+    },
+    {
+      "id": "3",
+      "label": "C&C Communication"
+    },
+    {
+      "id": "4",
+      "label": "Persistence Mechanisms"
+    },
+    {
+      "id": "5",
+      "label": "Configuration Management"
+    },
+    {
+      "id": "6",
+      "label": "Modules"
+    },
+    {
+      "id": "7",
+      "label": "Anti-Reversing Techniques"
+    },
+    {
+      "id": "8",
+      "label": "Anti-Forensics Techniques"
+    },
+    {
+      "id": "9",
+      "label": "Encryption and Compression"
+    }
+  ],
+  "edges": [
+    {
+      "source": "1",
+      "target": "2",
+      "label": "Has"
+    },
+    {
+      "source": "1",
+      "target": "3",
+      "label": "Uses"
+    },
+    {
+      "source": "1",
+      "target": "4",
+      "label": "Implements"
+    },
+    {
+      "source": "1",
+      "target": "5",
+      "label": "Manages"
+    },
+    {
+      "source": "1",
+      "target": "6",
+      "label": "Includes"
+    },
+    {
+      "source": "1",
+      "target": "7",
+      "label": "Implements"
+    },
+    {
+      "source": "1",
+      "target": "8",
+      "label": "Uses"
+    },
+    {
+      "source": "1",
+      "target": "9",
+      "label": "Employs"
+    }
+  ],
+  "details": [
+    {
+      "id": "2",
+      "description": "The GreyEnergy malware has a modular architecture, allowing the attackers to extend its functionality with additional modules. Each module is a DLL file that gets executed by calling the function with the first ordinal."
+    },
+    {
+      "id": "3",
+      "description": "C&C communication is usually over HTTPS but can also use HTTP. The data are encrypted using AES-256 and RSA-2048. The malware sends system information to the C&C server, including MAC addresses and IP configurations."
+    },
+    {
+      "id": "4",
+      "description": "The malware has two persistence mechanisms: in-memory persistence and disk-based persistence. It uses techniques like named pipes for updates and secure deletion of files to evade detection."
+    },
+    {
+      "id": "5",
+      "description": "The malware's configuration is encrypted using AES-256 and compressed using LZNT1. The external configuration is stored in a specific path and can contain C&C server lists, proxy settings, and other values."
+    },
+    {
+      "id": "6",
+      "description": "GreyEnergy includes various modules for different purposes, such as remote process execution, information collection, file system operations, screenshot grabbing, keylogging, password harvesting, Mimikatz, Plink, and 3proxy."
+    },
+    {
+      "id": "7",
+      "description": "The malware implements several anti-reversing techniques, including string encryption and hooking functions like DeleteFileA and DeleteFileW to securely wipe files before deletion."
+    },
+    {
+      "id": "8",
+      "description": "GreyEnergy uses anti-forensics techniques such as overwriting memory buffers with zeros before freeing them and securely wiping files from the disk."
+    },
+    {
+      "id": "9",
+      "description": "The malware encrypts its strings using a Mersenne Twister pseudorandom number generator (PRNG) algorithm. It also uses AES-256 for configuration encryption and RSA-2048 for C&C communication."
+    }
+  ]
+}

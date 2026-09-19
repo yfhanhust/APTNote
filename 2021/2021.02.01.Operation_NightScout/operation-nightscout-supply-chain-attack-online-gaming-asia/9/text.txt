@@ -1,0 +1,94 @@
+Malware
+A total of three different malicious update variants were observed, each of which dropped different malware. These variants
+are the following:
+Malicious Update variant 1
+This variant is one of the preliminary updates pointing to compromised BigNox infrastructure. Our analysis is based on the
+sample with SHA-1 CA4276033A7CBDCCDE26105DEC911B215A1CE5CF .
+The malware delivered does not seem to have been documented before. It is not extremely complex, but it has enough
+capabilities to monitor its victims. The initial RAR SFX archive drops two DLLs into
+C:\Program Files\Internet Explorer\ and runs one of them, depending on architecture, via rundll32.exe . The
+names of these DLLs are the following:
+```
+   ieproxysocket64.dll
+ieproxysocket.dll
+```
+It also drops a text file named KB911911.LOG to disk, into which the original name of the SFX installer will be written. The
+DLL attempts to open and read this log file, and if not found will stop execution, therefore implementing an execution
+guardrail.
+The DLL will then check whether it has been loaded by any of the following processes; if it has, it will stop its own execution:
+```
+   smss.exe
+winlogon.exe
+csrss.exe
+wininit.exe
+services.exe
+explorer.exe
+```
+The IP address of the machine will be checked to verify that it is neither 127.0.0.1 nor 0.0.0.0 ; if it is, it will be rechecked
+in an infinite loop until it changes. Otherwise, it will proceed to extract the UUID of the current machine via a WMI object
+query. This returned UUID is hashed using MD5 to serialize the current victim. Account name information will also be
+retrieved and saved.
+An encrypted configuration will be retrieved from the DLL’s resource. This configuration is encrypted using a two-byte XOR
+with 0x5000. The encrypted configuration is partially visible given the weakness of the key used:
+Figure 8. Encrypted configuration in resources
+The format of this configuration is the following (roughly):
+Offset Size Comment
+0x00 0x08 Fake JPG header magic
+0x08 0x12C Buffer holding tokenized C&C information
+0x134 0x14 Buffer holding port for C&C communication
+0x148 0x14 Sleep time
+0x15C 0x14 Operate flag; don’t operate with network monitoring tools deployed or if this flag is set
+0x170 0x14 N/A
+0x184 0x14 DNS flag; append a token at the end of a hostname buffer with either |UDP or |DNS, depending on the value of this field
+0x198 0x38 Variable holding offset start of decoded configuration buffer
+After the configuration has been parsed, the backdoor will check several times for network monitoring processes before
+transferring execution to the C&C loop. Operation stops if the Operate flag is set or if either of the following processes is
+running:
+```
+   netman.exe
+wireshark.exe
+```
+The backdoor can use either a raw IP address or a domain name to communicate with the C&C server. After successful
+connection to the C&C, the malware will be able to perform the following commands:
+Command ID Specification
+getfilelist-delete Delete specified files from the disk
+getfilelist-run Run a command via the WinExec API
+getfilelist-upload Upload a file via ScreenRDP.dll::ConnectRDServer
+getfilelist-downfile1 Download a specific file
+getfilelist-downfile2 Download a specific directory
+getfilelist-downfile3 Same as getfilelist-downfile2
+ \tsclient drive redirection of certain directories (starting with A: for range(0x1A))
+Figure 9. Anatomy of malicious update variant 1
+Malicious Update variant 2
+This malware variant was also spotted being downloaded from legitimate BigNox infrastructure. Our analysis is based on the
+sample with SHA-1 E45A5D9B03CFBE7EB2E90181756FDF0DD690C00C .
+It contains several files comprising what is known as a trident bundle, in which a signed executable is used to load a
+malicious DLL, which will decrypt and load a shellcode, implementing a reflective loader for the final payload.
+The theme for this trident bundle was to disguise the malware as Sandboxie components. The names of the bundled
+components are the following:
+Filename Description
+C:\ProgramData\Sandboxie\SandboxieBITS.exe Signed Sandboxie COM Services (BITS)
+C:\ProgramData\Sandboxie\SbieDll.dll Malicious hijacked DLL
+Malicious encrypted payload; decrypts a reflectively loaded instance of
+C:\ProgramData\Sandboxie\SbieIni.dat
+Gh0st RAT
+C:\Users\Administrator\AppData\Local\Temp\delself.bat Script to self-delete the initial executable
+C:\Windows\System32\wmkawe_3636071.data Text file containing the sentence Stupid Japanese
+We have encountered other instances of this same text file, dropped by a very similar loader in a supply-chain compromise
+involving the Myanmar presidential office website in 2018, and in an intrusion into a Hong Kong university in 2020.
+The deployed final payload was a variant of Gh0st RAT with keylogger capabilities.
+Figure 10. Anatomy of malicious update variant 2
+Malicious Update variant 3
+This update variant was only spotted in activity subsequent to initial malicious updates, downloaded from attacker
+controlled infrastructure. Our analysis is based on the sample with SHA-1
+AA3D31A1A6FE6888E4B455DADDA4755A6D42BEEB .
+Similarly, as with the previous variant, this malicious update comes bundled in an MFC file, and extracts two components: a
+benign signed file and a dependency of it. The components are:
+Filename Description
+C:\ProgramData\LoGiTech\LoGitech.exe Signed Logitech binary
+C:\ProgramData\LoGiTech\LBTServ.dll Malicious DLL decrypts and reflectively loads an instance of PoisonIvy
+On the most recently discovered victims, the initial downloaded binary was written in Delphi, while for previous victims the
+same attacker-controlled URL dropped a binary written in C++. These binaries are the initial preliminary loaders. Although
+the loaders were written in different programming languages, both versions deployed the same final payload, that being an
+instance of the PoisonIvy RAT.
+Figure 11. Anatomy of malicious update variant 3

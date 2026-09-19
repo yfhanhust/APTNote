@@ -1,0 +1,75 @@
+LODEINFO
+In late December 2019, spear phishing email was delivered to several companies in Japan. When a macro in the
+attached doc file is activated, the system becomes infected with malware called LODEINFO.
+Figure 19. Attack Flow Using LODEINFO
+The macro embedded in the doc file is mainly obfuscated using base64. When the macro is decrypted,
+base64-encoded data contained within a separate macro are acquired and the decoded data is saved as a file with
+“.txt” extension. Although the file has “.txt” extension, it is DLL file and run using rundll32.exe. Values are added to the
+Run registry so that it is automatically run after the device is rebooted.
+While we analzyed some LODEINFO malwares, the following two values have been confirmed to be added to registries
+for persistence.
+HKCU\SOFTWARE\Microsoft\Windows\CurentVersion\Run\"BIG_POOH" = cmd /c cd %ProgramData%&start
+rundll32.exe Windows.SecurityMitigationsBroker.txt main
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\"MsiWrapper" = cmd /c cd %ProgramData%&start
+rundll32.exe euwPvlGQN.Ikbn main
+Characteristics of LODEINFO
+A pdb file path is left in the dropped DLL (LODEINFO).
+E:\Production\Tool-Developing\png_info\Release\png_info.pdb
+LODEINFO was developed based on the PNG file encoder/decoder “LodePNG” source code published on GitHub. [14]
+This technique of trying to escape analysis by concealing a malicious code within the benign source code is often used
+by attack groups based in Chinese-speaking regions.
+There are two types of LODEINFO, one that injects a portable executable (PE) format RAT code into svchost.exe (Figure
+20), and one that decrypts and executes a RAT code on the memory of a rundll32.exe (Figure21).
+With the code-injection type, the attacker’ s code is added as a function to the end of the main function.
+Figure 20. Injection Type: Payload Decryption and Code Injection
+14 https://github.com/lvandeve/lodepng/blob/master/examples/example_png_info.cpp
+In the added malicious function, embedded payload is decrypted and svchost.exe is run and a PE format code is
+injected into svchost.exe.
+The payload is embedded in the data section and is decrypted by XORing with 128-bit values.
+With the type that decrypts and runs the RAT code on the rundll32.exe memory, decryption and allocating RAT code on
+the memory are implemented within the main function.
+Figure 21. Memory Expansion Type: Payload Decryption and Execution decrypted code
+LODEINFO RAT Component
+Finally, it is a code that runs on svchost.exe or rundll32.exe memory that has the RAT functions.
+HTTP POST communication is regularly carried out to the C2 server and processing is performed according to the
+instruction codes included in the response.
+The instruction codes used such as “send”, “recv”, or “kill”, which suggests a UNIX OS environment (Figure 22).
+When the attacker wants to put the RAT into a dormant state, a “stay calm!” code, which is not part of the RAT
+command, was sent to the RAT (Figure 23). For the user agent, the fixed character string “Mozilla/5.0 (Windows NT
+10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36” is used.
+Figure 22. C2 Command Processing Parts
+Figure 23. Dormant State Command Used by Attackers
+Communication data is encrypted by AES + base64. A characteristic point is that constants such as AES S-BOX are not
+embedded in the data area, but rather, pushing the constant values into stack memory. The purpose of this is probably
+to make it difficult to detect the encryption, and thereby hinder analysis.
+Figure 24. AES Encryption
+Similarities between APT10 and ANEL in code level
+“ANEL” is one of the backdoor type malwares which APT10 used. Several similarities were found between LODEINFO
+and ANEL in the code level. However, we don’t have enough information to corroborate attribution to a specific
+adversary at the time of writing.
+Code Similarities to ANEL
+
+
+At the beginning of main processing, configured C2 servers string are parsed, and used in a single string variable.
+
+
+Communication data (encryption + Base64)
+
+
+CryptBinaryToString() is used for Base64 encoding of encrypted byte data.
+
+
+A fixed User-Agent string is used for HTTP POST communication.
+
+
+Encryption algorithms involving heavy implementation are coded without using encryption libraries.
+
+
+C2 response is read by InternetReadFile() and instruction processing is run in another thread using CreateThread().
+
+
+Version information is embedded in the RAT.
+
+
+15 https://www.secureworks.jp/resources/at-bronze-riverside-updates-anel-malware
+Figure 25. C2 strings (Top: LODEINFO RAT, Bottom: ANEL 5.1.1)

@@ -1,0 +1,132 @@
+
+
+
+Sentence : LODEINFO Backdoor Shellcode
+LODEINFO Backdoor Shellcode is a fileless malware that allows attackers to remotely
+access and operate infected hosts. The following features were the same as the
+published information.
+The C2 server address uses a unique data structure.
+A mechanism that refers to the address of the embedded data is characteristic.
+The Backdoor Command ID is hidden using 2-bytes XOR.
+The structure and encryption of the communication data with the C2 server are very
+complex, as shown in the figure below.
+The above encryption uses the Vigenere cipher multiple times.
+https://blog-en.itochuci.co.jp/entry/2024/01/24/134100 12/17
+1/30/24, 1:41 PM The Endless Struggle Against APT10: Insights from LODEINFO v0.6.6 - v0.7.3 Analysis - Researcher Blog - ITOCHU Cyber & Intelligen…
+Figure 13. Overview of the unique data structure and encryption used for communication with the C2
+server
+Our analysis of multiple LODEINFO samples found in 2023 revealed the following
+differences from previously published information:
+
+
+Change in the hash calculation algorithm for obtaining API function names
+
+
+Addition of backdoor commands
+
+
+Change 1: Change in the hash calculation algorithm for obtaining API function
+names
+The v0.7.0 version uses a new hash calculation algorithm compared to v0.6.9. This
+change makes it impossible to match signatures using the same rules as previous
+samples.
+The hash calculation algorithm is used by malware to calculate the hash of API function
+names and resolve function addresses. The hash calculation logic includes a hard-coded
+XOR key that is different for each sample. This key is used for XOR decoding, so the
+hash values embedded in each sample are different.
+https://blog-en.itochuci.co.jp/entry/2024/01/24/134100 13/17
+1/30/24, 1:41 PM The Endless Struggle Against APT10: Insights from LODEINFO v0.6.6 - v0.7.3 Analysis - Researcher Blog - ITOCHU Cyber & Intelligen…
+Figure 14. Change in the hash calculation algorithm
+Change 2: Additions to backdoor commands
+LODEINFO implements the following backdoor commands to control infected hosts:
+The number of backdoor commands was reduced to 11 in v0.6.5, but v0.7.1 restored 6
+commands and added the new runas command, bringing the total to 18.
+Additionally, four commands ( keylog, ps, pkill, autorun ) that were removed in v0.7.2
+and v0.7.3 have been restored. Furthermore, the content of the config command, which
+previously displayed "Not Available," has also been implemented.
+Command Descriptions v0.6.5 v0.7.1
+v0.7.2,
+v0.7.3
+command List the embedded backdoor
+commands.
+Enable Enable Enable
+ls Get a list of files. Removed Enable Enable
+rm Delete a file. Removed Enable Enable
+mv Move a file. Removed Enable Enable
+cp Copy a file. Removed Enable Enable
+https://blog-en.itochuci.co.jp/entry/2024/01/24/134100 14/17
+1/30/24, 1:41 PM The Endless Struggle Against APT10: Insights from LODEINFO v0.6.6 - v0.7.3 Analysis - Researcher Blog - ITOCHU Cyber & Intelligen…
+Command Descriptions v0.6.5 v0.7.1
+v0.7.2,
+v0.7.3
+cat Upload a file to C2. Removed Enable Enable
+mkdir Create a directory. Removed Enable Enable
+send Download a file from C2. Enable Enable Enable
+recv Upload a file to C2. Enable Enable Enable
+memory Inject Shellcode into memory. Enable Enable Enable
+kill Kill a process by process ID. Enable Enable Enable
+cd Change directory. Enable Enable Enable
+ver Send malware and system information.
+This includes the current OS version,
+malware version, process ID, path of
+the executable file, system username,
+current directory, C2 and Mutec names.
+Enable Enable Enable
+print Take a screenshot of the desktop. Enable Enable Enable
+ransom Encrypt files using a generated AES
+key, and simultaneously encrypt that
+AES key using a hardcoded RSA key.
+Enable Enable Enable
+comc Execute a command using WMI. Enable Enable Enable
+config Write settings to the registry
+(implemented in v0.7.2, this function
+only returned "Not Available." prior to
+v0.7.1).
+runas Run a command as a specific user
+(implemented in v0.7.1).
+keylog Save the keystrokes, date and time,
+and name of the active window from the
+suspect endpoint. Use single-byte XOR
+encryption, and the file is saved to
+%temp%%hostname%.tmp.
+Not
+Available
+Not
+Available
+Enable
+N/A Enable Enable
+Removed Removed Enable
+ps List processes. Removed Removed Enable
+https://blog-en.itochuci.co.jp/entry/2024/01/24/134100 15/17
+1/30/24, 1:41 PM The Endless Struggle Against APT10: Insights from LODEINFO v0.6.6 - v0.7.3 Analysis - Researcher Blog - ITOCHU Cyber & Intelligen…
+Command Descriptions v0.6.5 v0.7.1
+v0.7.2,
+v0.7.3
+pkill Kill a process. Removed Removed Enable
+autorun Set and remove persistence. Removed Removed Enable
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "LODEINFO Backdoor Shellcode", "type" : "EXEF"},
+        {"id": 2, "description": "C2 server", "type" : "CCSH"},
+        {"id": 3, "description": "Vigenere cipher", "type" : "TTPS"},
+        {"id": 4, "description": "hash calculation algorithm", "type" : "TTPS"},
+        {"id": 5, "description": "%temp%%hostname%.tmp", "type" : "SYSP"},
+        {"id": 6, "description": "WMI (Windows Management Instrumentation)", "type" : "APPS"},
+        {"id": 7, "description": "AES key", "type" : "TTPS"},
+        {"id": 8, "description": "RSA key", "type" : "TTPS"},
+        {"id": 9, "description": "Registry settings", "type" : "REGI"},
+        {"id": 10, "description": "APT10", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "communicates with"},
+        {"source": 1, "target": 3, "rel_name" : "uses encryption"},
+        {"source": 1, "target": 4, "rel_name" : "uses for API function name resolution"},
+        {"source": 1, "target": 5, "rel_name" : "saves keystrokes to"},
+        {"source": 1, "target": 6, "rel_name" : "executes commands using"},
+        {"source": 1, "target": 7, "rel_name" : "encrypts files with"},
+        {"source": 1, "target": 8, "rel_name" : "encrypts AES key with"},
+        {"source": 1, "target": 9, "rel_name" : "writes settings to"},
+        {"source": 10, "target": 1, "rel_name" : "developed by"}
+    ]
+}

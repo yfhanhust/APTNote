@@ -1,0 +1,108 @@
+
+
+
+Sentence : June 2021
+Proofpoint identified another email campaign from the same sender purporting to be a well-known foreign policy specialist.
+The campaign attempted to distribute a downloader that Proofpoint refers to as FatBoy, named after the FatBoy.dll file name
+used in this campaign. (Figure 32).
+Figure 32. FatBoy installation flow
+The messages contained an HTML attachment masquerading as a preview of an article, as shown in Figure 33.
+Figure 33. Phishing message with HTML attachment
+30
+TRIPLE THREAT: NORTH KOREA-ALIGNED TA406 STEALS, SCAMS, AND SPIES ** REPORT**
+The HTML attachment used a fake error message to trick the user into clicking the “Save on Disk” button to download a
+document from the attacker’s C&C server (Figure 34).
+Figure 34. HTML attachment lure
+31
+TRIPLE THREAT: NORTH KOREA-ALIGNED TA406 STEALS, SCAMS, AND SPIES ** REPORT**
+In addition to the button, the attachment used an invisible iframe to communicate with the attacker’s C&C server with the
+Base64 encoded alias of the target’s email address appended to the URL request (see Figure 35). This approach allows:
+
+
+Each attachment to have a unique hash
+
+
+The attacker(s) to see which recipient opened the attachment
+
+
+The attacker(s) to collect the IP address of any device allowed to beacon to the C&C URL
+
+
+Figure 35. HTML attachment showing button onclick code and invisible iframe; the [redacted] portion of the URL
+was the Base64 encoded email address of the target
+32
+TRIPLE THREAT: NORTH KOREA-ALIGNED TA406 STEALS, SCAMS, AND SPIES ** REPORT**
+Clicking the “Save on Disk” button created an HTTP request to the attacker’s C&C server to download a malicious Word
+document with a macro and a poorly worded lure attempting to trick its targets into enabling content (see Figure 36).
+Figure 36. Downloaded Word document with malicious macro
+The macro’s primary purpose was to execute several commands. These commands extract the next-stage payloads
+embedded in the Word document and then execute those payloads with a batch script. (See Figure 37 and Table 2.)
+Figure 37. VBS macro in downloaded Word document
+33
+TRIPLE THREAT: NORTH KOREA-ALIGNED TA406 STEALS, SCAMS, AND SPIES ** REPORT**
+Command Purpose
+cd /d %USERPROFILE% Set current directory to %USERPROFILE%
+findstr /b “TVNDR” “[path from Use findstr to parse the Word document looking for the string “TVNDR” that
+ActiveDocument.FullName]”>xtong.txt follows a new line and then writes all following data to xtong.txt
+certutil -decode -f xtong.txt xto.c Use certutil to Base64 decode the data in xtong.txt and save to xto.c, which
+resulted in a CAB file being saved to xto.c
+expand -f:* xto.c %USERPROFILE% Use the expand command to extract the xto.c CAB file and save all the
+extracted files to %USERPROFILE%
+chk One of the extracted files from the xto.c CAB archive was a batch script named
+chk.bat; this command executes that batch script
+Table 2. Commands executed in order by the VBS macro used in the downloaded Word document
+After the macro executes, the seven files contained in the xto.c CAB file are extracted to the %USERPROFILE% directory:
+c hk.bat, FatBoy32.dll, FatBoy64.dll, FatBoy.dtd, install.bat, wupelv32.dll and wupelv64.dll .
+The chk.bat script starts the execution of these payloads by first checking for administrative privileges (net session > nul). If
+administrative privileges are available, the script skips straight to executing either the wupelv32.dll DLL on x86 based systems
+or wupelv64.dll on x64 based systems (WUPELV DLLs).
+If privileges aren’t available, the script checks if the system is Windows 10. The Num variable is set to 4 on Windows 10
+systems, while Num would be set to 1 for all other OS versions. The WUPELV DLLs are executed with the EntryPoint entry
+point name, the value saved to the Num variable and, finally, the following argument:
+/c %~dp0install[.]bat
+The purpose of the WUPELV DLLs is to execute the install.bat script with elevated privileges either directly when privileges are
+already available or using UAC bypass methods similar to those described in the following Malwarebytes research:
+“ New variant of Konni malware used in campaign targeting Russia .”
+The install.bat script (Figure 38) is responsible for moving malware files to the System32 directory, executing commands
+to create a malicious service named EdgeUpdate, starting the malicious service and cleaning up files used throughout this
+execution process.
+Figure 38. install.bat script used to execute implant and perform cleanup
+34
+TRIPLE THREAT: NORTH KOREA-ALIGNED TA406 STEALS, SCAMS, AND SPIES ** REPORT**
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Proofpoint", "type" : "ACTO"},
+        {"id": 2, "description": "FatBoy (downloader)", "type" : "APPS"},
+        {"id": 3, "description": "FatBoy.dll file", "type" : "EXEF"},
+        {"id": 4, "description": "HTML attachment masquerading as a preview of an article", "type" : "DOCF"},
+        {"id": 5, "description": "C&C server", "type" : "CCSH"},
+        {"id": 6, "description": "malicious Word document with a macro", "type" : "DOCF"},
+        {"id": 7, "description": "VBS macro in downloaded Word document", "type" : "APPS"},
+        {"id": 8, "description": "%USERPROFILE% directory", "type" : "SYSP"},
+        {"id": 9, "description": "xtong.txt file", "type" : "DOCF"},
+        {"id": 10, "description": "xto.c CAB file", "type" : "DOCF"},
+        {"id": 11, "description": "chk.bat batch script", "type" : "EXEF"},
+        {"id": 12, "description": "FatBoy32.dll DLL", "type" : "EXEF"},
+        {"id": 13, "description": "FatBoy64.dll DLL", "type" : "EXEF"},
+        {"id": 14, "description": "FatBoy.dtd file", "type" : "DOCF"},
+        {"id": 15, "description": "install.bat script", "type" : "EXEF"},
+        {"id": 16, "description": "wupelv32.dll DLL", "type" : "EXEF"},
+        {"id": 17, "description": "wupelv64.dll DLL", "type" : "EXEF"},
+        {"id": 18, "description": "System32 directory", "type" : "SYSP"},
+        {"id": 19, "description": "malicious service named EdgeUpdate", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 4, "target": 5, "rel_name" : "download from"},
+        {"source": 6, "target": 5, "rel_name" : "download from"},
+        {"source": 7, "target": 8, "rel_name" : "sets current directory to"},
+        {"source": 7, "target": 9, "rel_name" : "creates file"},
+        {"source": 7, "target": 10, "rel_name" : "extracts CAB file to"},
+        {"source": 7, "target": 11, "rel_name" : "executes batch script"},
+        {"source": 11, "target": 8, "rel_name" : "checks for administrative privileges in"},
+        {"source": 11, "target": 16, "rel_name" : "executes DLL on x86 systems"},
+        {"source": 11, "target": 17, "rel_name" : "executes DLL on x64 systems"},
+        {"source": 15, "target": 18, "rel_name" : "moves malware files to"},
+        {"source": 15, "target": 19, "rel_name" : "creates and starts malicious service"}
+    ]
+}

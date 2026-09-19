@@ -1,0 +1,135 @@
+
+
+
+Sentence : Analysis
+Why do adversaries use
+Windows Service?
+Windows services are imperative to the normal functions of the operating
+system. They are common binaries that run in the background and are typically
+not cause for alarm when executed. Since Windows services already exist on
+the system, an adversary who is able to modify or install a new service is less
+likely to draw attention to their activities than an adversary who installs and
+runs an unknown binary or spawns a command from a command or scripting
+interpreter.
+Outside of assisting in concealing malicious activity, Windows services typically
+run automatically during the boot cycle of the operating system and with
+elevated privileges. This provides the adversary two distinct benefits:
+      - a means of persistence using an executable under their control that can
+
+automatically start and remain on indefinitely
+      - a reliable means to leverage elevated permissions
+
+MITRE ATT&CK scopes the Windows Service technique to the creation or
+modification of the services, while the execution of a service falls under our
+ninth most prevalent technique in 2020, T1569.002: Service Execution. The two
+techniques rely on each other, but considering them separately allows defenders
+to think about how threats and detection strategies differ.
+In order to achieve service execution, an adversary must first install a new
+service or modify an existing one, meaning they must have the requisite
+permissions to do so. The choice between creation and modification is a matter
+of preference, practicality, and opportunity. When choosing whether to create
+l [T1543.003: Windows Service]
+i
+35
+2021 Threat Detection Report
+or modify an existing service, an adversary may consider—or be implicitly bound
+by—the following criteria:
+      - Do their tools support service creation and/or modification?
+
+      - If a defender might monitor for service creation, could modification offer
+
+additional evasion opportunities?
+      - Would it be more evasive to modify an existing service than to create a
+
+new service?
+      - If an adversary does not have permissions to create or modify a service
+
+directly, are any existing services configured in an insecure fashion that
+would permit tampering and, ultimately, privilege escalation?
+      - Is service creation easier and less prone to error or system instability?
+
+How do adversaries use
+Windows Service?
+The majority of detections show adversaries using Windows services to
+establish a persistence mechanism, ensuring that their script or file will
+continue to run. A common pattern is the use of the Windows Service Control
+Manager Configuration Tool ~~(~~ ~~sc.exe~~ ) to modify or create a service based on the
+adversary’s needs.
+The presence of Windows Service in our top 10 is due almost entirely to a
+single threat: Blue Mockingbird, an activity cluster we identified that deploys
+Monero cryptocurrency-mining payloads and leverages Windows services for
+persistence. Because we counted our top techniques based on the number of
+times we observed their use, several widespread Blue Mockingbird outbreaks in
+a few environments caused a large number of Windows services sightings. This
+is why the Windows Service technique ranks so highly while affecting a relatively
+small percentage of customers.
+Blue Mockingbird used ~~sc conf~~ i ~~g~~ to modify an existing service named
+~~wercplsupport~~ to automatically start a malicious DLL named ~~wercplsupporte.~~
+~~dll~~ (an attempt to masquerade by using a slightly different name that defenders
+might miss):
+cmd.exe /c sc config wercplsupport start= auto
+```
+       & sc start wercplsupport & copy c:\windows\
+   System32\checkservices.dll c:\windows\System32\
+
+   wercplsupporte.dll /y & start regsvr32.exe /s
+
+   c:\windows\System32\checkservices.dll
+
+```
+l [T1543.003: Windows Service]
+i
+i
+“Adversaries may create or modify
+Windows services to repeatedly
+execute malicious payloads as part of
+persistence. When Windows boots up, it
+starts programs or applications called
+services that perform background
+system functions. Windows service
+configuration information, including
+the file path to the service’s executable
+or recovery programs/commands, is
+stored in the Windows Registry. Service
+configurations can be modified using
+utilities such as sc.exe and Reg.”
+36
+2021 Threat Detection Report
+Another interesting use of Windows services emerged in 2020 as part of a novel
+technique used by RagnarLocker ransomware . RagnarLocker deployed custom
+virtual machines to prevent direct analysis of the encryption malware on the
+endpoint. As part of its setup script, RagnarLocker leverages ~~sc.exe~~ to create the
+service ~~VBoxDRV~~ using these commands:
+```
+        sc create VBoxDRV binpath= “%binpath%\drivers\
+    VboxDrv.sys” type= kernel start= auto error=
+
+    normal displayname= PortableVBoxDRV’
+
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Windows Service", "type" : "TTPS"},
+        {"id": 2, "description": "Service Execution (T1569.002)", "type" : "TTPS"},
+        {"id": 3, "description": "Blue Mockingbird", "type" : "ACTO"},
+        {"id": 4, "description": "Monero cryptocurrency-mining payloads", "type" : "APPS"},
+        {"id": 5, "description": "sc.exe (Windows Service Control Manager Configuration Tool)", "type" : "EXEF"},
+        {"id": 6, "description": "wercplsupport", "type" : "REGI"},
+        {"id": 7, "description": "wercplsupporte.dll", "type" : "DOCF"},
+        {"id": 8, "description": "c:\\windows\\System32\\checkservices.dll", "type" : "SYSP"},
+        {"id": 9, "description": "regsvr32.exe", "type" : "EXEF"},
+        {"id": 10, "description": "RagnarLocker ransomware", "type" : "ACTO"},
+        {"id": 11, "description": "VBoxDRV (service)", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "related to"},
+        {"source": 3, "target": 4, "rel_name" : "deploys"},
+        {"source": 3, "target": 5, "rel_name" : "uses"},
+        {"source": 3, "target": 6, "rel_name" : "modifies"},
+        {"source": 3, "target": 7, "rel_name" : "installs"},
+        {"source": 8, "target": 7, "rel_name" : "copies to"},
+        {"source": 9, "target": 8, "rel_name" : "registers"},
+        {"source": 10, "target": 5, "rel_name" : "uses"},
+        {"source": 10, "target": 11, "rel_name" : "creates"}
+    ]
+}

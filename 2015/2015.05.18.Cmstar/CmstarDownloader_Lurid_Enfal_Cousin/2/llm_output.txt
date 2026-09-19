@@ -1,0 +1,114 @@
+
+
+
+Sentence : Manual Building of Import Address Table
+The Cmstar downloader starts by manually building its import address table (IAT), much like shellcode
+would; however, it uses a rather unique technique. Instead of finding API function names based on their
+hashed values, this malware enumerates libraries’ export address table (EAT) and searches for the name
+of the API function the payload needs to load by using a character to offset array. The payload pairs
+several comma-separated lists of characters with comma-separated lists of numbers. Each list of
+characters consists of the set found within the API function name the payload seeks to add to its IAT,
+while the corresponding list of numbers specifies the offset in the function name where those characters
+should be placed. For example, if the payload has “D,e,A” paired with “0,5,19”, this results in the following
+mapping:
+“D” at offset 0 in API function name
+“e” at offset 5 in API function name
+“A” at offset 19 in API function name
+The payload loads a specific Windows library’s EAT by calling the ImageDirectoryEntryToData API
+function using the IMAGE_DIRECTORY_ENTRY_EXPORT flag. It then enumerates the library’s EAT to
+find exported function names by checking each function name for the character and the specific offset.
+Once found, the payload adds the address for the specific API function to its IAT. For instance, the
+payload checks the EAT of “wininet.dll” using the comparisons mentioned above to find the address to the
+“DeleteUrlCacheEntryA” API function. One specific Cmstar payload that we analyzed used the
+character/offsets seen in Figure 1 to locate the API functions within three different Windows libraries to
+build its IAT.
+|Library|Characters|Offsets|Function Name|
+|---|---|---|---|
+|Library|D,e,A|0,5,19|DeleteUrlCacheEntryA|
+|wininet.dll|Col2|Col3|Col4|
+|---|---|---|---|
+|wininet.dll|e,O,A|3,8,12|InternetOpenA|
+|wininet.dll|e,C,A|3,8,15|InternetConnectA|
+|wininet.dll|p,O,A|3,4,15|HttpOpenRequestA|
+|wininet.dll|p,S,A|3,4,15|HttpSendRequestA|
+|wininet.dll|p,E,A|3,4,14|HttpEndRequestA|
+|wininet.dll|p,Q,A|3,4,13|HttpQueryInfoA|
+|wininet.dll|e,R,e|3,8,15|InternetReadFile|
+|wininet.dll|e,C,e|3,8,18|InternetCloseHandle|
+|advapi32.dll|S,V,A|3,6,13|RegSetValueExA|
+|advapi32.dll|C,s,y|3,6,10|RegCloseKey|
+|advapi32.dll|O,K,A|3,7,12|RegOpenKeyExA|
+|advapi32.dll|D,K,A|3,9,12|RegDeleteKeyA|
+|advapi32.dll|D,V,A|3,9,14|RegDeleteValueA|
+|advapi32.dll|U,r,A|3,6,11|GetUserNameA|
+|advapi32.dll|v,t,S|3,6,12|ConvertSidToStringSidA|
+|advapi32.dll|k,A,A|3,6,17|LookupAccountNameA|
+|kernel32.dll|W,E,c|0,3,6|WinExec|
+|kernel32.dll|C,M,A|0,10,17|CreateFileMappingA|
+|kernel32.dll|U,V,e|0,5,14|UnmapViewOfFile|
+|kernel32.dll|M,O,e|0,7,12|MapViewOfFile|
+Figure 1 . Character and Offset Pairs Found in Cmstar Payload and the Resulting API Function Names
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cmstar downloader", "type": "EXEF"},
+        {"id": 2, "description": "Import Address Table (IAT)", "type": "TAMP"},
+        {"id": 3, "description": "Export Address Table (EAT)", "type": "TAMP"},
+        {"id": 4, "description": "ImageDirectoryEntryToData API function", "type": "TTPS"},
+        {"id": 5, "description": "IMAGE_DIRECTORY_ENTRY_EXPORT flag", "type": "TAMP"},
+        {"id": 6, "description": "wininet.dll", "type": "APPS"},
+        {"id": 7, "description": "DeleteUrlCacheEntryA API function", "type": "TTPS"},
+        {"id": 8, "description": "InternetOpenA API function", "type": "TTPS"},
+        {"id": 9, "description": "InternetConnectA API function", "type": "TTPS"},
+        {"id": 10, "description": "HttpOpenRequestA API function", "type": "TTPS"},
+        {"id": 11, "description": "HttpSendRequestA API function", "type": "TTPS"},
+        {"id": 12, "description": "HttpEndRequestA API function", "type": "TTPS"},
+        {"id": 13, "description": "HttpQueryInfoA API function", "type": "TTPS"},
+        {"id": 14, "description": "InternetReadFile API function", "type": "TTPS"},
+        {"id": 15, "description": "InternetCloseHandle API function", "type": "TTPS"},
+        {"id": 16, "description": "advapi32.dll", "type": "APPS"},
+        {"id": 17, "description": "RegSetValueExA API function", "type": "TTPS"},
+        {"id": 18, "description": "RegCloseKey API function", "type": "TTPS"},
+        {"id": 19, "description": "RegOpenKeyExA API function", "type": "TTPS"},
+        {"id": 20, "description": "RegDeleteKeyA API function", "type": "TTPS"},
+        {"id": 21, "description": "RegDeleteValueA API function", "type": "TTPS"},
+        {"id": 22, "description": "GetUserNameA API function", "type": "TTPS"},
+        {"id": 23, "description": "ConvertSidToStringSidA API function", "type": "TTPS"},
+        {"id": 24, "description": "LookupAccountNameA API function", "type": "TTPS"},
+        {"id": 25, "description": "kernel32.dll", "type": "APPS"},
+        {"id": 26, "description": "WinExec API function", "type": "TTPS"},
+        {"id": 27, "description": "CreateFileMappingA API function", "type": "TTPS"},
+        {"id": 28, "description": "UnmapViewOfFile API function", "type": "TTPS"},
+        {"id": 29, "description": "MapViewOfFile API function", "type": "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "builds"},
+        {"source": 1, "target": 3, "rel_name": "enumerates"},
+        {"source": 1, "target": 4, "rel_name": "calls"},
+        {"source": 4, "target": 5, "rel_name": "uses_flag"},
+        {"source": 1, "target": 6, "rel_name": "loads_library"},
+        {"source": 1, "target": 7, "rel_name": "locates_function"},
+        {"source": 1, "target": 8, "rel_name": "locates_function"},
+        {"source": 1, "target": 9, "rel_name": "locates_function"},
+        {"source": 1, "target": 10, "rel_name": "locates_function"},
+        {"source": 1, "target": 11, "rel_name": "locates_function"},
+        {"source": 1, "target": 12, "rel_name": "locates_function"},
+        {"source": 1, "target": 13, "rel_name": "locates_function"},
+        {"source": 1, "target": 14, "rel_name": "locates_function"},
+        {"source": 1, "target": 15, "rel_name": "locates_function"},
+        {"source": 1, "target": 16, "rel_name": "loads_library"},
+        {"source": 1, "target": 17, "rel_name": "locates_function"},
+        {"source": 1, "target": 18, "rel_name": "locates_function"},
+        {"source": 1, "target": 19, "rel_name": "locates_function"},
+        {"source": 1, "target": 20, "rel_name": "locates_function"},
+        {"source": 1, "target": 21, "rel_name": "locates_function"},
+        {"source": 1, "target": 22, "rel_name": "locates_function"},
+        {"source": 1, "target": 23, "rel_name": "locates_function"},
+        {"source": 1, "target": 24, "rel_name": "locates_function"},
+        {"source": 1, "target": 25, "rel_name": "loads_library"},
+        {"source": 1, "target": 26, "rel_name": "locates_function"},
+        {"source": 1, "target": 27, "rel_name": "locates_function"},
+        {"source": 1, "target": 28, "rel_name": "locates_function"},
+        {"source": 1, "target": 29, "rel_name": "locates_function"}
+    ]
+}

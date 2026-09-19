@@ -1,0 +1,322 @@
+Ninja Trojan
+In specific cases the Samurai backdoor was used to deploy another sophisticated malware
+that we dubbed Ninja, a tool developed in C++, likely a part of an unknown postexploitation toolkit developed by ToddyCat.
+This tool was designed to take full control of a remote system and provide the attacker
+with the ability to operate deeply within the targeted network. The attacker can use a
+number of different commands that provide the following capabilities:
+Enumerate and manage running processes;
+Manage the file system;
+Start multiple reverse shell sessions;
+Inject code in arbitrary processes;
+Load additional modules (probably plugins) at runtime;
+Provide proxy functionalities to forward TCP packets between the C2 and a remote
+host.
+Moreover, the tool can be configured to communicate using multiple protocols and it
+includes features to evade detection, camouflaging its malicious traffic inside HTTP and
+HTTPS requests that try to appear legitimate by using popular hostname and URL path
+https://securelist.com/toddycat/106799/ 12/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+combinations. The configuration is fully customizable and is similar to other features
+provided by famous post-exploitation tools such as Cobalt Strike and its Malleable C2
+profiles.
+The attacker can configure the agent to work only in specific time frames, which can be
+dynamically configured using a specific command.
+Last, but not least, each agent can also work as a server component that receives packets
+from other agents, parses the requests and forwards them to another predefined C2. This
+feature allows the attackers to create chains of servers and communicate with agents
+without a direct internet connection. It can also be used to avoid network detections, by
+forwarding all malicious traffic generated inside a targeted intranet through a unique
+node instead of generating activities from all compromised machines.
+Loader
+We have never observed Ninja stored on the file system; it is usually loaded in memory by
+another component. The loader is usually an executable file, which shares many
+similarities with the iiswmi.dll library and Samurai installers such as the previously
+mentioned debug.exe.
+The loader uses the same “special resolution function” to call the Windows API and
+decrypts the file payload using 3DES (112-bit) and uncompress the decrypted data with
+the LZSS algorithm.
+The resulting payload is a library that will be mapped in memory by the loader without
+the DOS header and it will be invoked calling an exported function “Debug”.
+We observed multiple variants, and the tool evolved during the year. The first samples
+lacked some features, such as the ability to handle multiple sessions on the client side and
+the ability to communicate with HTTP and HTTPS protocols. The embedded
+configuration structure was also a little different.
+In this article we are going to describe the last detected version.
+Config
+The malware starts operations by retrieving configuration parameters from an encrypted
+payload embedded in the binary, which is XORed with the constant value “0xAA” and
+compressed with the LZSS algorithm.
+The analyzed configuration contains a list of 15 elements with the following values:
+Parameter Description
+2B847033-C95F-92E3-D847
+29C6AE934CDC
+Mutex name used to guarantee atomic
+execution.
+https://securelist.com/toddycat/106799/ 13/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+C2_INFO A structure that contains the information to
+communicate with the C2 servers.
+/Collector/3.0/ URL path used with HTTP and HTTPS
+protocols.
+Content-Type: application/x-wwwform-urlencoded
+Host:
+mobile.pipe.microsoft.com:8080
+Mozilla/5.0 (Windows NT 6.3;
+Trident/7.0; rv 11.0) like Gecko
+HTTP header used with HTTP and HTTPS
+protocols.
+HTTP header used with HTTP and HTTPS
+protocols.
+User-Agent used with HTTP and HTTPS
+protocols.
+0 Working hour Start.
+0 Working minute Start.
+0 Working second Start.
+0 Working hour Stop.
+0 Working minute Stop.
+0 Working second Stop.
+0 TCP C2 communication interval.
+300 HTTP C2 communication interval.
+0 Local Server port.
+The first element is the mutex name, which could be any string, but usually looks like a
+GUID value. C2_INFO is a string that contains multiple values organized with a specific
+structure.
+HTTP config
+The attacker can also customize the HTTP URL path and headers to mimic legitimate
+services and hide malicious traffic. The specific values in the example will generate
+requests like the following.
+https://securelist.com/toddycat/106799/ 14/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+1
+2
+3
+4
+5
+6
+POST /Collector/3.0/ HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+Host: mobile.pipe.microsoft.com:8080
+User-Agent: Mozilla/5.0 (Windows NT 6.3; Trident/7.0; rv 11.0) like Gecko
+Content-Length: 430
+Cache-Control: no-cache
+We may infer that the attacker was trying to emulate Microsoft Teams behavior, although
+the “User-Agent” and the “Host” headers are incorrect.
+C2 Info
+The C2_INFO contains multiple information items specified with the following format:
+1 %Protocol% \r %C2_Hostname% \r %C2_Port% \r %Proxy_Type% \r Proxy_Info
+The protocol is a numeric value that identify the communication protocol:
+
+
+HTTP
+
+
+HTTPS
+
+
+TCP
+
+
+The C2 hostname and port are self-explanatory.
+The “Proxy_Type” is another integer that can have three different values:
+
+
+No Proxy. Connect to the C2 directly
+
+
+System Proxy
+
+Manual Proxy
+
+When the value is equal to “3”, the agent will try to decode a base64 string embedded in
+“Proxy_Info” that contains different information, according to the specified protocol.
+When the protocol is HTTP or HTTPS, the following information must be specified:
+1 %Proxy_Address% : %Proxy_Port% \t %Proxy Username% \t %Proxy_Password%
+If the protocol is TCP, the decoded strings could specify a proxy chain with up to 255
+hops.
+https://securelist.com/toddycat/106799/ 15/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+1
+2
+3
+4
+5
+6
+7
+8
+9
+%Proxy_Address% \t %Proxy_Port% \t %Remote_Host% \t %Remote_Port% \r
+%Proxy_Address% \t %Proxy_Port% \t %Remote_Host% \t %Remote_Port% \r
+%Proxy_Address% \t %Proxy_Port% \t %Remote_Host% \t %Remote_Port% \r
+%Proxy_Address% \t %Proxy_Port% \t %Remote_Host% \t %Remote_Port% \r
+... up to 255
+The information will be used by the agent to initialize the connection with the C2.
+Working time config
+The Ninja agent includes an interesting ‘working time’ feature that can be used to force
+the malware to work only within a specific time frame. For example, it could configure the
+malware to work only from 9am to 6pm, during typical working hours. This feature is
+useful to avoid being detected by specific security solutions such as behavior-based
+intrusion detection systems. When the values are equal to zero, the feature is disabled and
+the agent works at any time. The attacker can remotely configure these options with a
+specific command.
+Local server
+The last value is the local server port. When the local server feature is enabled, the agent
+acts as the C2. It waits for agent connections, decodes the received requests and forwards
+them to the remote C2. This feature is probably used for ‘pivoting’ and accessing other
+internal systems from the compromised machine. Also, this value can be modified by the
+attacker with a specific command.
+Communication protocol
+Malware communications are protected with a sequence of encryption and encoding
+algorithms, with small differences between the HTTP and TCP protocols.
+Both protocols use a message format as follows:
+1 Message_ID@Message_payload
+https://securelist.com/toddycat/106799/ 16/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+The “Message_ID” changes according to the command type and the “Message_payload”
+contains the real payload compressed, XORed with the static value 0x3F and encoded
+with base64 algorithm using a custom alphabet.
+The resulting message is then encrypted with AES 256 using a session key generated by
+selecting two random characters from the custom base64 alphabet. The agent will use
+random characters to generate a SHA1 hash, which will be used for the AES encryption.
+The encrypted data is then encoded again using the base64 algorithm and the resulting
+string is appended to the previously generated random character to allow the server to
+decrypt the information.
+When the agent is configured to use the HTTP/S protocol, the data are included in
+standard POST requests.
+If the C2 communicates using the TCP protocol, the agent will send a first packet with the
+constant value 0x6CC8DF01 and then other packets with the generated payload. The
+server should reply with a packet with the same constant value 0x6CC8DF01 and then
+with other packets encrypted with the same algorithms. The constant value is not always
+the same, but changes according to the variant.
+The first message is sent using the “Message_ID” 10001 and it contains information
+about the infected system and the agent configuration.
+System info (collected with Kernel32.GetNativeSystemInfo function)
+OS info (collected with Ntdll.RtlGetVersion function)
+Computer name
+Local IP address
+Agent file path
+Agent PID
+Agent Sleep Time
+Agent C2 configuration (C2 hostname, Port, Proxy Info)
+Commands
+The server response usually has the following structure:
+Magic constant 0x887766
+Number of commands
+List of commands
+The “Magic constant” is an integer, the value of which changes according to the variants.
+The list of commands is an array, and for each element the attacker could specify:
+CommandID
+Arguments Size
+Arguments
+https://securelist.com/toddycat/106799/ 17/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+The argument values change according to the “CommandID”, but usually they are strings
+with multiple values divided by the ‘*’ character.
+Command
+ID
+Description Response
+ID
+20000 Enable Session
+20001 Disable Session
+20002 Update sleep time
+20003 Kill Bot
+20004 Execute program as user
+20005 Set Local Server Port
+20006 Safe Exit
+20010 Shell::Start new session 30010
+20011 Shell::Handle Command 30011
+20012 Shell::Close Session 30012
+20013 Shell::Terminate Session Tree 30013
+20020 File::Get Drives list 30020
+20021 File::Get Directory content 30021
+20022 File::Create directory 30022
+20023 File::Delete file 30023
+20024 File::Remove directory 30024
+20025 File::Move file 30025
+20026 File::Change Create\Last access\Last write Time 30026
+20030 File::Read file 30030
+20031 File::Write file 30031
+20040 Proxy::Start Session 30040
+20041 Proxy::Set socket as writeable 30041
+20042 Proxy::Send Data 30042
+20043 Proxy::Receive Data 30043
+20044 Proxy::Close Session 30044
+https://securelist.com/toddycat/106799/ 18/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+20045 Proxy::Reconnect 30045
+20050 Enumerate Processes (filename|pid|number of threads) 30050
+20051 Kill a list of processes
+20052 Process Injection 30052
+20053 Plugin::Load 30053
+20054 Plugin::Read Output 30054
+20055 Plugin::Unload 30055
+20056 Enumerate Processes
+(SessionID\PID\Domain\Username)
+30056
+20060 Injection::Start new session 30060
+20061 Injection::List active sessions 30061
+20062 Injection::Close session 30062
+20064 Injection::Inject code in a new process 30064
+20065 Injection::Read “pobject” 30065
+20068 Injection::Read “create_object” 30068
+21000 Configure Working Time 31000
+Some commands are self-explanatory, others aren’t, and in some cases we are unable to
+fully understand them since we are still missing some information.
+The Enable and Disable session commands are used to activate or deactivate the Agent.
+The attacker should enable the bot before sending any other commands, which will be
+dropped by deactivated bots. The Enable command is also mandatory to enable the “Local
+server” feature.
+The Shell, Proxy and Injection commands were designed to run multiple parallel sessions,
+which probably means that multiple operators can work on the target machine
+simultaneously. The agent manages three structures, one for the Shell, one for the Proxy
+and the last one for the Injection commands.
+For example, when the attacker wants to start a shell, they must use the command
+“20010” that will force the agent to create a new process and new pipes used to redirect
+the standard input and the standard output. The “Shell session ID” must be specified by
+the attacker and this value will be stored in the local array, which contains the list of
+active sessions. If the command succeeds, the agent will reply with a list of information
+like new PID and pipe handles.
+https://securelist.com/toddycat/106799/ 19/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+The command 20011 can be used to read or write data in the pipes. The attacker has to
+provide a valid “Shell session id”, an event ID and the pipe handles. Before processing the
+command, the agent will check if the provided ID is valid, by comparing the values with
+those in the local structure.
+The command 20012 is used to close an active session, remove the “Session_ID” from the
+local array, terminate the running process and close the pipe handles. A similar logic is
+used to manage the Proxy commands, which can be used to forward packets to other
+remote hosts using the TCP protocol.
+The Plugin commands are used to load other unknown libraries in the agent process
+address space. We don’t have information about the other modules, but we presume they
+are additional plugins that can be used by the attacker to provide more features.
+Based on static analysis we know the libraries should export at least three functions: GET,
+RUN and CLOSE; and then share data with the main process by using a file mapping
+object.
+The “Process Injection” (20052) command and the “Injection” set of commands could
+cause some confusion, but they are quite different. The first one is used to inject arbitrary
+shellcode in a running process. The second is used to inject another agent module in a
+new process specified by the attack. The injected code is not an arbitrary shellcode, but
+something that should communicate with the main agent by using specific file mapping
+objects.
+The attacker uses command 20060 to start a new injection session, where the attacker
+basically provides the shellcode that will be injected in a new program, and whose path
+will be specified with command 20064.
+The “Injection::Inject code in a new process” command will force the agent to start a
+program specified by the attacker. The specified program will be created as suspended
+and the agent will write the shellcode in a new section allocated in the created process.
+The agent then gets the remote thread’s context to obtain the instruction pointer address
+and replace the instruction in that offset with the following:
+1
+2
+3
+4
+5
+dec eax
+sub esp, 40h
+dec eax
+mov eax, %SHELLCODE_ADDRESS%
+call eax
+Finally, the code will resume the remote process, which will execute the injected code.
+https://securelist.com/toddycat/106799/ 20/28
+6/27/22, 3:49 PM ToddyCat: Unveiling an unknown APT actor attacking high-profile entities in Europe and Asia | Securelist
+The commands 20065 and 20068 are then used to read data from the file mapping
+objects, which should contain information generated by the injected code.

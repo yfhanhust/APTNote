@@ -1,0 +1,53 @@
+En Route with Sednit
+Once the proxy information has been retrieved, Seduploader sends an HTTP POST request
+to Google via the proxy and checks the answer status code, in the same way as previously described.
+We speculate that only Firefox is currently implemented because Sednit
+operators have had trouble establishing an Internet connection on specific
+targets using this browser, while the code injection technique described below
+was good enough for other browsers. The proxy information retrieval code
+has been built so that it could possibly be extended to other browsers than
+Firefox, with the use of an abstract C++ class.
+
+Inject Into a Running Browser
+If the proxy method also fails, Seduploader injects some code into a running browser, which may
+allow it to bypass network security products. To do so, Seduploader waits for the user to launch a
+browser, by regularly enumerating the running processes and comparing the hash of their names
+with some hardcoded values. The hash function is a simple series of ROL 7 operations, and Table 6
+shows the list of targeted browsers.
+
+~~Table 6.~~ ~~Targeted browsers~~
+Hash Process Name Browser Name
+0x250DFA8F iexplore.exe Internet Explorer
+0x7712FEAE firefox.exe Firefox
+0xBD3CC33A chrome.exe Google Chrome
+0x7A38EBF3 opera.exe Opera
+0x4A36ABF3 browser.exe Yandex Browser
+If a browser is found running, Seduploader injects a shellcode into its memory, and creates
+a thread in it with the ~~CreateRemoteThread~~ Windows API. This shellcode tries to contact Google in
+a way similar to that described above, and communicates the result back to the Seduploader process
+through shared memory. This shared memory is created with the Windows API ~~OpenFileMapping~~
+and bears a hardcoded, random-looking name.
+If all the tested methods fail, Seduploader will try all the methods again, until there is a working
+Internet connection.
+Reconnaissance Report
+Once the network link has been established, Seduploader builds a report on the compromised
+machine in the form of ~~id=XXXXXX&w=…~~ ~~​.~~ The ~~id~~ parameter contains the serial number of the hard
+drive and serves to identify the machine, while the ~~w~~ parameter contains the actual report with
+the following information:
+
+
+List of running processes
+
+
+Hard drive information extracted from Windows registry key ~~HKLM\SYSTEM\~~
+~~CurrentControlSet\Services\Disk\Enum~~ (preceded by ~~disk=~~ ~~)~~
+
+
+Build identifier, which is a hardcoded 4-byte value (preceded by ~~build=~~ ~~)~~
+
+
+Optional field named ~~inject~~ indicating whether the network link was established through
+
+
+browser injection
+31

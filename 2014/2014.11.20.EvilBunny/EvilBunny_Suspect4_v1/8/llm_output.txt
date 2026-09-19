@@ -1,0 +1,132 @@
+
+
+
+Sentence : 2.1 MALWARE ANTI-ANALYSIS
+Suspect #4 is written in C++, and just like its dropper, it is not protected by any runtime
+packer or crypter. It is, however, compiled with a performance optimization option which
+causes a lot of code in-lining and duplicate code in the binary. Duplication also applies to
+string constants, as every string is present once per function, if the given function uses it.
+This might accelerate execution speed of the bot at runtime, but implicitly or even on
+purpose hinders static analysis of the binary code. Cross referencing of strings or helper
+functions is ineffective due to the duplications.
+Only few anti-analysis measures can be found in the binary. One function exists, which
+resembles the sandbox check of its dropper with minor extensions. This sandbox detection
+consists of three parts:
+
+The module path name should be more than 5 characters long and contain either
+
+'msapps\' or 'Perf Manager\', which is the case if the sample was legitimately
+dropped by its dropper.
+
+The module file name should not contain either of the following strings: 'klavme',
+
+'myapp', 'TESTAPP' or 'afyjevmv.exe'.
+page | 7
+
+The function performs a hook detection on time retrieval APIs. These are
+
+NtQuerySystemTime, GetSystemTimeAsFileTime and GetTickCount. Every API is
+called twice to calculate a delta, while performing a sleep(1000) operation between
+iteration one and iteration two. The final condition is, if any of the three deltas is
+below 998 milliseconds execution will abort. This can only be the case if any of the
+three API's return values is modified by a system monitoring solution, like a
+sandbox.
+Illustration 3: Hook detection on time retrieval functions
+Another evasion trick implemented by the malware is the partial obfuscation of API names.
+For no obvious reason though, the obfuscation algorithm is only applied to a small subset
+of APIs used in the code. The algorithm uses the fixed value AB34CD77h and a
+combination of XOR and ROL
+instructions to calculate hashes
+from the export names of
+kernel32.dll, advapi32.dll and
+psapi.dll. It is important to note that
+this obfuscation trick and the
+according hash function remain
+consistent through out all related
+samples. Illustration 4: The API name hashing function
+page | 8
+2.1.1 ENUMERATION OF FIREWALL AND ANTIVIRUS PRODUCTS
+Similar to its dropper, suspect #4 enumerates the system's installed AntiVirus product and
+checks firewall settings. For AntiVirus detection it utilizes WMI and issues 'SELECT *
+FROM AntiVirusProduct'. Identification of installed products is achieved by comparing the
+hashed product name to a set of SHA-256 hashes; although, a different and much bigger
+set than used by its dropper. With the help of hash tables from perturb.org and
+md5decoder.org it is possible to revert some of the hashes to their original text form:
+a48be88bed64eff941be52590c07045b896bc3e87e7cf62985651bbc8484f945  MAfee
+1ba035db418ad6acc8e0c173a49d124f3fcc89d0637496954a70e28ec6983ad7
+a7f9b61169b52926bb364e557a52c07b34c9fbdcd692f249cd27de5f4169e700
+2bc42b202817bdab7d49506d291e3d9624ae0069087a8949c8fcb583c73772b1  Norton
+f7d9ea7f3980635237d6ea58048057c33a218f2670e0ff45af5f4f670e9aa6f4  Panda
+522e5549af01c747329d923110c058b7bb7e112816de64bd7919d7b9194fba5b  Rising
+4db3801a45802041baa44334303e0498c2640cd5dfd6892545487bf7c8c9219f
+d4634c9d57c06983e1d2d6dc92e74e6103c132a97f8dc3e7158fa89420647ec3
+9e217716c4e03eee7a7e44590344d37252b0ae75966a7f8c34531cd7bed1aca7  Trend
+e1625a7f2f6947ea8e9328e66562a8b255bc4d5721d427f943002bb2b9fc5645
+588730213eb6ace35caadcb651217bfbde3f615d94a9cca41a31ee9fa09b186c
+ab6ed3db3c243254294cfe431a8aeada28e5741dfa3b9c8aeb54291fddc4f8c3
+b3fe0e3a3e3befa152c4237b0f3a96ffaa44a2d7e1aa6d379d3a1ab4659e1676  AntiVir
+0d21bd52022ca7f7e97109d28d327da1e68cc0bedd9713b2dc2b49d3aa104392
+c0ffcaf63c2ca2974f44138b0956fed657073fde0adeb0b1c940b5c45e8a5cab  avast
+249a90b07ed10bd0cd2bcc9819827267428261fb08e181f43e90807c63c65e80  AVG
+b39be67ae54b99c5b05fa82a9313606c75bfc8b5c64f29c6037a32bf900926dd
+4b650e5c4785025dee7bd65e3c5c527356717d7a1c0bfef5b4ada8ca1e9cbe17  CA
+c8e8248940830e9f1dc600c189640e91c40f95caae4f3187fb04427980cdc479
+97010f4c9ec0c01b8048dbad5f0c382a9269e22080ccd6f3f1d07e4909fac1a5
+aa0ad154f949a518cc2be8a588d5e3523488c20c23b8eb8fafb7d8c34fa87145
+333e0a1e27815d0ceee55c473fe3dc93d56c63e3bee2b3b4aee8eed6d70191a3  G
+977781971f7998ff4dbe47f3e1d679f1941b3237d0ba0fdca90178a15aec1f52  Jiangmin
+f1761a5e3856dceb3e14d4555af92d3d1ac47604841f69fc72328b53ab45ca56  Kaspersky
+The malware retrieves the attributes 'productState', 'DisplayName' and on WindowsXP
+also 'productUptoDate'. It is noteworthy though, that for netmgr.exe the existence of any of
+the indicated AntiVirus products does not pose a reason to end execution. In fact, these
+hashes are the only measure for obfuscating strings in the binary.
+Firewall detection works equally via querying WMI through "SELECT * FROM
+FirewallProduct", while this time the malware searches for the attributes 'enabled',
+'VersionNumber' and 'DisplayName'.
+AntiVirus and firewall information is stored in objects in a linked list at runtime. It will later
+either be exfiltrated to a C&C server directly or dumped to a local file on disk. Either way,
+the results of this check do not influence the flow of execution.
+page | 9
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Suspect #4", "type" : "EXEF"},
+        {"id": 2, "description": "C++", "type" : "TAMP"},
+        {"id": 3, "description": "performance optimization option", "type" : "TAMP"},
+        {"id": 4, "description": "in-lining and duplicate code", "type" : "TAMP"},
+        {"id": 5, "description": "string constants", "type" : "TAMP"},
+        {"id": 6, "description": "sandbox check function", "type" : "EXEF"},
+        {"id": 7, "description": "msapps\\ or Perf Manager\\", "type" : "SYSP"},
+        {"id": 8, "description": "'klavme', 'myapp', 'TESTAPP' or 'afyjevmv.exe'", "type" : "EXEF"},
+        {"id": 9, "description": "time retrieval APIs (NtQuerySystemTime, GetSystemTimeAsFileTime, GetTickCount)", "type" : "APPS"},
+        {"id": 10, "description": "hook detection function", "type" : "EXEF"},
+        {"id": 11, "description": "API name hashing function", "type" : "EXEF"},
+        {"id": 12, "description": "AB34CD77h", "type" : "TAMP"},
+        {"id": 13, "description": "XOR and ROL instructions", "type" : "TAMP"},
+        {"id": 14, "description": "kernel32.dll, advapi32.dll, psapi.dll", "type" : "APPS"},
+        {"id": 15, "description": "Firewall and Antivirus products enumeration function", "type" : "EXEF"},
+        {"id": 16, "description": "WMI (Windows Management Instrumentation)", "type" : "TAMP"},
+        {"id": 17, "description": "AntiVirusProduct WMI class", "type" : "REGI"},
+        {"id": 18, "description": "SHA-256 hashes", "type" : "IOCS"},
+        {"id": 19, "description": "hash tables from perturb.org and md5decoder.org", "type" : "STOR"},
+        {"id": 20, "description": "FirewallProduct WMI class", "type" : "REGI"},
+        {"id": 21, "description": "C&C server", "type" : "CCSH"},
+        {"id": 22, "description": "linked list at runtime", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "compiled with"},
+        {"source": 1, "target": 4, "rel_name" : "has feature"},
+        {"source": 1, "target": 5, "rel_name" : "uses"},
+        {"source": 1, "target": 6, "rel_name" : "contains function"},
+        {"source": 6, "target": 7, "rel_name" : "checks for path name containing"},
+        {"source": 6, "target": 8, "rel_name" : "avoids file names with"},
+        {"source": 10, "target": 9, "rel_name" : "detects hooks on"},
+        {"source": 11, "target": 14, "rel_name" : "hashes API names from"},
+        {"source": 15, "target": 16, "rel_name" : "uses for enumeration"},
+        {"source": 15, "target": 17, "rel_name" : "queries to detect AntiVirus products"},
+        {"source": 15, "target": 18, "rel_name" : "compares with hashes"},
+        {"source": 15, "target": 20, "rel_name" : "queries to detect firewall products"},
+        {"source": 15, "target": 21, "rel_name" : "exfiltrates information to"},
+        {"source": 15, "target": 22, "rel_name" : "stores in"}
+    ]
+}

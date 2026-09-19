@@ -1,0 +1,260 @@
+
+
+
+Sentence : Attack Overview
+The attack is very simple in its delivery and silent in delivering its payload. The attack starts when the attacker sends a
+website URL (through SMS, email, social media, or any other message) to an identified target. The user only has to take
+one action--click on the link. Once the user clicks the link, the software silently carries out a series of exploits against the
+victim’s device to remotely jailbreak it so that the espionage software packages can be installed. The user’s only indication
+that anything happened will be that the browser closes after the link is clicked.
+The espionage software contains malicious code, processes, and apps that are used to spy, collect data, and report back
+what the user does on the device. This spyware can access and exfiltrate messages, calls, emails, logs, and more from
+apps including, but not limited to:
+ - Gmail
+
+
+ - Facetime
+
+
+ - Facebook
+
+
+ - Line
+
+
+ - Mail.Ru
+
+i
+
+
+Calendar
+
+
+WeChat
+
+
+Surespot
+
+
+Tango
+
+
+WhatsApp
+
+
+Viber
+
+
+Skype
+
+
+Telegram
+
+
+i
+i
+CVE-2016-4655 Two kernel exploits
+Exploit against Safari (CVE-2016-4656
+& CVE-2016-4657)
+jailbreak the device
+i
+
+
+Persistence and stealth monitoring
+
+
+Establishes communication
+
+
+to Command & Control
+Infrastructure
+
+Hooks all communication
+
+and starts stealing data
+i
+In order to accomplish this, the spyware, once it jailbreaks the user’s phone, does not download malicious versions of
+these apps to the victim’s device in order to capture data, rather it compromises the original apps already installed on the
+device. This includes pre-installed apps such as Facetime and Calendar and those from the official App Store.
+Usually, iOS security mechanisms prevent normal apps from spying on each other, but spying “hooks” can be installed
+on a jailbroken device. Pegasus takes advantage of both the remote jailbreak exploit and a technique called “hooking.”
+The hooking is accomplished by inserting Pegasus’ dynamic libraries into the legitimate processes running on the device.
+These dynamic libraries can be used to hook the apps using a framework called Cydia Mobile Substrate, known to the
+iOS jailbreak community, and which Pegasus uses as part of the exploit.
+A user infected with this spyware is under complete surveillance by the attacker because, in addition to the apps listed
+above, it also spies on:
+ - Phone calls
+
+
+ - Call logs
+
+
+ - SMS messages the victim sends or receives
+
+
+ - Audio and video communications that (in the words a founder of NSO Group) turns the phone into a “walkie-talkie” [4]
+
+4 ~~h~~ ttp://www.ft.com/cms/s/9869fd34-c7ac-11e2-be27-00144feab7de,Authorised=false.html?siteedition=intl&_i_location=http%3A%2F%2Fwww.
+ft.com%2Fcms%2Fs%2F0%2F9869fd34-c7ac-11e2-be27-00144feab7de.html%3Fsiteedition%3Dintl&_i_referer=&classifcationi =conditional_standard&iab=barrier-app#axzz4I8PLStjS
+TECHNICAL ANALYSIS OF PEGASUS SPYWARE | 7
+Access to this content could be used to gain further access into other accounts owned by the target, such as banking,
+email, and other services he/she may use on or off the device.
+The attack is comprised of three separate stages that contain both the exploit code and the espionage software. The
+stages are sequential; each stage is required to successfully decode, exploit, install, and run the subsequent stage.
+Each stage leverages one of the Trident vulnerabilities in order to run successfully.
+STAGE 1 Delivery and WebKit vulnerability: This stage comes down over the initial URL in the form of an HTML
+file (1411194s) that exploits a vulnerability (CVE-2016-4655) in WebKit (used in Safari and other browsers).
+STAGE 2 Jailbreak:
+This stage is downloaded from the first stage code based on the device type (32-bit vs 64
+bit). Stage 2 is downloaded as an obfuscated and encrypted package. Each package is encrypted with unique keys
+at each download, making traditional network-based controls ineffective. It contains the code that is needed to
+exploit the iOS Kernel (CVE-2016-4656 and CVE-2016-4657) and a loader that downloads and decrypts a package
+for stage 3.
+STAGE 3 Espionage software: This stage is downloaded by stage 2 and is also based on the device type (32-bit
+vs 64-bit). Stage 3 contains the espionage software, daemons, and other processes that are used after the de
+vice has been jailbroken in stage 2. Stage 3 installs the hooks into the applications the attacker wishes to spy on.
+Additionally, stage 3 detects if the device was previously jailbroken through another method and, if so, removes
+any access to the device that the jailbreak provides, such as via SSH. The software also contains a failsafe to remove
+itself if certain conditions are present.
+The third stage deploys a number of files deployed in a standard unix tarball (test222.tar), each of which has its own pur
+pose (that we describe later in this report):
+
+
+ca.crt - root TLS certificate that is added to keystore (see Appendix A)
+
+
+ccom.apple.itunesstored.2.csstore - Standalone javascript that is run from the command line at reboot and is used to
+
+
+run unsigned code and jailbreak the kernel on device reboot
+
+converter - injects dylib in a process by pid. It is a renamed version of the cynject from the Cydia open-source
+
+library
+
+
+libaudio.dylib - The base library for call recording
+
+
+libdata.dylib - A renamed version of the Cydia substrate open-source library
+
+
+libimo.dylib - Generic chat sniffer library
+
+
+libvbcalls.dylib - Viber sniffer
+
+
+libwacalls.dylib - Whatsapp sniffer
+
+
+lw-install - Spawns all sniffing services
+systemd - Sends reports and files to server
+
+
+watchdog
+
+
+workerd - SIP module
+
+
+The attack we investigated works on iOS up to 9.3.4. The developers maintain a large table in their code that attacks
+all iOS versions from 7.0 up to and including iOS 9.3.3. While the code we investigated did not contain the appropriate
+values to initially work on iOS 9.3.4, the exploits we investigated would still work, and it is trivial for the attackers to update
+the table so that the attack will work on 9.3.4.
+TECHNICAL ANALYSIS OF PEGASUS SPYWARE | 8
+One other unique property of this attack is that standard jailbreak detections fail to report that the device has been ex
+ploited. The attack and installation of the spying software is designed to be as silent as possible to the target.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Attacker", "type" : "ACTO"},
+        {"id": 2, "description": "Website URL", "type" : "URLS"},
+        {"id": 3, "description": "SMS", "type" : "MAIL"},
+        {"id": 4, "description": "Email", "type" : "MAIL"},
+        {"id": 5, "description": "Social media", "type" : "SOCM"},
+        {"id": 6, "description": "Victim’s device", "type" : "TAMP"},
+        {"id": 7, "description": "Espionage software packages", "type" : "APPS"},
+        {"id": 8, "description": "Gmail", "type" : "MAIL"},
+        {"id": 9, "description": "Facetime", "type" : "APPS"},
+        {"id": 10, "description": "Facebook", "type" : "SOCM"},
+        {"id": 11, "description": "Line", "type" : "APPS"},
+        {"id": 12, "description": "Mail.Ru", "type" : "MAIL"},
+        {"id": 13, "description": "Calendar", "type" : "APPS"},
+        {"id": 14, "description": "WeChat", "type" : "APPS"},
+        {"id": 15, "description": "Surespot", "type" : "APPS"},
+        {"id": 16, "description": "Tango", "type" : "APPS"},
+        {"id": 17, "description": "WhatsApp", "type" : "SOCM"},
+        {"id": 18, "description": "Viber", "type" : "APPS"},
+        {"id": 19, "description": "Skype", "type" : "APPS"},
+        {"id": 20, "description": "Telegram", "type" : "SOCM"},
+        {"id": 21, "description": "CVE-2016-4655", "type" : "CVES"},
+        {"id": 22, "description": "CVE-2016-4656", "type" : "CVES"},
+        {"id": 23, "description": "CVE-2016-4657", "type" : "CVES"},
+        {"id": 24, "description": "Command & Control Infrastructure", "type" : "CCSH"},
+        {"id": 25, "description": "Pegasus spyware", "type" : "APPS"},
+        {"id": 26, "description": "Cydia Mobile Substrate", "type" : "APPS"},
+        {"id": 27, "description": "Phone calls", "type" : "TAMP"},
+        {"id": 28, "description": "Call logs", "type" : "TAMP"},
+        {"id": 29, "description": "SMS messages", "type" : "MAIL"},
+        {"id": 30, "description": "Audio and video communications", "type" : "TAMP"},
+        {"id": 31, "description": "Stage 1 HTML file (1411194s)", "type" : "DOCF"},
+        {"id": 32, "description": "WebKit vulnerability in Safari", "type" : "CVES"},
+        {"id": 33, "description": "Encrypted package for Stage 2", "type" : "DOCF"},
+        {"id": 34, "description": "Espionage software (Stage 3)", "type" : "APPS"},
+        {"id": 35, "description": "ca.crt", "type" : "DOCF"},
+        {"id": 36, "description": "ccom.apple.itunesstored.2.csstore", "type" : "EXEF"},
+        {"id": 37, "description": "converter (cynject from Cydia)", "type" : "EXEF"},
+        {"id": 38, "description": "libaudio.dylib", "type" : "EXEF"},
+        {"id": 39, "description": "libdata.dylib (Cydia substrate)", "type" : "EXEF"},
+        {"id": 40, "description": "libimo.dylib", "type" : "EXEF"},
+        {"id": 41, "description": "libvbcalls.dylib", "type" : "EXEF"},
+        {"id": 42, "description": "libwacalls.dylib", "type" : "EXEF"},
+        {"id": 43, "description": "lw-install", "type" : "EXEF"},
+        {"id": 44, "description": "systemd (sends reports and files to server)", "type" : "EXEF"},
+        {"id": 45, "description": "watchdog", "type" : "EXEF"},
+        {"id": 46, "description": "workerd (SIP module)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "sends"},
+        {"source": 1, "target": 3, "rel_name" : "sends"},
+        {"source": 1, "target": 4, "rel_name" : "sends"},
+        {"source": 1, "target": 5, "rel_name" : "sends"},
+        {"source": 6, "target": 7, "rel_name" : "installs"},
+        {"source": 7, "target": 8, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 9, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 10, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 11, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 12, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 13, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 14, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 15, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 16, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 17, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 18, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 19, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 7, "target": 20, "rel_name" : "accesses and exfiltrates data from"},
+        {"source": 6, "target": 27, "rel_name" : "spies on"},
+        {"source": 6, "target": 28, "rel_name" : "spies on"},
+        {"source": 6, "target": 29, "rel_name" : "spies on"},
+        {"source": 6, "target": 30, "rel_name" : "spies on"},
+        {"source": 1, "target": 24, "rel_name" : "controls"},
+        {"source": 7, "target": 24, "rel_name" : "sends data to"},
+        {"source": 31, "target": 6, "rel_name" : "triggers vulnerability in"},
+        {"source": 32, "target": 6, "rel_name" : "exploits"},
+        {"source": 33, "target": 6, "rel_name" : "installs on"},
+        {"source": 34, "target": 6, "rel_name" : "runs on"},
+        {"source": 35, "target": 34, "rel_name" : "is part of"},
+        {"source": 36, "target": 34, "rel_name" : "is part of"},
+        {"source": 37, "target": 34, "rel_name" : "is part of"},
+        {"source": 38, "target": 34, "rel_name" : "is part of"},
+        {"source": 39, "target": 34, "rel_name" : "is part of"},
+        {"source": 40, "target": 34, "rel_name" : "is part of"},
+        {"source": 41, "target": 34, "rel_name" : "is part of"},
+        {"source": 42, "target": 34, "rel_name" : "is part of"},
+        {"source": 43, "target": 34, "rel_name" : "is part of"},
+        {"source": 44, "target": 34, "rel_name" : "is part of"},
+        {"source": 45, "target": 34, "rel_name" : "is part of"},
+        {"source": 46, "target": 34, "rel_name" : "is part of"}
+    ]
+}

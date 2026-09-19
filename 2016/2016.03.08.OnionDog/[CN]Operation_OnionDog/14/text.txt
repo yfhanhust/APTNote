@@ -1,0 +1,33 @@
+2. HWP 漏洞原理分析
+HWP 支持 hwp 、 doc 、 wps 、 ppt 等格式。其中 hwp 包括 hwp2.0 、 hwp3.0 、 hwp5.0 三个
+版本、 hwp2.0 是比较老的格式。 hwp 程序打开 hwp2.0 的文档时会自动转换为 hwp3.0 格式。
+9 ’
+[Warning] Detected malicious file using HWP file s vulnerability ，
+http://en-erteam.nprotect.com/2011/07/caution-detected-malicious-file-using.html
+10
+https://cryptam.com/docsearch.php?md5=26b416d686ce57820e13e572e9e33cce
+11
+https://cryptam.com/docsearch.php?md5=de00286f6128fb92002e0c0760855566
+图 12 HWP 漏洞文档文档格式
+Hwp2.0 偏移 0x48E 的位置开始是字体结构, 前两个字节是字体名称数量，每个字体名称
+长度为 0x28 。程序处理 hwp2.0 文档时，调用 CHwp20ToHwp30FilterLibrary 类的
+ConvertFilterFileToWorkFile 函数转换为 hwp3.0 格式，处理字体结构调用 Set20FontList 子函数。
+图 13 Set20FontList 函数
+Set20FontList 函数中读取 hwp2.0 文档的 0x28 个字节，到数组 arySrc[0x28] 中，循环拷贝
+到 aryDest[0x28] 中，退出循环的条件为当前拷贝字节是否为 0 。
+而在内存中， arySrc 数组后面紧接着就是 aryDest ，当拷贝到 arySrc 最后一个字符 0x3C
+时由于不是 0 ，继续取下一个字符，取到了 aryDest 的第一个字符。如此反复直至触发
+C0000005 访问异常。
+图 14 arySrc aryDest 内存结构
+覆盖的地址里面包括 CHwp20ToHwp30FilterLibrary::ConvertFilterFileToWorkFile 函数设置
+的 SEH 记录。
+图 15 SEH 记录被覆盖后
+接下来当拷贝到 00130000 时，触发 C0000005 异常，来到 windows 异常处理流程，调
+用 SEH Handler(7FFAC1B1) ，此时第二个参数指向 12E4B8 。
+图 16 调用 SEH 处理函数
+图 17 pop pop ret 指令串
+来到 ntdll.7FFAC1B1, ，是一个 pop pop ret 指令串。经过两个 pop 指令后，此时 esp 指
+向 12E4B8 ， shellcode 代码起始位置， Retn 执行后就来到了 shellcode 。
+图 18 开始执行 shellcode
+最后在临时目录中创建真正的 hwp 文档，启动 hwp 2007 目录下的 hwp.exe ，载入临时
+目录的 tmp.hwp ，释放并启动 msserver.exe （洋葱狗）， ICEFOG 样本并没有释放。

@@ -1,0 +1,52 @@
+
+
+
+Sentence : 5.4 The Watermark
+When the malware is ran via rundll32.exe upon the first boot, it creates a copy of itself named
+as tempfile.dat (in some samples) and would mark the executable file in order to prevent it
+from correctly running on other systems. This watermarking process involves the
+modification of two already encrypted data areas at the end of the executable file.
+The first encrypted area is 0x80 bytes large and holds the encrypted Twitter link.
+For samples dated 2011, this area starts with encrypted(http://twitter.com/)
+For samples dated 2012-2013, the area starts with
+encrypted (https://mobile.twitter.com/)
+8
+© 2013 Bitdefender
+Figure 2: The watermarking process
+The switch to mobile.twitter has been done on purpose in order to keep the data traffic to a
+minimum when a connection with Twitter is made. Also worth mentioning is the fact that the
+variants we discovered as dated 2012/2013 are connecting via HTTPS.
+The second area is 0x10 bytes long and holds an encrypted string that is used to perform a
+Google query for samples from 2012/2013. Depending on the string and the current date, a
+second Twitter handle is generated. The sample dated 2011 does not feature this Google
+search mechanism.
+The data areas don’t start at a specific offset. In order to find them, the malware iterates them
+from their end and looks for the first byte that is not zero. This would be the last byte from the
+small area (which is 0x10 bytes large). From here on, it can compute where the larger data
+area is located in the file.
+After the malware has identified the area offsets, it would start encrypting them. A hash is also
+computed on specific pieces of system information and will be used in the encryption process.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 2, "description": "tempfile.dat", "type" : "DOCF"},
+        {"id": 3, "description": "encrypted data area (0x80 bytes)", "type" : "TAMP"},
+        {"id": 4, "description": "Twitter link (http://twitter.com/)", "type" : "URLS"},
+        {"id": 5, "description": "encrypted data area (https://mobile.twitter.com/)", "type" : "TAMP"},
+        {"id": 6, "description": "HTTPS connection to Twitter", "type" : "NETP"},
+        {"id": 7, "description": "encrypted string for Google query", "type" : "TAMP"},
+        {"id": 8, "description": "Google search mechanism", "type" : "APPS"},
+        {"id": 9, "description": "second Twitter handle generated from Google query", "type" : "URLS"},
+        {"id": 10, "description": "system information hash", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "creates copy of"},
+        {"source": 3, "target": 4, "rel_name" : "holds encrypted"},
+        {"source": 5, "target": 6, "rel_name" : "uses for connection"},
+        {"source": 7, "target": 8, "rel_name" : "used in"},
+        {"source": 7, "target": 9, "rel_name" : "generates"},
+        {"source": 10, "target": 3, "rel_name" : "used in encryption of"},
+        {"source": 10, "target": 5, "rel_name" : "used in encryption of"}
+    ]
+}

@@ -1,0 +1,89 @@
+Mocelpa
+Upon first look we notice that the executable file contained with the zip archive is fairly small being
+just 11 Kilobytes in size. Up until recently Mocelpa had a very low detection rate, being detected by
+just 1 out of 57 anti-virus engines tested against.
+The first characteristic we notice is the lack of bootstrap mechanism. Should the user logout,
+shutdown or reboot the malware will not survive. This is interesting behaviour and suggests that the
+malware author is confident in Mocelpa’s stability.
+To begin with I will describe the network functions, since my main interest in this malware stems
+from the use of SSL. An initial glance at network traffic produced by Mocelpa reveals something
+interesting and surprising: an SSL handshake followed by quite blatant non-SSL traffic.
+Delving into the disassembly behind the malware we can see that this SSL handshake is clearly faked
+and generated using hardcoded values within the malware.
+D r a g o n T h r e a t L a b s, H o n g K o n g Page 4
+In this situation it would appear that the author has simply copy & pasted values from a packet
+capture and in doing so they have revealed what is most likely the exact time and date that the
+packet was generated.
+Interestingly there is one identifiable string in the data: www.apple.com. I think we have just
+discovered why this malware is called Mocelpa: ApleCom <> Mocelpa. This suggests that the
+individual who named the malware knew that the connection data was hardcoded and not actually
+encrypted. Those of you who are familiar with IDS/IPS and network detection will know that this
+behaviour makes a highly reliable signature. In all Mocelpa samples we analysed (see appendix for
+MD5’s) this string remained the same.
+Now that we know the traffic data is hardcoded let’s take a look at what follows the ‘SSL’ handsake.
+Firstly, Mocelpa grabs the MAC address of the machine and runs it through an encoding routine. The
+encoding performed simply increases each number/character in the MAC address by 1. This value is
+then modified, by inserting hardcoded hexadecimal values at the beginning and end of the string.
+Before connecting to the command and control server Mocelpa looks up the proxy server that is
+configured in Internet Explorer. This can be found in the registry under
+“HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings” in the
+“ProxyServer” key. It appears that at least one of the samples we analysed (see appendix) has a bug [3]
+and will fail to connect to the command and control server unless the system is configured to use a
+proxy server. Failure to connect to the command and control server results in the malware sleeping
+for 5 minutes before trying again.
+3 Thanks to Tillmann Werner for pointing this out
+D r a g o n T h r e a t L a b s, H o n g K o n g Page 5
+Upon connecting to the command and control server several exchanges of information take place.
+During the initial ‘SSL’ connection (described above) certain responses are expected from the
+command and control server. These responses are only validated by length and in fact can contain
+any data; the first response should be 3162 bytes in length and the second 59 bytes.
+The encoded MAC address is also sent to the command and control server. It is likely that the
+attacker’s use this value to identify unique victims. Once the connection has been established
+command and control can take place.
+The command and control functionality is very simple, however the structure is not. From this very
+high-level view we can see that this is not as easy as a simple IF, NOT, THEN structure.
+D r a g o n T h r e a t L a b s, H o n g K o n g Page 6
+Ultimately this breaks to commands and sub-commands, denoted by a specific packet structure.
+D r a g o n T h r e a t L a b s, H o n g K o n g Page 7
+The functionality can be broken down into the following groups:
+
+0x3: Execute command
+
+o Uses cmd.exe to execute a command, logs the output and sends it back to the c2
+server
+
+0x0A: File operations
+
+o Sub-options:
+     - **0x0B:** Create a file (filename specified by in the data packet) in the user’s
+
+temporary directory
+     - **0x0C:** Write data (specified in the data packet) to the currently open file
+
+     - **0x0D:** Open the file that was created/written to, perform an MD5 hash on
+
+the contents and compare it to the attacker specified MD5 (contained within
+the data packet)
+The structure behind the protocol is fairly simple and involves packet data being passed through a
+decoding routine before being processed. For example, a decoded packet executing C2 command
+0x0A, sub-command 0x0D looks like the following:
+The data decoding routine begins by taking a series hardcoded values and appending it to the
+beginning of the data, it then proceeds to run an XOR operation against each byte of the packet in
+reverse order, for example:
+Clearly at this stage we can see that this implant does not use SSL.
+Server-side protocol analysis has unfortunately been thwarted by a lack of response from the
+command and control servers so the examples are above are just that: examples. In any case we are
+D r a g o n T h r e a t L a b s, H o n g K o n g Page 8
+confident in saying that responses from live command and control servers are unlikely to be fully
+static and thus creating a reliable IDS signature or detection heuristic would be challenging at best.
+During the process of analysing the malware samples we created a fully functioning command and
+control server module. After careful consideration we have decided not to release the code for this.
+Ultimately Mocelpa is a simple downloader with basic functionality. Given the seemingly
+unnecessary amount of complexity involved and the obscure method of verifying file download
+success we would be quick to assume that this was written by an inexperienced programmer, but
+there are in fact a number of reasons why such methods were used in the development of this
+implant. Taking into consideration things like reverse engineering, network detection devices, anti
+virus and human ‘hunter’ teams it does not take much thought to theorise why the codebase and
+functionality are somewhat creative.
+Still, through this extra code it does not make Mocelpa less detectable – in fact quite the opposite.
+D r a g o n T h r e a t L a b s, H o n g K o n g Page 9

@@ -1,0 +1,56 @@
+Technical analysis
+In this particular case, we can’t reveal the victim’s name or any other specific circumstances but we did find
+some noteworthy technical details, including:
+
+The email was sent using the address, clearsky . cybersec . group @ gmail . com, which is obviously not
+
+an official ClearSky address that the attackers created. Attentive recipients should realize that the
+important information here lies in the address domain—a Gmail address—but very often, they tend
+to intuitively only react to the first part of the name that indicates some kind of security problem with
+their machines.
+The first link in the email, “Trend Micro security,” actually leads to the real Trend Micro website,
+trendmicro.com.
+20 | The Spy Kittens Are Back: Rocket Kitten 2
+
+The second link that the recipients are supposed to click in order to download HouseCall, however, leads
+
+to a malicious file (HousecallLauncher.exe [SHA-1: af364ff503da71875b6d7c401a1e98e31450a561]) .
+The attackers’ choice to use the Trend Micro brand as lure raised a red flag. It could have either been
+a purely random choice or a very cleverly chosen one. Knowing that Trend Micro investigated on their
+operations, they could have utilized this fact to create a false sense of security and trust with victims
+who would probably believe it safe to download the vendor’s product. Perhaps this is also a payback for
+revealing details on one of their operations.
+
+The malicious file (HousecallLauncher.exe) is a Flex-compressed .SFX file with a lot of obfuscation
+
+and anti-debugging code. It has three embedded files, namely:
+• Data.ini: Only contains a path to the actual file.
+• FILE1: An official Trend Micro HouseCall launcher binary.
+• FILE2 (SHA-1: 457f54e9a0f32f2648f95a8e339d9fd9aed23fa7): The actual malicious
+payload—a Meterpreter [2] stager.
+When the .SFX file is executed, the payload is placed and ran in memory. No traces are left in the file
+system, rendering detection rather difficult.
+
+It accesses the same IP address (84.11.146.62), which belongs to IABG in Germany. This service
+
+provider has already been used in previous Rocket Kitten operations. The malware obfuscates every
+application programming interface (API) string in its body (using a simple XOR operation with the
+value, 0xC4h). It also very carefully obfuscates its strings after use.
+
+The code is literally littered with several anti-debugging techniques (IsDebuggerPresent, GetTickCount,
+
+and ZwQueryInformationProcess tricks).
+
+The code only has one function—to establish a connection with the IP address, 84.11.146.62, in order
+
+to download a new binary. Once connected to the C&C server, the downloaded binary is injected into a
+process, which is, in fact, metsrv.dll, from Metasploit. It has several export functions.
+2 Meterpreter is an advanced, dynamically extensible payload included in the Metasploit framework. It can provide complex and advanced
+features that would otherwise be tedious to purely implement in assembly. Developers can write their own extensions in .DLL files that can be
+uploaded and injected into processes running on target computers after exploitation.
+21 | The Spy Kittens Are Back: Rocket Kitten 2
+List of export functions in the binary
+In sum, the first binary only contains instructions to contact the handler, read the 4-byte value (the size of
+the metsrv.dll file), allocate the required RWX memory in the remote host, download the metsrv.dll file,
+and through a process known as “reflective DLL injection,” pass the control to the metsrv.dll file.
+22 | The Spy Kittens Are Back: Rocket Kitten 2

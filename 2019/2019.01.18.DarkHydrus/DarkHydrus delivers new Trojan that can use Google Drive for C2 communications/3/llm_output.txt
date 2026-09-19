@@ -1,0 +1,86 @@
+
+
+
+Sentence : Delivery Document
+We collected a total of three DarkHydrus delivery documents installing a new variant of the RogueRobin trojan. These
+three documents were extremely similar to each other and are all macro enabled Excel documents with .xlsm file
+extensions. None of the known documents contain a lure image or message to instruct the recipient to click the
+Enable Content button necessary to run the macro, as seen in Figure 1. While we cannot confirm the delivery
+mechanism, it is likely that the instructions to click the Enable Content button were provided during delivery, such as
+in the body of a spear-phishing email.
+Figure 1 DarkHydrus’ delivery document does not have a lure image or message
+Without the delivery mechanism we cannot confirm the exact time these delivery documents were used in an attack;
+however, the observed timestamps within these three delivery documents gives us an idea when the DarkHydrus
+actors created them. While the creation times were timestomped to a default time of 2006-09-16 00:00:00Z commonly
+observed in malicious documents, the Last Modified times were still available and suggest that DarkHydrus created
+these documents in December 2018 and January 2019. Table 1 shows the breakdown of timestamps and their
+associated sample hashes.
+SHA256 Last Modified
+e068c6536bf353abe249ad0464c58fb85d7de25223442dd220d64116dbf1e022 2018-12-15T05:14:32Z
+4e40f80114e5bd44a762f6066a3e56ccdc0d01ab2a18397ea12e0bc5508215b8 2018-12-23T05:45:43Z
+513813af1590bc9edeb91845b454d42bbce6a5e2d43a9b0afa7692e4e500b4c8 2019-01-08T06:51:21Z
+Table 1 Timestamps of delivery documents
+The macro executes immediately after pressing the Enable Content button thanks to the Workbook_Open sub
+function, which will call the actor created New_Macro function. The New_Macro function starts by concatenating
+several strings to create a PowerShell script that it will write to the file %TEMP%\WINDOWSTEMP.ps1. The function
+builds the contents of a second file by concatenating several strings together, but this second file is a .sct file that the
+https://www.printfriendly.com/p/g/Th9KZF 1/11
+2/12/2019 DarkHydrus delivers new Trojan that can use Google Drive for C2 communications
+function will write to a file %TEMP%\12-B-366.txt. While .sct files are used by a multitude of applications, in this
+instance it is being used as a Windows Script Component file. The function then uses the built-in Shell function to run
+the following command, which effectively executes the .sct file stored in 12-B-366.txt:
+1 regsvr32.exe /s /n /u /i:%TEMP%\12-B-366.txt scrobj.dll
+The use of the legitimate regsvr32.exe application to run a .sct file is an AppLocker bypass technique originally
+discovered by Casey Smith (@subtee), which eventually resulted in a Metasploit module. The WINDOWSTEMP.ps1
+script is a dropper that decodes an embedded executable using base64 and decompresses it with the
+System.IO.Compression.GzipStream object. The script saves the decoded and decompressed executable to
+%APPDATA%\Microsoft\Windows\Templates\WindowsTemplate.exe and creates an LNK shortcut at
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\OneDrive.lnk to persistently run
+WindowsTemplate.exe each time Windows starts up. The WindowsTemplate.exe executable is a new variant of
+RogueRobin written in C#.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "DarkHydrus delivery documents", "type" : "DOCF"},
+        {"id": 2, "description": "RogueRobin trojan", "type" : "APPS"},
+        {"id": 3, "description": ".xlsm file extensions", "type" : "DOCF"},
+        {"id": 4, "description": "Enable Content button", "type" : "TAMP"},
+        {"id": 5, "description": "spear-phishing email", "type" : "MAIL"},
+        {"id": 6, "description": "2006-09-16 00:00:00Z (default time)", "type" : "TAMP"},
+        {"id": 7, "description": "December 2018", "type" : "TAMP"},
+        {"id": 8, "description": "January 2019", "type" : "TAMP"},
+        {"id": 9, "description": "SHA256 hashes (e068c6536bf353abe249ad0464c58fb85d7de25223442dd220d64116dbf1e022, 4e40f80114e5bd44a762f6066a3e56ccdc0d01ab2a18397ea12e0bc5508215b8, 513813af1590bc9edeb91845b454d42bbce6a5e2d43a9b0afa7692e4e500b4c8)", "type" : "IOCS"},
+        {"id": 10, "description": "%TEMP%\\WINDOWSTEMP.ps1", "type" : "SYSP"},
+        {"id": 11, "description": ".sct file (12-B-366.txt)", "type" : "DOCF"},
+        {"id": 12, "description": "regsvr32.exe /s /n /u /i:%TEMP%\\12-B-366.txt scrobj.dll", "type" : "EXEF"},
+        {"id": 13, "description": "%APPDATA%\\Microsoft\\Windows\\Templates\\WindowsTemplate.exe", "type" : "SYSP"},
+        {"id": 14, "description": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OneDrive.lnk", "type" : "TPTH"},
+        {"id": 15, "description": "DarkHydrus actors", "type" : "ACTO"},
+        {"id": 16, "description": "Workbook_Open sub function", "type" : "EXEF"},
+        {"id": 17, "description": "New_Macro function", "type" : "EXEF"},
+        {"id": 18, "description": "Windows Script Component file", "type" : "DOCF"},
+        {"id": 19, "description": "AppLocker bypass technique", "type" : "TTPS"},
+        {"id": 20, "description": "Casey Smith (@subtee)", "type" : "ACTO"},
+        {"id": 21, "description": "Metasploit module", "type" : "APPS"},
+        {"id": 22, "description": "WindowsTemplate.exe (new variant of RogueRobin)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 1, "target": 4, "rel_name" : "requires interaction with"},
+        {"source": 1, "target": 5, "rel_name" : "likely delivered via"},
+        {"source": 1, "target": 9, "rel_name" : "has hash"},
+        {"source": 1, "target": 6, "rel_name" : "timestomped to"},
+        {"source": 1, "target": 7, "rel_name" : "created in"},
+        {"source": 1, "target": 8, "rel_name" : "created in"},
+        {"source": 1, "target": 2, "rel_name" : "installs"},
+        {"source": 15, "target": 16, "rel_name" : "uses"},
+        {"source": 15, "target": 17, "rel_name" : "creates"},
+        {"source": 17, "target": 10, "rel_name" : "writes to"},
+        {"source": 17, "target": 11, "rel_name" : "writes to"},
+        {"source": 12, "target": 11, "rel_name" : "executes"},
+        {"source": 13, "target": 22, "rel_name" : "contains executable from"},
+        {"source": 14, "target": 13, "rel_name" : "runs at startup"},
+        {"source": 19, "target": 12, "rel_name" : "uses technique in"},
+        {"source": 20, "target": 19, "rel_name" : "discovered by"}
+    ]
+}

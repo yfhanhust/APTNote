@@ -1,0 +1,427 @@
+3 、技术分析
+3.1 早期攻击样本
+此次攻击过程开始于一个携带恶意宏的 DOC 文档，黑客通过伪造成简历的投递邮件手段将
+此恶意文件发送给攻击目标，当目标用户不慎打开文档便成为了受害者。 DOC 文档运行后
+会启动恶意宏代码并从指定的服务器下载 Etr739.exe ，成功下载后立即执行。新进程通过
+Base64 解码出另一个服务器地址，继续下载恶意代码 hqpi64.exe 至临时目录下。恶意程序
+hqpi64.exe 便是 Warzone RAT 的释放器，其通过释放 Warzone RAT 来执行后续操作，如将
+explorer.exe 作为傀儡进程守护、与控制端进行通信等。
+样本中的恶意代码大部分采用 CRC32 来加密敏感字串，同时在 API 调用手法上采用了 API
+Hash 值动态获取函数地址和模拟系统快速调用两种方式。使用此类手法不但能在一定程
+度上减少杀软静态扫描的检测，而且还不易被监测到 API 的调用踪迹。同时其使用纯加密
+Shellcode 代码内存执行的方式加载其核心功能模块，通过 “ 无文件技术 ” 提高自身隐蔽性，
+以此来躲避安全厂商查杀。其与 C2 服务器间的通信数据也以 CR4 算法进行加密进而规避
+IDS 系统的检测。
+https://www.secrss.com/articles/10745 7/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+(1)DOC 文档
+Doc 文档为 word 文件，也是针对攻击目标实施的第一步攻击，黑客通过钓鱼攻击、社工等
+手段欺骗攻击目标打开此文档让其中嵌入的恶意宏代码得以执行。我们使用提取工具获取
+在 AutoOpen 函数中包含了一串混淆过的 cmd 命令，经过解密后的代码如图所示：
+https://www.secrss.com/articles/10745 8/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+这段代码获得执行后，会直接从此链接地址 (http[:]//linksysdatakeys.se) 下载恶意程序
+到 “%Temp%\SAfdASF.exe” 并执行。
+(2)Payload
+下一个 Dropper 的下载地址是被加密后保存在恶意程序 SAfdASF.exe 的资源中，加密的资
+源数据如下图：
+该 Payload 先将上图中加密的数据通过 Base64 解码出下载链接地
+址 “http[:]//www.gestomarket[.]co/hqpi64.exe” ，然后把 hqpi64.exe 更名为 2XC2DF0S.exe
+并保存在临时目录下。
+(3)Dropper
+在后续的解密以及执行的过程中，此 Dropper 会把一段 Shellcode 注入到 explorer 进程并在
+内存中解密出 RAT 实体使其不落地，最终通过无文件技术将 RAT 加载到内存中来执行。
+逃避检测
+此恶意程序在开始执行时，会通过大量的调用 printf 函数打印垃圾代码和 sleep 函数来达到
+延时效果，这在一定程度上能够躲避安全软件的监控。而其核心功能是将自身携带的
+shellcode 解密并执行：
+https://www.secrss.com/articles/10745 9/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+解密 shellcode
+如上图所示，恶意程序会在加载执行 shellcode 前进行解密。解密算法非常简单，将每个字
+节的值增加 0x0c 即可。
+自定义的解密函数
+经过重重下载并解密之后，那么这段解密后的 Shellcode(PE Loader) 代码具体会做些什
+https://www.secrss.com/articles/10745 10/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+PE Loader
+此 PE Loader 在执行 Shellcode 的时候使用了四个参数，经分析后我们将这 4 个参数内容所
+序号 内容 功能
+参数
+1
+参数
+2
+参数
+3
+参数
+4
+“FYBLV” 拷贝自身的目录名和文件名 ( 需解密的资源
+名 )
+“BJU” RAT 远控文件 ( 需解密的 PE 文件资源名 )
+“OPTYUPPABIVSUWNRXSNCT‐
+DW”
+Key
+0x01 （固定数值） 未使用
+该 PE Loader 首先在运行过程中进行了沙箱和指定进程的检测，以防止被自动化系统分
+析。并且根据自带的资源数据来判定是否实施驻留本机的操作和注入体的选择。最后此
+PE Loader 将最终选择的傀儡进程的空间架空，并把解密出的 RAT 模块映射到此进程中执
+行 ( 原本 PE 文件代码被置换 ) 。
+运行环境检测
+该 PE Loader 在开始运行时，依然会进行沙箱和调试环境的检测，同时通过预先计算好的
+进程名哈希值来查找指定的进程。当这些检测条件中的任意一条满足时，该恶意程序就不
+再继续执行，直接返回退出。
+运行环境检测
+操作资源数据
+https://www.secrss.com/articles/10745 11/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+如果运行环境的检测全部通过，该 PE Loader 则加载名为 “FYBLV” 的资源数据，并从资源
+中取出后续要拷贝自身的文件夹名称和文件名的字串。然后以参数 3 作为分隔符，依次取
+出其它的数据并保存在自定义的结构体中。资源中提取出的结构数据内容如下图：（图中
+标红的数值为保存在结构体中的 8 个成员数据）：
+释放与驻留
+如果 bIsCpySelf 值为 TRUE ，那么该 PELoader 会将自己复制到
+C:\Users\SuperVirus\AppData\Roaming\ptdkuybasm\" 目录下并把新文件命名为
+szPathName 里保存的内容。接着在 Windows 的启动文件夹里创建一个 .url 的网页文件快捷
+方式，我们查看该 PE Loader 创建的快捷键属性，发现此快捷键的访问协议格式为 file:/// ，
+即指向的资源是本地计算机上的文件，而后面紧跟的路径便是复制过去新文件的全路径。
+通过此方法则可实现开机自启动以达到长期控制主机的目的。
+https://www.secrss.com/articles/10745 12/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+创建的快捷键属性
+最后，该 PE Loader 根据结构体中的 dwFlag 值来选择后续的 RAT 载体，所对应的 RAT 载体
+数据 进程名
+0x01 C:\Windows\Microsoft.NET\Framework\v2.0.50727\RegAsm.exe
+0x02 C:\Windows\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe
+0x03 C:\Windows\Microsoft.NET\Framework\v2.0.50727\MSBuild.exe
+0x04 C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe
+0x05 C:\Windows\System32\svchost.exe
+0x06 C:\Windows\System32\dllhost.exe
+而在本样本中，此成员的值所对应的载体为当前运行的自身进程。
+获取 RAT 并执行
+在准备好 RAT 的傀儡进程后，该 PE Loader 将结构体中的 szKey 值作为 key ，和名
+为 ”BJU” 的资源传入解密函数。解密的算法仅为 XOR 运算，具体算法代码如下图：
+https://www.secrss.com/articles/10745 13/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+接着，该 PE Loader 重新创建新进程并将其设置为挂起状态。然后卸载此进程映像，并把
+在内存中解密出的新的 PE 头部，以及节数据依次写入到挂起的进程中，最后修改 OEP 并
+启动运行。
+(4) WARZONE RAT 模块
+我们将此 PE 文件从内存中 dump 出来，通过分析和溯源后发现，该 PE 与国外某黑客论坛中
+售卖的 WARZONE RAT 同出一辙。由此我们推测，此处使用的 RAT 模块可能为
+WAREZONE RAT1.6 版本，此版本为 C++ 语言编写，主要功能包括远程桌面控制、键盘记
+录、特权升级（ UAC 绕过）、远程 WebCam 、窃取凭证信息、 Remote Shell 、 Offine
+Keylogger 等等。下面我们会对 RAT 中的核心部分做简要介绍。
+远控程序 Warzone 后台界面
+获取 C&C 地址
+https://www.secrss.com/articles/10745 14/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+为了防止 C&C 被轻易发现或者批量提取，该木马将其加密后存放在 “.bss” 的资源节数据
+中。通过对解密函数的分析我们发现，这里采用了 CR4 算法。 CR4 生成一种称为密钥流的
+伪随机流，它是同明文通过异或操作相混合来达到加密的目的。解密时则使用密钥调度算
+法 (KSA) 来完成对大小为 256 个字节数组 sbox 的初始化及替换。具体流程如下：
+1 ）用数值 0~255 来初始化数组 sbox 。
+2) 当开始替换的时候，获取硬编码在资源里的密钥，长度为 0x32 个字节。
+( 在资源数据中前 0x32 个字节是密钥，其余 0x68 个字节则是待解密的数据 )
+密钥和待解密数据
+3 ）密钥流的生成是从 sbox[0] 到 sbox[255] ，对每个 sbox[i] ，根据当前 sbox 值，将 sbox[i] 与
+sbox 中的另一个字节置换，然后使用密钥进行替换。当数组 sbox 完成初始化之后，输入密
+码便不再被使用。
+4 ）替换后的 sbox 数组中的数值如下图：
+https://www.secrss.com/articles/10745 15/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+5 ）通过替换后的 sbox 和待解密的数据进行 XOR 运算后，最终得到服务器的 host 地
+址 "asdfwrkhl.warzonedns[.]com" 。
+执行注入功能
+当成功解密出 C&C 地址后，该木马则开始将一段 Shellcode 代码注入到傀儡进程中。在注
+入功能开启时，木马程序首先会根据操作系统架构 (64/32) 来选择注入到 cmd.exe 或
+explorer.exe 中。相关代码如下图所示：
+接着，该木马使用远程线程的方式来注入核心功能 Shellcode 代码，并在启动远线程执行
+时，修改写入目标进程内存偏移的 0x10E 处为开始执行代码。
+https://www.secrss.com/articles/10745 16/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+通过分析我们发现，这段注入代码的主要功能是利用傀儡进程来保护
+Dropper(hqpi64.exe) 。其会定时检查 Dropper 是否处于运行状态，如被关闭，则重新启
+动。以此达到进程守护的目的。
+进程守护功能
+通信协议解析
+1 ）连接服务器
+当成功注入到目标进程后，该木马则开始尝试与前文解密出的 C2 服务器进行连接，并会根
+https://www.secrss.com/articles/10745 17/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+2 ）解密控制包
+该木马首先将接收到的前 0x0C 个字节作为头部数据调用自定义 fn_Decrypt_CR4 函数进行
+解密（密钥以明文方式硬编码在代码中）。成功解密后，取出偏移 0x04 处的 DWORD 数值
+作为是否继续执行以下流程的判断条件（此 DWORD 数值里保存着除去 0x0C 后，剩余的数
+据长度）。
+https://www.secrss.com/articles/10745 18/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+若条件符合，则该木马会再次调用 fn_Decrypt_CR4 函数对整个数据（头部数据 + 跟随数
+据）重新进行一次解密。接着调用自定义 fn_Distribute 函数，并取出数据中的 OpCode 来
+执行 switch 中不同的操作。相关代码如下图所示：
+3 ）执行控制指令
+通过我们前面的分析可以看到，该木马控制指令中包含了大量用户隐私信息的窃取功能。
+最终受害者的敏感数据信息，都会根据远程服务器的指令回传给远程服务器。
+控制指令功能
+当远程服务器成功响应数据后，该木马就会根据服务器返回的内容执行指定操作。部分控
+控制命令 指令功能
+0x01~0x04 调用自定义函数，并将执行结果回传服务器
+0x02 上传进程列表
+0x06 上传文件列表信息
+0x0E Remote Shell
+0x10 取消下载
+0x12 获取 Webcam Devices 列表
+https://www.secrss.com/articles/10745 19/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+0x14 Start Webcam
+0x16 Stop Webcam
+0x18 发送心跳包
+0x1A 卸载客户端
+0x1E 下载 VNC 模块
+0x20 窃取 Google Chrome 、 Mozilla FireFox 等浏览器和 OutLook 、 Thunderbird 、
+0x24 根据控制指令，切换两种方式来记录键盘使用信息
+0x26 使用全局消息钩子，记录键盘使用信息
+0x28 Remote VNC 安装
+0x2C 断开远程服务器
+0x38 未知测试
+other 获取用户名，系统版本， GUID 等信息
+1 ）窃取凭证信息
+窃取的信息包括 Google Chrome 、 Mozilla Firefox 等浏览器和 Outlook 、 Thunderbird 、
+Foxmail 邮箱客户端保存的凭证信息等。
+该木马获取相关凭证信息以及实现方法如下表所示：
+https://www.secrss.com/articles/10745 20/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+息
+Mozilla
+Firefox
+读取配置路径下的 signons.sqlite 数据库，并通过 nss3.dll 解密
+Outlook 遍历注册表 Software\Microsoft\Windows NT\CurrentVersion\Windows Mes‐
+saging Subsystem\Profiles 下子键进行识别并解密
+Thun‐
+derbird
+读取 \AppData\Roaming\Thunderbird\Profiles 目录下的数据库文件，并通过应用
+程序目录下的 nss3..dll 对存储的密码进行解密
+Foxmail 读取邮箱目录下的 \Account\Account.rec0 文件并进行解密
+a ）提取 Chrome 凭证
+Chrome 浏览器保存用户登录信息的数据库文件
+为 %AppData%\Local\Google\Chrome\UserData\Default\Login Data ，该数据库是 sqlite3
+的数据库，数据库中用于存储用户名密码的表为 logins 。 logins 表结构定义如下：
+从该表中读取的内容是加密的，通过 CryptUnProtectData 函数对其进行解密便可以获取到
+明文数据。最后该木马将解密后的数据保存在名为 ”xxx.tmp” （ ”xxx“ 为 Base64 解码出的字
+串）的临时文件中。
+b ）提取 Mozilla 凭证信息
+https://www.secrss.com/articles/10745 21/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+该木马首先检索和读取 profile.ini 配置文件，并提取关联的文件夹路径。接着利用 nss3.dll
+来解密数据库 signons.sqlite 中被加密的内容，并通过 SQL 语句获取到主机名、被加密的用
+户名及密码，然后调用 nss3.dll 中的导出函数对 sqlite 查询出的用户名和密码进行解密。最
+后同样的，将解密后的内容保存在名为 ”xxx.tmp” 的临时文件中。
+用户名和密码
+c ） OutLook 凭证获取
+电子邮箱 OutLook 的用户登录凭证一般会保存在注册表中，该木马通过枚举注册表
+Software\Microsoft\WindowsNT\CurrentVersion\Windows Messaging
+Subsystem\Profiles 下的所有子健，读取键名为下表中的数据比如 password 进行解密还原
+出明文的密码。最后将获取到的用户的 Outlook 登录凭证写入名为 ”xxx.tmp” 的临时文件
+中。
+获取 Outlook 邮箱的用户信息
+d ） Thunderbird 凭证获取
+https://www.secrss.com/articles/10745 22/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+同样， Thunderbird 邮箱的凭证数据也是存储在数据库文
+件 %AppData%\Thunderbird\Profiles 中，该木马通过 nss3.dll 的导出函数对储存文件的密
+码进行解密。最后将解密后的数据保存在名为 ”xxx.tmp” 的临时文件中。
+e ） FoxMail 凭证获取
+该木马在 FoxMail 的安装目录下查找 Storage 文件夹，接着遍历所有当前邮箱账户目录下的
+\Account\Account.rec0 文件。此文件实际上就是用来存放账户相关信息的，加密后的密码
+就默认保存在这里。木马获取并解密此文件后便可窃取到 Foxmail 的凭证信息。
+f ）上传获取到的凭证信息
+窃取完所有信息后，该木马则使用 fn_Decrypt_CR4 加密函数将文件内容做加密处理并将
+它们发送给远程服务器。
+2 ）键盘记录
+https://www.secrss.com/articles/10745 23/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+a ）离线键盘记录（常驻）
+当接受到的控制命令为为启用脱机键盘记录时，此木马则使用钩子来实现键盘记录功能。
+该钩子将捕获按键和窗口名信息保存在 ”C:\user\sss\AppData\Local\MicrosoftVision\” 目录
+下，文件则以当前日期和时间来命名。相关代码的实现如下图：
+b ）临时键盘记录
+当远程控制指令为开启键盘记录时，该木马则通过 Raw Input 方法来实时监控当前键盘的
+使用情况。接着将捕获到的键值进行判断并转化为字符值。同样的，这些字符值和窗口名
+信息保存在 ”C:\user\sss\AppData\Local\MicrosoftVision\” 目录下，文件则以当前日期和时
+https://www.secrss.com/articles/10745 24/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+间来命名。
+3 ） RemoteVNC 安装
+a ）将新用户添加到 ” 远程桌面用户 ” 组
+首先，该木马会调用 fn_Base64 自定义函数，解码出后续需要添加的账户名和密码。并设
+定 Software\Microsoft\WindowsNT\CurrentVersion\Winlogon\SpecialAccounts\Userlist 注
+册表值为 0 来隐藏新创建的账户。
+添加并隐藏创建的新账户
+接着，该木马将上文解码出的账户名和密码作为新用户加入到 administor 用户组中。这样
+便可使用非管理员用户来进行远程桌面登录。
+https://www.secrss.com/articles/10745 25/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+该木马会修改注册表信息，实现打开远程桌面、多用户支持、更改用户登录和注销方式、
+使用快速登录切换、以及设置远程 ” 终端服务 ” 的使用名为 “RDPClip” 等等操作。具体细节如
+下图所示（仅截取了部分步骤）：
+通过分析我们发现，此 RAT 的远程桌面功能是通过特制的 VNC 模块来实现的。并且在后续
+的更新版本中，还增加了 HRDP 模块来实现隐藏远控桌面。该 HRDP 模块使用了 Github 上
+的 rdpwrap 项目，不仅可以在后台登录远程计算机，并且创建的 Windows 账户还会自动隐
+藏。
+4 ）权限升级（ UAC 绕过）
+该木马的权限提升是利用了自动提升权限的合法应用程序 ”pkgmgr.exe” 来执行 DISP 模块。
+其功能代码实现是采用了 Bypass-UAC 框架，该框架可以通过调用 IFileOpertion COM 对象
+所提供的方法来实现自动提权。
+该木马先将嵌入在资源数据中的 PE 文件在内存中加载并运行。而此 PE 文件实际上是一个
+加载器，其所做的事情则是将资源中的另一个 PE 伪造为 “dismcore.dll” ，然后将此 dll 复制
+到 System32 目录下，最后使用 pkgmgr.exe 执行伪造的恶意 DLL 。由于 pkgmgr.exe 是一个
+UAC 白名单程序，所以它默认具有管理员权限，且不会弹出 UAC 提示框。部分代码如下图
+https://www.secrss.com/articles/10745 26/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+此恶意 DLL 的主要功能是获取注册表中的 ”Install” 安装信息 (Dropper 的路径 ) 并重新启动具
+有管理员权限的 Dropper 新进程。
+5 ）未知测试
+该木马尝试与远程服务器进行通信，当连接成功时则会向服务器发送 ”AVE_MARIA” 字串
+作为暗号。然后等待接收服务器返回数据，大小为 4 个字节。如果接收成功，则开启新线
+程。
+https://www.secrss.com/articles/10745 27/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+在新线程中，根据远程服务器发送的指令，与新指定的 C&C 进行连接。
+由于接收数据无法获取，所以目前我们无法确定其准确用途，暂将其命名为未知测试。
+3.2 最新攻击样本
+我们在 2019 年 3 月 26 日捕获到了最新的关联文档 “Michelle Flores - Curriculum
+Actualizado.doc” ，其同样通过恶意宏启动攻击。文档首先通过 Powershell 脚本下载并执行
+PE 文件 “massive.exe”(C# 编写并加入了大量混淆 ) 。之后包含了两个阶段，第一阶
+段 “massive.exe” 会从资源中解密出 PE 文件 “DUMP1.exe”(C# 编写 ) 并加载。第二阶段则
+是 “DUMP1.exe” 释放自身并通过计划任务设置自启动，最后从资源中提取出 Remcos RAT
+https://www.secrss.com/articles/10745 28/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+“massive.exe” 从资源中提取并解码出加密字符流，之后通过 StrReverse 函数将该字符流逆
+序排列，再经 FromBase64String 函数解码，最后通过自定义的解密函数 method_0 解密得
+到 PE 文件 “DUMP1.exe” 。
+解密函数 method_0 如下图所示：
+https://www.secrss.com/articles/10745 29/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+在经过逆序排列和 Base64 解码后的字符串（ byte_0 ）中，前 16 位为解密密钥 “0x28 0x49
+0xf7 0x30 0xec 0x8d 0x500x80 0x94 0xaf 0x85 0xaa 0xa8 0xe7 0xc0 0x41”, 之后为待解
+密密文。函数以 16 位为循环, 将密钥同密文依次进行按位异或，最终解密得到 “DUMP1” 文
+件并通过 CallByName 函数加载执行。
+“DUMP1” 文件同样采用 C# 编写，程序首先会睡眠 50 秒以躲避沙箱检查，之后会检测调试
+器并将自身释放至 “%ApplicationData%\riNpmWOoxxCY.exe” ，接着创建 schtasks.exe 进
+程并添加计划任务 “Updates\riNpmWOoxxCY” ，从而实现在登录账户时自启动，相关命令
+"C:\Windows\System32\schtasks.exe/Create/TN
+Updates\riNpmWOoxxCY/XMLC:\Users\super\AppData\Local\Temp\tmp925C.tmp"
+之后，程序会从自身资源内解密出 PE 文件 “DUMP2” ，通过 CreateProcess 、
+WriteProcessMemory 和 SetThreadContext 等函数，以挂起的方式加载一个新的进程，并
+最终以傀儡进程的方式写入并加载 “DUMP2” 。
+https://www.secrss.com/articles/10745 30/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+经过分析，我们在 “DUMP2” 中发现了一些可疑字符串
+如： “Remcos” 、 “Remcos_Mutex_Inj” 、 “2.3.0 Pro” 。
+通过大量可疑信息我们确认此木马为 Remcos RAT 的客户端，且其使用的版本为 2.3.0
+Pro 。以 Remcos RAT 免费版 V2.4.3 为例，服务端如图所示：
+其免费版仅可添加一个 C2 连接服务器，专业版则没有数量限制。此次攻击中植入的木马是
+通过专业版生成且连接至多个恶意 C2 ，包含的 C2 地址提取如下：
+casillas.hicam.net
+casillasmx.chickenkiller.com
+casillas.libfoobar.so
+du4alr0ute.sendsmtp.com
+settings.wifizone.org
+wifi.con-ip.com
+rsaupdatr.jumpingcrab.com
+https://www.secrss.com/articles/10745 31/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+activate.office-on-the.net
+Remcos RAT 自 2016 年下半年开始在其官网和黑客论坛售卖，部分厂商曾对其进行过详细
+的技术分析，在此不做赘述，但这款木马的发现为我们寻找 “Curriculum Vitae Actualizado
+Jaime Arias.doc” 植入的未知木马来源提供了很好的溯源线索。
+4.1 恶意代码溯源追踪
+前文曾提到， “Curriculum Vitae Actualizado Jaime Arias.doc” 植入的木马中包含
+了 “AVE_MARIA” 特征字符串，且自 2018 年 12 月开始， “AVE_MARIA” 类恶意样本在
+twitter 、 virustotal 等平台越来越多的被发现。但多篇相关研究文章均未指出其真实来源，
+杀毒厂商也广泛的将其命名为 AVE_MARIA ，这引起了我们浓厚的兴趣。
+我们尝试从多种角度去溯源木马以寻找线索，包括域名、 IP 、关联样本等等。其中在对关
+联样本 “Michelle Flores - Curriculum Actualizado.doc” 的分析中成功溯源到了商用软件
+Remcos RAT 。我们分析了该软件的发布渠道，发现其不仅在官网进行销售，还在诸多黑
+客论坛如 Hackforums 上大量售卖。由此，我们猜测攻击人员很可能活跃在相关论坛并购
+买过多款商用软件，同时也将溯源重点转向黑客论坛和暗网市场。
+我们收集并分析了大量 AVE_MARIA 类恶意样本，发现大部分样本均通过 warzonedns.com
+子域名进行恶意连接和下载，追溯发现其实质为黑客提供的 DDNS 服务。结合攻击人员的
+活动线索，我们成功追踪到 Hackforums 论坛上的可疑用户 Solmyr 。
+Solmyr 在论坛中提供了 warzonedns.com 域名的免费 DDNS 服务（ IP 动态绑定至子域
+名），使得用户可以轻易的将服务器 IP 绑定解析至 warzonedns.com 下的任意子域名，使
+https://www.secrss.com/articles/10745 32/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+这无疑给黑客提供了很好的藏身之所，与此同时我们发现 Solmyr 的另一个身份是
+WARZONE RAT 的发布者，该软件由于控制手段丰富、技术功能强大、迭代更新迅速，目
+前在 Hackforums 论坛中非常受欢迎。
+至此，我们有理由怀疑攻击者使用过该款商用远程管理工具。由于该软件闭源且不提供免
+费版本，我们追溯到了 WARZONE RAT 流出的破解版本（ V1.31 ），并将其与 “Curriculum
+Vitae Actualizado Jaime Arias.doc” 植入的木马样本进行同源性分析, 以确定二者间的关
+联。
+4.2 同源性分析
+首先，我们在两种样本中均发现了特征字符串 “AVE_MARIA” ，并且针对两类样本的代码
+结构进行了比对，发现相似度极高。
+https://www.secrss.com/articles/10745 33/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+其次，我们通过 Bindiff 进行了更为精确的对比，在去除部分 API 干扰并比较分析了可信度
+高的函数后，发现大量函数完全相同，占比达到 80.16% ，其余函数则可能因为版本原因
+另外, 从传播时间的角度分析,“AVE_MARIA” 关联样本最初出现的时间 (2018 年 12 月 2 日 ) 略
+晚于 WarzoneRAT 在论坛的发布时间 (2018 年 10 月 22 日 ) ，这也符合恶意代码传播的时间逻
+辑。
+依据以上几点分析，我们认为两者具有高度的一致性。从目前已知的情况看， WARZONE
+被杀毒厂商广泛的识别为 AVE_MARIA ，而在深入比对分析后，我们判定黑客组织使用的
+远控木马正是 WARZONE RAT 。因此可以将此类包含 “AVE_MARIA” 字符串的恶意样本家
+族命名更新为 “WARZONE” 。
+4.3 域名关联
+https://www.secrss.com/articles/10745 34/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+我们观察到目前与 DDNS 服务 warzonedns.com 相关联的子域名总数共 101 个，部分截图如
+下：
+这批域名均为 warzonedns.com 提供的免费子域名，且大部分关联至恶意样本，这表明大
+可以判断， Solmyr 团伙作为 WARZONE 类恶意软件产业链的上游供应商，提供了包括免费
+域名服务、收费恶意软件及其它恶意利用技术等一系列服务，打包售卖给下游黑客使用。
+此次事件的攻击组织也为其下游客户，通过购买其部分服务，与自身的恶意代码组合利用
+来达到更佳的攻击效果，同时也能更好的隐藏自己的身份。
+5
+总 结
+本文对本次攻击活动的攻击流程、相关的恶意代码、黑客背景等做了深入的分析和研究，
+从上文的分析中我们可以看出该黑客组织目前的攻击活动十分谨慎，既没有大规模的攻
+击，也没有采用高成本的 0day 漏洞，同时，攻击活动时间也非常短。这表明该攻击活动还
+处于初期，并对目标进行了一些试探性、针对性的攻击，也为后续的攻击做好准备。此外
+通过对攻击活动的溯源，我们确定了该次活动背后的黑客组织，并根据该黑客组织的活动
+历史，发现其民族主义色彩强烈，因此政治目的意图也较为明显。
+当前利用宏进行网络攻击已经成为一种成本较低的攻击方式，因此也被大量的黑客组织所
+使用。黑客常常利用目标的一些薄弱环节来进行此类攻击，具有一定的成功率，通过诱饵
+文档可以看出，本次活动针对的是政府机构的招聘部门，此类人群具有相对较弱的安全意
+识，且由于工作中需要翻阅的简历量较多 ( 如财政部门的简历量通常较大 ) ，使得相关人员
+无法分辨伪装得较好的恶意简历文件。再加上多阶段在线下载恶意代码的策略、无文件技
+术和打包加密技术的使用，从而大大提高了攻击的成功率。因而此类攻击需要相关部门提
+高警惕，加强体系架构中的短板防范。
+IOC
+MD5
+https://www.secrss.com/articles/10745 35/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+99C82F8A07605DA4CCC8853C910F7CAF
+048DCA20685ECD6B7DBDBF04B9082A54
+DEF105A9452DEF53D49631AF16F6018B
+1E19266FC9DFF1480F126BD211936AAC
+262D9C6C0DC9D54726738D264802CCAD
+B3C9F98DD07005FCCF57842451CE1B33
+497566120F1020DBD6DF70DD128C0FFB
+域名
+linksysdatakeys[.]se
+gestomarket[.]co
+asdfwrkhl.warzonedns[.]com
+casillas.hicam[.]net
+casillasmx.chickenkiller[.]com
+casillas.libfoobar[.]so
+du4alr0ute.sendsmtp[.]com
+settings.wifizone[.]org
+wifi.con-ip[.]com
+rsaupdatr.jumpingcrab[.]com
+activate.office-on-the[.]net
+声明：本文来自 ADLab ，版权归作者所有。文章内容仅代表作者独立观点，不代表安全内
+参立场，转载目的在于传递更多信息。如有侵权，请联系 anquanneican@163.com 。
+https://www.secrss.com/articles/10745 36/37
+5/24/2019 黑狮行动：针对西班牙语地区的攻击活动分析 - 安全内参 | 网络安全首席知识官
+https://www.secrss.com/articles/10745 37/37

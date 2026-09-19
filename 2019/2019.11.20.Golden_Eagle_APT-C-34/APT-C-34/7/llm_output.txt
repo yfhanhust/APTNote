@@ -1,0 +1,77 @@
+
+
+
+Sentence : Windows 类型
+Rcs 的 Windows 客户端是外界公布的 HackingTeam “Soldier” 程序，其使⽤了 VMP 进⾏保护，并且使
+⽤了证书进⾏签名。功能上与⽼版本的 HackingTeam 程序相似。 Windows 端的 C&C 信息格式如
+下：
+IP Country ASN
+_._ .* Germany 47447\23media_GmbH
+
+与⽼版本的 Hacking Team 的程序相类似，其写⼊注册表项进⾏⾃启动，注册表位置为：
+SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder
+项名称为 NVIDIAControlPanel
+值得注意的是我们还发现了 RCS ⽊⻢离线安装包，将该安装包写⼊ U 盘等可引导介质中，当攻击者
+物理接触到受害者电脑后，能够在系统启动阶段，神不知⻤不觉的将⽊⻢植⼊系统。
+该离线安装包不仅⽀持 Windows 操作系统，⽽且还⽀持 Mac OS 和 Linux 系统。
+该安装包的版本为 10.3.0 ，远⾼于 2015 年泄漏的版本，该安装包能够⾃动识别操作系统的版本，机
+器名，⽤户名等信息，使⽤界⾯极为简便。
+blogs.360.cn/post/APT-C-34_Golden_Falcon.html 14/22
+11/22/2019 盘旋在中亚上空的阴影-黄⾦雕（APT-C-34）组织攻击活动揭露 - 360 核⼼安全技术博客
+在安装完成后， Hacking Team ⽊⻢被安装到配置⽂件中指定的位置了。重启系统后，⽊⻢便开始
+运⾏。 下图为 Hacking Team 离线安装配置⽂件：
+HKCU\Software\Microsoft\Windows\CurrentVersion\Run 下添加开机启动项，启动
+%userprofile%\appdata\local\microsoft\ ⽂件夹下的 InterMgr 0.17.stcz ⽂件。⽊⻢在运⾏后会向其
+他进程注⼊线程，以此来达到对抗分析的⽬的，下图为使⽤分析⼯具和 Regedit 查看启动项的对
+⽐。
+blogs.360.cn/post/APT-C-34_Golden_Falcon.html 15/22
+11/22/2019 盘旋在中亚上空的阴影-黄⾦雕（APT-C-34）组织攻击活动揭露 - 360 核⼼安全技术博客
+如果只看 0 字节的 InterMgr 0.17.stcz 的⽂件可能会误导后⻔⽆法启动。
+是劫持了后缀为 stcz ⽂件的关联打开⽅
+式， HKEY_CLASSES_ROOT.sctz 指
+向了 stcz_auto_file 。
+⽽从 HKEY_CLASSES_ROOT\stcz_auto_file\shell\open\command 的值可以知道， InterMgr
+0.17.stcz 在开机时被打开后会调⽤ rundll32 ，运⾏ %userprofile%\AppData\Local\Microsoft\yFEO39g\ ⽬录下的⽊⻢ dCh8RnL1.Odo 。
+该处注册表值如下： %systemroot%\system32\rundll32.exe"
+%windir%..\Users\ADMINI~1\AppData\Local\MICROS~1\yFEO39g\dCh8RnL1.ODo",fe566ba28K
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "HackingTeam ‘Soldier’ 程序", "type" : "APPS"},
+        {"id": 2, "description": "VMP (Virtual Machine Protection)", "type" : "TAMP"},
+        {"id": 3, "description": "证书签名", "type" : "TAMP"},
+        {"id": 4, "description": "C&C 信息格式", "type" : "CCSH"},
+        {"id": 5, "description": "Germany", "type" : "COUN"},
+        {"id": 6, "description": "注册表项", "type" : "REGI"},
+        {"id": 7, "description": "NVIDIAControlPanel 注册表项名称", "type" : "REGI"},
+        {"id": 8, "description": "RCS ⽊⻢离线安装包", "type" : "DOCF"},
+        {"id": 9, "description": "U 盘等可引导介质", "type" : "USB"},
+        {"id": 10, "description": "Windows 操作系统", "type" : "OPPS"},
+        {"id": 11, "description": "Mac OS", "type" : "OPPS"},
+        {"id": 12, "description": "Linux 系统", "type" : "OPPS"},
+        {"id": 13, "description": "InterMgr 0.17.stcz 文件", "type" : "DOCF"},
+        {"id": 14, "description": "%userprofile%\\appdata\\local\\microsoft\\文件夹", "type" : "SYSP"},
+        {"id": 15, "description": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run 开机启动项", "type" : "REGI"},
+        {"id": 16, "description": "%userprofile%\\AppData\\Local\\Microsoft\\yFEO39g\\dCh8RnL1.Odo 文件", "type" : "DOCF"},
+        {"id": 17, "description": "HKEY_CLASSES_ROOT.sctz 注册表项", "type" : "REGI"},
+        {"id": 18, "description": "stcz_auto_file 关联打开方式", "type" : "TAMP"},
+        {"id": 19, "description": "%systemroot%\\system32\\rundll32.exe 调用命令", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "protected by"},
+        {"source": 1, "target": 3, "rel_name" : "signed with"},
+        {"source": 1, "target": 4, "rel_name" : "uses C&C format from"},
+        {"source": 4, "target": 5, "rel_name" : "located in country"},
+        {"source": 1, "target": 6, "rel_name" : "writes to registry at"},
+        {"source": 6, "target": 7, "rel_name" : "contains item named"},
+        {"source": 8, "target": 9, "rel_name" : "written to USB or bootable media"},
+        {"source": 8, "target": 10, "rel_name" : "supports OS"},
+        {"source": 8, "target": 11, "rel_name" : "supports OS"},
+        {"source": 8, "target": 12, "rel_name" : "supports OS"},
+        {"source": 13, "target": 14, "rel_name" : "located in folder"},
+        {"source": 15, "target": 13, "rel_name" : "adds to startup item"},
+        {"source": 16, "target": 13, "rel_name" : "called by file at"},
+        {"source": 17, "target": 18, "rel_name" : "points to"},
+        {"source": 19, "target": 16, "rel_name" : "calls"}
+    ]
+}

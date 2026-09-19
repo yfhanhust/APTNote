@@ -1,0 +1,33 @@
+2.9 HBOOT patch analysis
+The analysis required a good understanding of what HBOOT did and how. We began by observing that like
+BROM, HBOOT implemented a console with an impressive set of commands. Finding out how these commands
+were added allowed us to spot every implemented command, and rename the corresponding handler functions.
+This provided at least some insight into what parts were patched.
+Figure 18. List of console commands supported by HBOOT.
+Starting with the first modification of two PowerPC instructions in the middle of the HBOOT code section, we
+saw the boot command implementation was modified to include a call to the other added code fragment. The
+call was patched in to be performed after the application image was loaded into memory and authenticated.
+Analysis of the inserted code revealed this to be the first stage of a de-obfuscator (XOR-based with the key
+derived from the unit serial number), processing the "random" data previously discovered at the end of Flash.
+This data is de-obfuscated into a stack-based buffer, and control was then passed there. Care was taken to verify
+the operation was performed correctly, so the unit did not crash even when there was no obfuscated data
+present.
+That code was found to be a stage 2 de-obfuscator, with the key based on certain data from the Flash IC not
+accessible directly through conventional tools we had. Due to these circumstances, the key had to be brute
+forced. Similarly, the de-obfuscated code of stage 3 was again placed into a stack-based buffer and executed.
+F-Secure.com | © F-Secure LABS 22
+PUBLIC
+Stage 3 was found to be the actual patching code, searching for the serialNu string and applying some
+modifications to the IOS image expected to be already loaded in memory. The modifications were few and
+consisted of mainly "return OK" kind of patches; full details of functions being patched will not be published for
+obvious reasons. However, it appeared the only purpose of this "added functionality" was to circumvent
+software licensing protections.
+It was due to this added patching functionality that the counterfeit units could bypass platform authenticity
+verification. This also explained why units stopped working after a software update: the latest software will
+almost certainly rewrite the patched HBOOT code, removing the work done to bypass the checks. The case of
+the Counterfeit B unit confirmed this hypothesis.
+When the CISO of the victim company provided us the counterfeit devices for investigation one of the main
+tasks was to answer whether there were any backdoor-like functionalities being introduced. We concluded this
+did not appear to be the case for application and HBOOT code.
+F-Secure.com | © F-Secure LABS 23
+PUBLIC

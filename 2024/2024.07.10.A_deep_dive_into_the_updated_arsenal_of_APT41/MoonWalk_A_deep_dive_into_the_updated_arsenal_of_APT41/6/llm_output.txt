@@ -1,0 +1,330 @@
+
+
+
+Sentence : MoonWalk analysis
+MoonWalk is a malware backdoor written in C that shares many code similarities with
+DodgeBox, suggesting a common development toolkit. It incorporates many evasion related
+functions from DodgeBox, including those related to the following:
+DLL hollowing
+Import resolution
+DLL unhooking
+Call stack spoofing
+Additionally, MoonWalk utilizes the same DLL blocklist as DodgeBox.
+ThreatLabz analysis reveals MoonWalk's modular design, allowing it to load different plugin
+components as needed. The sample examined by ThreatLabz contains two embedded
+plugins, a C2 plugin for C2 communication, and a utility plugin that provides functionality
+related to compression and public-key cryptography. This modular architecture makes
+MoonWalk highly adaptable, enabling attackers to customize its functionality for different
+scenarios.
+In the section below, we will highlight several notable capabilities of MoonWalk.
+Unloading the DodgeBox loader
+When MoonWalk first initializes, it resolves its imports using the same algorithms as
+DodgeBox. Then, depending on the DodgeBox configuration
+parameter Config.fShouldUnloadStealthVector, MoonWalk unloads the DodgeBox
+DLL from memory and unlinks it from the Process Environment Block (PEB). This reduces
+MoonWalk’s in-memory footprint, and obfuscates its origins, hindering memory forensic
+analysis.
+Using Windows Fibers
+Next, MoonWalk initializes global structures used to manage Windows Fibers. Windows
+Fibers are a lightweight threading mechanism, available in the Windows operating system
+since Windows NT SP5. Unlike traditional threads, which are scheduled by the operating
+system, fibers are cooperatively scheduled by the application itself. This allows developers to
+tune an application’s performance for a specific workload. However, due to the complexity of
+utilizing Windows Fibers, and performance improvements of computer hardware, Windows
+Fibers were not widely adopted, and remains an obscure feature.
+However, with the increased focus on cybersecurity in recent years, there has been an uptick
+in interest in Windows Fibers from the research and red-teaming community. Multiple
+research papers (1, 2, 3) and open-sourced proof of concepts (POCs) have been published,
+abusing Windows Fibers to evade AVs/EDR solutions.
+APT41 may have been following these developments, as they have incorporated Windows
+Fibers into the MoonWalk backdoor. At a high level, MoonWalk maintains a global array of
+fibers. When a function needs to be executed as a fiber, a fiber is created using
+the CreateFiber API. This fiber is then packaged together with the address of the
+function and its arguments and other metadata, and inserted into the global array. The main
+fiber then schedules these fibers for execution. This use of Windows Fibers helps
+MoonWalk evade AVs and EDRs which do not support the scanning of Windows Fibers, and
+also makes analysis challenging by breaking up the control flow.
+Configuration
+MoonWalk decrypts its configuration, which is hard-coded within its .lrsrc section. Like
+DodgeBox, MoonWalk uses MD5 for configuration validation and AES Cipher Feedback
+(AES-CFB) for decryption.
+However, MoonWalk's configuration is more complex, featuring nested structures and
+arrays. This configuration contains various execution parameters including the following:
+Mutex names
+A fiber configuration
+Heartbeat intervals
+Encryption keys
+C2-related data
+In the sample we analyzed, MoonWalk's configuration (referred to as Config ) included
+OAuth secrets used to authenticate with the attacker-controlled Google Drive account, and
+other notable fields as shown below:
+```
+XXXXXXXX3108
+0pm3bsjc0mto2e1k4kp2u8817lgk3e3v.apps.googleusercontent.com
+XXXXXXXXBiuo8VPZUH1dBHkv86mC1xFU_Z3
+          XXXXXXXXiYDPmH9cCgYIARAAGAkSNwF
+
+L9IrcM7YiuxWrNuyIfKINyNc_pEVytGNNK750ZyyIm32qH6Wh3dGIBTvdPJ2v92xAohHwW
+w
+a8e6bd132daf0360b1af1f5eea15e42f8c6f1dcd7d34376ae4e83a1a4f5907c0
+Global\ctXjvsAxpzyqElmk
+default
+```
+After loading the default configuration, MoonWalk searches for a new configuration file at
+C:\ProgramData\[MD5(Config.rgbIDBytes)] . If found, the malware decrypts and
+loads this file. A sample of MoonWalk's decrypted configuration is available in the Appendix
+of this blog for reference.
+Unpacking and loading plugins
+MoonWalk then extracts embedded plugins from the .lrsrc section. In the MoonWalk
+sample we analyzed, there were two plugins embedded within this section: one plugin for
+C2, and another plugin which provides utility functions such as public key cryptography and
+compression.
+Each plugin in the .lrsrc section is prefixed with 72 bytes of metadata, which includes
+AES-CFB secrets, an MD5 checksum, and plugin type information. The plugin type
+information fields provide information about the features of a plugin. These fields help
+identify whether a plugin serves as a command handler, C2, or utility. More details about the
+structure of plugin metadata can be found in the Appendix section.
+MoonWalk organizes these plugins by registering them in a global linked list. MoonWalk
+then goes through this list to load the C2 plugin and its dependencies, such as the utility
+plugin, using DLL hollowing. This process is similar to what we previously described in Part 1
+for DodgeBox. Like DodgeBox, this MoonWalk sample stores a copy of the host DLL
+in C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Data.Trace .
+Network Communication
+After loading the C2 plugin, MoonWalk is prepared to establish communication with the C2
+server. MoonWalk utilizes Google Drive for C2 communications. This helps MoonWalk
+evade detection, as traffic to and from reputable cloud services are less likely to raise
+suspicion, especially if a target is already using this service. Strangely, MoonWalk uses the
+string curl/7.54.0 as its User-Agent when making HTTP requests, even though it does not
+utilize libcurl in its C2 plugin, and uses the WinHTTP family of APIs instead.
+At a high level, MoonWalk communicates over Google Drive in the following manner:
+|Step|Description|
+|---|---|
+|1 - Initialization|MoonWalk obtains an access token fromthe Google Authorization Server, byutilizing the OAuth secrets in itsconfguration(Config.szClientID ,Config.szClientSecretandConfig.szRefreshToken ).MoonWalk generates 16 random bytes,and hex-encodes them, resulting in astring suchas:f137da1a9019849fbc2aac49a4b6f2c3.  We will reference this stringasSessionID .MoonWalk uses the Google Drive APIsto retrieve the ID for the/datadirectory.MoonWalk retrieves the ID forthe/data/temp  directory.|
+|2 - Cryptographic Handshake (ClientHello and Server Hello)|MoonWalk searches /data/temp for afle named after thegeneratedSessionID  (i.e.f137da1a9019849fbc2aac49a4b6f2c3 ). If the fleis not found, MoonWalk generates anduploads a|
+|Step|Description|
+|---|---|
+||fle/data/temp/[SessionID]  toinitiate a cryptographic handshake andexchange AES keys with the server.MoonWalk then looks forthe/data/[SessionID]  directory, anditssubdirectory/data/[SessionID]/s1 .The directory titleds[number]  seemsto serve as the designated location whereMoonWalk will retrieve and downloadforthcoming C2 instructions.Lastly, MoonWalk searches forthe/data/[SessionID]/s1/1  fle. Asit becomes available, MoonWalkdownloads and processes it, andcompletes the cryptographic handshake.|
+|3 - Information Gathering|MoonWalk then checks for the existenceof thedirectory/data/[SessionID]/c1 , andcreates it if it does not exist. Then,MoonWalk gathers information such asthe computer name, user name, and OSversion, and uploads this to thefle/data/[SessionID]/c1/1 .|
+|4 - Heartbeat|MoonWalk then proceeds to sendheartbeats regularly to the C2 server byupdating a fle named “temp.txt ” withthe current Unix timestamp as a string.MoonWalk also regularly pollsthe/data/[SessionID]/s1  directoryfor new fles. If a new fle is found,MoonWalk processes it and uploads itsresponse inthe/data/[SessionID]/c1  directory.During our analysis of MoonWalk,only ping commands were observed,where MoonWalk responded byuploading encoded fles to|
+|Step|Description|
+|---|---|
+||the/data/[SessionID]/c1 directory,containing the current Unix timestamp.|
+Table 1: High-level view of the MoonWalk C2 communication protocol using Google Drive.
+Cryptographic Handshake (Client Hello)
+During the cryptographic handshake phase, MoonWalk exchanges AES keys with the server
+using a custom protocol. Because of this, it becomes very difficult or impossible to decode
+encrypted C2 messages without access to these AES keys, which exist only in MoonWalk’s
+process memory.
+The process begins with MoonWalk generating a 32-byte AES key ( rgbClientAESKey )
+and a 16-byte initialization vector (IV) ( rgbClientAESIV ) using a custom random number
+generator. The AES key is then treated as an Elliptic-curve Diffie-Hellman (ECDH) private key,
+to generate the corresponding ECDH public key ( rgbECDHPublicKey ) using
+the curve25519_donna function.
+MoonWalk then encodes the ECDH public key and AES IV by XORing them with the XOR
+key from MoonWalk's configuration ( Config.rgbXorKey ). A checksum is created by
+performing an MD5 hash on the concatenation of Config.rgbXorKey, ECDH public key,
+and AES IV, and then taking the hash’s first four bytes. Finally, MoonWalk uploads this data
+to Google Drive at the path /data/temp/[SessionID] .
+The figure below shows content of an uploaded file:
+Figure 2: Contents of a MoonWalk Client Hello key exchange message.
+The table below provides a description of the various fields contained within the uploaded
+file:
+|Ofsf et|Size in bytes|Description|
+|---|---|---|
+|0x00|1|Unknown feld, possibly a|
+|Ofsf et|Size in bytes|Description|
+|---|---|---|
+|||message type enum.|
+|0x01|32|rgbECDHPublicKeyXORedwithConfig.rgbXorKey rgbECDHPublicKey beforethe XOR operation is:d2 04 7b 20 60 c425 e2 da 01 f8 1d5b 89 d1 8cae bd 07 d3 da bc82 41 e1 b1 14 2c57 b5 5a 07|
+|0x21|16|rgbClientAESIVXORedwithConfig.rgbXorKey rgbClientAESIVbefore the XOR operationis:c4 e9 27 7c 18 e367 c7 49 32 0a a6f8 be 7a 67|
+|0x31|4|First four bytes ofMD5(Config.rgbXorKey |rgbECDHPublicKey |rgbClientAESIV)|
+|0x35|15|Unknown bytes.|
+Table 2: Description of MoonWalk Client Hello key exchange message.
+Cryptographic Handshake (Server Hello)
+MoonWalk then downloads the file located at /data/[SessionID]/s1/1 . This file
+contains the server’s response to MoonWalk’s handshake above.
+This file, and all subsequent uploaded or downloaded files, are encoded using a custom
+scheme. Here, we walk through the decoding process of this scheme, using the Server Hello
+file as an example.
+The figure below is an example of the overall layout of the encoded Server Hello file:
+Figure 3: MoonWalk Server Hello message format.
+A description of these fields is shown in the following table.
+|Ofsf et|Size in bytes|Description|
+|---|---|---|
+|0x00|8|rgbFileXorKeyThe XOR key used todecodergbEncodedBytes .|
+|0x08|8|Unknown, potentially amessage type feld.|
+|0x10|2|dwNumEncodedBytes The number of encodedbytes that follows. Thisfeld is encodedwithrgbFileXorKey .Decoding this feld showsthat there are 0xbcencoded bytes within thisfle.85 20XOR859c= 00 bc|
+|0x12|dwNumEncodedBytes|rgbEncodedBytes|
+|Ofsf et|Size in bytes|Description|
+|---|---|---|
+|||The encoded bytes withinthis fle. These bytesappear to containmessage metadata, suchas Google Drive fle IDs,message headers, or junkbytes. To decode thesebytes,rgbFileXorKeyis used, starting with thethird byte of the XOR key. 18 25 ea a3 39 b4e8 45 7f 01 99 ba07 d6XOR29 44 ae cd 5f fb85 20 29 44 ae cd5f fb=31 61 44 6e 66 4f6d 65 56 45 37 7758 2d|
+|0x??|variable|rgbEncryptedBytesThe rest of the fle is notencoded, because thissection is typicallyencrypted with AES-CFB,using the AES keysexchanged during thecryptographic handshakephase.|
+Table 3: Description of the MoonWalk Server Hello message format.
+The figure below shows the Server Hello file after decoding:
+Figure 4: Example contents of a decoded MoonWalk Server Hello message.
+The decoded Server Hello fields are described in the table below.
+|Ofsf et|Size in bytes|Description|
+|---|---|---|
+|0x00|8|rgbFileXorKeyThe XOR key, used todecodergbEncodedBytes .|
+|0x08|8|Unknown|
+|0x10|2|dwNumEncodedBytes|
+|0x12|variable|szHeartBeatFileIDThe Google Drive ID ofthe heartbeatfle,temp.txt .|
+|0x34|variable|Unknown|
+|0xce|48|Encoded bufer, XORencoded|
+|Ofsf et|Size in bytes|Description|
+|---|---|---|
+|||withConfig.rgbXorKey . After decoding, thefollowing felds arerevealed: rgbServerECDHBasePoint- Used as the ECDHbase point, whichMoonWalk later uses togenerate the shared AESkey used by the server. 77 82 64 13 04 1694 da 35 d2 1e b827 d7 35 ff02 8a 47 85 56 4129 5b cb 3b 28 22f2 69 3d 3a The remaining bytes afterdecoding contain achecksum, and additionalunknown bytes.|
+|0xfe|4|Checksum generatedbyMD5(rgbServerECDHBasePoint |Config.rgbXorKey.)|
+|0x102|variable|Unknown|
+Table 4: Description of fields within a MoonWalk Server Hello message.
+With this information, MoonWalk generates a public key ( rgbECDHServerPublicKey )
+using the curve25519_donna function. Then, rgbECDHServerPublicKey is XORed
+against Config.rgbXorKey to generate the server AES key.
+```
+Curve25519_Donna(
+a1->rgbECDHServerPublicKey,
+```
+```
+// Public Key (out):
+// 000001e6`246391ec b5 8f a7 ee 0b da d6 79-79 60 85 79 bf 32 ad 91
+// 000001e6`246391fc 24 a3 39 66 4c 4b 49 97-6c 71 92 d3 55 45 4b 3e
+a1->rgbClientAESKey,
+// Private Key:
+// 000001e6`2463920c 54 be fd a7 f4 0f 62 15-fb 22 9a 48 04 e3 6e 90
+// 000001e6`2463921c 85 4b b9 c7 f2 5f de 57-65 59 9c 90 18 04 d9 d1
+a1->rgbECDHServerBasepoint);
+// Basepoint:
+// 000001e6`24639251 77 82 64 13 04 16 94 da-35 d2 1e b8 27 d7 35 ff
+// 000001e6`24639261 02 8a 47 85 56 41 29 5b-cb 3b 28 22 f2 69 3d 3a
+rgbServerAESKey = rgbECDHServerPublicKey ^ Config.rgbXorKey
+// 1d 69 1a fd 26 75 d5 19-c8 cf 9a 27 55 27 49 be
+// a8 cc 24 ab 31 7f 7e fd-88 99 a8 c9 1a 1c 4c fe
+```
+In this manner, MoonWalk exchanges AES keys with its C2, and thus concludes the
+cryptographic handshake.
+Information gathering
+During this phase, MoonWalk collects information about the environment and uploads it to
+Google Drive. The gathered data includes details such as the processor architecture,
+Windows product type, version and build numbers, computer and usernames, as well as IP
+addresses. This information is then compressed using LZ4. A checksum is then added, using
+the 32-bit MurmurHash2 algorithm, with a customized mixing constant where r is set
+to 15, and with the initial seed set to 0x12345678 . These bytes are then encrypted using
+AES-CFB with the server’s AES key, and packaged using the custom scheme detailed above,
+before being uploaded to Google Drive.
+More details of the environment information collected are provided in the Appendix of this
+blog.
+Heartbeat
+MoonWalk also regularly sends heartbeats to the server. It uploads the current Unix
+timestamp in plain text to a temp.txt file on Google Drive, using the file
+ID szHeartBeatFileID retrieved as part of the cryptographic handshake.
+Backdoor capabilities
+In our analysis of MoonWalk, we did not observe the C2 sending any other commands or
+plugins. If a command handler plugin ( dwPluginTypePart2 == 1 described in the
+Appendix) is not found, MoonWalk defaults to a built-in list of handlers. These handlers
+contain functionality, which include the following:
+Collect environment information (similar to the information gathering step above)
+Steal token (token impersonation)
+Create token (log on to the Windows machine using given credentials)
+Download new configuration
+Execute command line commands
+Note: This list is not complete as further analysis is required.
+Output : 
+### Overview of MoonWalk Backdoor
+
+MoonWalk is a sophisticated backdoor that leverages Google Drive for Command and Control (C2) communication, environment information gathering, and file exfiltration. The malware uses advanced cryptographic techniques to secure its communications and employs a modular architecture with plugins for various functionalities.
+
+### Key Components and Features
+
+#### 1. **C2 Communication via Google Drive**
+- **File Exchange**: MoonWalk uses specific files on Google Drive to exchange data with the C2 server.
+- **Custom Encoding Scheme**: Files are encoded using a custom XOR-based scheme, followed by AES-CFB encryption for secure transmission.
+
+#### 2. **Cryptographic Handshake**
+- **Client Hello**:
+  - **rgbFileXorKey**: Used to decode `rgbEncodedBytes`.
+  - **rgbClientAESIV**: Initialization vector for AES-CFB.
+  - **Checksum**: First four bytes of MD5 hash of concatenated keys and IV.
+
+- **Server Hello**:
+  - **rgbServerECDHBasePoint**: Base point for ECDH key exchange.
+  - **Shared AES Key Generation**: Derived from the server's public key and client's private key using curve25519_donna.
+
+#### 3. **Information Gathering**
+- **Data Collected**:
+  - Processor architecture
+  - Windows product type, version, and build numbers
+  - Computer name and username
+  - IP addresses
+- **Compression**: Data is compressed using LZ4.
+- **Checksum**: Added using the 32-bit MurmurHash2 algorithm with a custom mixing constant (r=15) and initial seed (0x12345678).
+- **Encryption**: Compressed data is encrypted using AES-CFB with the server's AES key.
+
+#### 4. **Heartbeat Mechanism**
+- **Frequency**: Regular heartbeats are sent to the C2 server.
+- **Data Sent**: Current Unix timestamp in plain text.
+- **File ID**: `szHeartBeatFileID` obtained during the cryptographic handshake.
+
+#### 5. **Backdoor Capabilities**
+- **Built-in Handlers**:
+  - Collect environment information
+  - Steal token (token impersonation)
+  - Create token (log on using given credentials)
+  - Download new configuration
+  - Execute command line commands
+
+- **Plugin System**:
+  - MoonWalk can load additional plugins for extended functionality.
+  - If a command handler plugin is not found, it defaults to the built-in handlers.
+
+### Detailed Analysis
+
+#### Cryptographic Handshake (Client Hello)
+
+1. **File Layout**:
+   - `rgbFileXorKey`: 8 bytes
+   - `rgbClientAESIV`: 16 bytes
+   - `Checksum`: 4 bytes
+   - `Unknown Bytes`: 15 bytes
+
+2. **Decoding Process**:
+   - XOR `rgbEncodedBytes` with `rgbFileXorKey`.
+   - Validate the checksum using MD5.
+
+#### Cryptographic Handshake (Server Hello)
+
+1. **File Layout**:
+   - `rgbFileXorKey`: 8 bytes
+   - `Unknown Field`: 8 bytes
+   - `dwNumEncodedBytes`: 2 bytes (encoded with `rgbFileXorKey`)
+   - `rgbEncodedBytes`: Variable length
+   - `rgbEncryptedBytes`: Remaining part of the file, encrypted with AES-CFB.
+
+2. **Decoding Process**:
+   - XOR `rgbEncodedBytes` starting from the third byte of `rgbFileXorKey`.
+   - Validate the checksum using MD5.
+   - Decrypt `rgbEncryptedBytes` using the server's AES key.
+
+#### Information Gathering
+
+1. **Data Collection**:
+   - Use Windows API calls to gather system information.
+   - Compress data using LZ4.
+   - Add a 32-bit MurmurHash2 checksum.
+   - Encrypt with AES-CFB using the server's AES key.
+
+2. **File Upload**:
+   - Package the encrypted data using the custom scheme.
+   - Upload the file to Google Drive using the provided `szHeartBeatFileID`.
+
+#### Heartbeat
+
+1. **Data Preparation**:
+   - Get the current Unix timestamp.
+   - Convert it to plain text.
+
+2. **File Upload**:
+   - Use the `szHeartBeatFileID` to upload the timestamp to the specified file on Google Drive.
+
+### Conclusion
+
+MoonWalk is a highly sophisticated backdoor that demonstrates advanced techniques in C2 communication, data exfiltration, and modular plugin architecture. Its use of Google Drive as a covert channel for communication adds an additional layer of stealth, making it a significant threat to targeted systems. Further analysis and monitoring are essential to fully understand its capabilities and to develop effective countermeasures.

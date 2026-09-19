@@ -1,0 +1,97 @@
+2.10 SLIMpro analysis
+We had reached the point where we were ready to investigate the question posed previously with regards to
+the bypassing of HBOOT image verification. As the SLIMpro component was responsible for authentication
+because PowerPC cores only initiated the process by posting a message to a "mailbox", it was reasonable to
+conclude that some changes were implemented, resulting in this component always reporting a successful
+authentication. By identifying and understanding these changes we would be able to explain how the
+counterfeiters are able to bypass the code authentication function.
+What piqued our interest in the case of Counterfeit A was the "implant" added in conjunction with a serial
+EEPROM chip. What was the reason for such an unusual and obvious addition? Furthermore, the same chip had
+been replaced with a completely different package in Counterfeit B.
+Figure 19. The implant PCB, disconnected from the unit, with the resin blob removed. As with Counterfeit B,
+the top marking was erased.
+Since the protocol used to interface with EEPROM was relatively simple and slow, it was easy to intercept and
+record the communications to gain insight into the workings of this implant. Any existing tool able to decode
+I [2] C communications and export the decoded traffic could be used for this purpose. Below is a short excerpt of
+this intercepted traffic as produced by the Logic software shipped with Saleae logic analyzer:
+According to the M24512 data sheet, random-access read operation was performed by writing two address
+bytes followed by reading multiple bytes of data. This corresponded to the observed traffic. A simple script was
+F-Secure.com | © F-Secure LABS 24
+PUBLIC
+written to parse such output and to create a dump file containing the intercepted contents, as well as to provide
+some overview on the read transactions executed.
+Exactly the same behavior was observed when traffic was captured on the Genuine unit.
+The following could be immediately noted:
+
+Repeating small accesses to addresses 0x60 through 0xE0 of 0x40 bytes each, followed by a significant
+
+sequential read.
+
+Data starting at address 0x220 was read twice, but with different transaction sizes.
+
+F-Secure.com | © F-Secure LABS 25
+PUBLIC
+Here is a closer look at what was being read:
+Figure 20. The beginning of the obtained EEPROM/implant dump of the Counterfeit A unit.
+After a 32-byte block of unknown data, we could see the AMCC magic bytes, identifying the container format
+described in appendix 6.3. By correlating the accesses with file offsets within the container, it was easy to identify
+which files from this container were being read and in what order, so a higher-level overview could be pieced
+together:
+The fact that the ipp.bin file was being read twice stands out. This mirrored the situation with the main
+application binary being read twice; first to verify the signature, then to decompress and pass control to.
+Therefore, it is easy to assume the similar situation here as well: verify, then execute.
+Such an implementation, however, is vulnerable to a classic race condition called time-of-check to time-of-use
+(TOCTOU) where verified content could be manipulated after it had been verified but before its use. This
+immediately prompted a comparison between the two reads (it was easy to truncate the I [2] C traffic dump to
+exclude the second series of transactions starting at address 0x220).
+Quite similarly to the HBOOT patch, two differences were detected: one small patch within the bulk of the file
+and another, larger binary blob appended to the image.
+Assuming this file contained software for some CPU architecture and not data, we could attempt to identify
+which architecture this was meant to be executed on. Unfortunately, binwalk -A did not produce any
+meaningful output. However, the following facts were observed:
+
+The beginning of the file appeared to contain a set of 32-bit little-endian integers similar in magnitude except
+
+the very first one
+
+The byte sequence 70 47 was encountered quite often in the file
+
+These two facts point at the possibility of this being ARM Thumb code, with the exception vectors located at the
+beginning as is common with ARM-based embedded systems. From there, it was easy to verify the assumption
+and guess the correct loading address with IDA Pro.
+It was also possible to locate the previously observed BOOT FAIL string in this file.
+F-Secure.com | © F-Secure LABS 26
+PUBLIC
+With that, we concluded that the ipp.bin file contained software running on the SLIMpro SoC component.
+After loading the image in IDA Pro and spending some time marking up known library functions, we turned our
+attention to the changes made to the image by the implant. It transpired that a call to memcmp() was replaced in
+a certain function with a call to another function introduced by the patch; the new function inherited the original
+semantics. Below is the pseudocode of the replacement function:
+Not having access to the SoC reference manual or other sources of information concerning the SoC memory
+map as seen by SLIMpro, made it very challenging to understand what the first condition meant. The second
+condition took into account the contents of one of the input buffers: it should have started with bytes 27 4F . In
+both cases, the number of bytes to be compared was reset to two.
+Considering the goal of the whole effort was to bypass signature verification checks, a reasonable guess was that
+this function made that possible in some cases. On inspecting signatures present in the extracted Flash images,
+we found the following BROM signature (after RSA decryption):
+Figure 21. Decrypted BROM signature.
+An immediate conclusion was that the second condition was used to circumvent the BROM signature check,
+while we could only assume that the first condition was somehow involved in circumventing HBOOT signature
+check.
+F-Secure.com | © F-Secure LABS 27
+PUBLIC
+The same exercise could be repeated against Counterfeit B. The integrated circuit installed on the processor
+board appeared to have the same pinout as the one found on the implant PCB on Counterfeit A. This was
+performed by tapping the correct vias on the board, given connecting to the pads of the QFN package footprint
+was not feasible. Here is the list of transactions performed on the bus for this unit.
+The differences were obvious: apart from two shorter reads at the beginning, the whole content was read in one
+go, with no per-file read patterns as observed in Counterfeit A. Further inspection of the dumped data revealed
+pseudo-random data with no discernible structure, apart from the first 0x120 bytes. The 32-byte header
+contained the same data; however, the AMCC file structure was not found. Instead, it appeared the software
+image starts as is. We could only conclude that the contents were encrypted in some way, and that no further
+analysis was possible.
+Figure 22. The beginning of the obtained EEPROM/implant dump of Counterfeit B.
+F-Secure.com | © F-Secure LABS 28
+PUBLIC
+environment.
+PUBLIC

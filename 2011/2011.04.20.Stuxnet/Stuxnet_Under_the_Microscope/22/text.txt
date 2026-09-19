@@ -1,0 +1,108 @@
+4.1 User-mode functionality
+There are several modules that constitute the user-mode functionality. The main module that contains
+the others is a large dynamic link library. Other modules including kernel mode drivers are stored in the
+DLL’s resources.
+4.1.1 Overview of the main module
+The main module is represented as a large DLL packed with UPX. Its unpacked size is 1233920 bytes
+(1.18 MB).
+Figure 4.1 – Section Table of the Main Module
+www.eset.com
+46
+Figure 4.2 – Resources of the Main Module
+The main module exports 21 functions by ordinal. Each function has its own purpose as will be described
+in the section Exported functions.
+Figure 4.3 – Export Address Table of the Main Module
+4.1.2 Injecting code
+The malware employs quite an interesting technique to inject code into the address space of a process
+and execute exported functions. The user-mode modules of Stuxnet are implemented as dynamic link
+libraries, and exported functions are frequently executed or injected into the address space of a process.
+There are two different cases: when a module is loaded into an existing process, or when the module is
+injected into a new process.
+www.eset.com
+47
+4.1.3 Injecting into a current process
+Consider the first case, when one of the user-mode components wants to call a function exported by
+another component in the context of the calling process. To avoid being detected by antivirus software
+the malware loads a module in the following way:
+
+
+It allocates a memory buffer in the calling process for the module to be loaded;
+
+
+It patches Ntdll.dll system library: namely, it hooks the following functions:
+
+
+a. ZwMapViewOfSection;
+b. ZwCreateSection;
+c. ZwOpenFile;
+d. ZwClose;
+e. ZwQueryAttributesFile;
+f. ZwQuerySection;
+
+It calls LoadLibraryW API, exported from kerenl32.dll and passing it as a parameter a
+
+specially constructed library name, using the pattern: KERNEL32.DLL.ASLR.XXXXXXXX or
+SHELL32.DLL.ASLR.XXXXXXXX, where XXXXXXXX is a random hexadecimal number;
+
+
+It calls desired exported function;
+
+
+It calls FreeLibrary API function to free loaded library.
+
+
+To hook the functions specified above, the malware allocates a memory buffer for code that will
+dispatch calls to hooked functions, overwrite some data in MZ header of the image with the code that
+transfers control to the new functions, and hook the original functions by overwriting its bodies, the
+result of these manipulations is presented on figure 4.4.
+www.eset.com
+48
+Figure 4.4 – Hooking Functions in ntdll.dll
+www.eset.com
+49
+The MZ header of ntdll.dll is overwritten with the following code:
+Figure 4.5 – Code Injected into MZ Header of ntdll.dll
+The purpose of all these manipulations is to load a non-existent library legitimately (at least as far as the
+system is concerned). The hook functions allow the malware to load module as if it were a library that
+really existed. When a library with specific name (KERNEL32.DLL.ASLR or SHELL32.DLL.ASLR) is
+requested, these functions map the desired module into the address space of the process. As a result,
+the loaded module looks like a real dynamic link library except that there is no file with the name of the
+library on the hard drive, which reduces probability of detection by heuristic methods. Some anti-rootkit
+software does detect it and warn users:
+www.eset.com
+50
+Figure 4.6 – GMER Detected that Loaded Library doesn't have Corresponding File
+4.1.4 Injecting into a new process
+In the second case when the malware requires the module to be executed in a newly created process it
+uses different approach. To achieve this Stuxnet:
+
+
+Creates a host process;
+
+
+Replaces the image of the process with the module to execute and with supplemental
+
+
+code that will load the module and call specified export passing parameters (as in the first case
+described).
+Depending on the processes present in the system the malware chooses the host process from
+the following list: 
+lssas.exe (system process); 
+avp.exe (Kaspersky); 
+mcshield.exe (McAfee VirusScan); 
+avguard.exe (AntiVir Personal Edition); 
+bdagent.exe (BitDefender Switch Agent); 
+UmxCfg.exe (eTrust Configuration Engine from Computer Associates International); 
+fsdfwd.exe (F-Secure Anti-Virus suite); 
+rtvscan.exe (Symantec Real Time Virus Scan service); 
+ccSvcHst.exe (Symantec Service Framework); 
+ekrn.exe (ESET Antivirus Service Process); 
+tmproxy.exe (PC-cillin antivirus software from TrendMicro);
+The malware enumerates processes in the system and if it finds a process whose executable
+image has a name present in this list, and which meets certain criteria, then it is chosen to be a host for
+the module.
+4.1.5 Installation
+We can consider the case when ~WTR4141. TMP is loaded due to the vulnerability (CVE-2010-2568) in
+displaying shortcuts for icons as described in section 1.6. As soon as the file is loaded it hooks the
+following functions to hide the worm's files on a flash USB drive.
+www.eset.com

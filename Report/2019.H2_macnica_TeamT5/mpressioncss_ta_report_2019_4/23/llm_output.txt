@@ -1,0 +1,92 @@
+
+
+
+Sentence : BlackTech
+2020 年 1 月末から 2 月にかけて、BlackTech 攻撃グループが利用したと思われる TsCookie マルウェアの
+Linux 版と一連の攻撃ツールが発見されています。攻撃ツールには、TsCookie マルウェア Linux 版の他に、ウェブシェ
+ル、ポートフォワードツール、GoogleAPI トークンのアップデータ、Bifrose マルウェアの Linux 版などがありました。
+TsCookie Linux
+TsCookie の Linux 版は、ツールの機能や特徴は公開情報 [13] と一致していましたが、C&C サーバが異なるものでした ( 図
+13)。
+sha256:62840976ab695211447b47ea4555ae665c7039c74a3f2167d660a85283eae86b
+filename:acud
+図 13. TsCookie の設定コード
+13 https://blogs.jpcert.or.jp/ja/2020/02/elf_tscookie.html
+Bifrose Linux
+この標的組織からは、TsCookie と同じような RAT に分類される Bifrose マルウェアの Linux バージョン
+(sha256: 3cad20318f36b020cf4d6b44320eb5a6dae0a78339a0fdc3a1fe5e280a8507f1、
+filename: sshd) が確認されています。Bifrose マルウェアの Linux バージョンは、公開情報 [14] より 2014 年頃から
+BlackTech 攻撃グループにより利用されていたと思われますが、当時から大きな変更がないバージョンで、C&C サー
+バなどの設定情報は暗号化されず検体に含まれていました（図 14）。
+図 14. Linux 版 Bifrose の通信先とポート番号
+C&C サーバ：107.191.61[.]247:443 へ通信する際の最初のビーコンパケットもフォーマットは、下記のようになり、
+こちらも引用した公開情報と同様になっていました。
+フォーマット :¦unix¦¦¦5.0.0.0¦0¦1¦1¦0¦¦0¦0¦0¦0¦None¦¦¦¦¦
+例 :172.16.108.141¦unix¦web1.localdomain¦NULL¦5.0.0.0¦0¦1¦1¦0¦4789¦0¦0¦0¦0¦None¦¦¦¦¦
+通信データは、"\xA3\x78\x26\x35\x57\x32\x2D\x60\xB4\x3C\x2A\x5E\x33\x34\x72\x00" の鍵を使っ
+て、RC4 アルゴリズムで暗号される特徴があります。
+図 15. 通信データフォーマット
+14 https://blogs.jpcert.or.jp/ja/2020/02/elf_tscookie.html
+今回発見された Bifrose の Linux には、つぎのように C&C サーバからの命令を受けるための豊富な機能が実装されて
+います ( 表 8)。
+表 8. Bifrose Linux の機能
+Perl WebShell
+続いて、Linux 版の RAT の他に WebShell が発見されています。発見されたウェブシェルファイル (sha256:
+35f8dec25f11b8a1340d4a1e4c0bc55ed8d8560425d0d50ad6c002bc74f0fa6a) は、CGI-Perl で動
+作するファイルで、GitHub で公開されている WebShell ファイル [15] を若干改良したものでした。WebShell にアクセ
+スするパスワードは“www.org”で、リモートシェルの実行とファイルのアップロード、ダウンロードがサポートされ
+ていました。
+図 16. WebShell へのアクセス画面
+15 https://github.com/backlion/webshell/blob/master/pl/Silic%20Group_cgi.pl
+Google API Token Updater
+これまでと同様に Linux で動作する Google API Token のアップデータが検出されました。このファイルは、sem
+のファイル名で、Golang でコンパイルされています。パッカーの UPX で圧縮されていますが、Golang は API を静
+的リンクするためにファイルサイズが大きくなるため、通常のパッカーによる検知回避の目的ではなくサイズを小さく
+する目的で UPX パッカーが利用された可能性があると思われます。このファイルは、Google API のアクセスに必要
+なトークンを更新し、保存します。
+( 使用例 ) $sem < トークンファイルのパス - < 更新したトークンファイルのパス 
+Google API のクライアント ID とシークレットキーは以下のものが使われています。
+client_id=637778819557-clle39i9dlnpkq3i2kobmtl8dcnc4iv0.apps.googleusercontent.com&
+client_secret=D2wmg1foukw6LIT7o2Ieg3rq&
+grant_type=refresh_token &
+refresh_token=1%2FFE88fgt3ZzLKx85a5cWeHa1wQE8AXcB4SuhRhuy8rE@
+図 17. Google API Token の更新ツール
+BlackTech 攻撃グループはデータを窃取する際に Google API を使ってクラウド上の Google ドライブにデータを保
+存する事が報告されています [16] 。今回発見された Google API Token の更新ツールが一連の BlackTech 攻撃グルー
+プによるものである場合、おそらく Google ドライブにデータを保管する別のツールがあり、Google API Token を
+更新するためにツールとして利用されたものと考えています。
+この攻撃で検出された TsCookie の通信先 fortigatecloud[.]com は、過去に BlackTech 攻撃グループが攻撃で利用
+したネットワークインフラとの関連が見られます（図 18）。
+図 18. BlackTech インフラ関連
+このように、BlackTech 攻撃グループは、過去の攻撃インフラを再利用する傾向があり、BlackTech 攻撃グループの
+インディケータをネットワークセキュリティ機器のブラックリストとして活用する事で、攻撃の検出に役立てる事がで
+きます。また、Linux サーバのネットワークにも侵入し、独自の TsCookie Linux 版を利用する事から、ホスト型のセ
+キュリティ対策は Windows だけでなく Linux サーバにも適用し、Linux サーバの出口ネットワークの通信も監査し忘
+れないようご注意ください。
+16 https://hitcon.org/2015/CMT/download/day2-f-r0.pdf
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BlackTech", "type" : "ACTO"},
+        {"id": 2, "description": "TsCookie malware Linux version", "type" : "APPS"},
+        {"id": 3, "description": "WebShell", "type" : "APPS"},
+        {"id": 4, "description": "Port forwarding tool", "type" : "APPS"},
+        {"id": 5, "description": "Google API token updater", "type" : "APPS"},
+        {"id": 6, "description": "Bifrose malware Linux version (sha256:3cad20318f36b020cf4d6b44320eb5a6dae0a78339a0fdc3a1fe5e280a8507f1, filename: sshd)", "type" : "APPS"},
+        {"id": 7, "description": "C&C server (107.191.61[.]247:443)", "type" : "CCSH"},
+        {"id": 8, "description": "C&C server communication data format", "type" : "TAMP"},
+        {"id": 9, "description": "WebShell file (sha256:35f8dec25f11b8a1340d4a1e4c0bc55ed8d8560425d0d50ad6c002bc74f0fa6a)", "type" : "DOCF"},
+        {"id": 10, "description": "Google API client ID (637778819557-clle39i9dlnpkq3i2kobmtl8dcnc4iv0.apps.googleusercontent.com)", "type" : "TAMP"},
+        {"id": 11, "description": "Google API client secret (D2wmg1foukw6LIT7o2Ieg3rq)", "type" : "TAMP"},
+        {"id": 12, "description": "Google API refresh token (1%2FFE88fgt3ZzLKx85a5cWeHa1wQE8AXcB4SuhRhuy8rE@)", "type" : "TAMP"},
+        {"id": 13, "description": "TsCookie C&C server (fortigatecloud[.]com)", "type" : "CCSH"},
+        {"id": 14, "description": "Google Drive", "type" : "STOR"}
+    ],
+    "edges": [
+        {"source": 2, "target": 7, "rel_name" : "communicates with"},
+        {"source": 6, "target": 7, "rel_name" : "uses C&C server"},
+        {"source": 9, "target": 3, "rel_name" : "is a file for"},
+        {"source": 5, "target": 14, "rel_name" : "updates token for"},
+        {"source": 2, "target": 13, "rel_name" : "communicates with"}
+    ]
+}

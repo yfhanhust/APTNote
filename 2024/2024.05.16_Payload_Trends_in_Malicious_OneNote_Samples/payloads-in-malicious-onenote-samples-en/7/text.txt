@@ -1,0 +1,52 @@
+Analysis of an Embedded EXE Payload
+While our previous research examined OneNote samples that carry the more common and
+popular payload types, such as PowerShell or HTA, EXE payloads have gotten less attention. In
+this section, we will analyze a OneNote sample with an embedded EXE payload.
+The payload below is extracted from a OneNote sample with the following SHA256 hash:
+```
+   d48bcca19522af9e11d5ce8890fe0b8daa01f93c95e6a338528892e152a4f63c
+```
+The payload itself has the following SHA256 hash:
+```
+   92d057720eab41e9c6bb684e834da632ff3d79b1d42e027e761d21967291ca50
+```
+Figure 8 shows our analysis of the EXE payload in IDA Pro. We found a handful of code blocks,
+which often signal that we might be dealing with shellcode.
+Our assumption was confirmed by the existence of GS:60, which points to the Process
+Environment Block (PEB) and the rotate right (ROR) instruction. This indicates that the malware
+is using dynamic address resolution for functions and hashing for function identification.
+Image not found or type unknown Image 8 is a diagram of the EXE payload opened in the disassembler IDA Pro. Red rectangles hone in on the differen
+Figure 8. EXE payload opened in IDA.
+To get an understanding of the objective of the shellcode and identify the libraries it was
+dynamically loading, we opened it in the x64dbg debugger. We then put a breakpoint at the
+function that repeatedly calls the loc_140004021 function block in a loop, as shown in Figure
+9.
+Image not found or type unknown Image 9 is a screenshot of highlighted functions that were dynamically loaded. A blue arrow points to a row highligh
+Figure 9. Breakpoint set to identify the functions that are being dynamically loaded.
+The combination of the WSAStringToAddressA function (shown in Figure 10) and
+WSASocketW functions (shown in Figure 11) makes it clear that the shellcode is attempting to
+send or receive data by establishing a network socket.
+Image not found or type unknown Image 10 is a screenshot of recorded function WSAStringToAddressA highlighted in the RSI register. It is indicated
+Figure 10. Function name WSAStringToAddressA recorded in the RSI register.
+Image not found or type unknown Image 11 is a screenshot of recorded function WSASpclertW highlighted in the RSI register. It is indicated in a red re
+Figure 11. Function name WSASpclertW recorded in the RSI register.
+Since reverse TCP shells are the most common type of shellcode used for connecting back to the
+attacker's machine, we set up breakpoints in ws2_32.dll (shown in Figure 12) to determine
+whether the connect function is called. And if so, we could extract the arguments passed down to
+it. These arguments often have the IP address and port number to which the payload attempts to
+connect.
+Image not found or type unknown Image 12 is a screenshot of the breakpoints for ws2_32.dll. A line in left pane is highlighted in grey. Two addresses i
+Figure 12. Breakpoint set at function connect in ws2_32.dll .
+As expected, the shellcode stopped at the connect function call. Upon dumping the values of the
+RDX register, we were able to identify the contents of the sockaddr_in struct, as shown in
+Figure 13.
+Image not found or type unknown Image 13 is a screenshot of the contents of sockaddr_in highlighted in a red rectangle on the lower left of the screensh
+Figure 13. Content of sockaddr_in struct dump.
+As shown in Figure 14, we then wrote a Python script to unpack the content of the
+sockaddr_in structure identified above.
+Image not found or type unknown Image 14 is a screenshot of Python code unpacking sockaddr_in contents.
+Figure 14. Python script unpacking content of sockaddr_in struct.
+Executing the above Python script gave us the output shown in Figure 15, indicating the attacker
+is connecting to a local machine on port 4444, potentially to an attacker-controlled machine.
+Image not found or type unknown Image 15 is a screenshot of Python script that contains the IP address and port, labeled in lines 2 and 3 of the image.
+Figure 15. IP address and port the payload is connecting to.

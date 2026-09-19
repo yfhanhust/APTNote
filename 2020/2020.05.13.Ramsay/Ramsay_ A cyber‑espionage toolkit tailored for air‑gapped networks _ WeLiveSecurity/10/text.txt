@@ -1,0 +1,53 @@
+File collection and covert storage
+The primary goal of this framework is to collect all existing Microsoft Word documents within the target’s
+filesystem. The overall collection stages are shown in Figure 6:
+https://www.welivesecurity.com/2020/05/13/ramsay-cyberespionage-toolkit-airgapped-networks/ 5/19
+5/14/2020 Ramsay: A cyber ~~-~~ espionage toolkit tailored for air ~~-~~ gapped networks | WeLiveSecurity
+Figure 6. Mechanism of document collection
+Word documents will first be collected and stored in a preliminary collection directory. The location of this
+directory may vary depending on the Ramsay version. Two of the directories we observed being used for
+this purpose were %APPDATA%\Microsoft\UserSetting and
+%APPDATA%\Microsoft\UserSetting\MediaCache .
+Depending on the Ramsay version, file collection won’t be restricted to the local system drive, but also
+will search additional drives such as network or removable drives:
+https://www.welivesecurity.com/2020/05/13/ramsay-cyberespionage-toolkit-airgapped-networks/ 6/19
+5/14/2020 Ramsay: A cyber ~~-~~ espionage toolkit tailored for air ~~-~~ gapped networks | WeLiveSecurity
+Figure 7. Hex-Rays output of procedure to scan removable drives for collection
+Figure 8. Hex-Rays output of procedure to scan network drives for collection
+Collected documents are encrypted using the RC4 Stream Cipher Algorithm .
+The RC4 key used to encrypt each file will be a computed MD5 hash of a randomly generated sequence
+of 16 bytes, salted with 16 bytes hardcoded in the malware sample. The first 16 bytes of the buffer where
+the encrypted file will be held will correspond to the actual RC4 key used:
+https://www.welivesecurity.com/2020/05/13/ramsay-cyberespionage-toolkit-airgapped-networks/ 7/19
+5/14/2020 Ramsay: A cyber ~~-~~ espionage toolkit tailored for air ~~-~~ gapped networks | WeLiveSecurity
+Figure 9. Hex-Rays output of RC4 key generation and storage
+Collected files under the preliminary collection directory will be compressed using a WinRAR instance
+that Ramsay Installer drops. This compressed archive will be saved within the preliminary collection
+directory and then generate a Ramsay container artifact:
+Figure 10. Hex-Rays output of Ramsay container generation
+As shown in the previous screenshot, these Ramsay containers contain a magic value at the beginning of
+the file, along with a Hardware Profile GUID denoting an identifier of the victim’s machine; an additional
+XOR-based encryption layer will be applied to the generated compressed archive. The following diagram
+shows the structure of these artifacts:
+Figure 11. Ramsay Container Structure<{i>
+https://www.welivesecurity.com/2020/05/13/ramsay-cyberespionage-toolkit-airgapped-networks/ 8/19
+5/14/2020 Ramsay: A cyber ~~-~~ espionage toolkit tailored for air ~~-~~ gapped networks | WeLiveSecurity
+Ramsay implements a decentralized way of storing these artifacts among the victim’s file system by using
+inline hooks applied on two Windows API functions, WriteFile and CloseHandle.
+The hooked WriteFile procedure’s main purpose is to save the file handle of the subject file to write and
+install another hook in the CloseHandle API function. The CloseHandle hooked procedure will then check
+whether the subject file name has a .doc extension; if that’s the case, it will then append at the end of the
+subject document the Ramsay container artifact followed by a stream of 1024 bytes denoting a Microsoft
+Word document footer.
+This is done as an evasion measure in order to provide a means to hide the embedded artifact within the
+subject document from the naked eye:
+Figure 12. Hex-Rays output of code for appending Word document footer at the end of the target document
+Ramsay containers appended to Word documents will be marked in order to avoid redundant artifacts
+being appended to already affected documents and the preliminary storage directory will be cleared in
+order to generate a brand-new Ramsay artifact in intervals.
+Even though affected documents will be modified, it won’t impact their integrity; each affected Word
+document remains fully operational after artifact appending has taken place.
+Exfiltration of these artifacts is done via an external component that we haven’t been able to retrieve.
+However, based on the decentralized methodology Ramsay implements for storage of collected artifacts,
+we believe this component would scan the victim’s file system in search for the Ramsay container’s
+magic values, in order to identify the location of artifacts to exfiltrate.

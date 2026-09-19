@@ -1,0 +1,51 @@
+Operation Blockbuster: Loaders, Installers and Uninstallers Report 53
+LimaCharlie is a DLL-based loader and is both the loader and dropper for the RomeoHotel malware family. LimaCharlie’s
+operation consists of four tasks:
+
+
+Dynamically load API functions
+
+
+Verify RomeoHotel’s configuration and drop RomeoHotel DLL to disk
+
+
+Load and activate the RomeoHotel DLL
+
+
+Remove the RomeoHotel DLL
+
+
+LimaCharlie appears to be the second stage of a longer malware chain, as the second task it performs is the verification
+of the RomeoHotel’s configuration and temporary installation of the RomeoHotel DLL on the victim’s hard drive. This,
+along with the fact that LimaCharlie operates as a DLL, indicates that LimaCharlie requires an installer prior to its
+activation. It is currently not known which malware family is responsible for dropping and installing LimaCharlie.
+The verification of the RomeoHotel configuration data’s registry entry is somewhat spotty in its approach. The verification
+consists of decrypting the string containing the registry branch, using Caracachs, and then attempting to open the
+registry key at the location HKLM\SYSTEM\CurrentControlSet\Control\WMI\Security by calling RegOpenKey .
+If the RegOpenKey function returns an error, LimaCharlie terminates. However, the configuration data is stored under
+a subkey for RomeoHotel ( HKLM\SYSTEM\CurrentControlSet\Control\WMI\Security\zc62a465-efff-87cc-
+47cdcdefa ) that LimaCharlie attempts to read into memory via RegQueryValueEx . LimaCharlie makes no attempt
+to determine if the RegQueryValueEx call fails, thereby providing no real verification that the configuration data truly
+exists. If the configuration data is available, LimaCharlie uses the data as the RomeoHotel configuration and produces a
+series of calls to a nullsub function (a function that does nothing other than to return to the caller) with various fields
+from the configuration (Figure 16-1).
+RegQueryValueExA(phkResult, lpValueName, 0, 0, &Data, &NumberOfBytesRead);
+  RegCloseKey(phkResult);
+  GetSystemDirectoryW(FileName, 0x104);
+  wcscat(FileName, L"\\");
+  wcscat(FileName, Data.wszServiceDLL);
+  nullsub_1(&Data);
+  nullsub_1(&Data.arrwszC2s[9]);
+  nullsub_1(Data.wszServiceName);
+  nullsub_1(FileName);
+  memset(&buffer[0], 0, 100);
+  swprintf(
+  buffer,
+  L"\r\nDefualt Sleep = %d, read Size = %d, %d \r\n",
+  Data.dwSleepTimeBetweenReconnects,
+  NumberOfBytesRead,
+0xAE0);  // 0xAE0 is the expected size of the RomeoHotel configuration
+```
+  nullsub_1(buffer);
+```
+Figure 16-1: LimaCharlie’s Use of the RomeoHotel Configuration Data during the Verification Task

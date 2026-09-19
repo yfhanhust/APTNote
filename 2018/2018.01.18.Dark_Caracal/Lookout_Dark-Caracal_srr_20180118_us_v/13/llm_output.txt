@@ -1,0 +1,481 @@
+
+
+
+Sentence : Surveillanceware — Mobile Capabilities
+Pallas — Dark Caracal’s Custom Android Samples
+Using our global sensor network, Lookout researchers identified 11 unique Android surveillanceware apps tied to the Operation
+Manul campaign [10] . The trojanized apps still retain the legitimate functionality of the apps they spoof and behave as intended.
+The apps are found predominantly in trojanized versions of well-known secure messaging apps including:
+
+
+Signal (org.thoughtcrime.securesms)
+
+
+Threema (ch.threema.app)
+
+
+Primo (com.primo.mobile.android.app)
+
+
+WhatsApp (com.gbwhatsapp)
+
+
+Plus Messenger (org.telegram.plus)
+
+
+We also identified Pallas in trojanized versions of two apps aimed at users seeking to protect themselves and their data online:
+
+
+Psiphon VPN (com.psiphon3)
+
+
+Orbot: TOR Proxy (org.torproject.android)
+
+
+10 http://www.cmcm.com/blog/en/security/2017-08-16/1101.html
+21
+SECURITY RESEARCH REPORT
+Finally, with help from Google’s Android Security team, we discovered Pallas lurking in several apps purporting to be Adobe Flash
+Player and Google Play Push for Android:
+Flash Player (com.flashplayer.player)
+Google Play Push (com.flashplayer.player)
+Primo Threema Psiphon Signal
+Figure 23: Dark Caracal trojanized Android apps
+Neither the desktop nor the mobile malware tooling use zero day vulnerabilities. Pallas samples primarily rely on the permissions
+granted at installation in order to access sensitive user data. However, there is functionality that allows an attacker to instruct an
+infected device to download and install additional applications or updates. Theoretically this means it’s possible for the operators
+behind Pallas to push specific exploit modules to compromised devices in order to gain complete access.
+We found no attacker infrastructure containing rooting packages. This highlights that, in many cases, advanced exploitation
+capabilities like those shown by surveillance tools such as Pegasus for iOS and Chrysaor for Android (that targeted both Android
+11
+and iOS
+12 devices), are not essential, but helpful when targeting certain platforms.
+11 https://blog.lookout.com/pegasus-android
+12 https://blog.lookout.com/trident-pegasus
+22
+SECURITY RESEARCH REPORT
+The Pallas first stage is capable of performing the following surveillance functionality on a compromised device:
+
+Take photos with front or back camera
+
+Exfiltrate all text messages including those
+received in the future
+
+
+Retrieve latitude / longitude from GPS
+
+
+Silently activate the device microphone to
+
+
+capture audio
+
+Retrieve contacts
+
+Scan nearby Wi-Fi access points and exfiltrate
+information about them, including their BSSID, SSID,
+authentication, key management, encryption schemes,
+signal strength, and frequency
+
+Retrieve chat content from secure messaging
+
+applications (this only applies when a victim is using
+a secure messaging app that has been trojanized
+with Pallas)
+C2 Communications with Malware Implants
+
+
+Retrieve device metadata
+
+
+Retrieve text messages
+
+
+Retrieve information about all accounts
+
+
+Send an SMS to an attacker-specified number
+
+
+Retrieve call logs
+
+
+Retrieve messages and any corresponding
+
+
+decryption keys from messaging apps
+
+
+Retrieve a list of installed packages
+
+
+Download and install additional apps
+
+
+Upload attacker specified files
+Delete attacker specified files and directories
+
+Harvest credentials via phishing pop-ups
+
+All samples belonging to the Pallas malware family have the same capabilities and functionality described in the previous
+section. However, obfuscation did differ between them. For reference, code snippets shown in the following section
+have been taken from a trojanized version of WhatsApp with a package name of com.gbwhatsapp and a SHA1 hash of
+ed4754effda466b8babf87bcba2717760f112455 .
+Like most other surveillanceware, communication with the C2 includes three main phases:
+1. Regular beaconing to the remote HTTP server.
+2.
+Handling any outstanding attacker specified commands.
+3.
+Exfiltration / uploading of victim data to C2 servers.
+Pallas samples have a number of different entry points via broadcast receivers, specifically the C2 communications reside
+in the com.receive.MySe .
+23
+SECURITY RESEARCH REPORT
+Figure 24: Actions that trigger the Pallas malware samples to do work
+In all Pallas samples Lookout analyzed, domain information and URL paths are hardcoded as encrypted values. The actor uses
+AES encryption and chose to use the secret key of Bar12345Bar12345 and initialization vector of RandomInitVector, which
+appears in a post describing how to use AES encryption in Java [13] .
+Examples of AES encrypted, base64 encoded domains and URL paths present in some Pallas samples include:
+
+
+krgbAdOUCGKEnuCRp5s+eE2eMWUktZQR64RBdkNoH/O0NFo9ByRTFhjqa2UX2Y9k
+
+
+krgbAdOUCGKEnuCRp5s+eA/hX2erfMp+49exa+8zoZgMlBICjGuOSqrvGRCjgrZ4
+
+
+These two examples decrypt to:
+
+
+https://adobeair[.]net/wp9/add.php
+
+
+https://adobeair[.]net/wp9/upload.php
+
+
+The general format of Pallas requests can be written as https://adobeair[.]net//.
+The add.php script is used for several operations, including compromised device check-ins as well as C2 instruction execution.
+We also determined that it is able to retrieve location information (GPS data) and general metadata about a victim’s device. The
+following table provides additional details around the structure of these requests. In all cases, the Content-Type header is set to
+application/x-www-form-urlencoded. The listed ac parameter identifies the type of request made to the C2.
+13
+https://stackoverflow.com/questions/15554296/simple-java-aes-encrypt-decrypt-example
+24
+SECURITY RESEARCH REPORT
+|Description|PurposeOf The Request|HTTP Parameters(Key=Value)Required|
+|---|---|---|
+|Retrieve data from a compromised device,including text messages, calls, contactinformation, Wi-Fi details, and accounts.Parameter pr is “1” if suffcient permissionsexist, “0” otherwise, and “111111111111”, if thebuild version of the device is lower than 23.|Check-In with C2|ac=chkcm1uid=pr=|
+|The victim’s GPS location is communicated tothe C2 every 120 minutes.|GPS location|ac=chkcm1uid=alt=long=|
+|Request responsible for gathering generaldevice metadata and uploading to C2. Thisrequest is triggered via several entry pointsincluding, but not limited to, the creation of theapp on the device.|General Device Information|ac=iuuid=imei=nb=os=man=op=wif=cam=” ver=pr=idt=ecr=|
+Responses from C2 infrastructure to devices infected with Pallas consist of chunks of data separated by a “~!”. The following
+table shows the commands that are currently supported. Some of these require the victim’s device to report back to the C2
+and/or upload files to it via HTTP POST requests. The responses to the attacker commands detailed below are handled via the
+add.php page.
+25
+SECURITY RESEARCH REPORT
+|Description|C2Command|HTTP Parameters(Key=Value)Required|
+|---|---|---|
+|Retrieve all the data from a compromised device, including text message, callinformation, contact details, Wi-Fi data, and account information to name a few.|GALL1||
+|Toggle the call record functionality to on or off.|REC2||
+|Upload fle and directory access logs of the trojanized application to the C2via a single fle.|GFILE1||
+|Take a picture using the front or rear camera and upload to the C2 server.|CAMG1||
+|Download an update from attacker infrastructure, attempt to execute it,and notify the C2.|UPD1|ac=REPXuid=RP=Update Procedure Executed|
+|Delete an attacker-specifed fle from the device and notify the C2.|DELF1|ac=REPXuid=RP=File Deleted : |
+|Retrieve an attacker-specifed fle from a compromised device, uploading it to the C2.|UPF1||
+|Download an attacker-specifed fle to the target device and notify the C2.|DWN1|ac=REPXuid=RP=File Uploaded To Target : |
+|Record an MPEG4 audio fle (.mp4) for an attacker-specifed duration.Audio is captured with the device’s microphone, and once complete isuploaded to the C2 server.|REC1|ac=REPXuid=RP=Microphone Already in use by another app|
+|Performs the same functionality as detailed above for the REC1 command withthe exception that the fle is stored locally on external storage under the path.Temp/srec|SMS1|ac=REPXuid=RP=Microphone Already in use by another app|
+|Send a text message to an attacker-specifed number.|SMS1|ac=REPXuid=RP=SMS sent to|
+|Displays an alert with a phishing theme on a compromised device with theintention of stealing the victim’s credentials. Any entered credentials are sentto attacker servers.|PWS1|ac=PPWSuid=PS=|
+|Checks the Android build on the device as well as the permissions of the app.|PRM1||
+|If the installed Pallas sample is a trojanized version of Telegram, WhatsApp,Threema, or Primo, then retrieve their databases and, if present, associated keys.|WT1||
+|Create a zip fle of the shared_pref for the installed Pallas app and upload it toC2 infrastructure.|SHPR|ac=GTMBFTFX=|
+|Manipulate Bitmap images, convert to JPG, and upload to C2.|SILF||
+|Same operation as SILF but on a directory of images.|SIFO|ac=GTMBFTFX=|
+|Split an attacker-specifed fle into chunks, saving them toexternal storage under the path.Temp/spd/.|SPLT1|ac=REPXuid=RP= Splitted|
+|Create a zipfle of the contents of an attacker-specifed directory and upload itto a C2 server.|ZDIR1||
+26
+SECURITY RESEARCH REPORT
+Pallas handles the exfiltrated data server-side via the upload.php script. This accepts HTTP POST requests that have the following
+headers and structure, where op_id specifies the type of file being uploaded.
+POST
+Request properties
+Connection : Keep-Alive
+ENCTYPE : multipart/form-data
+Content-Type : multipart/form-data;boundary=*
+Uploaded_file : 
+upload.php?test=&op=&rn=<>&extra=<>&extra2=<>[&FLS=
+<>&RLD=<>]
+--*\r\n
+Content-Disposition: form-data; name=\”uploaded_file\”;filename=\\r\n
+\r\n
+\r\n
+--*--\r\n
+When Pallas receives the GALL1 instruction, it uploads exfiltrated data as a zip archive or saves it as a .db file. For most .db files,
+each line is base64 encoded and prepended with the string “*#@”. When decoded, each line translates to a piece of exfiltrated
+data. Each piece of information is associated with a content keyword or data type. This can be represented as follows:
+[...]
+27
+SECURITY RESEARCH REPORT
+Analysis of all known Pallas samples seen to date has resulted in the identification of the following 10 data types:
+|Data|Data Type|Fields|Description|
+|---|---|---|---|
+|SMS|A0X01|dateaddressbodyidtype|All SMS felds are set according tothe Android SMS content providerdocumentation14 in which the addressis the address of the other party andthe type may be any of the followingvalues:•  “0” : ALL•  “1”: INBOX• “2”: SENT•  “3”:”DRAFT”•    “4”:OUTBOX• “5”:FAILED• “6”: QUEUED|
+|Contacts|A0X02|Display_nameData1Times_contactedLast_time_contacted|All contacts felds are set accordingto the Android ContactsContractdocumentation15.|
+|Calls|A0X03|NumberTypeDateDuration|All contacts felds are set according tothe Android documentation for phonecalls16in which type is a string withany of the following values:•  ”INCOMING”• ”OUTGOING”• “MISSED”•   ”null”Date is in the standard Java SQL DATEformat17.|
+|Installed package|A0X04|Application_labelPackage_nameVersion_nameVersion_code|Specifes the list of installed packageson a victim’s device.|
+|Browsing History|A0X05|Page_titlePage_URL|Specifes the web pages a victimhas visited.|
+14 https://developer.android.com/guide/topics/providers/content-provider-basics.html
+15 https://developer.android.com/reference/android/provider/ContactsContract.CommonDataKinds.Phone.html
+16 https://developer.android.com/reference/android/provider/CallLog.Calls.html
+17 https://docs.oracle.com/javase/7/docs/api/java/sql/Date.html
+28
+SECURITY RESEARCH REPORT
+(continued from page 28)
+|Data|Data Type|Fields|Description|
+|---|---|---|---|
+|Bookmarks|A0X06|Bookmark_TitleBookmark_URL|Specifes the web pages a victim hasbookmarked.|
+|WiFi|A0X07|SSIDCapabilitiesLevelFrequencyBSSID|All the felds are defned in Androidscan result documentation18.|
+|Accounts|A0X08|NameType|Name is the account name of a victimand type is the authenticator name ofthat account.|
+|Access Logs|MIAMO|App_nameApp_pathString1|Specifes a “.db” fle that containsFile and Directory access logs ofa trojanized app. The “MIAMO”information line is always the frst linein such fles. App_path is always apath that a Pallas sample has accessto, for example, the SDCard or theapplication’s data folder.String1 is either set to “NO” or anabsolute path.|
+|Access Logs|D|Directory_pathDirectory_name|Directories that the app has accessed.Only exists in a fle with “MIAMO” asthe frst line.|
+|Access Logs|F|File_pathFile_nameFile_lengthLasModifedTime|Files that the app has accessed.Only exists in a fle with “MIAMO” as the frst line.|
+18
+https://developer.android.com/reference/android/net/wifi/ScanResult.html
+29
+SECURITY RESEARCH REPORT
+Previous Use of FinFisher Spyware
+In addition to the Pallas samples, we discovered a previously unreported FinFisher sample [19] on the tweetsfb[.]com server.
+It is unclear whether this sample was a demo provided to this actor or if the actor came across it via other means.
+The date of package and compilation for this sample is 2014-03-27 17:26:14 UTC.
+Below is the extracted configuration and relevant details of this sample.
+|Title: Android UpdatePackage Name: com.esn.walSHA1: 835befd9376f90a12892876b482c1dcc39643a09MD5: d965c3736e530bfdbfde2cc6a264f2aa|Col2|
+|---|---|
+|RequestID : 0|C2 Phone Added : +7820435193|
+|MobileTargetUID : 0|VoicePhone Added : +7820944266|
+|Version : 0|VoicePhone Added : +78235424312|
+|MobileTargetID : nana|Logging : 0|
+|HeartBeatInterval : 120|C2 : 180.235.133.57|
+|TrojanID : nana|Ports: 21, 53, 443, 4111|
+|TrojanUID : 03FDAF68|Included exploits - Exynos Abuse|
+|UserID : 1000|Installed Modules• SMS•    Phone log collection•   Call recording• Device tracking|
+|MaxInfections : 30|MaxInfections : 30|
+|RemovalAtDate : 0|RemovalAtDate : 0|
+|RemovalIfNoProxy : 0|RemovalIfNoProxy : 0|
+19 https://en.wikipedia.org/wiki/FinFisher
+30
+SECURITY RESEARCH REPORT
+Output : 
+```json
+{
+  "nodes": [
+    {
+      "id": "Pallas",
+      "type": "malware",
+      "description": "Android malware that targets messaging apps and exfiltrates data."
+    },
+    {
+      "id": "FinFisher",
+      "type": "malware",
+      "description": "A sophisticated spyware used for surveillance, discovered on the tweetsfb[.]com server."
+    },
+    {
+      "id": "tweetsfb.com",
+      "type": "server",
+      "description": "Server hosting a previously unreported FinFisher sample."
+    },
+    {
+      "id": "180.235.133.57",
+      "type": "C2 server",
+      "description": "Command and Control (C2) server for the FinFisher sample."
+    },
+    {
+      "id": "+7820435193",
+      "type": "phone number",
+      "description": "Phone number associated with the FinFisher C2 configuration."
+    },
+    {
+      "id": "+7820944266",
+      "type": "phone number",
+      "description": "Voice phone number associated with the FinFisher C2 configuration."
+    },
+    {
+      "id": "+78235424312",
+      "type": "phone number",
+      "description": "Another voice phone number associated with the FinFisher C2 configuration."
+    },
+    {
+      "id": "com.esn.wal",
+      "type": "package name",
+      "description": "Package name of the discovered FinFisher sample."
+    },
+    {
+      "id": "835befd9376f90a12892876b482c1dcc39643a09",
+      "type": "SHA1 hash",
+      "description": "SHA1 hash of the discovered FinFisher sample."
+    },
+    {
+      "id": "d965c3736e530bfdbfde2cc6a264f2aa",
+      "type": "MD5 hash",
+      "description": "MD5 hash of the discovered FinFisher sample."
+    },
+    {
+      "id": "120",
+      "type": "HeartBeatInterval",
+      "description": "Heartbeat interval for the FinFisher sample, set to 120 seconds."
+    },
+    {
+      "id": "30",
+      "type": "MaxInfections",
+      "description": "Maximum number of infections allowed by the FinFisher sample."
+    },
+    {
+      "id": "Exynos Abuse",
+      "type": "exploit",
+      "description": "Exploit included in the FinFisher sample targeting Exynos-based devices."
+    },
+    {
+      "id": "SMS",
+      "type": "module",
+      "description": "Module for collecting SMS data, part of the FinFisher sample."
+    },
+    {
+      "id": "Phone log collection",
+      "type": "module",
+      "description": "Module for collecting phone call logs, part of the FinFisher sample."
+    },
+    {
+      "id": "Call recording",
+      "type": "module",
+      "description": "Module for recording phone calls, part of the FinFisher sample."
+    },
+    {
+      "id": "Device tracking",
+      "type": "module",
+      "description": "Module for tracking device location, part of the FinFisher sample."
+    },
+    {
+      "id": "com.esn.wal",
+      "type": "package name",
+      "description": "Package name of the discovered FinFisher sample."
+    },
+    {
+      "id": "21",
+      "type": "port",
+      "description": "Port used by the FinFisher C2 server for communication."
+    },
+    {
+      "id": "53",
+      "type": "port",
+      "description": "Port used by the FinFisher C2 server for DNS queries."
+    },
+    {
+      "id": "443",
+      "type": "port",
+      "description": "Port used by the FinFisher C2 server for HTTPS communication."
+    },
+    {
+      "id": "4111",
+      "type": "port",
+      "description": "Custom port used by the FinFisher C2 server."
+    }
+  ],
+  "edges": [
+    {
+      "source": "FinFisher",
+      "target": "tweetsfb.com",
+      "type": "hosted on"
+    },
+    {
+      "source": "FinFisher",
+      "target": "180.235.133.57",
+      "type": "C2 server"
+    },
+    {
+      "source": "FinFisher",
+      "target": "+7820435193",
+      "type": "uses phone number"
+    },
+    {
+      "source": "FinFisher",
+      "target": "+7820944266",
+      "type": "uses voice phone number"
+    },
+    {
+      "source": "FinFisher",
+      "target": "+78235424312",
+      "type": "uses voice phone number"
+    },
+    {
+      "source": "FinFisher",
+      "target": "com.esn.wal",
+      "type": "has package name"
+    },
+    {
+      "source": "FinFisher",
+      "target": "835befd9376f90a12892876b482c1dcc39643a09",
+      "type": "SHA1 hash"
+    },
+    {
+      "source": "FinFisher",
+      "target": "d965c3736e530bfdbfde2cc6a264f2aa",
+      "type": "MD5 hash"
+    },
+    {
+      "source": "FinFisher",
+      "target": "120",
+      "type": "has HeartBeatInterval"
+    },
+    {
+      "source": "FinFisher",
+      "target": "30",
+      "type": "has MaxInfections"
+    },
+    {
+      "source": "FinFisher",
+      "target": "Exynos Abuse",
+      "type": "includes exploit"
+    },
+    {
+      "source": "FinFisher",
+      "target": "SMS",
+      "type": "installs module"
+    },
+    {
+      "source": "FinFisher",
+      "target": "Phone log collection",
+      "type": "installs module"
+    },
+    {
+      "source": "FinFisher",
+      "target": "Call recording",
+      "type": "installs module"
+    },
+    {
+      "source": "FinFisher",
+      "target": "Device tracking",
+      "type": "installs module"
+    },
+    {
+      "source": "180.235.133.57",
+      "target": "21",
+      "type": "uses port"
+    },
+    {
+      "source": "180.235.133.57",
+      "target": "53",
+      "type": "uses port"
+    },
+    {
+      "source": "180.235.133.57",
+      "target": "443",
+      "type": "uses port"
+    },
+    {
+      "source": "180.235.133.57",
+      "target": "4111",
+      "type": "uses port"
+    }
+  ]
+}
+```

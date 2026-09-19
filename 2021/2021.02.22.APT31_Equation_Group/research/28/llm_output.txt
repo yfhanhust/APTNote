@@ -1,0 +1,55 @@
+
+
+
+Sentence : Weird Looking Unicode String
+To the eyes of a Western researcher, the Unicode string used for both the print driver
+name and the name of the printed document looks foreign. And indeed, we can surely say
+that the string “ 屁썟 “ doesn’t look like an obvious choice for native English speakers.
+We therefore consulted with colleagues around the world who are fluent in Chinese,
+Korean and Japanese, and asked for their opinion about these two symbols. The
+unanimous answer we received declared that there is no language in which these symbols
+make sense. In each language, only one symbol has a meaning, and in any case doesn’t
+make sense as part of a two-symbol phrase. We also checked for a meaning for the
+symbols created from inverting the order of the original bytes, and the result was the
+same.
+So this is probably not a Chinese phrase used by the original developers of the exploit, but
+what is it?
+27/36
+Our main hypothesis is based on the op-sec of the developers. Aside from names of DLL
+files and imported functions, it is very rare to find any string inside Equation Group
+samples. Even the name of the created window is only “h”, not exactly a long string that
+could be used by YARA rules so as to “sign” the binary. Faced with the need to use a
+Unicode string that is surely longer than a single ASCII char string, we believe that the
+developers chose to use a pattern that matches their needs:
+Unicode-enough for the Windows API.
+Not a real string that might be traced by security researchers / solutions.
+If we look closely at the chosen Unicode string, we can see that it actually makes more
+sense as an x64 assembly snippet:
+41 5C pop r12
+5F pop rdi
+C3 retn
+As a matter of fact, this byte sequence is actually a very popular assembly snippet, found
+almost 150 times just in ntdll.dll . Choosing such a popular assembly sequence for a
+“Unicode string” achieves all of the stated goals.
+Finally, the string can also be randomly generated and lacks any meaning whatsoever.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Unicode string “ 屁썟 “", "type" : "TAMP"},
+        {"id": 2, "description": "Chinese, Korean, Japanese languages", "type" : "COUN"},
+        {"id": 3, "description": "DLL files and imported functions", "type" : "EXEF"},
+        {"id": 4, "description": "Equation Group samples", "type" : "ACTO"},
+        {"id": 5, "description": "Window name “h”", "type" : "TAMP"},
+        {"id": 6, "description": "Windows API", "type" : "APPS"},
+        {"id": 7, "description": "x64 assembly snippet: 41 5C pop r12; 5F pop rdi; C3 retn", "type" : "EXEF"},
+        {"id": 8, "description": "ntdll.dll", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "checked in languages"},
+        {"source": 4, "target": 3, "rel_name" : "contains"},
+        {"source": 4, "target": 5, "rel_name" : "creates window with name"},
+        {"source": 1, "target": 6, "rel_name" : "used in API"},
+        {"source": 1, "target": 7, "rel_name" : "matches pattern of"},
+        {"source": 7, "target": 8, "rel_name" : "found in"}
+    ]
+}

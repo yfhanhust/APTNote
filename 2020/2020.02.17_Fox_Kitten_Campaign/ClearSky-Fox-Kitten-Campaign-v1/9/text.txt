@@ -1,0 +1,75 @@
+Execution, Persistence, Privilege Escalation, Credential Access
+Discovery, Lateral Movement.
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+14 | P a g e
+4.2.1 “Juicy Potato”
+MITRE ATT&CK Tactic: Privilege Escalation (TA0004)
+MITRE ATT&CK Technique: Exploitation for Privilege Escalation (T1068)
+Juicy Potato is an open-source tool found on GitHub [6] and based on RottenPotatoNG. It can perform
+local privilege escalation from NT AUTHORITY\LOCAL SERVICE to NT AUTHORITY\SYSTEM using the
+“BITS Service” and “COM servers” processes. The tool searches for errors in privileges given to the users
+in the credentials manager in order to give a local user higher access.
+In order for this tool to run properly on the computer, the attacker has to have one of the following two
+permissions:
+
+
+SeImpersonate – to create a process with a certain token
+
+
+Se AssignPrimaryToken – to create a process as a certain user
+
+
+Following is an example of the tool being used, whereas the CMD window is activated under the Local
+Service permissions, and through a command that activates “Juicy Potato” another CMD is opened,
+now with System permissions [7] :
+The tool is downloaded from the command-and-control server used by the attackers in this campaign
+– 95.211.215[.]255. This file is 64-bit system compatible, and this in contrast with the one used in 2017
+and fitted to 32-bit systems. The file is downloaded to the computer under the title “psexec.exe”, while
+at the C2 server it’s called “j.exe” and found at the following address: hxxp://95.211.215[.]225/upd/j.exe.
+This URL address leads to downloading a file name “JuicyPotato.exe” and sometimes “jp.exe” – both
+are versions of this tool.
+6 github.com/ohpe/juicy-potato
+7 hunter2.gitbook.io/darthsidious/privilege-escalation/juicy-potato
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+15 | P a g e
+In several versions of this file there is an embedded evasion technique through which the tool identifies
+virtual machines and doesn’t activate. The “CPUID trick” artifact, used to identify virtual machines and
+perform an anti-VM trick, appears in the file downloaded to the computer:
+4.2.2 “Procdump” and “Mimikatz”
+MITRE ATT&CK Tactic: Credential Access (TA0006)
+MITRE ATT&CK Technique: Credential Dumping (T1003)
+MITRE ATT&CK Tool: Mimikatz (S0002)
+During this process, users’ credentials are stolen from the Lsass.exe process using ProcDump and
+Mimikatz. In order to perform this process, the attacker needs to have admin permissions on the target
+computer.
+In this attack scenario, after gaining initial access to the computer, ProcDump, a legitimate Microsoft
+tool that dumps the Lsass.exe process, is run. This tool is not identified by anti-virus solutions, unlike
+Mimikatz.
+Following is an example of using this command as a local user (also executable remotely):
+C:\procdump.exe -accepteula -ma lsass.exe lsass.dmp
+At this point, a dump file of Lsass.exe which contains the relevant credentials, is produced. The file is
+passed to Mimikatz for further extraction – an action which requires local admin privileges.
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+16 | P a g e
+4.2.3 “Sticky Keys” and Other Accessibility Tools’ Settings
+MITRE ATT&CK Tactic: Privilege Escalation (TA0004)
+After getting the passwords in the previous stage, the attackers created another mechanism to gain
+local admin permissions on target station.
+Another tool used by the attackers is abuse of the settings of the “sticky keys” accessibility tool. First,
+the attackers delete the “sticky keys” file – sethc.exe – from the computer. Next, they copy the local
+admin’s CMD file and switched it with the “sticky keys” process. As a result, when a user connects to
+the infected station via RDP and presses five times on a sticky key, for example “Shift”, a high-privileged
+Shell will be run at the station [8] .
+copy /y C:\windows\system32\cmd.exe C:\windows\system32\sethc.exe
+4.2.4 Local Admin User
+MITRE ATT&CK Tactic: Persistence (TA0003)
+MITRE ATT&CK Technique: Create Account (T1136)
+During analysis, we found that the attackers created a special local admin user at the infected stations.
+This move allows the attackers to maintain high permissions at the station even if the password of the
+station owner’s main user will be changed.

@@ -1,0 +1,63 @@
+
+
+
+Sentence : The art and science of detecting Cobalt Strike
+l
+Figure 14
+l
+Stageless
+Stageless operates in the same way a staged payload
+does — it still spawns a named pipe and data needs to
+be decrypted just like a staged payload. This payload in
+particular is larger than 200KB.
+However, once the final payload is decoded, it needs to be
+loaded into memory. This is performed using a technique
+called Reflective DLL loading — the process of loading a
+library from memory into a host process.
+An executable needs to access various resources to
+function correctly. It needs to know its base address in
+memory and have valid headers and a fully built import
+address table. This is how an executable knows where to
+call functions such as LoadLibrary or GetProcAddress.
+Once the reflective loader has rebuilt the necessary sections
+and relocated the image, we’ll see the actual path of execution.
+Once we unpack beacon.dll, we can dump it to disk and see
+the final artifact.
+Beacon configuration
+Cobalt Strike configuration is marked in the executable by
+patterns that allow us to parse it directly out of an unpacked
+beacon DLL. The configuration is XOR encrypted, but by
+default, use a static XOR key for each respective beacon
+version (3 or 4).
+Figure 14 shows a decrypted Cobalt Strike configuration
+l from the unpacked Cobalt Beacon.
+C2 COMMUNICATION
+Heartbeat
+An infected host will reach out to the Cobalt Strike C2
+server periodically with a heartbeat, sending basic
+metadata back home and gathering any commands issued
+by an operator. When a command is requested to be
+executed on the host, it’s queued up and waits for that host
+to reach out.
+l
+© 2020 Cisco. All rights reserved. talos-external@cisco.com | talosintelligence.com page 10 of 29
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cobalt Strike", "type" : "TTPS"},
+        {"id": 2, "description": "Stageless payload", "type" : "DOCF"},
+        {"id": 3, "description": "Named pipe", "type" : "SYSP"},
+        {"id": 4, "description": "Reflective DLL loading", "type" : "TTPS"},
+        {"id": 5, "description": "beacon.dll", "type" : "DOCF"},
+        {"id": 6, "description": "Cobalt Strike C2 server", "type" : "CCSH"},
+        {"id": 7, "description": "Heartbeat communication", "type" : "TTPS"},
+        {"id": 8, "description": "XOR encrypted configuration", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "spawns"},
+        {"source": 4, "target": 5, "rel_name" : "loads into memory"},
+        {"source": 5, "target": 8, "rel_name" : "contains"},
+        {"source": 6, "target": 1, "rel_name" : "uses"},
+        {"source": 7, "target": 6, "rel_name" : "communicates with"}
+    ]
+}

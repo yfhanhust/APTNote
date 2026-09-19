@@ -1,0 +1,173 @@
+Curl-based downloaders
+This is a standalone application built using a generic “Hello world” template of a Win32 GUI application.
+All string constants relevant to the business logic are stored in Base64-encoded form.
+The program creates a hidden window with the name “curl_test” and class name “CURL_TEST”. Then it follows into the C&C
+communication routine.
+C&C communication
+The module downloads several files from its C&C server. The URL of the server is hardcoded and varies among the samples.
+It may download modules specific to either 32-bit or 64-bit target systems, using the suffix “32” or “64” correspondingly. For
+each DLL file the download routine enters an infinite loop and continues to the next module only when the current file has
+been download without errors. Each attempt is followed by a predefined delay that is different for each sample.
+The first file to download is the following:
+URL of the C&C server/msreg_32.dll or URL of the C&C server/msreg_64.dll
+The file is saved to: %APPDATA%\msreg.dll.
+Next, the module attempts to download the files:
+URL of the C&C server/wrtreg_32.dll, saved to %TEMP%\wrtreg_32.dll
+URL of the C&C server/wrtreg_64.dll, saved to %TEMP%\wrtreg_64.dll
+This library is then loaded, unloaded and deleted. The latter two libraries are downloaded and executed only if the file
+msreg.dll is is nnot present on disk.
+19
+MosaicRegressor: Lurking in the Shadows of UEFI
+Then the module continuously attempts to download another file:
+URL of the C&C server/%Computername%/%PayloadName.dll, saved to %APPDATA%\%PayloadName%.dll
+(%PayloadName% varies, see the list of names)
+The previous version of the file, if present, is moved to a temporary filename with the prefix %TEMP%\34F and then
+deleted. Every time a new such file is successfully downloaded, the module starts a new thread to execute it.
+Payload ABI
+The payload file is expected to be a regular Windows DLL. The code that interacts with the library is similar to the one used
+in BITS Downloader. The file is loaded using the standard LoadLibraryA API function. Then it resolves the addresses of
+functions exported with the names “ExpA”, “ExpB”,“ExpC”, “ExpD”, “ExpE”, “ExpF”, “ExpG”. The functions, if present, are then
+consequently called. Every function has to take five arguments passed on the stack by pointers.
+Depending on the returned values, the module can stop executing the exported functions, download files to disk or upload
+data produced by the function to the C&C server. The data is uploaded with HTTP POST request to the URL:
+URL of the C&C server/upload.php
+The POST request contains the part called “txt” as a file attachment, with its filename and contents provided by the
+exported function.
+Notable file properties
+The binary is statically linked with libcurl and contains the version string “libcurl/7.49.1”. According to the official Curl website,
+version 7.49.1 was released on May 30 2016.
+The language identifier of the file’s resources is set to 2052 (“zh-CN”). One of the resources is its version information
+containing the application name “curl_test”.
+Variable parameters
+C&C URLs
+Payload DLL names
+20
+MosaicRegressor: Lurking in the Shadows of UEFI
+C&C communication delay
+Curl-based downloader, extended
+This module is built mostly from pieces of code found in the “BITS Downloader, extended”. However, the C&C
+communication routines are similar to those found in the “Curl-based downloader”.
+Mutex name: “single UI”
+Sets the autorun registry location: HKCU\Software\Microsoft\Windows\CurrentVersion\Run,
+value dsuiext=%location of the executable%.
+Every second the module checks for the presence of a kill switch file %APPDATA%\Microsoft\exitUI.rs and terminates if it
+is present.
+The module enters an infinite C&C communication loop with a preset delay between each attempt.
+C&C communication
+First, the module sends a test GET request using the URL of the C&C server and continues if the attempt succeeds. Then
+it collects system information and writes the results into a text file %APPDATA%\%Computername%.dat. The code that
+collects the system information is identical to the one found in the “BITS Downloader”. Then the resulting file with the system
+information is sent to the C&C server in a POST request to %URL of the C&C server/upload.php. The code also checks if
+there is a file %APPDATA%dat present on the disk and if so the file is uploaded instead.
+The URL of the C&C server and the unique identifier (“EXE ID”) are hardcoded in the binary and encrypted with a simple
+one-byte XOR operation.
+Payload
+When it has finished uploading the system information report the program then attempts to fetch the payload from the
+C&C server. The business logic is similar to the one for “BITS Downloader, extended”, with the following differences:
+Files that are downloaded and executed in separate threads:
+21
+MosaicRegressor: Lurking in the Shadows of UEFI
+%APPDATA%\Microsoft\WebA.dll fetched from %C&C URL%/%Computername%/WebA.z
+%APPDATA%\Microsoft\WebB.dll fetched from %C&C URL%/%Computername%/WebB.z
+Files that are downloaded and executed in the current thread:
+%APPDATA%\Microsoft\WebC.dll fetched from %C&C URL%/%Computername%/WebC.z
+Each DLL may have one or more exported functions named “FunA”, “FunB”, “FunC”, “FunD”, “FunE”, “FunF”, “FunG”, “FunH”,
+“FunI”, “FunJ”. Once finished, the program may delete the DLL file depending on the returned value. Depending on the data
+returned by the functions the module may upload or download the files from the C&C server.
+C&C communication period: 15 minutes
+Curl downloader, “OINFO11.OCX”
+The module is a DLL based on the Curl-based downloader, extended. Only the differences are included in this description.
+Mutex name: “Office Module”
+The kill switch file is monitored in a separate thread. When that file is found, the module not only terminates the current
+process but also deletes the autorun registry value.
+Rich header dump
+The 66 modules compiled with Visual Studio 6 are parts of the libcurl library identical to the one used in the “Curl-based
+downloader”. The rest of the code was compiled with the more recent version 9 (VS 2008).
+22
+MosaicRegressor: Lurking in the Shadows of UEFI
+C&C URL:
+Unique IDs (“EXE ID” in the report):
+C&C communication period: 15 minutes
+Payload of the BITS Downloader, “FileA.z”
+This module is a DLL library that matches the prototype of the payload of the BITS Downloader, extended and was
+discovered along with one of the downloader samples.
+The library has an empty DllMain function and three exported functions with the names “CallA”, “CallB”, “CallC”. The
+description of these functions follows.
+23
+MosaicRegressor: Lurking in the Shadows of UEFI
+CallA
+
+
+creates the directory %APPDATA%\Microsoft\Windows
+
+
+deletes the file %APPDATA%\Microsoft\Windows\mapisp.dll and, if this fails, renames the file to %TEMP%\Hx101.tmp
+
+
+returns the values that result in the BITS Downloader, fetching the file “SecondA.z” from the C&C server to
+
+
+%APPDATA%\Microsoft\Windows\mapisp.dll
+CallB
+
+
+creates the directory %APPDATA%\Microsoft\Windows\SendTo
+
+
+deletes the file %APPDATA%\Microsoft\Windows\SendTo\cryptui.sep and, if this fails,renames the file to
+
+
+%TEMP%\Hx102.tmp
+
+returns the values that result in the BITS Downloader, fetching the file “SecondB.z” from the C&C server to
+
+%APPDATA%\Microsoft\Windows\SendTo\cryptui.sep
+CallC
+
+sets an autorun registry value : HKCU\Software\Microsoft\Windows\CurrentVersion\Run,
+
+name mapisp to “rundll32.exe “%APPDATA%\Microsoft\Windows\mapisp.dll”,CryptoSysPrep
+
+
+checks if the files “mapisp.dll” (called “file a”) and “cryptiu.sep” (“file b”) are present
+
+
+writes a log of operations into the file %APPDATA%\Microsoft\Internet Explorer\FileOutA.dat and returns
+
+
+Strings written to the log depend on the results of the preceding operations:
+```
+“second file successA”
+“file a success” or “file a error”
+“file b success” or “file b error”
+“registry set success” or “registry set error”
+“do move file a” or “do not move file a”
+“do move file b” or “do not move file b”
+```
+WinRAR wrapper “load.rem”
+This module is referenced and loaded by the downloader modules. It is a DLL with an empty DllMain function and one
+exported function with the name “Load”.
+Load
+The function is an infinite loop. Every five minutes it checks if there is a file named
+%APPDATA%\Microsoft\Windows\LnkClass.dat. If the file is present, it then executes
+24
+MosaicRegressor: Lurking in the Shadows of UEFI
+“%APPDATA%\Microsoft\Windows\LnkClass.dat” a -hpHFG5fv(*&# -r
+“%APPDATA%\Microsoft\Credentials\MSI36C2.dat” %CSIDL_RECENT%
+Here, %CSIDL_RECENT% is the location of the “Recent documents” folder. Although the original file named LnkClass.dat
+was not recovered, the command line is valid for a popular archiver called WinRAR - it is a command to store the contents
+of the “Recent Documents” folder in the archive named MSI36C2.dat encrypted with the password “HFG5fv(*&#”.
+Intermediate DLL loader “mapisp.dll”
+This module is referenced by “FileA”. It is a DLL with an empty DllMain function and one exported function with the name
+“CryptoSysPrep”.
+CryptoSysPrep
+The function checks for the presence of additional DLL files and loads them in separate threads:
+%APPDATA%\Microsoft\Windows\SendTo\cryptui.sep, called by function RetrievePKCS7FromCA
+%APPDATA%\Microsoft\Network\sppsvc.sep, copied to %APPDATA%\Microsoft\sppsvc.tbl, then loaded and called by
+function “PlugA”
+%APPDATA%\Microsoft\Network\subst.sep, copied to %APPDATA%\Microsoft\subst.tbl, then loaded and called by
+function “PlugB”
+Any of these DLL files are deleted if the module fails to load them. The function never returns.
+The sample df1b910626a380bffa22a757f419135c loads all libraries in place.
+25
+MosaicRegressor: Lurking in the Shadows of UEFI

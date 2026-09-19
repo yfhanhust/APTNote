@@ -1,0 +1,106 @@
+Plug-in module
+Linux.Dacls Bot uses static compilation to compile the plug-in and Bot code together. By sending
+different instructions to call different plug-ins, various tasks can be completed. The sample we
+analyzed contains a total of 6 plugins, because the configuration information of the plugin is a
+continuous array of structures (0x00 ~ 0x0e). We guess that Bot may have other more plugins.
+Each plug-in has its own corresponding configuration, which is saved in the bot’s configuration file
+$HOME/.memcache . When the plug-in is initialized, the configuration information will be loaded.
+Bash plugin
+The Bash plug-in is plug-in number 0, it mainly supports two functions: receiving and executing
+system commands issued by the C2 server; C2 issues temporary new C2, bot then connects to
+the temporary C2 and executes system commands issued by the temporary C2.
+File plugin
+The main function of the File plugin is file management. In addition to supporting read, write,
+delete, and find operations on files, bot can also download files from a designated download
+server.
+https://blog.netlab.360.com/dacls-the-dual-platform-rat-en/ 14/23
+1/9/2020 Dacls, the Dual platform RAT
+Process plugin
+The main function is process management, including: killing a specified process, creating a
+daemon process, obtaining the PID and PPID of the current process, and obtaining process list
+information.
+If the /proc//task directory corresponding to the PID in the Linux process exists, the Bot
+sample will collect the following process information:
+/proc//cmdline Read full name from command line
+https://blog.netlab.360.com/dacls-the-dual-platform-rat-en/ 15/23
+1/9/2020 Dacls, the Dual platform RAT
+From /proc//status reading:
+Name   //process name
+Uid    //user ID
+Gid    //group ID
+PPid   //parent ID
+Test plugin
+The main function is to test network connectivity by connecting the IP address and port specified
+by C2.
+Reverse P2P plugin
+The Reverse P2P plug-in is actually a C2 Connection Proxy, it
+directs network traffic between bots and C2 to avoid direct connections to their infrastructure. This
+is a common used technique by the Lazarus Group. With connection proxy, the number of target
+host connections can be reduced, and the communication between the target and the real C2 can
+be hidden. In some cases, an infected intranet host can be used to further penetrates into the
+isolated network segment.
+reverse_p2p plugin initialization
+When Bot receives a command, it first attempts to connect to the specified C2 port to send a
+0x21000. If C2 returns 0x21300, the C2 connection is successful and the Bot will connect to the
+target IP:port. If it works, it will return 0x21100 to C2, indicating that the forwarding connection has
+been established and can start forwarding data. Now, Bot can forward the data sent by C2 to the
+target, and at the same time return the data returned by the target to C2, until either party
+interrupts the connection.
+https://blog.netlab.360.com/dacls-the-dual-platform-rat-en/ 16/23
+1/9/2020 Dacls, the Dual platform RAT
+The following is the working flowchart of the Reverse P2P plugin:
+LogSend plugin
+The LogSend plug-in mainly includes three functions: test the connection to the Log server,
+randomly scan the entire network's 8291 port and report to the Log server, execute system
+commands that take a long time and report the console output to the Log server in real time.
+LogSend plugin initialization
+https://blog.netlab.360.com/dacls-the-dual-platform-rat-en/ 17/23
+1/9/2020 Dacls, the Dual platform RAT
+LogSend related operation callback function
+After testing the connection to the Log server, the
+Bot will send a test request to the Log server. If the Log server returns {"result":"ok"},
+indicating that the test was successful, C2 can issue more LogSend instructions.
+Sending the POST request using the HTTP interface address specified by C2 and the built-in
+User-Agent
+POST /%s HTTP/1.0
+Host: %s
+Content-Length: 9
+Content-Type: application/x-www-form-urlencoded
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like
+Gecko) Chrome/65.0.3325.181 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,/;q=0.8
+Accept-Language: en-us,en;q=0.5
+Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.7
+Cache-Control: no-cache
+Connection: close
+log=check
+Randomly scan port 8291 on the entire network and report the result to the Log server.
+After receiving the instruction, Bot will randomly generate a public IP address according to 3 built
+in rules and try to connect to their port 8291. If the connection is successful, the scan result will be
+returned to the log server.
+IP generation rules:
+ip = ...
+rule1: part1 != 127
+rule2: part1 == 172 and (part2 <= 15 or part2 > 31)
+rule3: part1 != 192 and part2 != 168
+rule4: part1 != 10
+The random IP generation algorithm is as follows
+https://blog.netlab.360.com/dacls-the-dual-platform-rat-en/ 18/23
+1/9/2020 Dacls, the Dual platform RAT
+We can see that Bot hard-codes the TCP / 8291 port and calls the system connect function to
+perform port scan. It only checks whether the port is open and does not send payload data. We
+are not sure why TCP 8291 is targeted, but we know that the Winbox protocol of the MikroTik
+Router device works on TCP / 8291 port and is exposed on the Internet. Previously we also
+disclosed 2 articles about the TCP / 8291 port threat incident [1][2].
+https://blog.netlab.360.com/dacls-the-dual-platform-rat-en/ 19/23
+1/9/2020 Dacls, the Dual platform RAT
+Execute bash command which takes a long time to finish and report the console output to the Log
+server in real time.
+https://blog.netlab.360.com/dacls-the-dual-platform-rat-en/ 20/23
+1/9/2020 Dacls, the Dual platform RAT
+Execute the bash command and forward the output to the Log server.
+All reported Log data is submitted by HTTP POST. The format of the payload section is as
+follows:
+log=save&session_id=&value=
+https://blog.netlab.360.com/dacls-the-dual-platform-rat-en/ 21/23
+1/9/2020 Dacls, the Dual platform RAT

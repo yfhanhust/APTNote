@@ -1,0 +1,147 @@
+
+
+
+Sentence : Dskapi.ocx
+Name of the module used in Gauss: “Godel” or “Kurt”.
+|File names|%system32%\dskapi.ocx|
+|---|---|
+|Some known MD5|ED5559B0C554055380D75C1D7F9C4424E379270F53BA148D333134011AA3600CEF83394D9600F6D2808E0E99B5F932CA|
+|Image Size|1 327 104 bytes954 368 bytes962 560 bytes417 792 bytes|
+|Number of resources|2|
+|Resources|100, 101|
+|Date of compilation|28.09.201113.10.201101.11.201129.11.2011|
+|Related fles|%temp%\~gdl.tmp.thumbs.dbwabdat.datdesktop.initarget.lnkSystem32.datSystem32.bin.CatRoot.tmp|
+Creates events: “{12258790-A76B}”, “Global\RasSrvReady”
+All functionality is implemented in “RevertCache” export. The module starts its main thread and then returns. The main
+thread waits for the “{12258790-A76B}” event and continuously checks for the presence of anti-malware software.
+“ValidateEntry” signals the “{12258790-A76B}” event, allowing for the main thread to work for 3 seconds before terminating
+it.
+Writes log file: %temp%\~gdl.tmp
+The log file entries are compressed with Zlib.
+Reads registry key HKLM\SYSTEM\CurrentControlSet\Services\Disk\Enum
+18
+Checks for running anti-malware products by names and exits if they are present:
+fsorsp.exe
+fspc.exe
+fsqh.exe
+fssm32.exe
+fsus.exe
+gsava.exe
+gssm32.exe
+AVKProxy.exe
+AVKService.exe
+AVKTray.exe
+AVKWCtl.exe
+GDFirewallTray.exe
+GDFwSvc.exe
+GDScan.exe
+abcd.exe
+avp.exe
+fameh32.exe
+fch32.exe
+fsar32.exe
+fsav32.exe
+fsdfwd.exe
+fsgk32.exe
+fsgk32st.exe
+fsguidll.exe
+fshdll32.exe
+fsm32.exe
+fsma32.exe
+fsmb32.exe
+vsmon.exe
+zapro.exe
+zlclient.exe
+It also exits if started on Windows 7 SP 1.
+By querying disk enum in registry, it also tries to identify whether the storage is USB-connected or not by searching
+“USBSTOR” string in their information.
+When a drive contains “.thumbs.db” file, its contents are read and checked for the valid magic number 0xEB397F2B. If it
+matches, the module creates %commonprogramfiles%\system\wabdat.dat and writes the data to this file, and then deletes
+“.thumbs.db”.
+Then, it infects the USB drives by creating directories with the names .Backup0[D-M] and .Backup00[D-M]
+Infected USB root folder (before activation)
+19
+Each directory contains a specially crafted desktop.ini file and target.lnk file that exploits the LNK vulnerability.
+target.lnk
+```
+        [.ShellClassInfo]
+    CLSID = {0AFACED1-E828-11D1-9187-B532F1E9575D}
+
+    CLSID2 = {0AFACED1-E828-11D1-9187-B532F1E9575D}
+
+    UICLSID = {0AFACED1-E828-11D1-9187-B532F1E9575D}
+
+```
+desktop.ini
+Listing of .Backup0* directory
+In the root directory of the drive it creates files “System32.dat” and “System32.bin”, the payload DLLs, and the “.thumbs.db”
+file. The payloads are stored as resources and encrypted with a simple XOR routine.
+```
+       static int decrypt(uint8_t *data, unsigned int dataLen)
+   {
+
+       uint32_t acc = 0xCC;
+
+       for ( unsigned int i = 0; i < dataLen; i++ )
+
+       {
+
+           uint8_t acc2 = data[i];
+
+           data[i] ^= acc;
+
+           acc = acc2;
+
+       }
+
+       return 0;
+
+   }
+
+```
+20
+Resource File name Description
+|100|System32.dat (.CatRoot.tmp)|32-bit payload|
+|---|---|---|
+|101|System32.bin (.CatRoot.tmp)|64-bit payload|
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "dskapi.ocx", "type" : "EXEF"},
+        {"id": 2, "description": "Godel or Kurt module", "type" : "APPS"},
+        {"id": 3, "description": "%system32%\\dskapi.ocx", "type" : "SYSP"},
+        {"id": 4, "description": "ED5559B0C554055380D75C1D7F9C4424E379270F53BA148D333134011AA3600CEF83394D9600F6D2808E0E99B5F932CA", "type" : "IOCS"},
+        {"id": 5, "description": "%temp%\\~gdl.tmp.thumbs.dbwabdat.datdesktop.initarget.lnkSystem32.datSystem32.bin.CatRoot.tmp", "type" : "DOCF"},
+        {"id": 6, "description": "{12258790-A76B}", "type" : "REGI"},
+        {"id": 7, "description": "Global\\RasSrvReady", "type" : "REGI"},
+        {"id": 8, "description": "RevertCache export", "type" : "EXEF"},
+        {"id": 9, "description": "%temp%\\~gdl.tmp log file", "type" : "DOCF"},
+        {"id": 10, "description": "Zlib compression algorithm", "type" : "APPS"},
+        {"id": 11, "description": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Disk\\Enum registry key", "type" : "REGI"},
+        {"id": 12, "description": "USBSTOR string", "type" : "TAMP"},
+        {"id": 13, "description": ".thumbs.db file with magic number 0xEB397F2B", "type" : "DOCF"},
+        {"id": 14, "description": "%commonprogramfiles%\\system\\wabdat.dat", "type" : "SYSP"},
+        {"id": 15, "description": ".Backup0[D-M] and .Backup00[D-M] directories", "type" : "DOCF"},
+        {"id": 16, "description": "desktop.ini file", "type" : "DOCF"},
+        {"id": 17, "description": "target.lnk file exploiting LNK vulnerability", "type" : "DOCF"},
+        {"id": 18, "description": "System32.dat (32-bit payload)", "type" : "EXEF"},
+        {"id": 19, "description": "System32.bin (64-bit payload)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "contains"},
+        {"source": 3, "target": 1, "rel_name" : "stored in"},
+        {"source": 4, "target": 1, "rel_name" : "hash of"},
+        {"source": 5, "target": 2, "rel_name" : "related to"},
+        {"source": 6, "target": 8, "rel_name" : "waits for"},
+        {"source": 7, "target": 8, "rel_name" : "waits for"},
+        {"source": 9, "target": 2, "rel_name" : "writes log file to"},
+        {"source": 10, "target": 9, "rel_name" : "uses compression"},
+        {"source": 11, "target": 2, "rel_name" : "reads registry key"},
+        {"source": 13, "target": 14, "rel_name" : "writes to file"},
+        {"source": 13, "target": 15, "rel_name" : "creates directories in USB drive root"},
+        {"source": 16, "target": 15, "rel_name" : "contains in directory"},
+        {"source": 17, "target": 15, "rel_name" : "contains in directory"},
+        {"source": 18, "target": 15, "rel_name" : "stored as payload in directory"},
+        {"source": 19, "target": 15, "rel_name" : "stored as payload in directory"}
+    ]
+}

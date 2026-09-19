@@ -1,0 +1,68 @@
+
+
+
+Sentence : Main
+The main procedure starts from preparation to install current application in the system. It creates a directory
+“%APPDATA%\WCF Data Services” and prepares several strings containing work paths:
+On Windows XP English with system drive C: the paths will be the following:
+LnkPath = C:\Documents and Settings\\Start Menu\Programs\Startup\WcfAudit.lnk
+*LogPath = C:\ProgramData\Adobe\AdobeArm*
+ExePath = C:\Documents and Settings\\Application Data\WCF Data Services\WcfAudit.exe
+XmlPath = C:\Documents and Settings\\Application Data\WCF Data Services\preferences.xml
+Next it checks existence of system event object named “klgskot”. If that event is found, the application exits to prevent
+multiple instances of the application from running. If event doesn‘t exist it is created immediately.
+Next it checks if current executable is called WcfAudit.exe. If not it creates a shortcut file in the file referred above as LnkPath.
+Current executable is copied to the path referred above as ExePath. After that the process is restarted from ExePath.
+If installation to the system is completed, the application starts three threads:
+Thread #1 (Selfremover)
+This thread creates a system event object called “klgkillsoft” and waits for this event to be activated. When something
+activates this event the thread removes the LNK file from Startup folder and renames current executable from WcfAudit.exe to
+file with a decimal number in the name and no extension. The decimal number represents system tick counter value.
+Thread#2 (Keylogger)
+This thread sets low level Windows keyboard hook, which allows the module to intercept keystrokes. The thread records all
+keystrokes, foreground window names and textual clipboard data.
+Accumulated data is available for the Thread#3 which expects it in special buffer.
+PAGE 38 | The ‘TeamSpy’ Story - Abusing TeamViewer in Cyberespionage Campaigns | 20 March 2013
+Thread#3 (Logger)
+This thread is started 30 seconds after Thread#2. It checks if XmlPath file referred above exists. If it exists it is moved to
+LogPath directory, the name is changed to klg.klg, where Number is a decimal integer taken from current system
+tick counter value. Then this file is opened and appended with new data received from Keylogger thread. Please note, that at
+least empty file at XmlPath must be created, the keylogger starts saving collected data only if it finds file at XmlPath.
+If the LogPath directory doesn’t exist, it will be created.
+If the klg.klg file becomes larger than 1Mb, new file at XmlPath is created and moved back to LogPath directory
+with new name klg.klg (current tick counter value is used). In the end LogPath directory is full of klg.klg
+files, however there is a bug in this logics. If the system is rebooted it will not contains XmlPath will not exist and that means
+that keylogger will not be active. However it can still be activated any time by creating the XmlPath file.
+The logs are stored in plaintext. Below is a fragment of sample log from the keylogger module:
+***** C:\Documents and Settings\User\My Documents\My Music
+***** [18:47 - 13/03/2013; explorer.exe;]
+[BACK][BACK][DOWN][RIGHT][LEFT][RIGHT][ENTER]
+[DOWN][DOWN][UP][UP][ENTER]
+***** Control Panel ******* [18:48 - 13/03/2013; explorer.exe;]
+[LEFT][LCTRL] [LEFT][LSHIFT][RIGHT][LSHIFT]C:[ENTER]
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "%APPDATA%\\WCF Data Services", "type" : "SYSP"},
+        {"id": 2, "description": "C:\\Documents and Settings\\<username>\\Start Menu\\Programs\\Startup\\WcfAudit.lnk", "type" : "TPTH"},
+        {"id": 3, "description": "C:\\ProgramData\\Adobe\\AdobeArm", "type" : "SYSP"},
+        {"id": 4, "description": "C:\\Documents and Settings\\<username>\\Application Data\\WCF Data Services\\WcfAudit.exe", "type" : "EXEF"},
+        {"id": 5, "description": "C:\\Documents and Settings\\<username>\\Application Data\\WCF Data Services\\preferences.xml", "type" : "DOCF"},
+        {"id": 6, "description": "klgskot", "type" : "REGI"},
+        {"id": 7, "description": "klgkillsoft", "type" : "REGI"},
+        {"id": 8, "description": "WcfAudit.exe", "type" : "EXEF"},
+        {"id": 9, "description": "<decimal number>.<no extension>", "type" : "DOCF"},
+        {"id": 10, "description": "LogPath directory", "type" : "SYSP"},
+        {"id": 11, "description": "klg.klg", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 1, "target": 4, "rel_name" : "contains"},
+        {"source": 1, "target": 5, "rel_name" : "contains"},
+        {"source": 6, "target": 1, "rel_name" : "checks existence of"},
+        {"source": 7, "target": 2, "rel_name" : "waits for activation to remove and rename"},
+        {"source": 4, "target": 8, "rel_name" : "copies to"},
+        {"source": 5, "target": 10, "rel_name" : "moves to as klg.klg if exists"},
+        {"source": 5, "target": 3, "rel_name" : "must be created for keylogger activation"}
+    ]
+}

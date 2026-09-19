@@ -1,0 +1,139 @@
+
+
+
+Sentence : Anatomy of the attack
+General description
+These attacks comprised of the classical scenario of specific targeted attacks, consisting of two major
+stages:
+
+
+Initial infection
+
+
+Additional modules deployed for intelligence gathering
+
+
+The malicious code was delivered via e-mail as attachments (Microsoft Excel, Word and, probably PDF
+documents) which were rigged with exploit code for known security vulnerabilities in the mentioned
+applications. In addition to Office documents (CVE-2009-3129, CVE-2010-3333, CVE-2012-0158), it
+appears that the attackers also infiltrated victim network(s) via Java exploitation (known as the 'Rhino'
+exploit (CVE-2011-3544).
+Right after the victim opened the malicious document or visit malicious URL on a vulnerable system, the
+embedded malicious code initiated the setup of the main component which in turn handled further
+communication with the C&C servers.
+Next, the system receives a number of additional spy modules from the C&C server, including modules to
+handle infection of smartphones.
+The main purpose of the spying modules is to steal information. This includes files from different
+cryptographic systems, such as "Acid Cryptofiler", (see https://fr.wikipedia.org/wiki/Acid_Cryptofiler)
+which is known to be used in organizations of European Union/European Parliament/European
+Commission since the summer of 2011. All gathered information is packed, encrypted and only then
+transferred to the C&C server.
+Step-by-step description (1st stage)
+During our investigation we couldn't find any e-mails used in the attacks, only top level dropper
+documents. Nevertheless, based on indirect evidence, we know that the e-mails can be sent using one of
+the following methods:
+Using an anonymous mailbox from a free public email service provider
+Using mailboxes from already infected organizations
+E-mail subject lines as well as the text in e-mail bodies varied depending on the target (recipient). The
+attached file contained the exploit code which activated a Trojan dropper in the system.
+We have observed the use of at least three different exploits for previously known vulnerabilities: CVE
+2009-3129 (MS Excel), CVE-2010-3333 (MS Word) and CVE-2012-0158 (MS Word). The first attacks that
+used the exploit for MS Excel started in 2010, while attacks targeting the MS Word vulnerabilities
+appeared in the summer of 2012.
+As a notable fact, the attackers used exploit code that was made public and originally came from a
+previously known targeted attack campaign with Chinese origins. The only thing that was changed is the
+executable which was embedded in the document; the attackers replaced it with their own code.
+The embedded executable is a file-dropper, which extracts and runs three additional files.
+%TEMP%MSC.BAT
+%ProgramFiles%WINDOWS NTLHAFD.GCP (<- This file name varies)
+%ProgramFiles%WINDOWS NTSVCHOST.EXE
+MSC.BAT file has the following contents:
+chcp 1251
+:Repeat
+attrib -a -s -h -r "%DROPPER_FILE%"
+del "%DROPPER_FILE%"
+if exist "%DROPPER_FILE%" goto Repeat
+del "%TEMP%msc.bat"
+Another noteworthy fact is in the first line of this file, which is a command to switch the codepage of an
+infected system to 1251. This is required to address files and directories that contain Cyrillic characters in
+their names.
+The "LHAFD.GCP" file is encrypted with RC4 and compressed with the "Zlib" library. This file is
+essentially a backdoor, which is decoded by the loader module (svchost.exe). The decrypted file is injected
+into system memory and is responsible for communication with the C&C server.
+On any infected system, every major task is performed by the main backdoor component. The main
+component is started only after its loader ("svchost.exe") checks if the internet connection is available. It
+does so by connecting to three Microsoft hosts:
+update.microsoft.com
+www.microsoft.com
+support.microsoft.com
+Figure - Hosts used to validate internet connection
+After the Internet connection is validated, the loader executes the main backdoor component that
+connects to its C&C servers:
+Capture of malware's communication with the C2
+The connections with the C&C are encrypted - different encryption algorithms are used to send and
+receive data.
+Encrypted communication with the C2
+During our investigation, we found more than 60 different command-and-control domains. Each malware
+sample contains three such domains, which are hardcoded inside the main backdoor component:
+Hardcoded C2 domains inside backdoor
+Step-by-step description (2nd stage)
+After a connection with the C&C server is established, the backdoor starts the communication process,
+which leads to the loading of additional modules. These modules can be split into two categories: "offline"
+and "online". The main difference between these categories is their behavior on the infected system:
+"Offline": exists as files on local disk, capable of creating its own system registry keys, local disk log
+files, and may communicate with C&C servers on their own.
+"Online": exists only in system memory and is never saved to local disk, do not create registry keys,
+all logs are also kept in memory instead of local disk and sends the result of work to the C&C server
+using own code.
+There is a notable module among all others, which is essentially created to be embedded into Adobe
+Reader and Microsoft Office applications. The main purpose of its code is to create a foolproof way to
+regain access to the target system. The module expects a specially crafted document with attached
+executable code and special tags. The document may be sent to the victim via e-mail. It will not have an
+exploit code and will safely pass all security checks. However, like with exploit case, the document will be
+instantly processed by the module and the module will start a malicious application attached to the
+document.
+This trick can be used to regain access to the infected machines in case of unexpected C&C servers
+shutdown/takeover.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "E-mail with attachments", "type" : "MAIL"},
+        {"id": 2, "description": "Microsoft Excel document (CVE-2009-3129)", "type" : "DOCF"},
+        {"id": 3, "description": "Microsoft Word document (CVE-2010-3333 and CVE-2012-0158)", "type" : "DOCF"},
+        {"id": 4, "description": "Java exploit (CVE-2011-3544)", "type" : "CVES"},
+        {"id": 5, "description": "C&C servers", "type" : "CCSH"},
+        {"id": 6, "description": "Spy modules", "type" : "EXEF"},
+        {"id": 7, "description": "Acid Cryptofiler cryptographic system", "type" : "APPS"},
+        {"id": 8, "description": "File-dropper executable", "type" : "EXEF"},
+        {"id": 9, "description": "%TEMP%MSC.BAT file", "type" : "DOCF"},
+        {"id": 10, "description": "%ProgramFiles%WINDOWS NTLHAFD.GCP file", "type" : "DOCF"},
+        {"id": 11, "description": "%ProgramFiles%WINDOWS NTSVCHOST.EXE file", "type" : "EXEF"},
+        {"id": 12, "description": "Backdoor component (NTSVCHOST.EXE)", "type" : "EXEF"},
+        {"id": 13, "description": "Microsoft hosts for internet connection check", "type" : "URLS"},
+        {"id": 14, "description": "Command-and-control domains", "type" : "CCSH"},
+        {"id": 15, "description": "Offline modules", "type" : "EXEF"},
+        {"id": 16, "description": "Online modules", "type" : "EXEF"},
+        {"id": 17, "description": "Adobe Reader and Microsoft Office applications module", "type" : "APPS"},
+        {"id": 18, "description": "Specially crafted document with attached executable code", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 2, "target": 4, "rel_name" : "exploits"},
+        {"source": 3, "target": 4, "rel_name" : "exploits"},
+        {"source": 1, "target": 5, "rel_name" : "connects to"},
+        {"source": 5, "target": 6, "rel_name" : "deploys"},
+        {"source": 6, "target": 7, "rel_name" : "targets"},
+        {"source": 1, "target": 8, "rel_name" : "contains"},
+        {"source": 8, "target": 9, "rel_name" : "creates"},
+        {"source": 8, "target": 10, "rel_name" : "extracts and runs"},
+        {"source": 8, "target": 11, "rel_name" : "extracts and runs"},
+        {"source": 11, "rel_name" : "is backdoor component of", "target": 12},
+        {"source": 12, "target": 5, "rel_name" : "communicates with"},
+        {"source": 12, "target": 13, "rel_name" : "checks internet connection via"},
+        {"source": 12, "target": 14, "rel_name" : "connects to"},
+        {"source": 12, "target": 15, "rel_name" : "deploys"},
+        {"source": 12, "target": 16, "rel_name" : "deploys"},
+        {"source": 17, "target": 18, "rel_name" : "embeds and processes"}
+    ]
+}

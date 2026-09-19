@@ -1,0 +1,101 @@
+
+
+
+Sentence : Cleanup Thread and Main Process Cleanup Code
+After checking for any command line arguments, Tildeb will sleep for 4.096 seconds. This is followed by
+setting a global variable, which we’ve referred to as up_time , with the current time since the Epoch (in
+seconds).
+It then initializes and sets two Security Descriptors discretionary access control lists (DACL) to NULL,
+which allows access to two objects. One is a mailslot it creates under the name \.\mailslot\c54321. The
+handle of this object is set as such so it is not inheritable by a new process. Another is a temporary file it
+creates on the system under the name tmp.tmp . The handle of this object is set as such so it is
+inheritable by a new process.
+It subsequently attempts to initialize Windows Sockets and terminates itself if it fails to do so. Otherwise, it
+continues to create a global mutex object under the name nowMutex . The mutex is not created for
+ensuring only one instance of itself is running. In fact, there may be more than one instance running at the
+same time. The mutex is created solely for thread synchronization, that is, for signaling to the cleanup
+thread to acquire it. A mutex is a mutually exclusive object, and only one thread can own it at a time.
+Tildeb has a fail-aware thread responsible for housecleaning upon failure in specific operations in the
+code throughout the program lifetime. We’ve referred to this thread as the cleanup_thread .
+The synchronization between the main process thread and the cleanup_thread happens as follows.
+Initially, the main process thread is the owner of the mutex object nowMutex, which is in a non-signaled
+state at this point. At the same time, the cleanup_thread waits to acquire it indefinitely. For
+cleanup_thread to acquire the mutex, the owning thread releases it via the ReleaseMutex() application
+programming interface (API). When this happens, the mutex object becomes signaled and the
+cleanup_thread may acquire it.
+2
+The release of the mutex object and the trigger of the cleanup process carried out by the cleanup_thread
+happen when Tildeb:
+
+
+Fails to receive data from the C&C server (if the number of bytes received is 0).
+
+
+Fails to create a process/execute a file (control command 0x20).
+
+
+Successfully acquires the mutex object (if it is signaled by other thread); this is control commanddependent.
+
+
+When the cleanup_thread is created, it first attempts to set the thread’s priority to run only when the
+system is idle using the API SetPriorityClass(hThread, IDLE_PRIORITY_CLASS) . However, the usage of
+this API in the context of the thread is not correct, as this pertains to process priority and not threads. The
+proper API would have been SetThreadPriority (hThread, THREAD_PRIORITY_IDLE) . Therefore, the
+thread priority level will be that of the process thread priority, which is THREAD_PRIORITY_NORMAL .
+This mistake is present in every thread created by the implant.
+After setting the thread's priority, it goes into a while loop where the conditional exit is controlled via a
+global flag setting, which we’ve referred to as wayout_flag (initially this flag is set to 0). Inside the loop, it
+sleeps for 15 seconds on every iteration. To exit the while loop:
+
+
+The state of the mutex object must be anything other than signaled.
+
+
+More than 15 minutes had passed since the implant has started (this is also dependent on the
+up_time value).
+
+
+Once outside the while loop, it checks again if less than 15 minutes have passed. If so, it terminates the
+cleanup thread. Otherwise, it proceeds to close available handles, delete a temp file, shut down and close
+sockets, and terminate the process, as shown in Figure 1.
+Accordingly, the cleanup thread functions as a watchdog. If nothing happens that would influence its
+behavior in less than 15 minutes, the implant cleans after itself and is terminated.
+The main process thread signals the cleanup thread via the pseudocode (shown in Figure 2), which also
+alters the process main thread’s continuous operation. The process thread first attempts to acquire the
+mutex and sets the wayout_flag flag if it is in a non-signaled state. Otherwise, it updates the up_time
+variable value with the current time, releases the mutex (thus becoming signaled for the cleanup thread to
+acquire it if possible), and then checks if the number of bytes received from the server is 0. If so, it sets
+the wayout_flag flag. As shown in Figure 2, the main process thread also goes through a similar cleanup
+procedure when it fails to receive data from the server by setting the wayout_flag flag, causing it to
+terminate itself.
+Note that Tildeb is not equipped with any persistence mechanism. It is unlikely that one will be created
+considering what the cleanup code does.
+3
+Figure 1: cleanup_thread pseudocode Figure 2: Main process cleanup and thread
+synchronization pseudocode
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Tildeb", "type" : "ACTO"},
+        {"id": 2, "description": "\\.\mailslot\c54321", "type" : "MAIL"},
+        {"id": 3, "description": "tmp.tmp", "type" : "DOCF"},
+        {"id": 4, "description": "nowMutex", "type" : "SYSP"},
+        {"id": 5, "description": "C&C server", "type" : "CCSH"},
+        {"id": 6, "description": "cleanup_thread", "type" : "ACTO"},
+        {"id": 7, "description": "wayout_flag", "type" : "REGI"},
+        {"id": 8, "description": "up_time", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "creates"},
+        {"source": 1, "target": 3, "rel_name" : "creates"},
+        {"source": 1, "target": 4, "rel_name" : "creates"},
+        {"source": 1, "target": 5, "rel_name" : "communicates with"},
+        {"source": 1, "target": 6, "rel_name" : "spawns"},
+        {"source": 1, "target": 7, "rel_name" : "sets"},
+        {"source": 1, "target": 8, "rel_name" : "sets"},
+        {"source": 6, "target": 4, "rel_name" : "waits for"},
+        {"source": 6, "target": 3, "rel_name" : "deletes"},
+        {"source": 1, "target": 7, "rel_name" : "checks"},
+        {"source": 1, "target": 8, "rel_name" : "updates"}
+    ]
+}

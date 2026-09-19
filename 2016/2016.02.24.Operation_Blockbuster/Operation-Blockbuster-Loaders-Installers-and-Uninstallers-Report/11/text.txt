@@ -1,0 +1,48 @@
+2.2 IndiaAlfa-Two
+The development of IndiaAlfa-Two shows a change in technique, but only a slight deviation in methodology. The first
+noticeable difference in IndiaAlfta-Two is the use of dynamic API loading. IndiaAlfa-Two is a simple installer which does
+not require a significant number of function calls in order to execution its objectives, and the developers only dynamically
+load 7 functions. The API function names are encoded by XORing each byte in the string with 0xA7 .
+While IndiaAlfa-One used a hardcoded filename for the phishing document, IndiaAlfa-Two relies on the name of itself to
+provide the document’s name. For instance, if the IndiaAlfa-Two binary has the filename “abcdef.exe”, the dropped phishing
+document would be created within the same directory as the binary and given the name “abcdef.pdf” (for a PDF file).
+IndiaAlfa-Two uses the resource section of its binary to store the RomeoAlfa binary (in BIN\101 ) as well as the phishing
+document (in BIN\102 ). While IndiaAlfa-Two uses a simple XOR (using 0xA7 as the key) to obfuscate/encode API strings,
+the authors make no effort to obfuscate the payload components. Both the RomeoAlfa binary and phishing document are
+stored within the resource section in plaintext.
+IndiaAlfa-Two does not use a secondary DLL in order to open the phishing document, instead using a simpler approach
+with the ShellExecute API function, which will perform the default action the operating system has associated
+with the file’s type. Additionally, the use of ShellExecute allows the IndiaAlfa-Two binary to serve various file types
+without additional overhead. For instance, the IndiaAlfa-Two samples can easily switch between PDF and HWP phishing
+documents without the need to recode the portion of the binary responsible for opening the document.
+IndiaAlfa-Two introduces a slight deviation in the tasks that IndiaAlfa-One performs. The first task that IndiaAlfa-Two
+performs is the removal of the file %TEMP%\~DF {random value}. IndiaAlfa-Two will attempt to move itself to the
+%TEMP%\~DF {random value} filename prior to the suicide script’s execution. The suicide script itself is generated using a
+different technique than seen in IndiaAlfa-One. Notably, the script is generated in place on disk as seen in the Figure 2-3,
+rather than in memory and then copied to disk.
+```
+  void __noreturn Suicide(char pszFilename)
+  {
+  FILE fp;
+  char szSuicideScriptFilename[256];
+  GetTempPathA(0x104u, szSuicideScriptFilename);
+  strcat(szSuicideScriptFilename, "PM0D4.bat");
+  fp = fopen(szSuicideScriptFilename, "wb");
+  fprintf(fp, ":Repeat1\r\n");
+  fprintf(fp, "del \”%s\"\r\n", pszFilename);
+  fprintf(fp, "if exist \"%s\" goto Repeat1\r\n", pszFilename);
+  fprintf(fp, "del \"%s\"\r\n", szSuicideScriptFilename);
+  fclose(fp);
+  WinExec(szSuicideScriptFilename, 0);
+  exit(1);
+}
+```
+Figure 2-3: IndiaAlfa-Two’s Suicide Script Generator
+While observed samples of IndiaAlfa-Two have only used PDF and HWP phishing documents, the binary indicates that
+Microsoft Excel spreadsheet files (XLS) may also be used by the Lazarus group in attacks. IndiaAlfa-Two executes the code
+seen in Figure 2-4 immediately before beginning Task #1.
+```
+  printf("ExePath: %s\nXlsPath: %s\nTmpPath: %s\n", szTrojanFilenamePath,
+  szCoverFilenamePath, szNewDropperFilenamePath);
+```
+Figure 2-4: Artifact within IndiaAlfa-Two Indicating the Possibility that IndiaAlfa-Two May Also be used with Excel Decoy Documents

@@ -1,0 +1,36 @@
+Command 0x8006100A: Enumerate Processes
+The Enumerate Processes command provides a list of processes running on a victim’s
+machine for a given path on the victim’s machine along with user running the process, the PID
+of the process and the terminal server session (if any) associated with the process. The
+command handler requires no arguments. When activated, the command handler obtains a list
+of active processes on the victim’s machine by calling WTSEnumerateProcesses . By using
+WTSEnumerateProcesses instead of the more common Process32First and
+Process32Next functions, the Enumerate Processes command can also list processes
+associated with terminal server sessions.
+Using the number of processes returned by the WTSEnumerateProcesses call, the command
+handler will allocate a response buffer large enough to contain a CommandHeader and the
+necessarily information structures to describe each process. The command handler begins
+filling out a ProcessInfo data structure for each process, placing the structure within the
+payload of the response buffer. The ProcessInfo structure is defined as:
+```
+struct ProcessInfo
+{
+DWORD dwPID;
+DWORD dwSessionID;
+DWORD bIs64BitProcess;
+char szUsername[32];
+char szProcessName[260];
+};
+```
+The dwPID field identifies the process ID for the process and dwSessionID identifies the
+terminal server session associated with the process. If the process is a 64-bit image, the
+bIs64BitProcess field is set to 1 otherwise it is set to 0. Using the SID associated with the
+process, the command handler will look up the username responsible for the process and place
+the value in the szUsername field. Lastly, the szProcessName field contains the full name
+of the process.
+After completing the array of ProcessInfo structures for each found process, the command
+handler will set the dwCommandID field within the CommandData structure to 0x8006100A and
+return the response buffer. If, however, the WTSEnumerateProcesses function was
+unsuccessful, the command handler will return only a CommandHeader structure with the
+dwCommandID field set to 0x8006100A and the dwLastError set to the return value from
+GetLastError .

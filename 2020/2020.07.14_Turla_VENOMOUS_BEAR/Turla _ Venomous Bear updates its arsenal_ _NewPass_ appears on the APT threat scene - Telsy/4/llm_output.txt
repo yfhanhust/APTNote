@@ -1,0 +1,99 @@
+
+
+
+Sentence : Loader Analysis
+The retrieved backdoor implants are identified by the following hashes:
+Name SHA256
+lib3DXquery.dll 6e730ea7b38ea80f2e852781f0a96e0bb16ebed8793a5ea4902e94c594bb6ae0
+WindowsHolographicService.dll
+f966ef66d0510da597fec917451c891480a785097b167c6a7ea130cf1e8ff514
+Once again, the libraries export several functions but only one is useful to execute their
+real payload.
+https://www.telsy.com/turla-venomous-bear-updates-its-arsenal-newpass-appears-on-the-apt-threat-scene/ 4/11
+7/23/2020 Turla / Venomous Bear updates its arsenal: "NewPass" appears on the APT threat scene - Telsy
+To begin, the library checks the presence of the associated configuration file, if it does not
+exist, the backdoor terminates its execution. Vice versa, once found the file the malware
+starts to decode and read the current configuration.
+The first 5 bytes of the file contains the size of the data to read starting from
+the 6 th bytes and which contains the first encoded information useful to allow the
+malware to load the entire configuration.
+All the data retrieved in this first phase is encoded using a simple XOR algorithm with a
+fixed key 19 B9 20 5A B8 EF 2D A3 73 08 C1 53, hardcoded at the beginning of the
+function as represented in the following image.
+https://www.telsy.com/turla-venomous-bear-updates-its-arsenal-newpass-appears-on-the-apt-threat-scene/ 5/11
+7/23/2020 Turla / Venomous Bear updates its arsenal: "NewPass" appears on the APT threat scene - Telsy
+So, the malware reads the first 5 bytes and decodes it using the key, obtaining the
+number of the bytes it has to read to obtain the initial configuration.
+In this specific case, from the decoded bytes it gets the value 00081 .
+So, it proceeds to read other next 81 bytes .
+https://www.telsy.com/turla-venomous-bear-updates-its-arsenal-newpass-appears-on-the-apt-threat-scene/ 6/11
+7/23/2020 Turla / Venomous Bear updates its arsenal: "NewPass" appears on the APT threat scene - Telsy
+Decoding these last ones with the usual key, it obtains a string composed by different
+parameters separated by “ || ”, as illustrated below.
+However, this is still not the final configuration used by the malware, but it contains only
+the parameters to load the last malicious Windows library, named
+LastJournalx32.adf, containing the final agent.
+This payload is hidden into the configuration file after a section of random bytes used by
+the attackers to change the hash value of the file at every infection.
+During its activity, the loader decrypts and maintains in memory the complete
+configuration used during the infection chain.
+It consists of different JSON formatted structures that look like the following:
+https://www.telsy.com/turla-venomous-bear-updates-its-arsenal-newpass-appears-on-the-apt-threat-scene/ 7/11
+7/23/2020 Turla / Venomous Bear updates its arsenal: "NewPass" appears on the APT threat scene - Telsy
+{ “RefreshToken”:””, “NoInternetSleepTime”:”3600″, “GetMaxSize”:”60000″,
+“ClientId”:””, “DropperExportFunctionName”:”LocalDataVer”, “Autorun”:”16″,
+“ImgurImageDeletionTime”:”120″, “RecoveryServers”:[ ], “RunDllPath”:”%Win-
+Dir%\System32″, “AgentLoaderExportFunctionName”:”LocalDataVer”,
+“Key”:”[…redacted…]”, “AgentName”:”LastJournalx32.adf”, “UserAgent”:””,
+[…truncated…]
+The structure contains all the information necessary for the loader to correctly launch the
+final agent. Some of these information are
+AgentFileSystemName, AgentExportName and AgentName .
+The agent shares the same memory space of the loader, thus it is able to access to the
+same configuration and to extract the needed parameters, such as the object
+named Credentials . It also contains the domain name ( newshealthsport[.]com ) and
+the path (/sport/latest.php ) of the command-and-control with which the agent will
+communicate.
+From the configuration it is also possible to notice the version number of the malware,
+specifically it is 19.03.28 for the AgentLoader and 19.7.16 for the Agent .
+Moreover, the agent is identified by an ID addressed by the AgentID entry that is used
+during the communication with the C2 as identifier of the infected machine.
+The configuration also embeds a specific structure for persistence mechanisms that
+appears as follow:
+{ “Autoruns”: { “Service”: { “DisplayName”: “Adobe Update Module”,
+“ServiceName”: “Adobe Update Module”,       “Enabled”: “true” },
+“TaskScheduler”: { “Enabled”: “false” },     “Registry”: { “Enabled”:
+“false” },     “Policies”: { “Enabled”: “false” } } }
+The implant supports different types of persistence mechanisms: through Service
+Manager, Task Scheduler, via Registry Key or using Windows GPO.
+In this specific case, attackers enabled the Service method that allows the malware to
+interact with the SCManager to create a new service named Adobe Update
+Module pointing to the path of the loader.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "lib3DXquery.dll", "type" : "DOCF"},
+        {"id": 2, "description": "6e730ea7b38ea80f2e852781f0a96e0bb16ebed8793a5ea4902e94c594bb6ae0", "type" : "IOCS"},
+        {"id": 3, "description": "WindowsHolographicService.dll", "type" : "DOCF"},
+        {"id": 4, "description": "f966ef66d0510da597fec917451c891480a785097b167c6a7ea130cf1e8ff514", "type" : "IOCS"},
+        {"id": 5, "description": "Configuration file", "type" : "DOCF"},
+        {"id": 6, "description": "XOR algorithm with key 19 B9 20 5A B8 EF 2D A3 73 08 C1 53", "type" : "TTPS"},
+        {"id": 7, "description": "LastJournalx32.adf", "type" : "DOCF"},
+        {"id": 8, "description": "newshealthsport[.]com", "type" : "CCSH"},
+        {"id": 9, "description": "/sport/latest.php", "type" : "URLS"},
+        {"id": 10, "description": "%WinDir%\\System32", "type" : "SYSP"},
+        {"id": 11, "description": "Adobe Update Module (Service)", "type" : "TTPS"},
+        {"id": 12, "description": "AgentID entry", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 5, "rel_name" : "checks for configuration"},
+        {"source": 3, "target": 5, "rel_name" : "checks for configuration"},
+        {"source": 5, "target": 6, "rel_name" : "decoded using"},
+        {"source": 5, "target": 7, "rel_name" : "contains payload"},
+        {"source": 7, "target": 8, "rel_name" : "communicates with C2 domain"},
+        {"source": 7, "target": 9, "rel_name" : "uses URL for communication"},
+        {"source": 7, "target": 10, "rel_name" : "loaded from path"},
+        {"source": 11, "target": 7, "rel_name" : "creates service for persistence"},
+        {"source": 7, "target": 12, "rel_name" : "uses as identifier"}
+    ]
+}

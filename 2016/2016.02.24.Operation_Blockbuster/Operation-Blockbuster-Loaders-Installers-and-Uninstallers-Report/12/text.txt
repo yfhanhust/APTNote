@@ -1,0 +1,51 @@
+Operation Blockbuster: Loaders, Installers and Uninstallers Report 10
+IndiaBravo is a versatile installer that has been observed installing three different malware families: the RomeoBravo
+RAT, the RomeoCharlie RAT, and the PapaAlfa proxy. IndiaBravo provides a customizable framework that the authors of
+other malware families can utilize to install their malware on a victim’s machine. The IndiaBravo installer performs, at a
+minimum, four tasks:
+
+
+Dynamically load API functions (including functions that are not used by the installer).
+
+
+Call the WriteConfig function to install the configuration for the malware being installed.
+
+
+Call the ExtractDll function to install the malware image on the victim’s machine.
+
+
+Call CreateSVC to install and start the Windows service that is responsible for activating the installed malware.
+
+
+The dynamic API loading component of IndiaBravo uses a combination of XOR and Space-Dot string obfuscation. The
+names of libraries (e.g. kernel32.dll, advapi32.dll ) are obfuscated by using the XOR byte manipulation with the
+constant 0xA7 while the names of the API functions to load are obfuscated using the Space-Dot method. Of the 102 API
+functions that IndiaBravo loads during the dynamic API loading process, only 21-31% of the functions are used by the
+installer, depending on the type of malware being installed.
+As previously stated, IndiaBravo is a framework, allowing a malware author to modify the base code to fit a particular
+malware’s installation needs. As such, the function is by-and-large dropped depending on the malware,
+WriteConfig
+while the functions ExtractDll and CreateSVC are not. To date, there have been three IndiaBravo variants observed:
+IndiaBravo-RomeoBravo, as the name implies, installs the RomeoBravo RAT, IndiaBravo-RomeoCharlie installs the
+RomeoCharlie RAT, and IndiaBravo-PapaAlfa installs the PapaAlfa proxy. The malware image is appended to the end of
+the IndiaBravo executable followed by a 32-bit value (DWORD) identifying the size of the malware image in exactly the
+same way that IndiaAlfa stores its dropped components. Both IndiaBravo-RomeoBravo and IndiaBravo-RomeoCharlie
+store their malware payloads in plaintext, while IndiaBravo-PapaAlfa offsets the value of each byte within its malware
+payload image by adding 0xD7 to each byte.
+Before exploring the intricacies of each variant, it is best to explain the more general functions consistent across
+variants, ExtractDll and CreateSVC . The ExtractDll function drops the malware on a victim’s system. While
+only IndiaBravo-PapaAlfa has been observed decoding its payload prior to dropping said payload to disk, structural
+artifacts within IndiaBravo samples suggests that this may the more the norm for the IndiaBravo framework, rather
+than the exception. Both of the IndiaBravo-Romeo variants contain code within ExtractDll that appears to forego
+manipulating the payload’s image (or more precisely, performs the same act as IndiaBravo-PapaAlfa but with 0 as the
+constant instead of 0xD7 ). The code fragment in Figure 3-1 from an IndiaBravo-RomeoBravo sample illustrates the
+location of where the IndiaBravo framework’s ExtractDll function would manipulate a payload’s image in memory:
+```
+  ptr = (char *)LocalAlloc(0x40u, dwImageSize);
+  if ( ptr )
+  {
+  memcpy(ptr, &pvImageSource[uBytes - 4] - dwImageSize, dwImageSize);
+  for ( i = 0; i < dwImageSize; ++i )
+  ptr[i] = ptr[i];
+```
+Figure 3-1: Neutered Decryption Code Snippet from IndiaBravo’s ExtractDLL Function

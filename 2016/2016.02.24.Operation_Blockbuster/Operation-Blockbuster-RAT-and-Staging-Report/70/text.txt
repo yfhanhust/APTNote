@@ -1,0 +1,36 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 63
+Commonly known as Joanap, SierraJuliett-MikeOne is a peer-to-peer (P2P) malware family that gives the Lazarus
+Group the ability to rapidly establish a common program base across all infected machines as well as provide remote
+administration functionality on each individual infection. SierraJuliett-MikeOne (SJM1) is the older sibling of
+SierraJuliett-MikeTwo (SJM2) (see Section 18). While both SJM1 and SJM2 perform essentially the same function and follow
+roughly the same communication protocols, the two do not constitute variants of one another in the sense that the term
+variant has been established in this report. SJM1 and SJM2 have clearly different code bases, indicating they were most
+likely developed independently of one another but based on a common design specification. It is the clear distinction
+between the two code bases that necessitates they fall into different families.
+The samples within the SJM1 family are largely homogenous with each consecutive sample (based on compile time) having
+an average similarity 98.7% to its neighboring sample. Installed typically by IndiaJuliett, SJM1 operates as a svchostdependent service DLL. The ServiceMain export does little more than provide the necessary scaffolding for SJM1
+to appear to be an active service. The core of SJM1 is activated when the DLL is loaded by svchost and calls DllMain .
+DllMain spins the core of SJM1 off into its own thread. Some later samples of SJM1 place an intermediate piece of code
+between the DllMain and the core by having the newly generated thread call a function to call DialogBoxParamA
+with the lpDialogFunc ultimately calling the core of SJM1. It is unclear why this small variation was introduced as it
+seems to serve no real purpose.
+The core of SJM1 consists of three functions as Figure 17-1 illustrates. The first function initializes the SJM1 system. The
+initialization function begins by performing dynamic API loading. The dynamic API loading functions within SJM1 use
+an AES implementation to decrypt the names of the API functions to load via GetProcAddress. The AES implementation,
+CRijndael, is a direct lift from a CodeProject project by George Anescu that he published in November, 2002. [9] The same
+dynamic API loading functions for the API functions from kernel32.dll, psapi.dll, and ws2_32.dll used by
+SJM1 can be found in RomeoFoxtrot (see Section 8) albeit with different AES keys. A strange feature of these dynamic API
+loading functions, in both SJM1 and RomeoFoxtrot, is that all but the ws2_32.dll functions use the same AES key, but
+for some reason the Winsock API loading code uses a different key.
+void SierraRomeoMikeOneCore()
+```
+  {
+if ( Initialize() )
+{
+  if ( StartIncomingClientsHandler(0) )
+  StartP2PClientThread(0);
+}
+}
+```
+Figure 17-1: SierraJuliett-MikeOne’s Core
+9 George Anescu. CodeProject. “A C++ Implementation of the Rijndael Encryption/Decryption method”. http://www.codeproject.com/Articles/1380/A-C-Implementation-of-the-Rijndael-Encryption-Decr 8 Nov 2002.

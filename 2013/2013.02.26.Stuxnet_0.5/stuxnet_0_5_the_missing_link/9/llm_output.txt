@@ -1,0 +1,138 @@
+
+
+
+Sentence : Symbol label parsing
+The target system must be a SIMATIC 400 Station
+(0x14109A) or SIMATIC H-Station (0x141342), which use
+417 PLCs. The symbol labels must match the format:
+<Dev
+iceNumber>
+|Table 4Stuxnet 0.5 hooks fewer exports|Col2|
+|---|---|
+|Stuxnet v0.500s7_event|Stuxnet v1.xxxs7_event|
+||s7ag_bub_cycl_read_create|
+||s7ag_bub_read_var|
+||s7ag_bub_read_var_seg|
+||s7ag_bub_write_var|
+||s7ag_bub_write_var_seg|
+||s7ag_link_in|
+|s7ag_read_szl|s7ag_read_szl|
+|s7ag_test|s7ag_test|
+|s7blk_delete|s7blk_delete|
+|s7blk_findfirst|s7blk_findfirst|
+|s7blk_findnext|s7blk_findnext|
+|s7blk_read|s7blk_read|
+|s7blk_write|s7blk_write|
+||s7db_close|
+|s7db_open|s7db_open|
+A valve in module A21, also in cascade 8, and associated with centrifuge 160, would have the symbol label PVA21-8-160, for example.
+Each field is defined as follows:
+Delimiter
+Either space (“ “), hyphen (“-”), underscore (“_”), or not present at all.
+FunctionIdentifer
+A string that matches a set of strings (available in Appendix C) that loosely follows the ANSI/ISA S5.1
+Instrumentation Symbols and Identification standard. If the string is “PIA” (Pressure Indicator Alarm), it is
+expected to be followed by a one digit number. These strings will represent the device type (a valve, a transducer,
+or a status light, for instance).
+CascadeModule
+Must be the string “A21” to “A28” inclusive. These strings match cascade modules in Natanz, Iran, seen publicly
+described as “A24”, “A26”, and “A28”.
+CascadeNumber
+Single character that is in the letter range A to R. If it is not in this letter range, it checks to see if it is two digits
+in the decimal range 00 to 18. This two digit number is the number representation of the letter for A to R.
+DeviceNumber
+This is parsed in a more complex fashion depending on the device type as determined by the function identifier
+and caters to three possible cascade arrangements. The device type mappings to function identifiers are
+available in Appendix C.
+Device type 0
+A string of digits: If the length of the digits is less than three, the device type is changed to device type 6. If
+the length of the digits is greater than or equal to three, the device type is changed to device type 7.
+Device type 1, 2, 3
+“##”: A two digit number in the range 1 to 25.
+Device type 4, 5, or 7
+Device type 4, 5, or 7 has three different formats:
+Format 1
+“####”: Decoded as two separate two-digit numbers representing the stage number and the centrifuge
+number within the stage, respectively. The stage number must be in the decimal range 1 to 15, which
+matches with the known Natanz configuration. For each of these 15 stages, the maximum number of
+expected centrifuges in each corresponding stage is looked up in the following array.
+|Table 5Stage numbers with expected numbers of centrifuges|Col2|Col3|Col4|Col5|Col6|Col7|Col8|Col9|Col10|Col11|Col12|Col13|Col14|Col15|Col16|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|Stage|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|
+|Max #|2|2|4|6|8|10|12|16|20|24|20|16|12|8|4|
+|||||||||||||||||
+This means, for example, stage 3 is expected to have a second two digit number equal to 4 or less. This
+requirement is consistent with the centrifuge arrangement within a cascade.
+Format 2
+“###”: A three digit number that must be less than 164, which is the number of centrifuges in a cascade.
+Format 3
+“##L”: A two digit number followed by a letter. The letter must be in the range A to D, and the number
+must be in the decimal range 1 to 43. This arrangement sub-divides each stage into sub-clusters of four.
+Device type 6
+“##”: A two digit number in the range 1 to 30.
+Device type 8, 9, B, or C
+“##”: A two digit number in the range 1 to 3.
+Device type A
+“##”: A two digit number in the range 1 to 3 with an optional string preceded by a
+delimiter character. The string must start with the letter S and contain the letter P. If the string is present,
+the device is modified to be device type 0xB instead (Flow Rate Transmitter Controller Output, rather than
+device type 0xA which is Flow Rate Transmitter Controller Input).
+Based on the symbol fingerprinting, the following table summarizes what devices and labels Stuxnet looks for
+within the symbol table.
+|Table 6Summary of Stuxnet symbol label parsing|Col2|Col3|Col4|
+|---|---|---|---|
+|Device typeAuxiliary valve|P&ID function identifier{HS, HV, PV, EP}, {ZLO,ZO},{ZLC,ZC}|Devices per cascade|Devices per cascade|
+|Device typeAuxiliary valve|P&ID function identifier{HS, HV, PV, EP}, {ZLO,ZO},{ZLC,ZC}|Min2|Max25|
+|Centrifuge valve|{MVS, RVS, VS}, {MV,RV,SV,YV}|163|164|
+|Stage pressure transducer|PT, PCV, PIA#, PIT, PIC, PI, PS|3|30|
+|Centrifuge pressure transducer|PT, PCV, PIA#, PIT, PIC, PI, PS|0|164|
+|Flow rate sensor|{FIA}, {FIT}, {FITC},FIC,FT,MFC,MFM}|0|3|
+|||||
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "SIMATIC 400 Station (0x14109A)", "type" : "MTCP"},
+        {"id": 2, "description": "SIMATIC H-Station (0x141342)", "type" : "MTCP"},
+        {"id": 3, "description": "417 PLCs", "type" : "APPS"},
+        {"id": 4, "description": "Stuxnet v0.500s7_event", "type" : "TTPS"},
+        {"id": 5, "description": "Stuxnet v1.xxxs7_event", "type" : "TTPS"},
+        {"id": 6, "description": "s7ag_bub_cycl_read_create", "type" : "TTPS"},
+        {"id": 7, "description": "s7ag_bub_read_var", "type" : "TTPS"},
+        {"id": 8, "description": "s7ag_bub_read_var_seg", "type" : "TTPS"},
+        {"id": 9, "description": "s7ag_bub_write_var", "type" : "TTPS"},
+        {"id": 10, "description": "s7ag_bub_write_var_seg", "type" : "TTPS"},
+        {"id": 11, "description": "s7ag_link_in", "type" : "TTPS"},
+        {"id": 12, "description": "s7ag_read_szl", "type" : "TTPS"},
+        {"id": 13, "description": "s7ag_test", "type" : "TTPS"},
+        {"id": 14, "description": "s7blk_delete", "type" : "TTPS"},
+        {"id": 15, "description": "s7blk_findfirst", "type" : "TTPS"},
+        {"id": 16, "description": "s7blk_findnext", "type" : "TTPS"},
+        {"id": 17, "description": "s7blk_read", "type" : "TTPS"},
+        {"id": 18, "description": "s7blk_write", "type" : "TTPS"},
+        {"id": 19, "description": "s7db_close", "type" : "TTPS"},
+        {"id": 20, "description": "s7db_open", "type" : "TTPS"},
+        {"id": 21, "description": "A21 to A28", "type" : "COUN"},
+        {"id": 22, "description": "Natanz, Iran", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "uses"},
+        {"source": 4, "target": 5, "rel_name" : "replaces"},
+        {"source": 6, "target": 5, "rel_name" : "related to"},
+        {"source": 7, "target": 5, "rel_name" : "related to"},
+        {"source": 8, "target": 5, "rel_name" : "related to"},
+        {"source": 9, "target": 5, "rel_name" : "related to"},
+        {"source": 10, "target": 5, "rel_name" : "related to"},
+        {"source": 11, "target": 5, "rel_name" : "related to"},
+        {"source": 12, "target": 5, "rel_name" : "related to"},
+        {"source": 13, "target": 5, "rel_name" : "related to"},
+        {"source": 14, "target": 5, "rel_name" : "related to"},
+        {"source": 15, "target": 5, "rel_name" : "related to"},
+        {"source": 16, "target": 5, "rel_name" : "related to"},
+        {"source": 17, "target": 5, "rel_name" : "related to"},
+        {"source": 18, "target": 5, "rel_name" : "related to"},
+        {"source": 19, "target": 5, "rel_name" : "related to"},
+        {"source": 20, "target": 5, "rel_name" : "related to"},
+        {"source": 21, "target": 22, "rel_name" : "located in"}
+    ]
+}

@@ -1,0 +1,115 @@
+Preparing procedures
+At the beginning of the work, the backdoor decrypts the overlay provided by the shellcode. The
+first encryption layer is removed by the following algorithm:
+```
+ k = 0x37
+s = bytearray()
+for i in range(len(d)):
+c = d[i] ^ k
+s.append(c)
+k = (k + c) & 0xff
+```
+The second layer is the XOR operation with the key 0xCC .
+This overlay contains:
+configuration of trojan
+module for bypassing UAC
+Configuration looks as follows:
+```
+ struct st_proxy
+{
+char proxy_addr[32];
+char proxy_login[64];
+char proxy_password[64];
+```
+```
+ _BYTE pad[2];
+};
+struct st_config
+{
+char cnc_addr[4][34];
+st_proxy proxies[4];
+char home_dir[260];
+char exe_name[50];
+char loader_name[50];
+char shellcode_name[50];
+char software_name[260];
+char startup_argument[50];
+_DWORD reg_hkey;
+char reg_run_key[200];
+char reg_value_name[52];
+char taskname[52];
+_DWORD mstask_mo;
+char svcname[50];
+char svcdisplayname[50];
+char svcdescription[256];
+char reg_uninstall_key[50];
+char inject_target_usr[260];
+char inject_target[260];
+_BYTE byte0[2];
+_BYTE flags;
+_BYTE pad[3];
+_DWORD keepalivetime;
+unsigned __int8 key[16];
+};
+```
+The flags field displays which autoload methods the trojan should use, and what launch
+features are:
+```
+ enum em_flags
+{
+GOT_ENOUGH_RIGHTS= 0x1,
+UNK_FLAG_2 = 0x2,
+UNK_FLAG_4 = 0x4,
+INSTALL_AS_MSTASK = 0x8,
+INSTALL_AS_SERVICE = 0x10,
+RUN_WITH_ARGUMENT = 0x20,
+INJECT_TO_PROCESS = 0x40,
+RUN_AS_USER = 0x80,
+};
+```
+If the launch is specified via the task scheduler ( INSTALL_AS_MSTASK ), then the configuration
+flags creates a mutex after decrypting. That prevents restart:
+Next, it checks if the trojan has enough rights to launch in the way that was previously specified
+in the configuration. If not, it restarts itself to bypass UAC.
+Trojan checks for the presence of a file in the path
+C:Users\Public\Downloads\clockinstall.tmp, and if it exists, it deletes
+clockinstall.tmp .
+If the clockinstall.tmp file is missing, it checks if the install file exists in the folder from
+which the trojan was launched. If it exists, it removes it.
+Then, it installs itself into the system in accordance with the type specified in the configuration.
+The backdoor will also try to hide its activity from the user.
+If the trojan runs on a 32-bit OS, then the same mechanism for hiding a service from running
+ones is valid, as in BackDoor.PlugX.28, deleting that structure from the list of
+ServiceDatabase structures. That corresponds to the trojan service.
+If the configuration specifies that the trojan should be injected into a process, then it’ll be
+injected into the target process. If the RUN_AS_USER flag is specified in the configuration, then
+the trojan will wait until at least one authorized user appears. After that, it’ll create its own
+process, but on behalf of the user.
+Regardless of the trojan's autorun type, only one process can communicate with the command
+and control server. This creates a mutex:
+Before attempting to establish a connection with the command and control server, trojan
+determines the proxy server settings. For this purpose:
+The presence of the <process_name>.ini file in the folder from which the trojan process
+was launched is checked. Example of the configuration:
+```
+ [AntiVir]
+Cloud=0A0804D2242000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000299CC1003C9CC10098F11900DCF1190062F21900000000
+00E02AC300CC004501D8F11900000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000001
+```
+
+Reads a file named <loader_name>.tmp in the trojan folder, where <loader_name> is
+the value from the configuration
+
+Reads proxy settings from registry
+[HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings,
+keys ProxyEnable and ProxyServer
+
+Reads proxy settings from Mozilla Firefox settings - %APPDATA%
+```
+  \Mozilla\Firefox\\prefs.js
+
+```
+Checks for stored login:password from the proxy server in Mozilla Firefox and Internet
+Explorer

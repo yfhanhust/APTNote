@@ -1,0 +1,47 @@
+
+
+
+Sentence : Overview of the infection process
+Before getting into the various components that compose this rootkit, we would like to
+provide a high-level view of what it tries to accomplish. The goal of this execution chain is
+to deploy a kernel-level implant into a Windows system every time it boots, starting from
+an infected UEFI component.
+UEFI malware authors face a unique technical challenge: their implant starts running so
+early in the boot process that the operating system (in this case Windows) is not even
+loaded in memory yet – and by the time it is, the UEFI execution context will have
+terminated. Finding a way to pass down malicious code all the way through the various
+startup phases is the main task that the rootkit accomplishes.
+The workflow consists in setting hooks [1] in succession, allowing the malicious code to
+persist until after the OS has started up. The steps involved are:
+The initial infected firmware bootstraps the whole chain.
+The malware sets up a malicious hook in the boot manager, allowing it to modify
+Windows’ kernel loader before it is executed.
+By tampering with the OS loader, the attackers are able to set up another hook in a
+function of the Windows kernel.
+When that function is later called during the normal start-up procedure of the OS,
+the malware takes control of the execution flow one last time.
+https://securelist.com/cosmicstrand-uefi-firmware-rootkit/106973/ 2/12
+7/26/22, 11:13 AM CosmicStrand: the discovery of a sophisticated UEFI firmware rootkit | Securelist
+It deploys a shellcode in memory and contacts the C2 server to retrieve the actual
+malicious payload to run on the victim’s machine.
+These steps are summed up in the following graph:
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "UEFI component", "type" : "MTCP"},
+        {"id": 2, "description": "Windows system", "type" : "OPPS"},
+        {"id": 3, "description": "kernel-level implant", "type" : "EXEF"},
+        {"id": 4, "description": "UEFI malware authors", "type" : "ACTO"},
+        {"id": 5, "description": "boot manager", "type" : "APPS"},
+        {"id": 6, "description": "Windows’ kernel loader", "type" : "EXEF"},
+        {"id": 7, "description": "Windows kernel", "type" : "OPPS"},
+        {"id": 8, "description": "C2 server", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "deploys"},
+        {"source": 3, "target": 5, "rel_name" : "hooks into"},
+        {"source": 5, "target": 6, "rel_name" : "modifies"},
+        {"source": 6, "target": 7, "rel_name" : "sets up hook in"},
+        {"source": 3, "target": 8, "rel_name" : "contacts to retrieve payload"}
+    ]
+}

@@ -1,0 +1,46 @@
+PlugX connection
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 20/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+While analyzing the malicious payload injected into the signed ASUS Live Updater binaries, we came
+across a simple custom encryption algorithm used in the malware. We found that ShadowHammer reused
+algorithms used in multiple malware samples, including many of PlugX. PlugX is a backdoor quite popular
+among Chinese-speaking hacker groups. It had previously been seen in the Codoso, MenuPass and Hikit
+attacks. Some of the samples we found (i.e. md5:5d40e86b09e6fe1dedbc87457a086d95) were created as
+early as 2012 if the compilation timestamp is anything to trust.
+PlugX code from 2012 (on the left) and ShadowHammer (on the right)
+Apparently, both pieces of code share the same constants (0x11111111, 0x22222222, 0x33333333,
+0x44444444), but also implement identical algorithms to decrypt data, summarized in the python function
+below.
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+from ctypes import c_uint32
+from struct import pack,unpack
+def decrypt(data):
+p1 = p2 = p3 = p4 = unpack("<L", data[0:4])[0];
+pos = 0
+decdata = ""
+while pos < len(data):
+p1 = c_uint32(p1 + (p1 >> 3) - 0x11111111).value
+p2 = c_uint32(p2 + (p2 >> 5) - 0x22222222).value
+p3 = c_uint32(p3 - (p3 << 7) + 0x33333333).value
+p4 = c_uint32(p4 - (p4 << 9) + 0x44444444).value
+decdata += chr( ( ord(data[pos]) ^ ( ( p1%256 + p2%256 + p3%256 + p4%256 ) % 256 ) ) )
+pos += 1
+return decdata
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 21/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+While this does not indicate a strong connection to PlugX creators, the reuse of the algorithm is unusual
+and may suggest that the ShadowHammer developers had some experience with PlugX source code, and
+possibly compiled and used PlugX in some other attacks in the past.

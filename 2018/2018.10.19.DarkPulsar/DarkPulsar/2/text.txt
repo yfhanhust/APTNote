@@ -1,0 +1,48 @@
+DarkPulsar technical highlights
+The DarkPulsar implant is a dynamic library whose payload is implemented in exported
+functions. These functions can be grouped as follows:
+
+Two nameless functions used to install the backdoor in the system.
+Functions with names related to TSPI (Telephony Service Provider Interface)
+
+operations that ensure the backdoor is in the autorun list and launched
+automatically.
+3. A function with a name related to SSPI (Security Support Provider Interface)
+operations. It implements the main malicious payload.
+The implementations of the SSPI and TSPI interfaces are minimalistic: the functions that
+are exported by DarkPulsar have the same names as the interface functions; however,
+they include malicious code instead of the phone service.
+The implant is installed in the system by the nameless exported function. The backdoor is
+launched by calling Secur32.AddSecurityPackage with administrator privileges with the
+3/10
+path to its own library in the parameter, causing lsass.exe to load DarkPulsar as SSP/AP
+and to call its exported function SpLsaModeInitialize used by DarkPulsar to initialize the
+backdoor. In this way AddSecurityPackage is used to inject code into lsass.exe. It also
+adds its library name at
+HKLM\Software\Microsoft\Windows\CurrentVersion\Telephony\Providers
+This is loaded at start by the Telephony API (TapiSrv) launched alongside the Remote
+Access Connection Manager (RasMan) service, setting startup type as “Automatic”. When
+loading the telephony service provider’s library, TapiSrv calls
+TSPI_lineNegotiateTSPIVersion which contains the AddSecurityPackage call to make the
+inject into lsass.exe.
+DarkPulsar implements its payload by installing hooks for the SpAcceptLsaModeContext
+– function responsible for authentication. Such injects are made in several system
+authentication packets within the process lsass.exe and allow Darkpulsar to control
+authentication process based on the following protocols:
+Msv1_0.dll – for the NTLM protocol,
+Kerberos.dll – for the Kerberos protocol,
+Schannel.dll – for the TLS/SSL protocols,
+Wdigest.dll – for the Digest protocol, and
+Lsasrv.dll –for the Negotiate protocol.
+After this, Darkpulsar gets ability to embed malware traffic into system protocols. Since
+this network activity takes place according to standard system charts, it will only be
+reflected in the System process – it uses the system ports reserved for the above
+protocols without hindering their normal operation.
+4/10
+Network traffic during successful connection to DarkPulsar implant
+The second advantage of controlling authentication processes is ability to bypass entering
+a valid username and password for obtaining access to objects that require authentication
+such as processes list, remote registry, file system through SMB. After Darkpulsar’s
+DisableSecurity command is sent, backdoor’s hooks on the victim side will always returns
+in the SpAcceptLsaModeContext function that passed credentials are valid. Getting that,
+system will provide access to protected objects to client.

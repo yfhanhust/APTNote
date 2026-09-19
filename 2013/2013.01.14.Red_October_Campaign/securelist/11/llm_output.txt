@@ -1,0 +1,221 @@
+
+
+
+Sentence : FileInfo module
+Known variants (all share the same code section, differ in resources):
+19/22
+MD5 Compilation date (payload)
+C9686F76F827D8B16C434C84FDF9BE06 09.10.2012 5:49
+B6F2D2D27A91D99AB396AD7A4B4937DE 09.10.2012 5:49
+AC83001F4228D92F1457E5841792EAC1 09.10.2012 5:49
+Summary
+The file is a PE DLL file with 2 exported functions, compiled with Microsoft Visual Studio 2010.
+All functionality is implemented in the “START” function. The module is very similar to the
+“GetFileReg” module. It is stored on disk as an encrypted file that is loaded by the “Scheduler”
+module.
+Creates encrypted log files: “%TMP%smrdprevsmrdprev_%p_%p.tmp”, where “%p” parameters
+are formatted from the return values of subsequent GetTickCount API calls.
+Creates encrypted storage files: “%TEMP%%08 hex digits%hst”, where 8 hex digits represent the
+CRC32 checksum of the current user’s name.
+Creates mutex: “Win32Wbem32Prefetchfamt”
+START function
+When started, the module initializes its log object with a new filename using a format string
+“%TMP%smrdprevsmrdprev_%p_%p.tmp”, and sets the log header:
+@LOGFILEINFOAMT_1
+Then, it creates four data collection and directory traversal objects and loads the configuration
+INI file. The configuration file is loaded from the resource of type “BBB”, name “AAA” and is
+decrypted using a custom AMPRNG cipher with a hardcoded key.
+The code of the module appears to be a new version or a fork of the “GetFileReg” module, so are
+the configuration options extracted from the INI file.
+INI section name Description
+i_getfile Directory traversal and file matching rules
+Common On/off switches for features, global settings
+conn_a C&C server connection parameters, not used
+Keylogger Identified but not used
+net_res_acl (new in
+‘fileinfo’)
+Common options
+Network share traversal and matching rules
+Option name Description
+i_process_all_net_res (new in
+‘fileinfo’)
+When turned on, only ‘host_d’ exclusion list is applied. When turned off, only
+network paths matching ‘host_a’ are processed.
+i_getfile_all_dbx Extract data from all files with ‘dbx’ extension (Outlook Express mail
+archives)
+20/22
+i_getfile_all_tbebat Extract data from all files with ‘tbb’ extension (The Bat mail archives)
+i_getfile_all_thunderbird Extract data from all Thunderbird mail archives
+i_getfile_all_disks Traverse all fixed and network disks
+i_getfile_all_netdisks Traverse system network shares
+i_getfile_all_netshared Traverse computer’s network shares
+f_time_min Minimum file creation or modification time to look for
+f_time_max Maximum file creation or modification time to look for
+f_total_send_size_max Global limit on the data to be sent to the C&C server
+f_use_hash_storage (new in
+‘fileinfo’)
+Store MD5 hashes of files and e-mails that were already processed, skip
+already processed items
+f_max_size Maximum file size to look for
+f_min_size Minimum file size to look for
+spec_check_task_existance_a Save last traversal time value and modify minimum file time option
+depending that value
+log_level (new in ‘fileinfo’) Level of log verbosity: ‘normal’, ‘quiet’, ‘extend’
+process_ldisks_sleep (new in
+‘fileinfo’)
+process_ndisks_sleep (new in
+‘fileinfo’)
+process_nshare_sleep (new
+in ‘fileinfo’)
+process_spaths_sleep (new
+in ‘fileinfo’)
+i_getfile options
+Delay between each traversal, ‘PROC_LDISKS’
+Delay between each traversal, ‘PROC_NDISKS’
+Delay between each traversal, ‘PROC_NSHARES’
+Delay between each traversal, ‘PROC_SPATHS’
+The following options apply only to the “i_getfile” section they are specified in
+Option name Description
+f_use_hash_storage (new in
+‘fileinfo’)
+The same as in the ‘common’ section
+f_max_size Maximum file size to look for
+f_min_size Minimum file size to look for
+f_time_min Minimum file creation or modification time to look for
+f_time_max Maximum file creation or modification time to look for
+f_regexp_a Regular expression to match against the filename (must match)
+f_regexp_d Regular expression to match against the filename (must not match,
+exclusion list)
+f_search_path Directories to traverse
+f_delete_file Delete the file after sending its contents to the C&C server
+net_res_acl options (new in “fileinfo”)
+21/22
+Option name Description
+host_a Regular expression of network locations that should be traversed
+host_d Regular expression of network locations that should not be traversed (exclusion
+list)
+Then, the module starts four threads and assigns each traversal object to a thread. Every thread
+has a distinct scope of subjects to process:
+
+
+Directories shared over the network, called “PROC_SHARES”
+
+
+Disks shared over the network, called “PROC_NDISKS”
+
+
+Search paths specified in “i_getfile” sections, called “PROC_SPATHS”
+
+
+Local disks, called “PROC_LDISKS”
+
+
+The actual file matching and directory traversal code is almost identical to the one implemented
+in “GetFileReg”. There are only minor updates to the algorithm:
+Remote directory and disk paths are matched against “host_a” or “host_d” regular
+expressions. The remote location is traversed only if “host_a” regular expression is
+matched, or if “i_process_all_net_res” is set and the location is not matched by any of the
+“host_d” regular expressions.
+Remote disks are enumerated from “C$” to “Z$”
+If “f_use_hash_storage” option is turned on, the module creates a binary hash storage in a
+file named “%TEMP%%08 hex digits%hst”, where 8 hex digits represent the CRC32
+checksum of the current user’s name. It populates that storage with information about
+every processed file, including file size, creation date and MD5 hash of file’s name. The
+module checks every new file this hash storage, and skips the file that were already
+processed.
+Since traversal routines are now executed in separate threads, the “fileinfo” module introduces
+continuous mode of operation. Four options control this behavior, each corresponding to one
+thread:
+process_ldisks_sleep
+process_ndisks_sleep
+process_nshare_sleep
+process_spaths_sleep
+The directory traversal threads run their code in infinite loops, and “sleep” values specify the
+delay in milliseconds that should pass between iterations.
+Data exfiltration
+Although the module extracts the C&C server information from its configuration file, it does not
+interact with the C&C server in any way. All information including collected file names and
+contents is stored in its encrypted log files (“%TMP%smrdprevsmrdprev_%p_%p.tmp”).
+22/22
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PE DLL file", "type" : "EXEF"},
+        {"id": 2, "description": "Scheduler module", "type" : "EXEF"},
+        {"id": 3, "description": "%TMP%smrdprevsmrdprev_%p_%p.tmp", "type" : "DOCF"},
+        {"id": 4, "description": "%TEMP%%08 hex digits%hst", "type" : "DOCF"},
+        {"id": 5, "description": "GetFileReg module", "type" : "EXEF"},
+        {"id": 6, "description": "Configuration INI file", "type" : "DOCF"},
+        {"id": 7, "description": "BBB resource type", "type" : "TAMP"},
+        {"id": 8, "description": "AAA resource name", "type" : "TAMP"},
+        {"id": 9, "description": "AMPRNG cipher with a hardcoded key", "type" : "TTPS"},
+        {"id": 10, "description": "C&C server connection parameters", "type" : "CCSH"},
+        {"id": 11, "description": "i_getfile section in INI file", "type" : "DOCF"},
+        {"id": 12, "description": "Common section in INI file", "type" : "DOCF"},
+        {"id": 13, "description": "conn_a section in INI file", "type" : "DOCF"},
+        {"id": 14, "description": "net_res_acl section in INI file", "type" : "DOCF"},
+        {"id": 15, "description": "host_a regular expression", "type" : "TTPS"},
+        {"id": 16, "description": "host_d regular expression", "type" : "TTPS"},
+        {"id": 17, "description": "f_use_hash_storage option", "type" : "TAMP"},
+        {"id": 18, "description": "f_max_size option", "type" : "TAMP"},
+        {"id": 19, "description": "f_min_size option", "type" : "TAMP"},
+        {"id": 20, "description": "f_time_min option", "type" : "TAMP"},
+        {"id": 21, "description": "f_time_max option", "type" : "TAMP"},
+        {"id": 22, "description": "f_regexp_a regular expression", "type" : "TTPS"},
+        {"id": 23, "description": "f_regexp_d regular expression", "type" : "TTPS"},
+        {"id": 24, "description": "f_search_path option", "type" : "TAMP"},
+        {"id": 25, "description": "f_delete_file option", "type" : "TAMP"},
+        {"id": 26, "description": "i_process_all_net_res option", "type" : "TAMP"},
+        {"id": 27, "description": "i_getfile_all_dbx option", "type" : "TAMP"},
+        {"id": 28, "description": "i_getfile_all_tbebat option", "type" : "TAMP"},
+        {"id": 29, "description": "i_getfile_all_thunderbird option", "type" : "TAMP"},
+        {"id": 30, "description": "i_getfile_all_disks option", "type" : "TAMP"},
+        {"id": 31, "description": "i_getfile_all_netdisks option", "type" : "TAMP"},
+        {"id": 32, "description": "i_getfile_all_netshared option", "type" : "TAMP"},
+        {"id": 33, "description": "f_time_min option (common section)", "type" : "TAMP"},
+        {"id": 34, "description": "f_time_max option (common section)", "type" : "TAMP"},
+        {"id": 35, "description": "f_total_send_size_max option", "type" : "TAMP"},
+        {"id": 36, "description": "f_use_hash_storage option (i_getfile section)", "type" : "TAMP"},
+        {"id": 37, "description": "spec_check_task_existance_a option", "type" : "TAMP"},
+        {"id": 38, "description": "log_level option", "type" : "TAMP"},
+        {"id": 39, "description": "process_ldisks_sleep option", "type" : "TAMP"},
+        {"id": 40, "description": "process_ndisks_sleep option", "type" : "TAMP"},
+        {"id": 41, "description": "process_nshare_sleep option", "type" : "TAMP"},
+        {"id": 42, "description": "process_spaths_sleep option", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "loaded by"},
+        {"source": 1, "target": 3, "rel_name" : "creates"},
+        {"source": 1, "target": 4, "rel_name" : "creates"},
+        {"source": 1, "target": 5, "rel_name" : "similar to"},
+        {"source": 1, "target": 6, "rel_name" : "loads configuration from"},
+        {"source": 1, "target": 7, "rel_name" : "resource type in INI file"},
+        {"source": 1, "target": 8, "rel_name" : "resource name in INI file"},
+        {"source": 1, "target": 9, "rel_name" : "decrypts using"},
+        {"source": 6, "target": 10, "rel_name" : "contains"},
+        {"source": 6, "target": 11, "rel_name" : "contains section"},
+        {"source": 6, "target": 12, "rel_name" : "contains section"},
+        {"source": 6, "target": 13, "rel_name" : "contains section"},
+        {"source": 6, "target": 14, "rel_name" : "contains section"},
+        {"source": 11, "target": 26, "rel_name" : "contains option"},
+        {"source": 11, "target": 27, "rel_name" : "contains option"},
+        {"source": 11, "target": 28, "rel_name" : "contains option"},
+        {"source": 11, "target": 29, "rel_name" : "contains option"},
+        {"source": 11, "target": 30, "rel_name" : "contains option"},
+        {"source": 11, "target": 31, "rel_name" : "contains option"},
+        {"source": 11, "target": 32, "rel_name" : "contains option"},
+        {"source": 12, "target": 33, "rel_name" : "contains option"},
+        {"source": 12, "target": 34, "rel_name" : "contains option"},
+        {"source": 12, "target": 35, "rel_name" : "contains option"},
+        {"source": 12, "target": 36, "rel_name" : "contains option"},
+        {"source": 12, "target": 37, "rel_name" : "contains option"},
+        {"source": 12, "target": 38, "rel_name" : "contains option"},
+        {"source": 12, "target": 39, "rel_name" : "contains option"},
+        {"source": 12, "target": 40, "rel_name" : "contains option"},
+        {"source": 12, "target": 41, "rel_name" : "contains option"},
+        {"source": 12, "target": 42, "rel_name" : "contains option"},
+        {"source": 13, "target": 10, "rel_name" : "contains"},
+        {"source": 14, "target": 15, "rel_name" : "contains regular expression"},
+        {"source": 14, "target": 16, "rel_name" : "contains regular expression"}
+    ]
+}

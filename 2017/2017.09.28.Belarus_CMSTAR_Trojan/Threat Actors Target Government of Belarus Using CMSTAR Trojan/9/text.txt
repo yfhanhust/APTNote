@@ -1,0 +1,38 @@
+RTF Shellcode Analysis
+The RTF documents delivered in this attack campaign appear to be created by the same builder. All
+of the RTF �les attempt to exploit CVE-2015-1641 to execute shellcode on the targeted system.
+Please reference https://technet.microsoft.com/en-us/library/security/ms15-033.aspx for more
+information.
+The shellcode executed after successful exploitation begins by resolving the API functions it
+requires by enumerating the API functions within loaded modules in the current process. It then
+builds the following list of values:
+The shellcode then enumerates the API functions, subjects them to a ROR7 hashing routine and
+XORs the resulting hash with 0x10ADBEEF. It uses the result of this arithmetic to compare with the
+list of values above to �nd the API functions it requires to carry out its functionality.
+|ROR7|ROR7^0x10ADBEEF|API Func|
+|---|---|---|
+|1a22f51|110f91be|WinExec|
+|741f8dc4|64b2332b|WriteFile|
+|94e43293|84498c7c|CreateFileA|
+|daa7fe52|ca0a40bd|UnmapViewOfFile|
+|---|---|---|
+|dbacbe43|cb0100ac|SetFilePointer|
+|ec496a9e|fce4d471|GetEnvironmentVariableA|
+|ff0d6657|efa0d8b8|CloseHandle|
+After resolving the API functions, the shellcode then begins searching for the embedded payload
+and decoy within the initial RTF �le. It does so by searching the RTF �le for three delimiters,
+speci�cally 0xBABABABABABA, 0xBBBBBBBB and 0xBCBCBCBC, which the shellcode uses to
+�nd the encrypted payload and decoy. The shellcode then decrypts the payload by XOR’ing four
+bytes at at time with the key 0xCAFEBABE, and decrypts the decoy by XOR’ing four bytes at a time
+using the key 0xBAADF00D. Here is a visual representation of the delimiters and embedded �les:
+After decrypting the payload, it saves the �le to the following location:
+%APPDATA%\Microsoft\Of�ce\OutL12.pip
+The shellcode then creates the following registry key to automatically run the payload each time
+the system starts:
+Software\Microsoft\Windows\CurrentVersion\Run : Microsoft
+The shellcode saves the following command to this autorun key, which will execute the OutL12.pip
+payload, speci�cally calling its ‘WinCred’ exported function:
+rundll32.exe
+“%APPDATA\Roaming\Microsoft\Of�ce\OutL12.pip”,WinCred
+The shellcode will then overwrite the original delivery document with the decrypted decoy
+contents and open the new document.

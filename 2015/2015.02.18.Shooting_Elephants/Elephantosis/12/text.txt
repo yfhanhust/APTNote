@@ -1,0 +1,120 @@
+3.5 FUNCTIONALITY
+The spying activities are performed either through the Babar instance locally or via a global
+Windows hook invading all processes running in the same desktop. Instance-local capabilities are
+basic spying on window names or snooping on the clipboard data, while the global hooks manage
+to steal information directly from Windows API calls.
+A summary of the capabilities would be as follows:
+
+
+Logging keystrokes
+
+
+Taking screenshots
+
+
+Capture of audio streams from softphone applications
+
+
+Stealing of clipboard data
+
+
+System and user default language, keyboard layout
+
+
+Names of desktop windows
+
+
+3.5.1 THE KEYLOGGER MODULE
+The keylogger is based on the raw input model. The malware creates an invisible window, with no
+other purpose than to receive window messages. By processing the window message queue it
+filters out input events and dispatches them to a raw input device object. Said object is configured
+to grab keyboard events through GetRawInputData.
+page | 10
+Illustration 4 | The keylogger module uses Windows RAWINPUT to achieve its goal
+The snooped keystroke data is passed to a thread, which performs encryption and dumps the data
+to a log file. The file is located in Babar's working directory and named update.msi.
+The design of the keylogging component is simple but effective. Babar is able to sniff all keystrokes
+happening on the same desktop as its invisible window. Interesting though, the code seen in
+Babar's implant is remarkably similar to an example posted at [4].
+3.5.2 INVADING DESKTOP PROCESSES
+The Babar implant applies global Windows hooks to load its DLL into the process space of other
+processes. A global hook is installed by calling SetWindowsHookEx by passing the thread ID zero. It
+applies to all processes running in the same desktop, having the same 'bitness' as the DLL to be
+injected. In the given case this applies to all 32-bit processes.
+A global Windows hook is installed into the Windows event chain. This effectively means code
+provided by the hooking DLL gets executed whenever an arbitrary desktop process receives an
+event of a type specified by the hook.
+Babar installs hooks for type 2 and 3, which are WH_KEYBOARD and WH_GETMESSAGE. This way
+Babar has control over all keyboard and message events received by any application on the same
+Windows desktop.
+3.5.3 I AM ROOT(kit)
+Through the hook mechanism Babar can be maximum invasive in the Windows userland. Once in
+the context of a desired target process, the malware goes on to hook specific APIs of interest. This
+is achieved by applying the detours technique, which implements trampoline functions to be
+invoked every time a hooked API is called [6]. To achieve this, Babar rewrites the in-memory code
+for target APIs. A call to a hooked API then results in the calling application invoking a trampoline
+function, which performs malicious activity and then passes control on to the legitimate API.
+page | 11
+Babar supports trampoline functions for a limited list of APIs and limited to a set of processes of
+interest, defined by its configuration. The list of APIs to hook is parted in three groups:
+
+Internet communication
+
+WSARecv
+send
+closesocket
+
+File creation
+
+CreateFileW
+
+Media
+
+DirectSoundCreate
+DirectSoundCaptureCreate
+DirectSoundCreate8
+DirectSoundCaptureCreate8
+CoCreateInstance
+waveOutOpen
+waveOutClose
+waveOutWrite
+waveInOpen
+waveInClose
+waveInAddBuffer
+Any set of hooks will only be applied to a defined set of processes. The predefined groups of
+application names retrieved from the hardcoded configuration data set the scope of Babar's
+hooking advances:
+
+Internet communication
+
+iexplore.exe,firefox.exe,opera.exe,chrome.exe,Safari.exe,msnmsgr.exe
+
+File creation
+
+excel.exe, winword.exe, powerpnt.exe, visio.exe, acrord32.exe, notepad.exe,
+wordpad.exe.txt, rtf, xls, xlsx, ppt, pptx, doc, docx, pdf, vsd
+
+Media
+
+skype.exe, msnmsgr.exe, oovoo.exe, nimbuzz.exe, googletalk.exe, yahoomessenger.exe, x-
+lite.exe
+The respective trampolines steal data going in or out of the hooked APIs on the fly. The parsing
+function for intercepted internet communication searches for chat traffic, more specifically for
+messages conforming with the MSNP21 standard. Babar is searching for tags such as 'MessageType', 'Reliability', 'To', 'From' or 'Text' to pick out of the stream. A more detailed explanation
+concerning the MSNP21 can be found at [7]. MSNP21 is the MSN messenger chat protocol that
+was introduced with Windows Live 2010 beta. It is unclear though as of why only parsing for the
+MSN messenger is supported.
+page | 12
+The data, like all stolen information, is handled by
+a separate thread which compresses and encrypts
+it before dumping it to a file on disk.
+For grabbing audio streams Babar includes code
+from the OpenCORE AMR library [8]. AMR
+enables the malware to encode and decode raw
+audio frames as they are passed to or grabbed
+from the audio devices. The very same malware
+module performs screen captures while dumping
+the snooped data. This is assumed to happen to
+recognize the parties involved in the conversation
+by capturing the GUI of the softphone
+application.

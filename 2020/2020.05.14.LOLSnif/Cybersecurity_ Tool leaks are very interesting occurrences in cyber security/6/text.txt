@@ -1,0 +1,58 @@
+The Worker
+https://www.telekom.com/en/blog/group/article/lolsnif-tracking-another-ursnif-based-targeted-campaign-600062 3/10
+5/15/2020 Cybersecurity: Tool leaks are very interesting occurrences in cyber security. | Deutsche Telekom
+LOLSnif’s worker still resembles an original Ursnif worker. For instance, the general structure of
+the project is still preserved. This includes peculiarities like the configuration storage using JJ
+structures and the encrypted “.bss” section that holds strings and other data that deserves
+protection. Although there are some slight changes to the encryption algorithm. However, there
+are several interesting enhancements that I will detail later on.
+Its configuration format is the same as its ancestor. The following screenshot shows a
+configuration blob that is highlighted with colors. Its first part compromises structures with offsets
+to strings and information on the data type. At the end of the blob (grey area) are these strings
+stored. For instance, the area highlighted in blue contains the command and control server
+addresses. This area is followed by a list of public DNS server. Notably this blob contains
+configuration parameters for a DGA (Domain Generation Algorithm), e.g. the domain where to
+download keywords for domain generation (constitution[.]org). However, LOLSnif does not
+comprise any functionality to generate domain names.
+Configuration blob
+As its ancestor Ursnif, LOLSnif comes with a encrypted “.bss” section that holds, for example,
+strings. This section is decrypted on startup. However, the decryption algorithm differs slightly
+from the original code base. The following screenshot depicts the decryption algorithm. The
+decryption key is still based on the sample’s compilation date, which is hard-coded in the binary.
+However, there are some modifications to this key. Also, the original Ursnif utilized a rolling XOR
+algorithm, where LOLSnif’s algorithm is based on add / sub instructions. The full list of decrypted
+strings can be found in Appendix B (pdf, 121.5 KB).
+https://www.telekom.com/en/blog/group/article/lolsnif-tracking-another-ursnif-based-targeted-campaign-600062 4/10
+5/15/2020 Cybersecurity: Tool leaks are very interesting occurrences in cyber security. | Deutsche Telekom
+Decryption algorithm
+Furthermore, some strings do not have references. Hence, they are dead and not needed. While
+this may be an issue with the disassembler, this is rather an issue with the code. The strings are
+defined in Ursnif's code as macros (see header file “Common/cschar.h”). Therefore, the authors
+of the malware must keep track of them. This may suggest that this functionality is not yet
+implemented, or the author forgot to clean up all unused functionality like in the DGA example.
+The interaction with the registry is implemented in two ways: via native Win32 APIs (e.g.
+RegOpenKey, RegEnumKey, RegCloseKey) and via Windows Management Instrumentation
+(WMI). There are wrapper functions that take a Boolean argument in order to decide whether to
+use the Win32 API or WMI. For instance, the following screenshot shows a wrapper function for
+setting a string value of a registry key. The first argument (annotated as “use_wmi” in the
+disassembly) determines the use of native API or WMI.
+https://www.telekom.com/en/blog/group/article/lolsnif-tracking-another-ursnif-based-targeted-campaign-600062 5/10
+5/15/2020 Cybersecurity: Tool leaks are very interesting occurrences in cyber security. | Deutsche Telekom
+Wrapper function
+LOLSnif seems to be only built for x86. However, it clearly anticipates that it will run on x64
+platforms as well. For instance, it utilizes the flag “__ProviderArchitecture” to request data from a
+64 bit WMI provider as an 32 bit application.
+Another interesting aspect is that LOLSnif makes extensive use of COM interfaces. It was
+reported that this malware instruments the Internet Explorer via IWebBrowser in order to contact
+its Command and Control servers (CC). This tactic allows it to bypass any proxy configuration in a
+cooperate network since Internet Explorer typically knows how to talk to the proxy. LOLSnif
+anticipates that there might be invalid certificate warnings since it searches in the DOM via
+IHTMLElement for the string “invalidcert”. If it encounters this string, then it confirms the warning
+to send the payload to the CC server. However, the current sample does not utilize https but
+rather plain http. Furthermore, the malware sets Internet Explorer as standard browser in order to
+avoid any popups during operation.
+This Ursnif variant makes use of LOLBins (as also pointed out in this blog). For instance, LOLBins
+are utilized to start the malware from the registry (mshta.exe + powershell.exe). Furthermore,
+LOLSnif is capable of download and execute further modules as well as payloads. For instance, a
+recent blog post mentions that the associated actor dropped a Cobalt Strike BEACON as well as
+a legitimate TeamViewer VNC client.

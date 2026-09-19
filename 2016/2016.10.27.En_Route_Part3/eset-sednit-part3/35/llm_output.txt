@@ -1,0 +1,56 @@
+
+
+
+Sentence : En Route with Sednit
+Startup Process
+Once installed, the bootkit takes control of the machine during the next system startup. The startup
+process is detailed in Figure 10 for Windows 7, where only the steps involving the bootkit are shown.
+Original MBR
+CPU in real mode
+CPU in
+protected
+mode
+Bootkit MBR
+Loads Downdelph in
+explorer.exe process
+Figure 10. Startup process of a Windows 7 machine infected by the bootkit
+Roughly summarized, a bootkit’s objective is to “survive” Windows’ startup and eventually to execute
+a payload once the operating system is fully running. Such survival is made difficult by the strong
+modifications of the machine state at each step of the startup process (for example by reorganizing
+memory or switching the CPU mode). Hence, starting from the initially infected MBR, the bootkit
+ensures at each step that it will regain control at the next step, mainly by setting hooks.
+While the bootkit workflow described in Figure 10 bears some similarities with other known MBRinfected bootkits (see “Bootkits: Past, Present & Future” [20] for some examples), there are certain
+particularities that we would like to point out:
+
+The bootkit MBR decrypts the bootkit code and the bootkit driver initially stored from
+
+the third sector (see Figure 8) into a memory buffer. On the system we used for analysis,
+the buffer was located at physical memory address ~~0x97C00~~ . This memory area therefore
+contains the bulk of the bootkit code, and the hooks in ~~bootmgr~~, ~~winload.exe~~ and ~~ACPI.~~
+~~sys~~ re-route the execution flow to this buffer. It is more common for bootkits to copy
+their code at each step into a new memory area, in order to survive memory re-organization
+during startup.
+18
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sednit", "type" : "ACTO"},
+        {"id": 2, "description": "bootkit", "type" : "EXEF"},
+        {"id": 3, "description": "Windows 7", "type" : "OPPS"},
+        {"id": 4, "description": "MBR (Master Boot Record)", "type" : "SYSP"},
+        {"id": 5, "description": "explorer.exe", "type" : "APPS"},
+        {"id": 6, "description": "Downdelph", "type" : "EXEF"},
+        {"id": 7, "description": "bootmgr", "type" : "SYSP"},
+        {"id": 8, "description": "winload.exe", "type" : "APPS"},
+        {"id": 9, "description": "ACPI.sys", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 4, "rel_name" : "modifies"},
+        {"source": 2, "target": 6, "rel_name" : "loads into"},
+        {"source": 2, "target": 5, "rel_name" : "injects into"},
+        {"source": 7, "target": 2, "rel_name" : "hooks to"},
+        {"source": 8, "target": 2, "rel_name" : "hooks to"},
+        {"source": 9, "target": 2, "rel_name" : "hooks to"}
+    ]
+}

@@ -1,0 +1,75 @@
+
+
+
+Sentence : 2. Exploit mechanism
+HWP supports documents in formats of .hwp, .doc, .wps, .ppt and so on. .hwp format includes
+HWP 2.0, HWP 3.0 and HWP 5.0. HWP 2.0 is a very old version, so when HWP process HWP 2.0
+documents, it will switch the format to HWP 3.0 automatically.
+10
+https://cryptam.com/docsearch.php?md5=26b416d686ce57820e13e572e9e33cce
+11
+https://cryptam.com/docsearch.php?md5=de00286f6128fb92002e0c0760855566
+Picture 12 File format of HWP vulnerable documents
+The offset of the font structure in HWP 2.0 is 0x48E. The first two bytes in the font structure are
+the number of font names. Each font name has the length of 0x28. When HWP is processing a
+HWP 2.0 document, function ConvertFilterFileToWorkFile in Class CHwp20ToHwp30FilterLibrary
+will be called to convert the document into an HWP 3.0 document. Function Set20FontList will be
+called to process font structure.
+Picture 13 Function Set20FontList
+Function Set20FontList will read 28 bytes from the HWP 2.0 document into the array arySrc[0x28],
+then loop copy bytes into aryDest[0x28] until the byte equals zero. But in the computer memory,
+arySrc is followed by aryDest. So the attacker took advantage of it. In the process, when the last
+byte of arySrc is 0x3C instead of zero, the loop will not stop and continue to copy the bytes in
+aryDest until it triggered the access exception C0000005.
+Picture 14 Memory structure of arySrc aryDest
+The overwritten data includes the SEH of the function
+CHwp20ToHwp30FilterLibrary::ConvertFilterFileToWorkFile.
+Picture 15 SEH record is covered
+While copying the 00130000, it will trigger the access exception C0000005, then it will jump to
+the Windows exception handling process and call SEH Handler(7FFAC1B1) with the second
+parameter pointing to 12E4B8.
+Picture 16 Call SEH Handler
+Picture 17 pop pop ret instruction sequence
+This is the instruction sequence ‘pop/pop/ret in’ ntdll.7FFAC1B1. After executing the two ‘pop’,
+ESP pointing to 12E4B8 where the initial position of malicious shellcode is that will be executed
+after the ‘Retn’ instruction.
+Picture 18 The execution of shellcode
+In the end, it will create a normal HWP document in temp path and launch hwp.exe in HWP 2007
+path, then load the document tmp.hwp and release the malicious msserver.exe. The interesting
+thing is that ICEFOG malware is not even released.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": ".hwp", "type" : "DOCF"},
+        {"id": 2, "description": ".doc", "type" : "DOCF"},
+        {"id": 3, "description": ".wps", "type" : "DOCF"},
+        {"id": 4, "description": ".ppt", "type" : "DOCF"},
+        {"id": 5, "description": "HWP 2.0", "type" : "DOCF"},
+        {"id": 6, "description": "HWP 3.0", "type" : "DOCF"},
+        {"id": 7, "description": "https://cryptam.com/docsearch.php?md5=26b416d686ce57820e13e572e9e33cce", "type" : "URLS"},
+        {"id": 8, "description": "https://cryptam.com/docsearch.php?md5=de00286f6128fb92002e0c0760855566", "type" : "URLS"},
+        {"id": 9, "description": "CHwp20ToHwp30FilterLibrary::ConvertFilterFileToWorkFile", "type" : "EXEF"},
+        {"id": 10, "description": "Set20FontList", "type" : "TTPS"},
+        {"id": 11, "description": "SEH of the function CHwp20ToHwp30FilterLibrary::ConvertFilterFileToWorkFile", "type" : "TTPS"},
+        {"id": 12, "description": "C0000005", "type" : "TTPS"},
+        {"id": 13, "description": "Windows exception handling process", "type" : "SYSP"},
+        {"id": 14, "description": "SEH Handler(7FFAC1B1)", "type" : "EXEF"},
+        {"id": 15, "description": "ntdll.7FFAC1B1", "type" : "EXEF"},
+        {"id": 16, "description": "malicious shellcode", "type" : "DOCF"},
+        {"id": 17, "description": "temp path", "type" : "SYSP"},
+        {"id": 18, "description": "HWP 2007 path", "type" : "SYSP"},
+        {"id": 19, "description": "hwp.exe", "type" : "EXEF"},
+        {"id": 20, "description": "tmp.hwp", "type" : "DOCF"},
+        {"id": 21, "description": "msserver.exe", "type" : "EXEF"},
+        {"id": 22, "description": "ICEFOG malware", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 5, "target": 6, "rel_name" : "converted to"},
+        {"source": 9, "target": 10, "rel_name" : "calls"},
+        {"source": 10, "target": 12, "rel_name" : "triggers"},
+        {"source": 13, "target": 14, "rel_name" : "calls"},
+        {"source": 14, "target": 16, "rel_name" : "executes"},
+        {"source": 19, "target": 20, "rel_name" : "loads document"},
+        {"source": 19, "target": 21, "rel_name" : "releases"}
+    ]
+}

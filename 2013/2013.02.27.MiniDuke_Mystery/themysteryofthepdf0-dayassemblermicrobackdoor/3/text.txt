@@ -1,0 +1,81 @@
+Authors: Costin Raiu, Igor Soumenkov, Kurt Baumgartner, Vitaly Kamluk Global Research and Analysis Team, Kaspersky Lab
+On Feb 12th 2013, FireEye announced the discovery (http://blog.fireeye.com/research/2013/02/the-number-of-the-
+beast.html) of an Adobe Reader 0-day exploit which is used to drop a previously unknown, advanced piece of malware. We
+called this new malware “ItaDuke” because it reminded us of Duqu and because of the ancient Italian comments in the
+shellcode copied from Dante Aligheri’s Divine Comedy.
+Since the original announcement, we have observed several new incidents using the same exploit (CVE-2013-0640), some of
+which were so unusual that we decided to analyze them in depth.
+Together with our partner CrySyS Lab, we’ve performed a detailed analysis of these new incidents which indicate a new,
+previously unknown threat actor. For their analysis, please read http://blog.crysys.hu/2013/02/miniduke/ . For our analysis,
+please read below.
+First of all, while the fake “Mandiant” PDF reports (see http://blog.seculert.com/2013/02/spear-phishing-with-mandiant-apt-
+report.html?utm_source=feedburner&utm_medium=feed&utm_campaign=Feed%3A+SeculertResearchLab+(Seculert+Researc
+h+Lab)) are just dirty hacks of the original exploit, these newer attacks appear to have been created by a 0-day toolkit that was
+used to build the original “Visaform Tukey.pdf” discovered by FireEye.
+PAGE 1| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor|
+The new PDF attacks drop fake documents that are shown to the victim if the exploit is successfully executed. The documents
+refer to a human rights seminar (ASEM) and Ukraine’s foreign policy and NATO membership plans:
+Document used against the Hungarian target
+PAGE 2| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+Document used against the Belgian target
+PAGE 3| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+Document used against the Luxemburg target
+The MD5s for the documents used in this attack are:
+3668b018b4bb080d1875aee346e3650a action_plan.pdf (Country: Belgium)
+88292d7181514fda5390292d73da28d4 ASEM_seminar.pdf (Country: Hungary)
+3f301758aa3d5d123a9ddbad1890853b EUAG_report.pdf (Country: Luxembourg)
+0cdf55626e56ffbf1b198beb4f6ed559 report.pdf (Country: Spain)
+cf5a5239ada9b43592757c0d7bf66169 EUAG_report.pdf (Country: Belgium)
+c03bcb0cde62b3f45b4d772ab635e2b0 The 2013 Armenian Economic Association.pdf (Country: Belgium)
+The JavaScript exploit code has been modified since the original attack. For instance, the function named “oTHERWISE” was
+renamed to “q1w2e3r4t”. The function is later called in the code like this:
+New exploit:
+var sCIENZA = q1w2e3r4t(vOLENCI[sHOGG('ODNEDNERp',3329,7937)], gIRARSI);
+Older (“Visaform Turkey.pdf”) exploit:
+PAGE 4| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+var sCIENZA = oTHERWISE (vOLENCI['pRENDENDO'], gIRARSI);
+In addition, the JS code is now in compressed format, while the original sample had it in plaintext. The reason behind the
+changes is probably to avoid detection by anti-malware products although this doesn’t prevent our product from detecting it
+heuristically as “HEUR:Exploit.Script.Generic”.
+The shellcode contained in the PDF document is similar to that used in the documents carrying the “Itaduke” payload, with
+some differences. For instance, after exploiting the vulnerability, it searches for a specific signature within the PDF file. While
+the “Itaduke” shellcode was looking for “!H2bYm.Sw@”, the MiniDuke version uses a different signature, “@34fZ7E*p\”.
+Signature in the Itaduke PDF file
+Signature in the Miniduke PDF file
+Once the payload signature is found, it is decrypted with XOR and then decompressed using RtlDecompressBuffer API (LZNT1).
+The resulting PE file is written to a temporary file and loaded using LoadLibary API.
+The resulting dynamic library implements the second stage of installation. It contains two binary resources, 101 and 102.
+Resource 101 is the main backdoor DLL component. It is written to the %AppData% directory and loaded using LoadLibary API.
+Resource 102 is the decoy PDF document. It is written to the Internet cache directory and then opened using a simple BAT file:
+TASKKILL /F /IM acro*
+ping -n 1 127.0.0.1>nul
+start "" "%path to decoy PDF document%"
+The filenames of the dropped files are hardcoded in their resources.
+Beginning of the resource 101 with its filename
+Beginning of the resource 102 with its filename
+Interestingly, the malware dropper contains the following paths:
+
+
+“c:\src\dlldropper\Release\L2P.pdb”.
+
+
+“C:\src\hellodll\Release\hellodll.pdb”.
+
+
+PAGE 5| The MiniDuke Mystery: PDF 0-day Government Spy Assembler 0x29A Micro Backdoor |
+These paths did not exist in the dropper of original PDF (“Visaform Turkey.pdf”).
+If we are to trust the PE headers, the dropper was compiled on Feb 20, 2013 :
+‘Hungarian’ dropper compilation time - “ Feb 20 10:51:16 2013 ”
+The backdoor used in the Hungarian case was compiled on “ Feb 20 10:57:52 2013 ”, just minutes after the dropper was
+created.
+Perhaps the most unusual thing about these three new attacks is the malware they drop. In all the analyzed cases, the
+dropped malware is in the form of a 22,528 bytes DLL file. Parts of the malicious DLL file are encrypted with information
+related to the system configuration, which ensures it will only work properly on the victim’s system. If copied to another
+computer, the malware will be unable to function successfully.
+The backdoor is written in “old school” assembler and is tiny by current standards - only 20 KB. This is most unusual for
+modern malware, which can be several megabytes in size. It has a small decryptor at the beginning that decrypts the main
+body. All three cases use different encryption keys. Another peculiarity is that the backdoor has no imports: all functions are
+scanned from memory and are called dynamically. It is also interesting that the first two Win32 APIs resolved and called by the
+unpacking stub are ntdll.LdrLoadDll and kernel32.VirtualProtectEx. These two functions are not called according to the
+“_stdcall” convention. Instead, a ‘jmp ebx’ instruction is executed after manually building the stack. Clearly some thought went
+into creating anti-emulation and anti-scanning techniques with this malware.

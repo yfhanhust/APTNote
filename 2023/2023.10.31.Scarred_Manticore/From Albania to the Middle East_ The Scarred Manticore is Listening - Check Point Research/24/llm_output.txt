@@ -1,0 +1,74 @@
+
+
+
+Sentence : Web shell within a web shell: compiled FOXSHELL
+The versions that were described above, targeted entities in Middle Eastern countries,
+such as Saudi Arabia, Qatar, and the United Arab Emirates. This version, in addition to
+being leveraged against Middle Eastern governmental entities, was part of
+the attack against the Albanian government in May 2021. Through the exploitation of an
+Internet-facing Microsoft SharePoint server, the actors deployed ClientBin.aspx on the
+compromised server to proxy external connections and thus facilitate lateral movement
+throughout the victim’s environment.
+The details of the samples may vary but in all of them, the FOXHELL is compiled as DLL
+and embedded inside the base web shell in base64. The compiled DLL is loaded
+with System.Reflection.Assembly.Load, and then the ProcessRequest method from it
+is invoked. The DLL is written in .NET and has the name pattern App_Web_<random>.dll,
+which indicates an ASP.NET dynamically compiled DLL.
+Figure 19 – A web shell loading App_Web_*.dll.
+The App_Web* DLL is affected by the class and method obfuscation, and all the strings
+are encrypted with a combination of Base64, XOR with the first byte, and AES:
+Figure 20 – The inchpublic function, responsible for string encryption, showcases obfuscations of
+methods and classes.
+When the web shell is compiled into DLL, it contains the initialization stub, which ensures
+that the web shell listens on the correct URI. In this case, the initialization happens in the
+following piece of code:
+Figure 21 – Initialization stub in the web shell App_Web_*.dll.
+Or, after deobfuscation:
+public concertthis_medal() {
+base.AppRelativeVirtualPath = "~/1.aspx"
+if (!concertthis_medal.__initialized) {
+concertthis_medal.__fileDependencies = base.GetWrappedFileDependencies(new
+string{"~/1.aspx"});
+concertthis_medal.__initialized = true; }
+This initialization sets the FOXSHELL to listen to the requests on the relative
+path ~/1.aspx, which we observed as an unused artifact in other web shells related to
+attacks involving LIONTAIL.
+https://research.checkpoint.com/2023/from-albania-to-the-middle-east-the-scarred-manticore-is-listening/ 16/21
+1/16/24, 1:06 PM From Albania to the Middle East: The Scarred Manticore is Listening - Check Point Research
+Internally, the DLL has the same “ 1.5 ” version of FOXSHELL, which includes the WV-
+RESET parameter to stop the proxy and the same default Bsae64 Encryption DLL as in
+previous versions.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Middle Eastern countries", "type" : "COUN"},
+        {"id": 2, "description": "Saudi Arabia", "type" : "COUN"},
+        {"id": 3, "description": "Qatar", "type" : "COUN"},
+        {"id": 4, "description": "United Arab Emirates", "type" : "COUN"},
+        {"id": 5, "description": "Albanian government", "type" : "ACTO"},
+        {"id": 6, "description": "Microsoft SharePoint server", "type" : "APPS"},
+        {"id": 7, "description": "ClientBin.aspx", "type" : "DOCF"},
+        {"id": 8, "description": "FOXHELL (compiled as DLL)", "type" : "EXEF"},
+        {"id": 9, "description": "App_Web_<random>.dll", "type" : "EXEF"},
+        {"id": 10, "description": "Base64 encoding", "type" : "TTPS"},
+        {"id": 11, "description": "XOR with the first byte", "type" : "TTPS"},
+        {"id": 12, "description": "AES encryption", "type" : "TTPS"},
+        {"id": 13, "description": "Base_Web_*.dll (obfuscated)", "type" : "EXEF"},
+        {"id": 14, "description": "URI ~/1.aspx", "type" : "SYSP"},
+        {"id": 15, "description": "LIONTAIL (related web shell)", "type" : "ACTO"},
+        {"id": 16, "description": "FOXHELL version 1.5", "type" : "EXEF"},
+        {"id": 17, "description": "WV-RESET parameter", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 8, "target": 9, "rel_name" : "embedded in"},
+        {"source": 9, "target": 10, "rel_name" : "encoded with"},
+        {"source": 9, "target": 11, "rel_name" : "XORed with first byte of"},
+        {"source": 9, "target": 12, "rel_name" : "encrypted with"},
+        {"source": 8, "target": 13, "rel_name" : "obfuscated as"},
+        {"source": 13, "target": 14, "rel_name" : "listens on"},
+        {"source": 7, "target": 6, "rel_name" : "deployed on"},
+        {"source": 5, "target": 6, "rel_name" : "compromised"},
+        {"source": 8, "target": 16, "rel_name" : "version of"},
+        {"source": 14, "target": 7, "rel_name" : "part of"}
+    ]
+}

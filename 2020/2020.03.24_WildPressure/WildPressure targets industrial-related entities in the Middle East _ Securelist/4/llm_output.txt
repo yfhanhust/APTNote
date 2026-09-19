@@ -1,0 +1,112 @@
+
+
+
+Sentence : Let’s dig a little deeper inside
+The most popular sample in our telemetry was:
+MD5 0c5b15d89fda9baf446b286c6f97f535
+Compiled 2019.03.09 06:17:19 (GMT)
+Size 520704
+Internal name Milum46_Win32.exe
+This application exists as an invisible toolbar window. The main malicious functions are
+implemented in a separate thread. Milum decodes its configuration data and, besides timeouts, it
+gets the parameters “clientid” and “encrypt_key” to use in RC4 encryption.
+Example of the decoded and beautified configuration data. The “clientid” field differs in
+every sample observed
+The following table describes the different configuration parameters:
+https://securelist.com/wildpressure-targets-industrial-in-the-middle-east/96360/ 3/7
+3/27/2020 WildPressure targets industrial-related entities in the Middle East | Securelist
+Config parameter Parameter features
+shortwait Pause in milliseconds between C2 communication working cycles
+clientid Unique ASCII target name
+encrypt_key RC4 encryption key for JSON-based C2 communications
+relays – url Full URL to send HTTP POST beacon and GET commands
+relays – key Unique ASCII key for each C2 to communicate with it
+The operators can run the Trojan using the key (“b” or “B”) as the first argument and the file name
+as the second. In this case, Milum will delete the file sent as a parameter. Then the Trojan will
+create the C:\ProgramData\Micapp\Windows\ directory and parse its configuration data to form
+the beacon to send to its C2.
+To send the beacon, Milum uses the HTTP POST request with three parameters as enumerated
+in the table below.
+Beacon
+parameter
+Parameter values
+md Clientid from config, with prefix 01011 and random five-character
+ASCII suffix
+nk Key from config to communicate with C2, differs for each server
+val Compressed, encrypted and encoded command JSON data
+The first two parameters are taken from the configuration data. The third one is encrypted and
+after decryption, decompression, decoding and beautifying, it looks like this:
+https://securelist.com/wildpressure-targets-industrial-in-the-middle-east/96360/ 4/7
+3/27/2020 WildPressure targets industrial-related entities in the Middle East | Securelist
+Decoded and beautified JSON beacon to C2. In this case, the connection to the first server
+was unsuccessful
+There are several fields worth mentioning here. We referred above to different programming
+languages besides C++: “vt” seems to reference a programming language and “ext” a file
+extension. The only reason that we could think of for keeping these is if the attackers have
+several Trojans, written in different languages, to work with the same control server.
+Regarding the “command” field, the control servers were inaccessible at the time of the analysis,
+so we don’t have commands from them. However, we analyzed the command handlers in Milum’s
+code as described below:
+Code Mean‐
+ing
+1 Execu‐
+tion
+2 Server
+to client
+3 Client to
+server
+Features
+Silently execute received interpreter command and return result
+through pipe
+Decode received content in “data” JSON field and drop to file men‐
+tioned in “path” field
+Encode file mentioned in received command “path” field to send it
+4 File info Get file attributes: hidden, read only, archive, system or executable
+5 Cleanup Generate and run batch script to delete itself
+6 Com‐
+mand
+result
+7 System
+informa‐
+tion
+8 Directo‐
+ry list
+Get command execution status
+Validate target with Windows version, architecture (32- or 64-bit),
+host and user name, installed security products (with WQL request
+“Select From AntiVirusProduct WHERE displayName <>’Windows
+Defender'”)
+Get info about files in directory: hidden, read only, archive, system or
+executable
+9 Update Get the new version and remove the old one
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "MD5 0c5b15d89fda9baf446b286c6f97f535", "type" : "IOCS"},
+        {"id": 2, "description": "Milum46_Win32.exe", "type" : "EXEF"},
+        {"id": 3, "description": "C:\\ProgramData\\Micapp\\Windows\\ directory", "type" : "SYSP"},
+        {"id": 4, "description": "HTTP POST request to C2 server", "type" : "NETP"},
+        {"id": 5, "description": "relays – url (Full URL to send HTTP POST beacon and GET commands)", "type" : "URLS"},
+        {"id": 6, "description": "clientid Unique ASCII target name", "type" : "REGI"},
+        {"id": 7, "description": "encrypt_key RC4 encryption key for JSON-based C2 communications", "type" : "REGI"},
+        {"id": 8, "description": "relays – key (Unique ASCII key for each C2 to communicate with it)", "type" : "REGI"},
+        {"id": 9, "description": "shortwait (Pause in milliseconds between C2 communication working cycles)", "type" : "REGI"},
+        {"id": 10, "description": "C2 server", "type" : "CCSH"},
+        {"id": 11, "description": "Decoded and beautified JSON beacon to C2", "type" : "DOCF"},
+        {"id": 12, "description": "vt (programming language reference)", "type" : "TAMP"},
+        {"id": 13, "description": "ext (file extension reference)", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "hash of"},
+        {"source": 2, "target": 3, "rel_name" : "creates directory in"},
+        {"source": 2, "target": 4, "rel_name" : "sends request using"},
+        {"source": 4, "target": 5, "rel_name" : "uses URL from"},
+        {"source": 5, "target": 10, "rel_name" : "communicates with"},
+        {"source": 6, "target": 11, "rel_name" : "used in"},
+        {"source": 7, "target": 11, "rel_name" : "used for encryption in"},
+        {"source": 8, "target": 11, "rel_name" : "used as key in"},
+        {"source": 9, "target": 4, "rel_name" : "defines pause between requests"},
+        {"source": 10, "target": 4, "rel_name" : "receives request from"},
+        {"source": 2, "target": 11, "rel_name" : "sends beacon to"}
+    ]
+}

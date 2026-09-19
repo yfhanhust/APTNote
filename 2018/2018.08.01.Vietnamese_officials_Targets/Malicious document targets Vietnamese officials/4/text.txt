@@ -1,0 +1,73 @@
+Debugging of the shellcode
+At the start of the analysis, we think the process EQNEDT32.exe is created by
+Winword.exe using the function CreateProcess. So we decided to set a breakpoint at the
+call of his function.
+But EQNEDT32.exe is invoked by Winword.exe using COM Object. It’s not CreateProcess
+that used and Winword.exe is not the parent process of EQNEDT32.exe. So we have to
+attach the debugger when EQNEDT32.exe is launched.
+For that, we used a technique named Image File Execution Options that was documented
+by Microsoft. https://blogs.msdn.microsoft.com/mithuns/2010/03/24/image-file-execution
+options-ifeo/
+We create a key EQNEDT32.exe.
+Registry
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File
+Execution Options
+And we set a value string for launching the debugger when EQNEDT32.exe is executed
+and attaching the debugger to the process .
+Value to set the debuuger when EQNEDT32.exe is executed
+When we open the rtf document, Winword is launched and EQNEDT32.exe also.
+Winword process
+6/22
+EQNEDT32.exe process attached by the debugger
+And the debugger is attached at the entrypoint of EQNEDT32.exe.
+We check if it’s 8.t is correctly created in the %TMP% folder.
+8.t dropped on disk
+Now we set a breakpoint at the createFile to
+check if the shellcode of the exploit reads the file
+8.t.
+CreateFile is called at call eqnedt32.41E5EE.
+The param of the path of file is pushed on the stack push dword ptr ss:[ebp-4].
+The shellcode uses CreateFile to the 8.t in the %TMP% folder
+So now, we can return of the user code at the calling function.
+After a step into, we enter in the shellcode, the address space has changed:
+Shellcode of the exploit
+After CreateFile, GetFileSize is called to have the size of the file
+7/22
+Get the size of the file
+After is Virtualloc, and it create a memory page at 1FD0000 (eax value)
+VirtualAlloc memory page to load 8.t
+After virtualAlloc, the memory page is pointed by EAX
+The page allocated
+ReadFile is called:
+Readfile 8.t
+And 8.t is loaded at 1FD0000:
+8/22
+8.t in memory
+And the shellcode decrypts the 8.t file in memory at 0066C82A.
+The loop of decryption is a xoring with different manipulations on the decryption key.
+At the start of the decryption the key is set to 7BF48E63.
+Decryption loop
+And the xor is made after key manipulation.
+Set the decryption key in EAX
+If we check the destination of the result of the xoring (here edx + ebx), we find 01FD0000
+where 8.t is loaded.
+After two step of the loop, we can see the magic number MZ set at the begin of memory
+section.
+MZ magic number
+At the end of the decryption loop, we have a PE in memory at 01FD0000.
+the file 8.t has been decrypted.
+9/22
+8.t fully decrypted
+Then, the shellcode uses the VirtualAlloc and create a memory page at 02070000.
+And the new PE at 01FD0000 is copied at this address.
+the PE decrypted is copied in the new memory page
+After GetModuleFileNameA is called to have the path of EQNEDT32.exe
+And EQNEDT32.exe is forked in suspend status by a CreateProcess and the shellcode
+overwrite it by the PE at the address 02070000
+Fork of EQNEDT32.exe
+Overwritting of EQNEDT32.exe
+10/22
+Stack used by NTWriteVirtualMemory
+And the shellcode does a ResumeThread to launch the new PE.
+So, We’ve found all API Calls in the object ole at the beginning and we have a runPE to
+launch the new EQNEDT32.exe overwritten.

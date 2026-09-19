@@ -1,0 +1,73 @@
+
+
+
+Sentence : First iteration: Rheinmetall
+The first two documents from early May 2021 were related to a German Engineering company focused on the defense and automotive
+industries, Rheinmetall. The second malicious document appears to include more elaborate content, which may have resulted in the
+documents going unnoticed by victims.
+The Macro has base64 encoded files, which are extracted and decoded during execution. Some of the files are split inside the Macro
+and are not combined until the time of decoding. One of the most distinctive characteristics of this Macro is how it evades detections of
+a MZ header encoded in base64 (TVoA, TVpB, TVpQ, TVqA, TVqQ or TVro), by separating the first two characters from the rest of the
+content, as seen in Figure 1.
+https://cybersecurity.att.com/blogs/labs-research/lazarus-campaign-ttps-and-evolution 2/16
+7/28/2021 Lazarus campaign TTPs and evolution | AT&T Alien Labs
+Figure 1: Concealing of MZ header, as captured by Alien Labs.
+The rest of the content is kept together in lines of 64 characters, and because of this, YARA rules can be used to detect other, typical
+executable content encoded in base64 aside of the MZ header. In this case, up to nine different YARA rules alerted to suspicious
+encoded strings in our Alien Labs analysis, like VirtualProtect, GetProcAddress, IsDebuggerPresent, GetCurrentProcessId, etc.
+https://cybersecurity.att.com/blogs/labs-research/lazarus-campaign-ttps-and-evolution 3/16
+7/28/2021 Lazarus campaign TTPs and evolution | AT&T Alien Labs
+Figure 2: YARA rules detections listed in the AT&T Alien Labs Open Threat Exchange, OTX.
+All files created by the executable and used by the different Macros are located in a new folder C:/Drivers with the purpose of
+masquerading their activity. The Macro copies and renames the Microsoft legitimate executable Certutil.exe into this folder. The reason
+for this copy is to avoid endpoint detection and response (EDR) signatures based on system utilities executed from non-standard
+sources (a Microsoft Office document in this case). Additionally, the copy of Certutil is disguised to avoid using the full string, by
+partially replacing it with an asterisk %systemroot%\system32\certut*.exe. As seen in later iterations, this technique was slightly
+modified to further reduce the number of detections.
+Certutil is used to decode the previously mentioned file, doing it within the same folder and with a different executable name. Once the
+necessary files have been decoded, the encoded files are removed from the system.
+The script queries WMI to list all the explorer.exe processes, where it will try to inject the malicious payload. For the injection, the
+attackers used Mavinject (a legitimate Windows component that can be used and abused) to perform arbitrary code injections inside
+any running process. Mavinject.exe has been abused for several years, as indicated in this blog from 2017.
+https://cybersecurity.att.com/blogs/labs-research/lazarus-campaign-ttps-and-evolution 4/16
+7/28/2021 Lazarus campaign TTPs and evolution | AT&T Alien Labs
+Figure 3: Mavinject injection to explorer, as captured by Alien Labs.
+Figure 4: Malicious Document execution tree listed in the AT&T Alien Labs OTX.
+The payload is in fact a downloader, which requests the next stage to a hardcoded Command and Control (C&C) server and saves it to a
+new file. This request is made through HTTPS with hardcoded headers. In this case, the domain used as C&C has been registered for
+several years, and the domain continues to have a long expiration date. For these reasons, this domain was assessed as a compromised
+domain, leveraged by Lazarus as C&C.
+https://cybersecurity.att.com/blogs/labs-research/lazarus-campaign-ttps-and-evolution 5/16
+7/28/2021 Lazarus campaign TTPs and evolution | AT&T Alien Labs
+Figure 5: Hardcoded HTTP headers, as captured by Alien Labs.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "German Engineering company focused on the defense and automotive industries", "type" : "COUN"},
+        {"id": 2, "description": "Rheinmetall", "type" : "ACTO"},
+        {"id": 3, "description": "Malicious document from early May 2021", "type" : "DOCF"},
+        {"id": 4, "description": "Macro with base64 encoded files", "type" : "EXEF"},
+        {"id": 5, "description": "MZ header (TVoA, TVpB, TVpQ, TVqA, TVqQ or TVro)", "type" : "TAMP"},
+        {"id": 6, "description": "YARA rules", "type" : "TAMP"},
+        {"id": 7, "description": "C:/Drivers folder", "type" : "SYSP"},
+        {"id": 8, "description": "Microsoft legitimate executable Certutil.exe", "type" : "EXEF"},
+        {"id": 9, "description": "%systemroot%\\system32\\certut*.exe", "type" : "TAMP"},
+        {"id": 10, "description": "Mavinject (a legitimate Windows component)", "type" : "APPS"},
+        {"id": 11, "description": "explorer.exe processes", "type" : "EXEF"},
+        {"id": 12, "description": "Downloader payload", "type" : "EXEF"},
+        {"id": 13, "description": "Command and Control (C&C) server domain", "type" : "CCSH"},
+        {"id": 14, "description": "Lazarus group", "type" : "ACTO"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "related to"},
+        {"source": 3, "target": 4, "rel_name" : "contains"},
+        {"source": 4, "target": 5, "rel_name" : "evades detection of"},
+        {"source": 6, "target": 4, "rel_name" : "detects suspicious strings in"},
+        {"source": 4, "target": 7, "rel_name" : "creates and uses files in"},
+        {"source": 8, "target": 9, "rel_name" : "copies and renames to"},
+        {"source": 9, "target": 7, "rel_name" : "stored in"},
+        {"source": 10, "target": 11, "rel_name" : "injects into"},
+        {"source": 4, "target": 12, "rel_name" : "downloads and executes"},
+        {"source": 12, "target": 13, "rel_name" : "requests to"}
+    ]
+}

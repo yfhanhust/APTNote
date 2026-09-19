@@ -1,0 +1,29 @@
+DLL side-loading
+2/11
+The launcher is a 32-bit DLL named hpqhvsei.dll, which is the name of a legitimate DLL loaded
+by hpqhvind.exe. This executable is from HP and is usually installed with their printing and
+scanning software called “HP Digital Imaging”. In this case the legitimate hpqhvind.exe was
+dropped by the attackers, along with their malicious hpqhvsei.dll, in C:\Windows\Temp.
+Although we do not have the component that dropped and executed this launcher, the
+presence of these files leads us to think that the initial execution of this launcher is done
+through DLL side-loading.
+When the malicious DLL is loaded at hpqhvind.exe startup, its DLLMain function is called that
+will check its parent process for the following sequence of bytes at offset 0x10BA:
+85 C0 ; test eax, eax
+0F 84 ; jz
+In the case where the parent process is hpqhvind.exe, this sequence of bytes is present at this
+exact location and the malicious DLL will proceed to patch the parent process in memory. It
+replaces the original instructions at 0x10BA with an unconditional jump (jmp – 0xE9) to the
+address of the function from hpqhvsei.dll that decrypts and executes the encrypted payload
+embedded in the launcher.
+The decompiled function responsible for patching the parent process is shown in Figure 1. In
+case hpqhvsei.dll is loaded by a different process than hpqhvind.exe, the malicious code will
+not be decrypted and executed.
+Figure 1. Decompiled function responsible for patching the parent process
+3/11
+The difference between the original and patched hpqhvind.exe is shown in Figure 2.
+Figure 2. Difference between original (left) and patched (right) hpqhvind.exe
+The part of the code that is patched is located at the very beginning of the main function of
+hpqhvind.exe. As we can see in Figure 2, the patched code is located right after the load of
+hpqhvsei.dll. This means that the function responsible for decrypting and executing the
+payload is executed directly after the load of the malicious DLL.

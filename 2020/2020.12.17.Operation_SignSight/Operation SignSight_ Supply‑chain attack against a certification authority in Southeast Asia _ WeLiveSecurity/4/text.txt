@@ -1,0 +1,27 @@
+PhantomNet
+The backdoor was named Smanager_ssl.DLL by its developers but we use PhantomNet, as that was the project name used in an older version of this backdoor. This most recent version was compiled on
+the 26 of April 2020, almost two months before the supply-chain attack. In addition to Vietnam, we have seen victims in the Philippines, but unfortunately we did not uncover the delivery mechanism th
+in those cases.
+This backdoor is quite simple and most of the malicious capabilities are likely deployed through additional plugins. It can retrieve the victim’s proxy configuration and use it to reach out to the
+command and control (C&C) server. This shows that the targets are likely to be working in a corporate network.
+PhantomNet uses the HTTPS protocol to communicate with its hardcoded C&C servers: vgca.homeunix[.]org and office365.blogdns[.]com. In order to prevent a man-in-the-middle attack, PhantomNet
+implements certificate pinning, using functions from the SSPI library. The certificate is downloaded during the first connection with the C&C server and then stored in the Windows certificate store.
+In addition to the use of dynamic DNS providers, it is interesting to note that the name of the first subdomain, vgca, was chosen in order to mimic the name of the Vietnam Government Certification
+Authority.
+The implant can be controlled by the attackers using these five commands:
+Command
+ID Description
+0x00110020 Get victim information (computer name, hostname, username, OS version, user privileges (admin or not), and the public IP address by querying ipinfo.io ).
+0x00110030 Call the export DeletePluginObject of all installed plugins.
+0x00110040 Plugin management (install, remove, update). The plugins have the following exports (including the typo in the first one): GetPluginInfomation, GetRegisterCode, GetPluginObject,
+DeletePluginObject .
+0x00110070 Set a value of a given field in the main structure of the backdoor.
+0x547CBA78 Generate and set a password using the SSPI functions. The final purpose is unknown.
+On VirusTotal, we found one plugin that matches the exports above. It is a debug build and is named SnowballS according to its PDB path and other debug paths:
+E:\WorkCode\AD_Attacker\Server\EXE_DEBUG\SnowballS.pdb
+e:\workcode\ad_attacker\server\plugins\plugins\snowballs\cdomainquery.cpp
+An initial, cursory analysis suggests that this tool might be used for lateral movement, as it embeds Invoke-Mimikatz. It can also collect information about the victim machine and user accounts. This
+shows that PhantomNet can receive additional and complex plugins that are probably only deployed on machines of particular interest to the malware operators.
+In the case of the attack in Vietnam, we were not able to recover data about post-compromise activity and thus we don’t have visibility into the end goal of the attackers.
+https://www.welivesecurity.com/2020/12/17/operation-signsight-supply-chain-attack-southeast-asia/ 4/6
+12/18/2020 Operation SignSight: Supply ~~-~~ chain attack against a certification authority in Southeast Asia | WeLiveSecurity

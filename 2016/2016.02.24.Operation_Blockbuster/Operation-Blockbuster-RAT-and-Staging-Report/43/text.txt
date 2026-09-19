@@ -1,0 +1,47 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 41
+RomeoWhiskey requires that the victim’s system not block inbound access to the malware’s listening port. In order to
+modify the victim’s Windows firewall and set an exception for inbound connections destined for the RomeoWhiskey port,
+RomeoWhiskey will add a new registry key under HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\
+. RomeoWhiskey names
+Parameters\FirewallPolicy\StandardProfile\GloballyOpenPorts\List
+the new key {port number} : TCP and sets its value to {port number} : TCP:*:Enabled:Internet Connection
+Sharing(ICS) .
+For incoming connections, RomeoWhiskey begins by authenticating the client through a handshaking protocol. The
+handshake of RomeoWhiskey, Figure 13-1, starts by taking the current tick count of the victim’s computer, performing a
+series of bitwise transformations, and sending the result to the client as a challenge value. The client has up to 30 seconds
+to respond with a 4-byte response. The response value is then decomposed using another series of bitwise transformations
+to ensure a particular result. If any of the steps of the handshake fails, the handshake function returns a positive result,
+and the connection to the client terminates by means of a socket disconnection function call.
+int AuthenticationHandshake(SOCKET clientSkt)
+{
+unsigned __int16 wChallengeSeed = GetTickCount();
+unsigned __int32 dwChallengeResponse = 0;
+if ( SendData(clientSkt,
+(wChallengeSeed << 16) | (wChallengeSeed >> 52) ^ 0xF3C0),
+```
+  4, 1 )
+   return 1;
+
+```
+if ( WaitForSocketRecv(clientSkt, 30) )
+```
+       return 1;
+```
+if ( RecvData(clientSkt, dwChallengeResponse, 4, 1) )
+```
+           return 1;
+```
+return ((((dwChallengeResponse >> 16) & 0xFFFF) >> 52) ^ 0xF3C0) !=
+```
+  (dwChallengeResponse & 0xFFFF);
+  }
+```
+Figure 13-1: RomeoWhiskey-One’s Authentication Handshake Function for Command base 0x7D50 Samples
+The SendData and RecvData functions are common network data transmission functions found in a variety of
+families within the Lazarus Group’s collection. These particular instances use DNSCALC-style encoding to obfuscate the
+data as it traverses the network.
+After the authentication handshake completes, RomeoWhiskey spawns a new thread to handle the incoming requests
+from the client. Incoming requests consist of the client sending a modified version of a datagram specifying the command
+identifier value (WORD), followed by the a 2-byte (WORD) value for the size of the payload, and then an optional payload
+value of up to 260 bytes. RomeoWhiskey uses the command identifier value to locate and execute the appropriate
+command handler. Table 13-1 lists the commands that RomeoWhiskey-One supports.

@@ -1,0 +1,87 @@
+
+
+
+Sentence : Operating principle
+In the beginning, the malicious code checks if another backdoor copy is running. The trojan
+checks for the c:\windows\inf\mdmslbv.inf file. If it exists, the trojan starts reading. You
+can use the following script to decrypt:
+```
+ import sys
+with open(sys.argv[1], 'rb') as f:
+d = f.read()
+s = bytearray()
+for i in range(len(d)):
+s.append(d[i])
+for i in range(len(s)-2, 0, -1):
+s[i] = (((s[i + 1] * s[i + 1]) ^ s[i]) & 0xff)
+with open(sys.argv[1] + '.dec', 'wb') as f:
+f.write(s)
+```
+Encrypted file’s length
+The packet’s structure:
+random string from 10 to 19 characters long
+between the ... tags contains the backdoor process’s PID
+between the ... tags is the process’s name
+random string from 10 to 19 characters long
+The trojan checks for the existence of a process with the specified parameters. If it finds it, the
+trojan terminates its work.
+If it doesn’t find a process with the specified parameters or the mdmslbv.inf file itself, the
+trojan generates data as shown above. Then, it encrypts and writes to the c:
+\windows\inf\mdmslbv.inf .
+Communication with the command and control server
+The trojan has command and control server: blog[.]globnewsline[.]com.
+The trojan sends a GET request to the following URL:
+hxxps://blog.globnewsline.com:443/db/db.asp using User-Agent "Mozilla/5.0 (X11;
+Windows x86_64; rv:70.0) Gecko/20100101 Firefox/70.0". If the server response contains the
+substring Website under construction, then the trojan considers that the control server is
+available. If the server is unavailable, the malicious code checks for the presence of a proxy
+configuration file c:\windows\inf\bksotw.inf . If that’s present, the trojan reads the
+parameters written in the file.
+The backdoor uses MAC addresses as the network interface bot ID. For heartbeat requests, the
+following POST requests are used:
+```
+ https://blog.globnewsline.com:443/db/db.asp?m=w&n=~A.t
+```
+where <macaddr> is the MAC address string, converted to uppercase with colons removed.
+Next, a GET request is sent to get a list of commands:
+```
+ https://blog.globnewsline.com:443/db/A.c
+```
+The server response is encrypted in the same way as the file with the backdoor process’s PID.
+The following commands can be executed:
+
+
+up
+
+
+down
+
+
+bg
+bgd
+getinfo
+The command’s result is encrypted the same way as the command itself was encrypted. Then, it’s
+sent in the POST request’s body to the following URL:
+```
+ https://blog.globnewsline.com:443/db/A.c
+```
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "c:\\windows\\inf\\mdmslbv.inf", "type" : "SYSP"},
+        {"id": 2, "description": "blog[.]globnewsline[.]com", "type" : "CCSH"},
+        {"id": 3, "description": "hxxps://blog.globnewsline.com:443/db/db.asp", "type" : "URLS"},
+        {"id": 4, "description": "Mozilla/5.0 (X11; Windows x86_64; rv:70.0) Gecko/20100101 Firefox/70.0", "type" : "USER_AGENT"},
+        {"id": 5, "description": "c:\\windows\\inf\\bksotw.inf", "type" : "SYSP"},
+        {"id": 6, "description": "<macaddr>", "type" : "MAC"},
+        {"id": 7, "description": "https://blog.globnewsline.com:443/db/A.c", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "communicates with"},
+        {"source": 2, "target": 3, "rel_name" : "hosts"},
+        {"source": 2, "target": 4, "rel_name" : "uses user-agent"},
+        {"source": 5, "target": 2, "rel_name" : "checked for presence by"},
+        {"source": 6, "target": 2, "rel_name" : "used as bot ID in communication with"},
+        {"source": 7, "target": 2, "rel_name" : "sends commands to"}
+    ]
+}

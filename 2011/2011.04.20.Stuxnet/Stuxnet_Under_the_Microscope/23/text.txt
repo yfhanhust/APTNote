@@ -1,0 +1,89 @@
+
+51
+In kernel32.dll:
+o FindFirstFileW;
+o FindNextFileW;
+o FindFirstFileExW; 
+In ntdll.dll:
+o NtQueryDirectoryFile;
+o ZwQueryDirectoryFile.
+This function filters the files that satisfy the following criteria from being displayed: 
+files with " .LNK " extension of which the file size is equal to 1471 (0x104b) bytes; 
+files with " .TMP " extension of which the name consists of 12 characters (including filename
+extension) in the following format: "~ WTRabcd.TMP ", where a,b,c,d are digits from 0 to 9 which
+sum modulo 10 equals 0 (" ~WTR4411.TMP " for example).
+This module loads another module. ~WTR4132.TMP, using a method described in previous
+section. ~WTR4132.TMP extracts from its section with ".stub" name another component – the main
+dynamic link library of Stuxnet - then loads it and calls exported function number 15.
+Figure 4.7 – Installation of the Malware
+This function checks whether the token of the current user belongs to the group of the local
+administrators on the computer: if so, it executes the exported function with ordinal 0x10 in a new
+process. This function installs Stuxnet's components onto the system.
+www.eset.com
+52
+4.1.6 Exported functions
+Here we will describe the functions exported by the main module.
+Export 1
+This function has the same functionality as the function number 32 except it waits for 60 seconds prior
+creating and starting Stuxnet's RPC Server.
+Export 2
+This function is called in address space of the process with name s7tgtopx.exe and CCProjectMgr.exe
+and hooks certain functions by modifying the import address table of the corresponding modules. The
+table below gives the names of the patched modules and hooked functions:
+Table 4.1.1 – Patched Modules and Hooked Functions
+|Patched module|Hooked function|Library exporting hookedfunction|
+|---|---|---|
+|s7apromx.dll|CreateFileA|kernel32.dll|
+|mfc42.dll|CreateFileA|kernel32.dll|
+|msvcrt.dll|CreateFileA|kernel32.dll|
+|CCProjectMgr.exe|StgOpenStorage|ole32.dll|
+The hook for CreateFileA monitors opening files with the extension .S7P while the hook for
+StgOpenStorage monitors files with extension .MCP.
+Export 4
+This function performs the full cleanup of the malware from the system. It starts a new process, injects
+the main module into it and calls exported function 18 (see 18).
+Export 5
+This function checks whether the kernel-mode driver MrxCls.sys is properly installed in the system.
+Export 6
+This function returns current version of Stuxnet installed in the system.
+Export 7
+The same as function number 6
+www.eset.com
+53
+Export 9
+This function builds Stuxnet's dropper from the files located in the system and runs it. The dropper is
+constructed from the following files which seems to be a components of Stuxnet: 
+%Dir%\XUTILS\listen\XR000000.MDX; 
+%Dir%\XUTILS\links\S7P00001.DBF; 
+%Dir%\XUTILS\listen\S7000001.MDX .
+%Dir% passed as a parameter by a caller of the function.
+Export 10
+This function performs the same actions as function number 9 which builds and runs the Stuxnet
+dropper. The only difference between these functions is that this function can build the dropper from
+the set of the files used in function number 9 as well as from the following files: 
+%Dir%\GracS\cc_alg.sav; 
+%Dir%\GracS\db_log.sav; 
+%Dir%\GracS\cc_tag.sav.
+Parameter %Dir% is also specified by a caller.
+Export 14
+This function manipulates with files which paths it receives as a parameter.
+Export 15
+This routine initiates infection of the system. See section 4.1.5 for more details.
+Export 16
+This function installs the malware's components in the system and performs the following tasks: 
+Drops and installs kernel-mode drivers: MrxNet.sys and MrxCls.sys; 
+Drops the main dll in %SystemRoot%\inf\oem7A.PNF; 
+Drops Stuxnet's configuration data in %SystemRoot%\inf\mdmcpq3.PNF; 
+Creates tracing file in %SystemRoot%\inf\oem6C.PNF; 
+Drops data file in %SystemRoot%\inf\mdmeric3.PNF; 
+Injects the main dll into services.exe process and executes the function exported as
+ordinal 32; 
+Injects the main dll into the s7tgtopx.exe process if any exists, and executes exported
+function 2 there.
+Export 17
+This function replaces s7otbxdx.dll with a malicious DLL. It moves the original library into a file called
+s7otbxdsx.dll. The malicious library is a wrapper for the original DLL: that is, it simply passes control to
+the original library, except in the case of certain functions which it hooks: 
+s7_event; 
+s7ag_bub_cycl_read_create;
+www.eset.com

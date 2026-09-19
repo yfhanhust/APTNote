@@ -1,0 +1,116 @@
+
+
+
+Sentence : Technical Details
+Shellcode Execution
+The shellcode (SHA256:
+64CC899EC85F612270FCFB120A4C80D52D78E68B05CAF1014D2FE06522F1E2D0) is
+considered to be a stager, or downloader, whose function is to download an implant from
+a C2 server. During execution, the code employs byte randomization to obscure its
+behavior. This is achieved by using the host’s current time as a seed for a pseudorandom
+number generator, and then performing additional operations against that output. The
+resulting values are used to overwrite blocks of previously executed code. This byte
+manipulation is the first anti-analysis technique observed in the code, as any attempt to
+dump the memory segment would result in illegitimate or incorrect operations. Figure 1
+shows an example of the shellcode main entry point before and during runtime execution.
+Figure 1. Modified shellcode runtime example.
+Because shellcode lacks the ability to run on its own, a Windows loader is required to
+allocate an environment in memory for it to execute. At the time of analysis, no loader had
+been identified for this shellcode; Therefore, Unit 42 created a custom loader to study the
+code during its runtime execution. Since then, however, several older installers were
+discovered with embedded WaterBear shellcode based on attributes identified from this
+sample. More information on these loaders can be found in the Appendix section “x86
+WaterBear Loaders”.
+The shellcode begins by locating the target’s Process Environment Block (PEB) to check if
+it’s currently being debugged. However, the code is written such that it pulls both the
+“BeingDebugged” and “BitField” values from the PEB, resulting in code logic that
+invalidates the debugger check. Because of this, the shellcode will always fail to recognize
+when a debugger is attached. This routine is performed 52 times in a while loop.
+Next, the shellcode iterates through the PEB’s loader module list looking for the base
+address of Kernel32.dll. This is typical of shellcode, as the Kernel32.dll base address is
+necessary to resolve any dependency files required by the shellcode to run. With this
+address, the shellcode loads its dependency modules and resolves any necessary Windows
+Application Programming Interface (API) calls using standard shellcode API hashing. The
+following modules are loaded:
+Advapi32.dll
+3/19
+Kernel32.dll
+Msvcrt.dll
+User32.dll
+Ws2_32.dll
+With the shellcode initialization complete, it moves onto its main function. It begins by
+querying the target’s registry, at the following key:
+HKEY_CURRENT_USER\Console\QuickEdit
+This registry key is used by the Windows command prompt to enable Quick Edit mode.
+Quick Edit mode allows copy and paste from the command prompt to the clipboard. By
+default, this key contains a REG_DWORD, a 32-bit number of either 1 for enabled or 0 for
+disabled. BendyBear reads this value, multiplies it by 1000 and performs the following
+calculation on the result:
+If the result is less than 1,000 or greater than 3,300,000 the shellcode configuration
+(QuickEdit) is 4,000 (0xFA0) otherwise it is the result of the computed value.
+Refer to the highlighted light blue value in Figure 2 Shellcode configuration.
+This check is performed each and every time the shellcode is executed. One explanation
+for the use of this key is that the value is written to by the shellcode loader (to a value
+other than 0 or 1) and it’s used by the shellcode to obtain configuration settings.
+It then decrypts its internal configuration structure, which is 1,152 bytes. An example is
+shown in Figure 2.
+4/19
+5/19
+Figure 2. Shellcode configuration structure.
+A breakdown of the configuration structure shown in Figure 2 is below (from top to
+bottom):
+Highlighted in neon green are the two, 16-byte keys used for XORing values
+throughout the shellcode.
+7D 38 BA FD E1 C8 D2 DF B6 EE 33 F9 14 BF 52 96
+71 17 DF E4 AE 3B A9 F2 D5 3D 75 CC D3 0D 57 72
+Highlighted in light blue are the two bytes computed from the host’s Quick Edit
+Registry key.
+E8 03
+Highlighted in orange are the four bytes that represent the shellcode version.
+30 2E 32 34 (0.24)
+Highlighted in pink are the 17 bytes that make up the C2 domain. Bitwise NOT
+(unsigned byte) to decode the values including the NULL.
+88 98 CE D1 96 91 94 9A 8C 93 96 89 9A D1 9C 90 92
+Highlighted in dark green are the 103 bytes that are used for pattern elimination.
+XOR with 0xFF to NULL values.
+FF FF FF FF FF FF FF FF FF FF FF…
+Highlighted in magenta are the two bytes that make up the target C2 port.
+BB 01
+Highlighted in light yellow are the resolved function pointers used by the shellcode.
+92 13 73 33 37 02
+Highlighted in dark cyan are the 112 bytes that make up the function pointer sizes
+used to encrypt or decrypt function blocks.
+EE 01
+Highlighted in dark red are the 289 bytes that make up the resolved Windows API
+functions used by the shellcode
+A0 2E 52 CC FC 7F 00 00…
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Shellcode (SHA256: 64CC899EC85F612270FCFB120A4C80D52D78E68B05CAF1014D2FE06522F1E2D0)", "type": "EXEF"},
+        {"id": 2, "description": "C2 server", "type": "CCSH"},
+        {"id": 3, "description": "Windows loader", "type": "APPS"},
+        {"id": 4, "description": "WaterBear shellcode based installers", "type": "DOCF"},
+        {"id": 5, "description": "Process Environment Block (PEB)", "type": "SYSP"},
+        {"id": 6, "description": "Kernel32.dll", "type": "APPS"},
+        {"id": 7, "description": "Advapi32.dll", "type": "APPS"},
+        {"id": 8, "description": "Msvcrt.dll", "type": "APPS"},
+        {"id": 9, "description": "User32.dll", "type": "APPS"},
+        {"id": 10, "description": "Ws2_32.dll", "type": "APPS"},
+        {"id": 11, "description": "HKEY_CURRENT_USER\\Console\\QuickEdit", "type": "REGI"},
+        {"id": 12, "description": "C2 domain (decoded from: 88 98 CE D1 96 91 94 9A 8C 93 96 89 9A D1 9C 90 92)", "type": "CCSH"},
+        {"id": 13, "description": "C2 port (decoded from: BB 01)", "type": "NETP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name": "downloads from"},
+        {"source": 1, "target": 5, "rel_name": "checks"},
+        {"source": 1, "target": 6, "rel_name": "loads"},
+        {"source": 1, "target": 7, "rel_name": "loads"},
+        {"source": 1, "target": 8, "rel_name": "loads"},
+        {"source": 1, "target": 9, "rel_name": "loads"},
+        {"source": 1, "target": 10, "rel_name": "loads"},
+        {"source": 1, "target": 11, "rel_name": "queries"},
+        {"source": 1, "target": 12, "rel_name": "communicates with"},
+        {"source": 1, "target": 13, "rel_name": "uses port"}
+    ]
+}

@@ -1,0 +1,119 @@
+
+
+
+Sentence : x64 Shellcode Behaviors
+The following table describes the main behaviors of BendyBear.
+Behavior Artifact ATT&CK IDs
+Query Registry
+HKEY_CURRENT_USER\Console\QuickEdit
+T1012: Query Registry
+Command and Control T1573.002: Encrypted
+Channel: Asymmetric
+Cryptography
+Payload transfer from remote host T1105: Ingress Tool
+Transfer
+Payloads in modified RC4-encrypted chunks T1027.002: Obfuscated
+Files or Information:
+Software Packing
+~65 calls to Windows API kernel32!GetTickCountKernel32
+prior to the shellcode connecting to the C2 server. Used to
+encrypt or decrypt function blocks.
+T1497.003: Time Based
+Evasion
+Dynamic DLL Importing and API Lookups T1106 Native API
+12/19
+52 iterations of the shellcode obtaining the process
+environment block (PEB) and checking for IsDebugger flag
+Eight calls to msvcrt!time prior to connecting to the C2 server
+T1082: System
+Information Discovery
+Clearing host’s DNS cache via API DNSAPI!DnsFlushResolverCache
+PEB _LDR_DATA_TABLE_ENTRY metadata structures are not created, and the PEB
+for the process running the shellcode has no record of the DLL loading.
+Loaded payload module (DLL) has a type of MEM_PRIVATE
+Table 1. x64 shellcode commands executed.
+BendyBear vs. WaterBear
+Attributes WaterBear BendyBear
+File Type EXE/DLL Shellcode
+Implant Type Stage-2 Stage-0
+Modified RC4
+Additional Encryption UNKNOWN Extra XOR Computations
+16-Byte XOR keys
+Authenticated C2 Communications
+Signature Verification Magic Bytes 1F 40
+1F 43
+Chunked Payloads
+Polymorphic Code
+In-Memory Loading
+PEB Debugger Check
+Pattern Elimination
+Encrypt/Decrypt Function Routines
+API Hooking
+1F 40
+1F 43
+13/19
+Process Hiding
+Network Traffic Filtering
+Table 2. Comparison of BendyBear and WaterBear.
+File Type – WaterBear is a standalone PE/EXE. BendyBear is a x64 Shellcode that
+requires loader or code injection.
+Implant Type – WaterBear is a stage-2 implant with many capabilities; BendyBear is a
+stage-0 downloader.
+Modified RC4 Encryption – Both WaterBear and BendyBear use a modified RC4, but
+implement them slightly differently. WaterBear uses a 256 RC4 state box with byte
+shifting and addition within the key scheduling algorithm. BendyBear uses a 258 RC4
+state box and performs XOR within the key scheduling algorithm.
+Additional Encryption – While both use encryption as a way to conceal artifacts,
+BendyBear was found to contain additional XOR encryption steps.
+16-Byte XOR Key – Both use the same 16-byte XOR key to create the pre-session key:
+0x6162636465666768696A6B6C6D6E6f00
+Authenticated C2 Communications – Both send an initial 10-byte challenge request
+followed by 32-byte session keys.
+Signature Verification Magic Bytes – Both use the same matching magic byte
+verification values.
+Chunked Payload – Both expect the payloads to be sent in encrypted chunks.
+Polymorphic Code – Both employ code manipulation during runtime execution with
+random bytes.
+In-Memory Loading – Both support the in-memory loading of payloads.
+PEB Debugger Check – Both check to see if the code is being debugged.
+Pattern Elimination –Both re-encrypt any decrypted strings upon use.
+Encrypt/Decrypt Function Routines – Both WaterBear and BendyBear obfuscate
+runtime function addresses.
+API Hooking – Variants of WaterBear implement API hooking, while BendyBear does
+not.
+Process Hiding – Variants of WaterBear can hide processes via API hooking, while
+BendyBear does not support this capability.
+14/19
+Network Traffic Filtering – Variants of WaterBear can filter or hide network traffic
+via API hooking, while BendyBear does not support this capability.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BendyBear", "type" : "TTPS"},
+        {"id": 2, "description": "HKEY_CURRENT_USER\\Console\\QuickEdit", "type" : "REGI"},
+        {"id": 3, "description": "C2 server", "type" : "CCSH"},
+        {"id": 4, "description": "kernel32!GetTickCountKernel32", "type" : "APPS"},
+        {"id": 5, "description": "msvcrt!time", "type" : "APPS"},
+        {"id": 6, "description": "DNSAPI!DnsFlushResolverCache", "type" : "APPS"},
+        {"id": 7, "description": "MEM_PRIVATE", "type" : "TAMP"},
+        {"id": 8, "description": "WaterBear", "type" : "TTPS"},
+        {"id": 9, "description": "EXE/DLL", "type" : "DOCF"},
+        {"id": 10, "description": "x64 Shellcode", "type" : "EXEF"},
+        {"id": 11, "description": "256 RC4 state box with byte shifting and addition within the key scheduling algorithm", "type" : "TAMP"},
+        {"id": 12, "description": "258 RC4 state box and performs XOR within the key scheduling algorithm", "type" : "TAMP"},
+        {"id": 13, "description": "0x6162636465666768696A6B6C6D6E6f00", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "queries"},
+        {"source": 1, "target": 3, "rel_name" : "connects to"},
+        {"source": 1, "target": 4, "rel_name" : "calls API"},
+        {"source": 1, "target": 5, "rel_name" : "calls API"},
+        {"source": 1, "target": 6, "rel_name" : "clears DNS cache via"},
+        {"source": 1, "target": 7, "rel_name" : "loads payload with type of"},
+        {"source": 8, "target": 9, "rel_name" : "is a file type of"},
+        {"source": 8, "target": 10, "rel_name" : "requires loader or code injection for"},
+        {"source": 8, "target": 11, "rel_name" : "uses encryption with"},
+        {"source": 1, "target": 12, "rel_name" : "uses encryption with"},
+        {"source": 8, "target": 13, "rel_name" : "uses same XOR key for"}
+    ]
+}

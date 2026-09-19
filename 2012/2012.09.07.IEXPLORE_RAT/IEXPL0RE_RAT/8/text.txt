@@ -1,0 +1,191 @@
+APPENDIX B: COMMAND ENUMERATION
+The following is a list of all commands present in the IEXPL0RE malware, and a detailed
+description of what data is received or sent over the network for each command.
+|CODE|COMMAND|SERVER /CLIENT|DESCRIPTION|
+|---|---|---|---|
+|0x00|Failure|C|Client response for a variety of commands to indicate that the operation didnot succeed.|
+|0x01|Success|C|Client response for a variety of commands to indicate that the operation suc­ceeded. Contains variable data related to the command request.|
+|0x01|Reply file does not exist|C|Reply file for plugin does not exist.Packet contains:[4] - Command code (0x01)|
+|0x02|Reply file over 512kB|C|Reply file for plugin is over 512kB.Packet contains:[4] - Command code (0x02)|
+|0x03|Reply file|C|Reply file for plugin.Packet contains:[var] - buffer -- implemented so always 0?|
+|0x03|Shutdown|S|Sends a shutdown + power off + force command to the system. Requiresparameters 0/0.|
+|0x04|Reboot|S|Sends a reboot + force command to the system. Requires parameters 0/0.|
+|0x06|Reconnect|S|Disconnects open connections and reconnects.|
+|0x07|Shut off display|S|Sends WM_SYSCOMMAND message SC_MONITORPOWER to shut off thedisplay.|
+|0x0B|Download and installmalware|S|Downloads a file, writes it to disk, and possibly executes it.Packet contains:[4] - executable size[var] - executableDepending on configuration and AV software present, writes the file to IEX­PL0RE.EXE (in application data folder, Microsoft subfolder), fxsst.dll (in Win­dows system directory), or SENS64.DLL (in temp path). May run IEXPL0RE.EXE depending on options; may also install configuration file (STREAM.SYSor Cache).Returns failure or success with parameters 0/0.|
+|0x0C|Install dropped files|S|Checks configuration file options and moves the appropriate dropped files tothe correct locations (may vary depending on Windows version).Returns failure or success with parameters 0/0.|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 18
+0x0D Update configuration
+file
+S Downloads new configuration parameters and writes the updated information
+to the configuration file.
+Packet option 2:
+[2] - Value1 == 2
+[180] - Unused?
+Packet option 1: update campaign name?
+[2] - Value1 == 1
+[4] - campaign name length
+[var] - campaign name
+Packet option 4: update configuration file
+[2] - Value1 == 4
+[2] - port
+[2] - unknown (offset 264)
+[2] - unknown (offset 266)
+[4] - unknown (offset 664)
+[1] - unknown (offset 274)
+[1] - unknown (offset 534)
+[2] - unknown (offset 532)
+[2] - unknown (offset 270)
+[2] - unknown (offset 272)
+[4] - campaign name length
+[var] - campaign name
+[4] - C2 name length
+[var] - C2 name
+[4] - unknown length
+[var] - unknown (unused?)
+[4] - unknown length
+[var] - unknown (offset 275)
+[4] - unknown length
+[var] - unknown (offset 535)
+[4] - unknown length
+[var] - unknown (offset 599)
+Returns failure or success with parameters 0/0.
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 19
+0x0E Download and run
+plugin
+S Opens a new connection in a new thread, downloads a file, then runs it (possibly
+with Internet Explorer credentials). This looks like a plugin activation for screen
+captures and audio recording -- references offscreen.dll and offsound.dll.
+Packet contains:
+[4] - unknown (field_4)
+[4] - unknown length
+[var] - unknown (field_8)
+[4] - DLL name length
+[var] - DLL name
+[4] - DLL arguments length
+[var] - DLL arguments
+[4] - Reply filename length
+[var] - Reply filename
+[4] - unknown length
+[var] - unknown (field_620)
+[4] - unknown length
+[var] - unknown (field_724)
+[1] - unknown (field_828)
+[1] - unknown (field_829)
+[1] - unknown (field_82A)
+[1] - Add process ID, socket, verb to DLL arguments?
+[1] - Create process as IE user?
+[4] - unknown length
+[var] - unknown (field_82C)
+[4] - unknown (field_934)
+Handshake for the new connection uses connection number -1.
+If the connection is successful, replies with a failure packet, parameters 0/0,
+containing:
+[4] - unknown (field_4)
+[4] - unknown length
+[var] - unknown (field_8)
+[4] - DLL name length
+[var] - DLL name
+[4] - Reply filename length
+[var] - Reply filename
+[4] - unknown length
+[var] - unknown (field_620)
+[4] - unknown length
+[var] - unknown (field_724)
+[1] - unknown (field_828)
+[1] - unknown (field_829)
+[4] - unknown length
+[var] - unknown (field_82C)
+[4] - unknown (field_934)
+If successful, it will send the C2 an X command. The C2 will reply with a
+file, which the client writes to disk. The client will send a success or failure
+packet with parameters 0/0 depending on whether the file was received.
+If field_828 is non-zero, the client will send the contents of the reply file­
+name specified in a 0x03 command with parameters 0/0. The way this is
+implemented, it appears as if it will always send an empty packet.
+If process creation is unsuccessful, it will send a failure packet with param­
+eters 0/0 containing the following:
+[4] - command (0x00)
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 20
+|0x0F|Download and executefile|S|Downloads a file and runs it.Packet contains:[4] - executable size[var] - executableDownloads the file to %temp% and executes it. Returns failure or successwith parameters 0/0.|
+|---|---|---|---|
+|0x10|Unknown|S|Updates a values in the lock.dat file and sets an event.Packet contains:[4] - Value length[var] - ValueSets the DWORD at lock.dat offset 516 to 2, and copies the value from thepacket to offset 520. Sets the USERMODECMD event.|
+|0x11|Unknown|S|Reads a value out of %temp%/screenlog.txt.Returns a success or failure command with parameters 0/0 depending onwhether the value read equals 1. The command contains:[4] - ValueWhere value equals:0 : file does not exist3 : value read from file equals 14 : value read from file equals 05 : value read from file equals 2|
+|0x12|Unknown|S|Reads a value out of %temp%/offsoundlog.txt.Returns a success or failure command with parameters 0/0 depending onwhether the value read equals 1. The command contains:[4] - ValueWhere value equals:0 : file does not exist3 : value read from file equals 14 : value read from file equals 05 : value read from file equals 2|
+|0x1E|sub_10004603()|C|If not empty, packet contains:[2] - _WIN32_FIND_DATAA structure length[var] - Data for file nameIf empty, packet contains:[2] - Set to 0[1] - 1 if structure size > 40000, 0 if failureParameters are set to Res1/Res2.|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 21
+|0x20|Move file|S|Moves a file or directory.Packet contains:[4] - Source length[var] - Source[4] - Destination length[var] - DestinationReturns failure or success with parameters 1/Res1|
+|---|---|---|---|
+|0x21|Delete file|S|Deletes a file or directory.Packet contains:[4] - File name length[var] - File nameReturns a success or failure command with parameters Res2/Res1.|
+|0x22|Create directory|S|Creates a directory.Packet contains:[4] - Path name length[var] - Path nameReturns a success or failure command with parameters Res2/Res1.|
+|0x23|GetSystemInfo request|S|Requests client to send a 0x24 response with the output of GetSystemInfo().|
+|0x24|GetSystemInfo re­sponse|C|Contains a _SYSTEM_INFO struct with the output of GetSystemInfo().|
+|0x26|Get document paths|S|Gets paths for CSIDL special folders PERSONAL (My Documents), DESKTOP­DIRECTORY (Desktop), and HISTORY (Internet history).Returns a success command containing:[4] - My Documents path length[var] - My Documents path[4] - Desktop path length[var] - Desktop path[4] - Internet history path length[var] - Internet history pathParameters are set to 1/Res1.|
+|0x29|Move file or directory|S|Moves a file or directory.Packet contains:[4] - Source length[var] - Source[4] - Destination length[var] - DestinationReturns failure or success with parameters 1/Res1.|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 22
+|0x2A|Set file access time andattributes|S|Sets the creation time, last access time, last write time, and file attributes ofa file.Packet contains:[8] - CreationTime[8] - LastAccessTime[8] - LastWriteTime[4] - dwFileAttributes[4] - File name length[var] - File nameReturns failure or success with parameters Res2/Res1.|
+|---|---|---|---|
+|0x2B|Unknown|S|Does some file-walking, including across all drives available (A to Z). Replieswith a 0x2C command followed by a number of 0x2D commands.Packet contains:[4] - Directory length[var] - Directory[4] - Unknown length[var] - Unknown|
+|0x2C|Unknown start re­sponse|C|Response to the 0x2B command. Uses parameters Res2/Res1.Packet contains:[4] - Number of 0x2D packets to follow|
+|0x2D|Unknown response|C|Response to the 0x2B command. Uses parameters Res2/Res1.Packet contains:[4] - Unknown data length[var] - Unknown data, result of sub_10001B73()|
+|0x2F|Owner name, organiza­tion, and serial numberrequest|S|Sends the owner name, organization, and serial number.Returns a success response with the following data:[4] - Username length[var] - Username[4] - User organization length[var] - User organization[4] - Serial length[var] - Serial|
+|0x46|Read from file|S|Packet contains:[8] - File offset[2] - Characters to read[4] - Length of field 3[var] - Field 3Replies with a 0x47 packet containing data from a file.|
+|0x47|Read from file response|C|Response to 0x46 that contains data from a file. Sent with parameters 2/2.Packet contains:[2] - Size[var] - Data|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 23
+|0x4B|List files|S|Lists files in a given directory along with file size and last write times.Packet contains[4] - Directory length[var] - Directory|
+|---|---|---|---|
+|0x4C|Start of list filesresponse|C|Start of list response to 0x4B. Sent with parameters 2/2.Packet has no payload.|
+|0x4D|End of list filesresponse|C|End of list response to 0x4B. Sent with parameters 2/2.Packet has no payload.|
+|0x4E|List files response|C|List item for response to 0x4B. Sent with parameters 2/2.Packet contains:[8] - FindFileData.nFileSizeLow, FindFileData.nFileSizeHigh[8] - .ftLastWriteTime.dwLowDateTime, .dwHighDateTime[4] - length of next field[var] - whole string: filename plus size and write time|
+|0x4F|Open file|S|Opens a specified file for use with 0x46 [and friends].Packet  contains:[4] - File name length[var] - File name[4] - File mode length[var] - File modeReturns failure or success with parameters 2/2.|
+|0x50|Close file|S|Closes file opened with 0x4F command. No response sent.|
+|0x5A|Start of running pro­gram list|C|Response to 0x5D command that signals the start of a list of running pro­grams.Packet is empty with parameters 3/Res1.|
+|0x5B|End of running pro­gram list|C|Response to 0x5D command that signals the end of a list of running pro­grams.Packet is empty with parameters 3/Res1.|
+|0x5C|Running program|C|Response to 0x5D command that contains the first executable module for asingle process. One packet is sent per process.Packet contains:[24] - PROCESSENTRY32.th32ProcessID[4] - length of executable module name[var] - length of executable module|
+|0x5D|List running programs|S|Sends a list of executable names for running processes. Replies with a 0x5Aresponse, followed with a 0x5C packet for each executable, and ends with a0x5B response.Client uses the CreateToolhelp32Snapshot() API function followed by Pro­cess32First()/Process32Next() to list all processes. The executable name isthe module name returned by Module32First().|
+|0x5E|Kill process|S|Kills a running process.Packet contains:[4] - Process IDReturns failure or success with parameters 3/Res1.|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 24
+|0x5F|Run program|S|Runs a program already present on the client.Packet contains:[4] - Command line length[var] - Command lineReturns success or failure with parameters 3/Res1.|
+|---|---|---|---|
+|0x72|Unknown - open con­nection B?|S|Creates multiple new threads and a new C2 connection (via full handshake)with connection number 11.Packet contains:[4] - Unknown length[var] - Unknown value (if 0 < length < 80000)Returns success or failure with parameters 11/11. If successful, containsthe following payload:[4] - Unknown length[var] - Unknown (v2 + 808)[4] - Unknown value|
+|0x73|Unknown - remove con­nection B?|S|May relate to uninstalling.Packet contains:[4] - Process IDKills the process with given process ID, and closes a socket. Returns successor failure with parameters 11/11. If failure, contains the following payload:[4] - Process ID[4] - Unknown length[var] - Unknown (v2 + 808)|
+|0x82|Number of services|C|Response to 0x85 command with the number of services on the system.Packet contains:[4] - Number of services returned by EnumServicesStatusA()Response parameters are 5/5.|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 25
+|0x84|Service information|C|Response to 0x85 command with details on a service.Packet contains:[4] - Service handle[4] - Current state[4] - Start type[4] - Error control[4] - Length of service name[var] - Service name[4] - Length of service display name[var] - Service display name[4] - Length of service binary path[var] - Service binary path[4] - Length of service description[var] - Service description[4] - Length of service start name[var] - Service start nameResponse parameters are 5/5.|
+|---|---|---|---|
+|0x85|List services|S|Lists all services on the system. Sends a 0x82 response with the number ofservices, then 0x84 responses with service details.|
+|0x86|Start service|S|Starts a service on the system.Packet contains:[4] - Length of service name[var] - Service nameReturns success with parameters 5/5 if service is started.|
+|0x87|Control service|S|Sends a control message to a service on the system.Packet contains:[4] - Length of service name[var] - Service name[4] - Service control parameterService control parameters are:1 - stop2 - pause3 - continueReturns success with parameters 5/5 with the payload:[4] - Service current state|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 26
+|0x88|Create service|S|Creates a new service on the system.Packet contains:[4] - Service name length[var] - Service name[4] - Display name length[var] - Display name (set in CreateServiceA())[4] - Binary path name length[var] - Binary path name[4] - Display name length[var] - Display name (set by ChangeServiceConfig2A())[4] - Start typeReturns success or failure with parameters 5/5. If success, contains the fol­lowing payload:[4] - Service handle[4] - Current state[4] - Start type[4] - Error control[4] - Length of service name[var] - Service name[4] - Length of service display name[var] - Service display name[4] - Length of service binary path[var] - Service binary path[4] - Length of service description[var] - Service description[4] - Length of service start name[var] - Service start name|
+|---|---|---|---|
+|0x89|Delete service|S|Deletes a service from the system.Packet contains:[4] - Service name length[var] - Service nameReturns success or failure with parameters 5/5.|
+|0x8A|Set service options|S|Changes the display name and start type of a service.Packet contains:[4] - Service name length[var] - Service name[4] - Display name length[var] - Display name (max 256 chars)[4] - Display name length[var] - Display name (max 512 chars)[4] - Service start typeReturns success or failure with parameters 5/Res2|
+|0x96|Enumerate registrykeys|S|Opens a registry key and enumerates its subkeys. Replies with an 0x97packet with subkey information.Packet contains:[4] - Registry key name length[var] - Registry key name|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 27
+|0x97|Enumerate registrykeys response|C|Contains a list of all the subkey names for a given registry key.Packet contains:[4] - Number of subkeys (N)[var, N times] : [4] - Subkey name length[var] - Subkey nameParameters are set to 6/6.|
+|---|---|---|---|
+|0x98|Registry key last writetime query|S|Requests the last write time on a specified registry key and returns the infor­mation in a 0x99 packet.Packet contains:[4] - Registry key name length[var] - Registry key name|
+|0x99|Registry key last writetime response|C|Contains the last write time of a registry key.Packet contains:[8] - Last write time (_FILETIME structure)Parameters are set to 6/6.|
+|0x9A|Enumerate registry keyvalues|S|Opens a registry key and enumerates its values. Replies with a 0x9B packetwith the number of values and maximum size values. Sends a 0x9C packetfor each value, then signifies the end of the list with a 0x9D packet.Packet contains:[4] - Registry key name length[var] - Registry key name|
+|0x9B|Start of registry keyvalue enumeration list|C|Response to the 0x9A command signifying the start of a registry key valueenumeration.Packet contains:[4] - Number of values associated with the registry key[4] - Max value name length[4] - Max value lengthParameters are set to 6/6.|
+|0x9C|Registry key value enu­meration item|C|Response to the 0x9A command signifying a registry key value.Packet contains:[4] - Type[4] - Value name size[var] - Value name[4] - Value data size[var] - Value dataParameters are set to 6/6.|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 28
+|0x9D|End of registry keyvalue enumeration list|C|Response to the 0x9A command signifying the end of a registry key valueenumeration.Parameters are set to 6/6.|
+|---|---|---|---|
+|0x9F|Delete registry keyvalue|S|Deletes a value from a registry key.Packet contains:[4] - Registry key name length[var] - Registry key name[4] - Registry key value length[var] - Registry key valueReturns success or failure with parameters set to 6/6.|
+|0xA0|Change registry keyvalue|S|Changes a value of a registry key.Packet contains:[4] - Registry key name length[var] - Registry key name[4] - Registry key old value length[var] - Registry key old value[4] - Registry key new value length[var] = Registry key new valueReturns success or failure with parameters set to 6/6.|
+|0xA1|Create empty registrykey value|S|Creates a registry key value of a specified type with no value.Packet contains:[4] - Registry key name length[var] - Registry key name[4] - Registry key value name length[var] - Registry key value name[4] - Registry key value typeReturns success or failure with parameters set to 6/6.|
+|0xA2|Create registry key|S|Creates a registry key. Can be a subkey.Packet contains:[4] - Registry key name length[var] - Registry key nameReturns success or failure with parameters set to 6/6.|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 29
+|0xA3|Set registry key typeand value|S|Sets a registry key type and value.Packet always contains:[4] - Registry key name length[var] - Registry key name[4] - Registry value name length[var] - Registry value name[4] - Registry value typeThe value then can take a different form based on the value type.Value type 0 (empty):No payload.Value type 1 (REG_SZ, null terminated string):[4] - Registry value length[var] - Registry valueValue type 3 (REG_BINARY, raw binary data):[4] - Registry value length[var] - Registry valueValue type 4 (REG_DWORD, double word):[4] - Registry valueReturns success or failure with parameters 6/6.|
+|---|---|---|---|
+|0xA4|NOP|S|Does nothing. Possibly an unimplemented or deleted function.|
+|0xA5|Delete registry key|S|Deletes a registry key. Can be a subkey.Packet contains:[4] - Registry key name length[var] - Registry key nameReturns success or failure with parameters 6/6.|
+|0xB6|Keylogger response|C|Sends keylogger data from the keylogger buffer file.Keylogger data:[4] - Length[1] - All bytes read? 1 or 0[var] - Keylogger dataParameters are set to the output of function 4 in the class C vtable?|
+|0xB8|Keylogger data request|S|Requests keylogger data in a 0xB6 packet.|
+CITIZEN LAB TECHNICAL BRIEF: IEXPL0RE RAT 30
+|0xC8|Unknown - get a screen­shot?|S|Looks suspiciously like taking a screenshot.Packet contains:[2] - Unknown[2] - Unknown[1] - UnknownReplies with failure or success with parameters 8/8. If success, contains thefollowing fields:[2] - Monitor width size (X) in pixels[2] - Monitor height size (Y) in pixels[4] - Unknown[4] - Unknown size (screenshot?)[var] - Unknown (screenshot?)|
+|---|---|---|---|
+|0xCA|Send keyboard ormouse event|S|Packet contains:[4] - Unknown[4] - Extra information for keybd_event or mouse_event[4] - Flags for keybd_event or mouse_event[4] - Vk for keybd_event[4] - x coordinate for mouse or Vk for keyboard[4] - y coordinate for mouse[4] - Data for mouse event|
+|0xCB|Downloads a file|S|Downloads a file to %temp%\off.dll.Packet contains:[2] - Unknown[2] - Unknown[2] - Unknown[4] - Data length[4] - Unknown length[var] - Unknown[4] - Unknown length[var] - Unknown[4] - File data length[var] - File dataWrites log information on the size of the downloaded file to c:\aaa\ccc.txt.|

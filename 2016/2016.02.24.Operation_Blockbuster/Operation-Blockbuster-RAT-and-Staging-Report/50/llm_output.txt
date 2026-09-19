@@ -1,0 +1,74 @@
+
+
+
+Sentence : Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 47
+supports all of the same commands as command base 0x1E10 in RomeoWhiskey-One with the exception that the
+command for establishing a proxy/relay between the malware and an endpoint ( 0x1E17 ) has been replaced by the Proxy
+channel. RomeoWhiskey-Two’s RAT channel introduced a new command ( 0x1E10 ) and a new response code ( 0x1E31 ) as
+seen in Table 13-4.
+|COMMAND NUMBER|DESCRIPTION|
+|---|---|
+|0x1E10|“Knock” on remote host port - Test if a connection is possible as the socket is immediately closedon success. Basically this is a port ping. Returns a success status if the port responses, otherwisereturns a failure status.|
+|0x1E31|[Response code] RAT channel active acknowledgment|
+|0x1E32|[Response Code]|
+Table 13-4: RomeoWhiskey-Two’s Additional Supported RAT Channel Commands and their Command Identifier Values
+The Proxy channel in RomeoWhiskey-Two allows for the construction of a ghost network on top of existing
+infrastructure by linking RomeoWhiskey-Two infections to form virtual point-to-point sessions. After entering
+the Proxy channel, the client transmits a 112-byte structure (Table 13-5) that defines the hops (up to 10) used by the
+virtual connection in much the same way IP packets can specify Loose Source Routing or Strict Source Routing. The
+RomeoWhiskey-Two instance parses the Proxy channel command record sent by the client and determines the next hop,
+then makes a connection to the endpoint. The command record generally specifies the route as a predefined sequence of
+RomeoWhiskey-Two nodes to use, but, if the operations flag (offset 104) is set to 0xC2672253, then the array of hops is
+used to randomly select the next node for the connection.
+|OFFSET|SIZE|DESCRIPTION|
+|---|---|---|
+|0|80 Bytes [array ofendpoints]|Array of 10 records consisting of an IP (DWORD), a port (WORD) and a 2-byte unusedfield. Each record specifies a possible next hop in the virtual circuit.|
+|80|4 Bytes (DWORD)|Next hop index in the array of hop records (ofset 0)|
+|84|4 Bytes (DWORD)|Maximum hops|
+|88|4 Bytes (DWORD)|Final endpoint’s IP address (as DWORD)|
+|92|2 Bytes (DWORD)|Final endpoint’s port (as WORD)|
+|94|2 Bytes|Unused|
+|96|4 Bytes (DWORD)|Endpoint IP address (as DWORD)|
+|100|2 Bytes (WORD)|Endpoint port (as WORD)|
+|102|2 Bytes|Unused|
+|104|4 Bytes (DWORD)|Operations flags|
+|108|4 Bytes (DWORD)|Connection timeout|
+Table 13-5: RomeoWhiskey-Two’s Proxy Channel Command Record Data Structure
+Once the next hop has been determined by RomeoWhiskey-Two, a connection to the hop is made and the authentication
+handshake is performed. Earlier in this section it was pointed out that the algorithm used by the authentication handshake
+ultimately serves no value in terms of authentication. When viewed in the context of the Proxy channel, the method for the
+handshake begins to make a bit more sense, since the same function for performing the handshake is used here to establish a
+connection between one RomeoWhiskey-Two instance and another RomeoWhiskey-Two instance. Furthermore, taking into
+consideration that the handshake is no longer providing any real form of authentication, the use of asymmetric cryptography
+for the RAT channel’s authentication makes significantly more sense to the overall design of the malware.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RomeoWhiskey-One", "type" : "ACTO"},
+        {"id": 2, "description": "RomeoWhiskey-Two", "type" : "ACTO"},
+        {"id": 3, "description": "Proxy channel", "type" : "TTPS"},
+        {"id": 4, "description": "0x1E17", "type" : "EXEF"},
+        {"id": 5, "description": "0x1E10", "type" : "EXEF"},
+        {"id": 6, "description": "0x1E31", "type" : "EXEF"},
+        {"id": 7, "description": "0x1E32", "type" : "EXEF"},
+        {"id": 8, "description": "ghost network", "type" : "NETP"},
+        {"id": 9, "description": "RAT channel", "type" : "TTPS"},
+        {"id": 10, "description": "Loose Source Routing", "type" : "NETP"},
+        {"id": 11, "description": "Strict Source Routing", "type" : "NETP"},
+        {"id": 12, "description": "operations flag (offset 104) set to 0xC2672253", "type" : "REGI"},
+        {"id": 13, "description": "authentication handshake algorithm", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name" : "includes command"},
+        {"source": 2, "target": 5, "rel_name" : "introduces new command"},
+        {"source": 2, "target": 6, "rel_name" : "introduces response code"},
+        {"source": 2, "target": 7, "rel_name" : "introduces response code"},
+        {"source": 2, "target": 3, "rel_name" : "includes feature"},
+        {"source": 3, "target": 8, "rel_name" : "constructs"},
+        {"source": 3, "target": 9, "rel_name" : "uses channel"},
+        {"source": 3, "target": 10, "rel_name" : "supports routing method"},
+        {"source": 3, "target": 11, "rel_name" : "supports routing method"},
+        {"source": 3, "target": 12, "rel_name" : "uses flag for random selection"},
+        {"source": 3, "target": 13, "rel_name" : "uses handshake algorithm"}
+    ]
+}

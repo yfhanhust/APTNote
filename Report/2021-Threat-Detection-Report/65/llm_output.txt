@@ -1,0 +1,175 @@
+
+
+
+Sentence : Detection
+Collection requirements
+Process monitoring
+Process monitoring is a minimum requirement for reliably detecting Process
+Injection. Even though injection can be invisible to some forms of process
+monitoring, the effects of the injection become harder to miss once you
+compare process behaviors against expected functionality.
+API monitoring
+If possible, monitor API system calls that include ~~CreateRemoteThread~~ in
+Windows. This will indicate a process is using the Windows API to inject code
+into another process. Security teams should monitor for ~~ptrace~~ system calls on
+Linux as well. Such monitoring would also include data sources that track when
+a handle to a target process is requested and/or granted, like Sysmon Event
+ID 10 .
+Command-line monitoring
+Certain endpoint detection and response (EDR) products and Sysmon can
+provide alerting on suspected Process Injection activity. With either tool,
+monitoring for suspicious command-line parameters can be an effective way
+of observing and detecting potential Process Injection at scale. Some tools are
+purpose-built to have their injection arguments supplied at the command line,
+like ~~mavinject.exe~~ ~~.~~ So while command-line monitoring can’t catch all forms of
+injection, it can certainly help.
+Detection opportunities
+The detection of Process Injection involves hunting for legitimate processes
+doing unexpected things. This may involve processes making external
+network connections and writing files or processes spawning with unexpected
+command-line arguments.
+Unusual process behaviors
+Some specific patterns of behavior to look out for:
+      - a process that appears to be ~~**svchost.exe**~~ making network connections on
+
+l [T1055: Process Injection]
+56
+2021 Threat Detection Report
+tcp/447 and tcp/449, a behavior consistent with TrickBot
+      - a process that appears to be ~~**notepad.exe**~~ making external
+
+network connections
+      - a process that appears to be ~~**mshta.exe**~~ calling ~~**CreateRemoteThread**~~ to
+
+inject code
+      - a process that appears to be ~~**svchost.exe**~~ executing without corresponding
+
+command lines
+Unusual paths and command lines
+Some good examples of odd paths or command lines that may
+indicate injection:
+• ~~rundll32.exe~~ ~~,~~ ~~regasm.exe~~ ~~,~~ ~~regsvr32.exe~~ ~~,~~ ~~regsvcs.exe~~ ~~,~~ ~~svchost.exe~~ ~~,~~ and
+~~wefault.exe~~ process executions without command-line options may
+indicate they are targets of Process Injection
+      - Microsoft processes such as ~~**vbc.exe**~~ with command lines including
+
+~~/scomma~~, ~~/shtml~~, or ~~/test~~ may indicate the injection of Nirsoft tools for
+credential access
+      - Linux processes with ~~**memfd:**~~ in their path indicate they were spawned from
+
+code injected into another process
+Injection into LSASS
+Since injection into ~~lsass.exe~~ is common, impactful, and frequently suspicious,
+it deserves to be called out individually. To that point, it would be worth your
+time to determine and enumerate the processes in your environment that
+routinely or occasionally obtain a handle to ~~lsass.exe~~ . Any access outside of the
+baseline should be treated as suspicious. Discerning suspicious from malicious
+might involve considering the reputation of the unusual process that requested
+the access to ~~lsass.exe~~ (e.g., ~~powershell.exe~~ process with an unexpected
+command line, access requests from from an unsigned executable located in a
+world-writable directory like ~~%APPDATA%~~ or ~~%ProgramData%~~, etc.).
+Weeding out false positives
+The analytics that produced the most false positives in our dataset came from
+looking for ~~CreateRemoteThread~~ calls from any and all processes. Many tools
+in Windows use Process Injection legitimately for debugging and virtualization.
+If you want to write analytics around this API call, focus them on unusual source
+processes, such as Microsoft Office products and tools that commonly deliver
+first-stage malware like scripts and Mshta.
+l [T1055: Process Injection]
+Shane Welcher
+D E T EC T I O N
+E N G I N E E R
+Shane has a wide range of security
+experience: data analysis, forensics,
+debugging malware, penetration
+testing, and network and system
+administration. He is passionate
+about open source projects and was
+the highest community contributor to
+the Atomic Red Team GitHub project
+before joining Red Canary. In his free
+time, Shane enjoys studying different
+approaches to exploiting networks
+and applications, assisting others with
+open-source SIEM solutions,
+and traveling.
+57
+2021 Threat Detection Report
+Further, processes like ~~lsass.exe~~ and ~~svchost.exe~~ are both common targets for
+Process Injection and common processes in general. As such, baselining normal
+against abnormal will be an important step in fighting false positives. Consider
+the following:
+      - In some environments, you might be able to reliably detect on specific
+
+processes injecting into ~~lsass.exe~~ ~~.~~ However, you might achieve better
+detection outcomes by correlating cross processes with executing
+processes, including LOLBINs like MSbuild, PowerShell, Wscript, Cscript,
+Msiexec, Rundll32, and more
+      - Additionally, ~~**svchost.exe**~~ is a common process targeted for Process
+
+Injection. Due to the large volume, taking the approach of identifying
+known processes that may execute code can help reduce the amount of
+noise generated
+l [T1055: Process Injection]
+OVERALL RANK
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "CreateRemoteThread", "type" : "EXEF"},
+        {"id": 2, "description": "ptrace", "type" : "EXEF"},
+        {"id": 3, "description": "Sysmon Event ID 10", "type" : "REGI"},
+        {"id": 4, "description": "mavinject.exe", "type" : "EXEF"},
+        {"id": 5, "description": "svchost.exe", "type" : "EXEF"},
+        {"id": 6, "description": "tcp/447", "type" : "NETP"},
+        {"id": 7, "description": "tcp/449", "type" : "NETP"},
+        {"id": 8, "description": "notepad.exe", "type" : "EXEF"},
+        {"id": 9, "description": "mshta.exe", "type" : "EXEF"},
+        {"id": 10, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 11, "description": "regasm.exe", "type" : "EXEF"},
+        {"id": 12, "description": "regsvr32.exe", "type" : "EXEF"},
+        {"id": 13, "description": "regsvcs.exe", "type" : "EXEF"},
+        {"id": 14, "description": "wefault.exe", "type" : "EXEF"},
+        {"id": 15, "description": "vbc.exe /scomma", "type" : "EXEF"},
+        {"id": 16, "description": "vbc.exe /shtml", "type" : "EXEF"},
+        {"id": 17, "description": "vbc.exe /test", "type" : "EXEF"},
+        {"id": 18, "description": "lsass.exe", "type" : "EXEF"},
+        {"id": 19, "description": "powershell.exe", "type" : "EXEF"},
+        {"id": 20, "description": "%APPDATA%", "type" : "SYSP"},
+        {"id": 21, "description": "%ProgramData%", "type" : "SYSP"},
+        {"id": 22, "description": "msbuild", "type" : "EXEF"},
+        {"id": 23, "description": "PowerShell", "type" : "EXEF"},
+        {"id": 24, "description": "Wscript", "type" : "EXEF"},
+        {"id": 25, "description": "Cscript", "type" : "EXEF"},
+        {"id": 26, "description": "Msiexec", "type" : "EXEF"},
+        {"id": 27, "description": "Rundll32", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 9, "rel_name" : "used by"},
+        {"source": 1, "target": 5, "rel_name" : "used by"},
+        {"source": 2, "target": 9, "rel_name" : "used by"},
+        {"source": 3, "target": 5, "rel_name" : "logged by"},
+        {"source": 4, "target": 5, "rel_name" : "can inject into"},
+        {"source": 5, "target": 6, "rel_name" : "makes connection to"},
+        {"source": 5, "target": 7, "rel_name" : "makes connection to"},
+        {"source": 8, "target": 6, "rel_name" : "makes connection to"},
+        {"source": 9, "target": 1, "rel_name" : "calls"},
+        {"source": 10, "target": 5, "rel_name" : "can inject into"},
+        {"source": 11, "target": 5, "rel_name" : "can inject into"},
+        {"source": 12, "target": 5, "rel_name" : "can inject into"},
+        {"source": 13, "target": 5, "rel_name" : "can inject into"},
+        {"source": 14, "target": 5, "rel_name" : "can inject into"},
+        {"source": 15, "target": 5, "rel_name" : "can inject into"},
+        {"source": 16, "target": 5, "rel_name" : "can inject into"},
+        {"source": 17, "target": 5, "rel_name" : "can inject into"},
+        {"source": 18, "target": 5, "rel_name" : "can inject into"},
+        {"source": 19, "target": 18, "rel_name" : "can request handle to"},
+        {"source": 20, "target": 19, "rel_name" : "located in"},
+        {"source": 21, "target": 19, "rel_name" : "located in"},
+        {"source": 22, "target": 5, "rel_name" : "can inject into"},
+        {"source": 23, "target": 5, "rel_name" : "can inject into"},
+        {"source": 24, "target": 5, "rel_name" : "can inject into"},
+        {"source": 25, "target": 5, "rel_name" : "can inject into"},
+        {"source": 26, "target": 5, "rel_name" : "can inject into"},
+        {"source": 27, "target": 5, "rel_name" : "can inject into"}
+    ]
+}

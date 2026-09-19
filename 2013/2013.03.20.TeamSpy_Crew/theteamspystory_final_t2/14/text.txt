@@ -1,0 +1,80 @@
+DllMain
+The Module execution starts from the initialization procedure. First, the code searches for “tv.cfg” file in local directory and
+then common system paths, such as C:\Windows, C:\Windows\System32.
+The code uses non-standard way to pass some arguments to the called function. This is most likely done to harden manual
+analysis or break automated analysis of the code.
+PAGE 25 | The ‘TeamSpy’ Story - Abusing TeamViewer in Cyberespionage Campaigns | 20 March 2013
+Non-standard push of the “tv.cfg” string offset to the stack
+If the tv.cfg file wasn't found the process exits. If it was found, the module gets unique system ID, which is a hashed value of
+system drive Volume Serial Number. To hash the Volume Serial Number two types of hash algorithms are used: custom
+SHL/SHR/OR-based algorithm and then MD5. The result is stored in a hex-string which is used as a decryption key for the tv.cfg
+and part of the code in current file. Alternatively a hash of 792 bytes of executable code from TeamViewer.exe is used for
+tv.cfg decryption.
+After that the module decrypts tv.cfg using RC4 algorithm. An example of decrypted tv.cfg is presented below:
+szUserAgent "Mozilla5.0"
+szadminstat "tv/getinfo.php"
+szadminhost "newslite.org"
+szfilehost ""
+nTimeOut "10000"
+nStartIdleTime "60"
+nregKey ""
+szSubKey "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+szValueName "svchost"
+szteampass "1234"
+nVideo "4"
+szlogftp "bannetwork.org"
+szusername "[removed]"
+szpassword "[removed]"
+szlogkey "sysenter"
+PAGE 26 | The ‘TeamSpy’ Story - Abusing TeamViewer in Cyberespionage Campaigns | 20 March 2013
+szlogstat "log.php"
+szpostdata "id="
+nkilltvwin7 ""
+nkilltvwinXp ""
+nfakedel "1"
+After decrypting the config, the module checks if “szadminhost” is found inside. If it is not there, the executions stops.
+Then the module decrypts string data and extra code from its own data and code section. The data is stored in TLS section of
+the parent process.
+After using some of the file parts, the module overwrites them with 0-byte values to change the module in memory and
+possibly avoid detection or dumping of the module. This is the end of initialization part.
+Next, it starts main procedure, which loads export functions from the real avicap32.dll located in system directory
+(C:\Windows\System32). It also gets current Windows OS version and creates autorun key, under value specified in the tv.cfg.
+Currently it is
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\svchost
+Then the module patches the hosting TeamViewer process. It intercepts calls to the following system API functions:
+advapi32.dll: RegCreateKeyExW
+advapi32.dll: RegQueryValueExW
+kernel32.dll: CreateProcessW
+kernel32.dll: CreateMutexA
+kernel32.dll: CreateFileW
+kernel32.dll: CreateDirectoryW
+kernel32.dll: DeleteFileW
+shell32.dll: ShellExecuteExW
+user32.dll: SendMessageW
+user32.dll: CreateDialogParamW
+user32.dll: GetClassInfoExW
+user32.dll: RegisterClassExW
+user32.dll: CreateWindowExW
+user32.dll: IsWindowVisible
+user32.dll: GetDlgItem
+PAGE 27 | The ‘TeamSpy’ Story - Abusing TeamViewer in Cyberespionage Campaigns | 20 March 2013
+user32.dll: ShowWindow
+user32.dll: SetWindowTextW
+user32.dll: MessageBoxW
+wintrust.dll: WinVerifyTrust
+One of the functions, SetWindowTextW, is quite interesting and contains extra code to work with C2. This functions when it is
+executed the first time has a trigger to start a couple of new threads that communicate with C2 server to ping it and get
+commands via HTTP GET request using parameters specified in tv.cfg:
+http:///tv/getinfo.php?id=...&pwd=...&stat=1
+The server is expected to answer with one of the command from the list below:
+Next, it creates a Windows Firewall rule to allow outgoing connections for the current process, by running: “ netsh firewall set
+allowedprogram  tv ”
+After that the module creates several threads, described below and proceeds to the second stage.
+In the second stage the module loads “kl.dll” library from the current directory and imports two functions: “Init” and “Rdp”.
+After that it calls “Init” function, waits 32 milliseconds allowing kl.dll to initialize and calls “Rdp” function from the same
+library. The result of that call is submitted to the C2 via HTTP Post with Content-Type: application/x-www-form-urlencoded
+header value.
+PAGE 28 | The ‘TeamSpy’ Story - Abusing TeamViewer in Cyberespionage Campaigns | 20 March 2013
+In parallel a new thread is created, which waits for a signal to search *.bin files in the module directory, encrypt with szlogkey
+value from tv.cfg using RC4 algorithm and upload to the FTP server specified in the tv.cfg. After uploading the files are deleted
+from the filesystem using simple DeleteFileA API call.

@@ -1,0 +1,162 @@
+
+
+
+Sentence : Sequence C
+Stuxnet has a second sabotage strategy targeting S7-417 PLCs. However, the routine is incomplete and the PLC
+code, referred to as sequence C, is never purposefully copied onto a PLC or executed. While we can speculate the
+PLC code injection was active at a previous time, sequence C itself appears unfinished, contains unimplemented
+cases, unused code blocks, and test or debug code. This sequence is more complex than sequences A or B. It
+contains more blocks of code and data (32), and also generates data blocks on-the-fly using specific SFC blocks.
+The figure below represents sequence C.
+Figure 28
+Connections Between Blocks, Sequence C
+Sequence C Injection
+Stuxnet hooks the Step 7 write function, so that whenever someone updates code on the PLC, sequence C is cop­
+ied to the PLC. However, because code for a single function in the DLL is missing, sequence C is never properly
+activated.
+The S7-417 PLC code-installation routine starts when an operator of the target system performs a write opera­
+tion to a S7-417 PLC, such as updating code. The SDB7 is read and DB8061 (consisting of Stuxnet-specific data)
+is created based on the values in SDB7. However, due to the incomplete function in the DLL, DB8061 is never cre­
+ated and the data contained in DB8061 is unknown. In particular, the reference to the function exists, but when
+called, a Windows exception occurs. The exception is caught and execution resumes as if DB8061 was created.
+Figure 29
+Code where an exception is thrown
+```
+    .text:1000D947 68 70 C8 03 10 push  offset unk _ 1003C870
+    .text:1000D94C 8D 45 FF  lea   eax, [ebp+var _ 1]
+    .text:1000D94F 50  push  eax
+    .text:1000D950 E8 93 47 00 00 call  _ _ CxxThrowException@8
+    .text:1000D950
+```
+The blocks that compose sequence C are then written to the PLC, including the modifications of SDB0 and SDB4,
+and OB80 is created as well, if it did not previously exist. OB80 is the time-event error interrupt and is called if
+the maximum cycle time is exceeded. SDB0 is expected to contain records holding CPU configuration informa­
+tion. The block is parsed and a static 10-byte long record is inserted into the block. The purpose of this insertion
+is unknown. However, contrary to what happens with sequences A and B, no specific values are searched in the
+block. Moreover, record 13 of SDB0 can be modified.
+The creation timestamp of SDB0 is incremented, and this timestamp is replicated to a specific location in SDB4
+for consistency. Sequence C is written and Stuxnet also makes sure an OB80 exists, or else creates an empty
+one.
+Later, the modification of OB1 (the entry point) that is needed to execute sequence C never occurs. The code to
+modify OB1 requires the successful completion of the missing function and since the function throws an excep­
+tion, OB1 is not modified and the remaining sequence C code blocks are never executed.
+Even if OB1 is modified to execute sequence C, the missing (or an existing unrelated) DB8061 would cause
+sequence C to operate improperly. Finally, even if OB1 was modified and DB8061 contained correct values,
+unimplemented cases in sequence C would likely cause it to operate unexpectedly. Thus, sequence C appears
+unfinished.
+Stuxnet also hooks Step 7 to monitor for writes specifically to SDB7. When SDB7 is written, Stuxnet will modify
+three bytes in DB8061. Thus, if DB8061 already exists coincidentally on the target PLC, three values will acci­
+dentally be modified, potentially corrupting the PLC operation.
+The following provides a step-by-step summary of the failed injection process:
+
+
+Read SDB7
+
+
+Attempt to generate DB8061, which fails
+
+
+Modify SDB0, SDB4
+
+
+Copy sequence C blocks to the PLC (do not overwrite existing
+
+
+blocks)
+5. Create OB80 if it does not exist
+
+Modify OB1 (does not occur)
+
+Sequence C Behavior
+The following describes the behavior of sequence C. However,
+these behaviors never happen due to the missing function in the
+DLL. Sequence C consists of 40 blocks, 26 containing Stuxnet
+code, 4 with standard code blocks, and 10 containing data.
+Sequence C consists of a state machine with eight states.
+DB8061 is critical to the operation of sequence C and because
+DB8061 is missing, the exact behavior of sequence C is unknown.
+Figure 30
+Eight states in sequence C
+State 0: Wait
+The code expects six groups of 164 peripherals. Based on knowledge from the S7-315 code, these could be six
+cascades containing 164 centrifuges each. Stuxnet monitors the groups, and the sum of the activity times for all
+groups must be greater than 297 days or for a single group greater than 35 days. In addition, all groups must be
+active for at least three days.
+State 1: Recording
+DB8064 through DB8070 (seven blocks) are created and each contains three sub-blocks for a total of 21 subblocks. The input area of an I/O image is copied into each sub-block with a one second interval between copies,
+forming a 21 second recording of the input area. The input area contains information being passed to the PLC
+from a peripheral. (For example, the current state of a valve or the temperature of a device.)
+State 2 - 6: Sabotage
+When the peripheral output is written to, sequence C intercepts the output and ensures it is not written to the
+process image output. The output is the instructions the PLC sends to a device to change its operating behavior.
+By intercepting the peripheral output, Stuxnet prevents an operator from noticing unauthorized commands sent
+to the peripheral.
+Each cascade of 164 peripherals is grouped into 15 clusters (0 – 14). Each cluster is affected, but not every cen­
+trifuge within a cluster is affected. The following table shows for each group how many peripherals within each
+cluster are affected.
+|Table 7|Col2|Col3|Col4|Col5|Col6|Col7|Col8|Col9|Col10|Col11|Col12|Col13|Col14|Col15|Col16|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|Affected peripherals within each cluster|
+|ClusterNumber|0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|
+|Peripherals inthe Cluster|2|2|4|6|8|10|12|16|20|24|20|16|12|8|4|
+|PeripheralNumber|0-1|2-3|4-7|8-13|14-21|22-31|32-43|44-59|60-79|80-103|104-123|124-139|140-151|152-159|160-163|
+|Peripheralsaffected|2|2|2|4|6|8|10|13|14|0|14|13|10|8|4|
+The particular peripherals within the clusters that are affected are pseudo-randomly chosen. For example, clus­
+ter 4 contains 8 peripherals (peripheral 14 to 21). According to the table, 6 out of 8 are affected. One peripheral
+within the cluster is pseudo-randomly selected. Let’s say peripheral 20 is selected. Stuxnet will then sabotage
+peripherals 20, 21, 14, 15, 16, and 17. If an error occurs when attempting to sabotage one of the peripherals, the
+next one is selected. For example, if an error occurs when affecting peripheral 15, then peripherals 16, 17, and
+now 18 would be targeted.
+A total of 110 peripherals will be affected out of 164.
+While this behavior occurs across the four states, state 3 takes place in two parts, with a two minute break in
+between. The transition from state 5 to state 6 takes place after 2 minutes, 53 seconds.
+State 6 is the state where the writing to the image/peripheral output takes place. This state lasts 6 minutes, 58
+seconds.
+How the peripherals are affected is unknown. Data is written to the image/peripheral output changing their
+behavior, but the data to be written is within DB8061, which is missing.
+State 7: Reset
+The seven dynamically created data blocks (DB8064-DB8070) are deleted and many of the data values in the
+data blocks are reset. State 7 can also be reached if any error occurs or if more than seven seconds elapses
+between two OB1 cycles.
+A return to state 1 will occur, resulting in a cycle consisting of waiting approximately 35 days, followed by a seven
+minute attack phase.
+Thus, while the clear intention of the S7-417 code is unknown, key bits may support the theory of a secondary
+attack strategy on centrifuge systems within a cascade.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Stuxnet", "type" : "ACTO"},
+        {"id": 2, "description": "S7-417 PLCs", "type" : "MTCP"},
+        {"id": 3, "description": "Sequence C", "type" : "DOCF"},
+        {"id": 4, "description": "Step 7 write function", "type" : "EXEF"},
+        {"id": 5, "description": "DLL with missing function", "type" : "EXEF"},
+        {"id": 6, "description": "DB8061 (Stuxnet-specific data)", "type" : "DOCF"},
+        {"id": 7, "description": "SDB7", "type" : "DOCF"},
+        {"id": 8, "description": "SDB0", "type" : "DOCF"},
+        {"id": 9, "description": "SDB4", "type" : "DOCF"},
+        {"id": 10, "description": "OB80 (time-event error interrupt)", "type" : "EXEF"},
+        {"id": 11, "description": "OB1 (entry point)", "type" : "EXEF"},
+        {"id": 12, "description": "DB8064-DB8070 (dynamically created data blocks)", "type" : "DOCF"},
+        {"id": 13, "description": "Peripheral output", "type" : "TAMP"},
+        {"id": 14, "description": "I/O image input area", "type" : "TAMP"},
+        {"id": 15, "description": "Clusters (0-14)", "type" : "TAMP"},
+        {"id": 16, "description": "Peripheral groups (six cascades of 164 centrifuges each)", "type" : "MTCP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "targets"},
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 1, "target": 4, "rel_name" : "hooks"},
+        {"source": 1, "target": 5, "rel_name" : "missing_function_in"},
+        {"source": 1, "target": 6, "rel_name" : "creates_based_on_values_from_SDB7"},
+        {"source": 1, "target": 7, "rel_name" : "reads"},
+        {"source": 1, "target": 8, "rel_name" : "modifies_and_inserts_data_into"},
+        {"source": 1, "target": 9, "rel_name" : "replicates_timestamp_to"},
+        {"source": 1, "target": 10, "rel_name" : "ensures_exists_or_creates"},
+        {"source": 1, "target": 11, "rel_name" : "attempts_to_modify"},
+        {"source": 1, "target": 3, "rel_name" : "writes_blocks_of_to_PLC"},
+        {"source": 6, "rel_name" : "required_for_operation_of", "target": 3},
+        {"source": 3, "target": 12, "rel_name" : "creates_and_deletes_in_state_7"},
+        {"source": 3, "target": 14, "rel_name" : "copies_into_sub-blocks_with_interval"},
+        {"source": 3, "target": 13, "rel_name" : "intercepts_output_to_peripheral"}
+    ]
+}

@@ -1,0 +1,28 @@
+En Route with Sednit
+In order to access the first sectors of the hard drive, the installer employs a technique previously
+seen in the infamous TDL4 bootkit [18], whose code is shown in Figure 9.
+Figure 9. MBR opening code, as seen in a decompiler
+Once this device access is established, the installer simply calls the Windows API function ~~WriteFile~~
+to overwrite the hard drive’s first sectors. It should be noted that this method requires administrative
+rights on the system.
+Second, the installer stores a DLL in the newly created Windows Registry key ~~HKLM\SYSTEM\~~
+~~CurrentControlSet\Control\Lsa\Core Packages~~ . As we will explain later, this binary
+is the user mode component of the bootkit. Additionally, Downdelph itself is stored in the same
+registry path, but in the key named ~~Impersonation Packages~~ .
+These two files are stored in Windows’ Registry following a custom-encrypted data format that
+is also used for the bootkit code initially contained in the installer. More precisely, the data are
+aPLib-compressed [19], then RC4-encrypted, and begin with the following header:
+```
+   struct PackedChunkHeader
+{
+           DWORD magic; // set to 0x203a3320 (:3 in ASCII)
+           DWORD packed_size;
+           DWORD unpacked_size;
+           DWORD key_size;
+           BYTE rc4_ke y[16];
+   };
+```
+The magic 4-byte value “ :3 “ is also written by the bootkit installer at offset
+~~0x19B~~ of the MBR, as a marker to indicate that the hard drive has already
+been infected in the event that the installer is re-executed.
+17

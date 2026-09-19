@@ -1,0 +1,92 @@
+Analysis of the Novter malware
+Novter is a backdoor in the form of an executable file. Immediately after its execution,it performs the
+following anti-debugging and anti-analysis checks:
+
+
+Searching for blacklisted processes and modules by comparing the CRC32 algorithms of their
+names with a list of hardcoded CRC32s
+
+
+Checking if the number of cores is too small
+
+
+Checking if the process is being debugged
+
+
+Checking if the Sleep function is being manipulated
+
+
+If it finds any of aforementioned information, it is then reported to the C&C server. Note that it uses
+different sets of C&C servers for different purposes. One set, for instance, is solely used for anti-analysis
+reporting. After the affected machine’s environment is double-checked and reported, the malware goes to
+sleep for a long time.
+Figure 2. Snippets of code showing how anti-analysis information is reported to the C&C server (top), and
+how the malware is configured to sleep for a certain duration
+The malware then performs the following routines:
+
+Disable processes related to Windows Defender and Windows updates
+
+Set persistence through the following:
+
+
+Dropping a randomly named .HTA file to %APPDATA%\Roaming, where the routine body
+contains a hardcoded string with .HTA file contents and %s markers, which are replaced
+with randomly generated strings at runtime. This .HTA file contains JavaScript code,
+which reads and executes a PowerShell payload from registry.
+
+
+Creating three randomly named registry subkeys in HKLM or HKCU (based on account
+privileges) SOFTAWARE\ . The first two registry subkeys have
+hardcoded templates in the malware body, and the %s strings are randomized in a way
+similarly to how it was done in the .HTA file.
+
+
+
+
+The code stored in both registry subkeys are actually PowerShell scripts. The first script reads
+and executes the second script, which is obfuscated by abusing EmpireProject’s Invoke-PSInject
+open-source project. The third subkey contains the hex-encoded binary of the dropper, as
+shown in Figure 5.
+Figure 3. Code snippet showing the PowerShell script stored in the registry subkeys
+Figure 4. Code snippet showing how the malware is linked in the Run registry key
+- Creating a randomly named link to the .HTA file in the Run registry key, which executes
+
+PowerShell code stored in the first registry subkey. This executes the PowerShell code
+stored in the second registry subkey, which then loads the binary file stored in the third
+registry subkey. Infection from the next reboot of the system thus becomes fileless.
+
+Start a thread that parses an embedded configuration in JSON format and starts regular
+
+heartbeat communication — beacons that informs attackers that the infected machine is
+alive/working — by sending empty POST requests with the “accl” servers specified in the
+configuration file
+Figure 5. Code snippet showing the “accl” servers specified in the configuration file (top), and how the
+configuration file is retrieved (bottom)
+
+Start a thread that queries the “acll” server (shown in Figure 7) to get the dynamic configuration
+
+file. The request interval is six hours; the configuration file is encrypted by RC4 with a hardcoded
+password.
+
+Start a thread that constantly queries the C&C server, and execute a command, if requested, via
+
+the ShellExecute function.
+
+Start communication with one of “accl” servers specified in the dynamic configuration file.
+
+Communication is RC4-encrypted with a hardcoded password. However, this password is
+different from the thread where the configuration file is updated.
+The backdoor commands that Novter supports are:
+  - killall — Terminate a process and delete a file (for all modules)
+
+  - kill — Terminate a process and delete a file (for a specific module)
+
+  - stop — Terminate process without deleting its file (for a specific module)
+
+  - resume — Start a process (for a specific module)
+
+  - modules — Download and execute an additional module
+
+  - update — Download a new version and install the update
+
+  - update_interval — Set an interval between two consecutive update attempts

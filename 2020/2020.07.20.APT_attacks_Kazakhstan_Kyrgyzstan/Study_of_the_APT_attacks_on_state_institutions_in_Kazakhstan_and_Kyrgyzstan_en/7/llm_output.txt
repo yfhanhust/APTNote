@@ -1,0 +1,150 @@
+
+
+
+Sentence : Operating routine
+Using the 5-byte magic number, the installer checks whether the configuration embedded in
+it has encryption. The configuration is then used for the payload functioning. If there is no
+encryption, the program shuts down.
+After that, the malware receives information about the OS version, UAC settings and checks
+whether the user has administrative privileges. A string is formed from obtained data:
+```
+ admin:%d,dwCPBA:%d,dwLUA:%d,om:%d-%d
+```
+Then, the program outputs it via the OutputDebugStringA function.
+Next, the trojan attempts to install its driver. In case of failure, an attempt is made to install
+the module using COM Hijacking.
+After that, the program deletes its file from the disk and terminates its process.
+Driver installation
+It deletes the yyyyyyyyGoogle.sys file from the %WINDIR%\\tracing\\ directory. It
+extracts the desired driver version from its body, depending on the system architecture bit
+widths, and saves it to the specified path. Drivers are stored in the sample being compressed
+via the APLib library and are additionally encrypted by an algorithm based on the XOR
+operation with a single-byte key.
+It then stores its payload in the registry as three modules. It uses [HKLM\\SOFTWARE\
+\Microsoft\\LoginInfo] as its working registry branch. It creates keys in it and saves
+the payload there:
+Video — configuration;
+
+DirectShow — XPath module;
+
+DirectDraw — PayloadDll module.
+The modules are hardcoded in the trojan’s body in a similar form to the driver (using APLib
+and XOR) and are present in two versions — for both 32-bit and 64-bit systems. Each
+module uses its own single-byte key. The modules are saved as a structure:
+```
+ #pragma pack(push,1)
+struct mod
+{
+_DWORD compressed_size;
+ _DWORD decompressed_size;
+ _BYTE data[compressed_size];
+ };
+#pragma pack(pop)
+```
+The data module is decoded, but remains compressed.
+The program then attempts to create a service with autorun and ImagePath to the extracted
+driver. The driver file name is used as the service name.
+If the service cannot be launched via SCManager and the service has already been created,
+an attempt is made to start the driver via ZwLoadDriver .
+To check if the driver is working, the malware attempts to open the \\.\BaiduHips
+device. In case of failure, a second attempt is made after 100 milliseconds. A total of 15
+attempts are made, after which the driver installation is considered incomplete.
+If the driver is running, it sequentially starts the [ %WINDIR%\\System32\\ping.exe],
+[%WINDIR%\\System32\\rundll32.exe %WINDIR%\\System32\\svchost.exe]
+and [%WINDIR%\\System32\\lsass.exe] processes.
+COM Hijacking
+The program saves its modules in the registry the same way as when installing the driver, but
+this time using [HKCU\\SOFTWARE\\Microsoft\\LoginInfo] as the home branch.
+It iterates through the registry keys in the HKU section and searches for a key with a name
+containing the S-1-5-21- substring and does not contain the _Classes substring. Inside
+this key, it creates the Software\\Classes\\CLSID\\{ECD4FC4D-521C-11D0-B792-
+00A0C90312E1}\\ key for Windows 2000, Windows XP, Windows Server 2003, and the
+Software\\Classes\\CLSID\\{B12AE898-D056-4378-A844-6D393FE37956}\\
+key for Windows Vista or later. For this key it sets the %TMP%\\Microsoft\
+\ReplaceDll.dll path as the parameter value (by default). It also creates the
+ThreadingModel parameter with the Apartment value.
+After that, it unpacks the PayloadDll module into the %TMP%\\Microsoft\
+\ReplaceDll.dll directory.
+Artifacts
+The Trojan.XPath.1 file contains leftover debugging information that reveals the paths and
+source code file names:
+```
+ z:\desk_codes\project_xpath\xpathinstaller\client_files.h
+ z:\desk_codes\project_xpath\xpathinstaller\MemLoadDll.h
+xPathInstaller.c
+```
+The original function names are:
+```
+ InstallSecFunDriver
+MyZwLoadDriver
+SetMyLoginInfo
+InstallDrv
+```
+The file also contains various debugging messages:
+The setinfo false string is the most interesting. It contains the 0xACA3 sybmol, which in
+Unicode corresponds to the hieroglyph. This hieroglyph is used in South and North Korean
+writing.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "5-byte magic number", "type" : "TAMP"},
+        {"id": 2, "description": "configuration embedded in installer", "type" : "TAMP"},
+        {"id": 3, "description": "payload functioning", "type" : "TAMP"},
+        {"id": 4, "description": "OS version information", "type" : "OPPS"},
+        {"id": 5, "description": "UAC settings information", "type" : "OPPS"},
+        {"id": 6, "description": "administrative privileges check", "type" : "TAMP"},
+        {"id": 7, "description": "OutputDebugStringA function", "type" : "EXEF"},
+        {"id": 8, "description": "yyyyyyyyGoogle.sys file", "type" : "DOCF"},
+        {"id": 9, "description": "%WINDIR%\\tracing\\ directory", "type" : "SYSP"},
+        {"id": 10, "description": "APLib library", "type" : "EXEF"},
+        {"id": 11, "description": "XOR operation with a single-byte key", "type" : "TAMP"},
+        {"id": 12, "description": "[HKLM\\SOFTWARE\\Microsoft\\LoginInfo]", "type" : "REGI"},
+        {"id": 13, "description": "Video — configuration module", "type" : "EXEF"},
+        {"id": 14, "description": "DirectShow — XPath module", "type" : "EXEF"},
+        {"id": 15, "description": "DirectDraw — PayloadDll module", "type" : "EXEF"},
+        {"id": 16, "description": "service with autorun and ImagePath to the extracted driver", "type" : "TAMP"},
+        {"id": 17, "description": "\\.\BaiduHips device", "type" : "TAMP"},
+        {"id": 18, "description": "[%WINDIR%\\System32\\ping.exe]", "type" : "EXEF"},
+        {"id": 19, "description": "[%WINDIR%\\System32\\rundll32.exe %WINDIR%\\System32\\svchost.exe]", "type" : "EXEF"},
+        {"id": 20, "description": "[%WINDIR%\\System32\\lsass.exe]", "type" : "EXEF"},
+        {"id": 21, "description": "[HKCU\\SOFTWARE\\Microsoft\\LoginInfo]", "type" : "REGI"},
+        {"id": 22, "description": "%TMP%\\Microsoft\\ReplaceDll.dll", "type" : "DOCF"},
+        {"id": 23, "description": "ThreadingModel parameter with the Apartment value", "type" : "TAMP"},
+        {"id": 24, "description": "Trojan.XPath.1 file", "type" : "DOCF"},
+        {"id": 25, "description": "z:\\desk_codes\\project_xpath\\xpathinstaller\\client_files.h", "type" : "DOCF"},
+        {"id": 26, "description": "z:\\desk_codes\\project_xpath\\xpathinstaller\\MemLoadDll.h", "type" : "DOCF"},
+        {"id": 27, "description": "xPathInstaller.c file", "type" : "DOCF"},
+        {"id": 28, "description": "0xACA3 symbol in Unicode (Korean hieroglyph)", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "checks for encryption of"},
+        {"source": 2, "target": 3, "rel_name" : "used for"},
+        {"source": 4, "target": 6, "rel_name" : "obtained from system to form string with"},
+        {"source": 5, "target": 6, "rel_name" : "obtained from system to form string with"},
+        {"source": 6, "target": 7, "rel_name" : "outputs via"},
+        {"source": 8, "target": 9, "rel_name" : "deleted from"},
+        {"source": 10, "target": 13, "rel_name" : "used to compress and encrypt"},
+        {"source": 10, "target": 14, "rel_name" : "used to compress and encrypt"},
+        {"source": 10, "target": 15, "rel_name" : "used to compress and encrypt"},
+        {"source": 11, "target": 13, "rel_name" : "used to encrypt"},
+        {"source": 11, "target": 14, "rel_name" : "used to encrypt"},
+        {"source": 11, "target": 15, "rel_name" : "used to encrypt"},
+        {"source": 12, "target": 13, "rel_name" : "stored in"},
+        {"source": 12, "target": 14, "rel_name" : "stored in"},
+        {"source": 12, "target": 15, "rel_name" : "stored in"},
+        {"source": 16, "target": 8, "rel_name" : "uses as service name and ImagePath to"},
+        {"source": 17, "target": 16, "rel_name" : "opens to check if working"},
+        {"source": 18, "target": 17, "rel_name" : "starts process after driver is running"},
+        {"source": 19, "target": 17, "rel_name" : "starts process after driver is running"},
+        {"source": 20, "target": 17, "rel_name" : "starts process after driver is running"},
+        {"source": 21, "target": 14, "rel_name" : "stored in"},
+        {"source": 21, "target": 15, "rel_name" : "stored in"},
+        {"source": 22, "target": 21, "rel_name" : "path set as parameter value for COM hijacking"},
+        {"source": 23, "target": 22, "rel_name" : "parameter created with"},
+        {"source": 24, "description": "contains leftover debugging information", "type" : "DOCF"},
+        {"source": 25, "target": 24, "rel_name" : "file path in debugging info of"},
+        {"source": 26, "target": 24, "rel_name" : "file path in debugging info of"},
+        {"source": 27, "target": 24, "rel_name" : "file name in debugging info of"},
+        {"source": 28, "description": "found in debugging string", "type" : "TAMP"}
+    ]
+}

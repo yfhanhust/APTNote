@@ -1,0 +1,206 @@
+Operating routine
+Trojan.XPath.1 serves as a loader for the driver. Operating in Windows starting from Vista or
+higher is based on the source code of the WinDivert 1.1 (30.06.2013) - 1.2 (17.07.2015).
+Operating in Windows starting from Windows 2000 up to Vista is based on the source code
+of the WinPcap.
+Drivers have the following digital signatures:
+```
+CN = Anhua Xinda (Beijing) Technology Co., Ltd.
+OU = Digital ID Class 3 - Microsoft Software Validation v2
+O = Anhua Xinda (Beijing) Technology Co., Ltd.
+L = Beijing
+S = Beijing
+C = CN
+CN =
+O =
+L =
+S =
+```
+C = CN
+The trojan obtains the addresses of the necessary functions from a NDIS.SYS file:
+It then checks which of the available modules — hal.dll, halmacpi.dll or halacpi.dll — was
+loaded, and gets the addresses of several functions from it:
+Next, it checks if the ntdll.dll module is loaded. If it is not loaded, Trojan.XPath.2
+independently maps the file into the memory, and gets the addresses of the necessary
+functions:
+Then trojan creates the device \\Device\\test1 and the symbolic link \
+\DosDevices\\test1 .
+Via PsSetCreateProcessNotifyRoutine it sets a callback function in which it tracks the
+lsass.exe process creation. As soon as this process is started, the trojan reads the loader
+module (Trojan.XPath.3) from the registry [\\registry\\machine\\SOFTWARE\
+\Microsoft\\LoginInfo] 'DirectDraw' . Then it unpacks it and injects it into the
+lsass.exe. In the 64-bit version of the driver, code is injected via the
+PsSetLoadImageNotifyRoutine function.
+The program waits until it can open \\Systemroot\\explorer.exe, then via
+IoCreateDriver it creates the \\FileSystem\\FsBaiduHips driver.
+It records the following values in the registry:
+
+[\\Registry\\Machine\\System\\CurrentControlSet\\Services\
+
+\yyyyyyyyGoogle] 'Group' = "Boot Bus Extender" ;
+
+[\\Registry\\Machine\\System\\CurrentControlSet\\Services\
+
+\yyyyyyyyGoogle] 'DependOnService' = "FltMgr" ;
+
+[\\Registry\\Machine\\System\\CurrentControlSet\\Services\
+```
+ \yyyyyyyyGoogle\Instances] 'DefaultInstance' = 'yyyyyyyyGoogle
+
+```
+Instance' ;
+
+[\\Registry\\Machine\\System\\CurrentControlSet\\Services\
+```
+ \yyyyyyyyGoogle\Instances\yyyyyyyyGoogle Instance] 'Altitude' =
+
+```
+'399999' ;
+
+[\\Registry\\Machine\\System\\CurrentControlSet\\Services\
+```
+ \yyyyyyyyGoogle\Instances\yyyyyyyyGoogle Instance] 'Flags' =
+
+```
+'00000000' .
+Then it attempts to register as a minifilter. If the FltRegisterFilter function returns the
+STATUS_FLT_INSTANCE_ALTITUDE_COLLISION error, the program reduces the value of
+Altitude by one, and then retries.
+When registering as the minifilter, the PreOperation callback function is set for
+IRP_MJ_CREATE :
+For IRP_MJ_QUERY_INFORMATION a callback function is set:
+For IRP_MJ_DIRECTORY_CONTROL, both the PreOperation and PostOperation
+callback functions are set. These four functions are used to conceal the driver file.
+The trojan then creates the device \\Device\\BaiduHips and the symbolic link \
+\DosDevices\\BaiduHips .
+Further behavior depends on the infected computer’s OS version.
+BaiduHips (Windows 2000, Windows XP, Windows Server 2003)
+The program registers the BaiduHips NDIS protocol.
+To perform the firewall functionality, the driver intercepts the SendHandler,
+ReceiveHandler, ReceivePacketHandler, and OpenAdapterCompleteHandler
+functions:
+Hooks are inserted only after receiving the IOCTL code 0x80000800 . After that, the
+program starts filtering traffic (see below).
+BaiduHips (Windows Vista, Windows Server 2008 or higher)
+It creates a WDF driver, and passes [\\Registry\\Machine\\System\
+\CurrentControlSet\\Services\\BaiduHips] as the service path.
+Further initialization is similar to the standard initialization of the WinDivert driver. The
+trojan tracks traffic transmitted over IPv4.
+The most important difference from the standard WinDivert is the windivert_filter
+function, which filters packets (see below).
+Firewall
+The second (in addition to payload launch) main function of the driver is to filter traffic. The
+firewall filters TCP/UDP packets transmitted over IPv4.
+The rules are defined as structures:
+```
+ #pragma pack(push, 1)
+struct st_fw_add_tcp
+ {
+_WORD protocol;
+ _DWORD pid;
+ _BYTE src_mac[6];
+ _BYTE dst_mac[6];
+ _DWORD ack;
+ _DWORD sn;
+ _DWORD src_ip;
+ _DWORD dst_ip;
+ _WORD src_port;
+ _WORD dst_port;
+ };
+#pragma pack(pop)
+```
+The src_mac, dst_mac, ack, and sn fields are optional. It should be noted that
+depending on the packet direction, the fields are compared accordingly. In other words, to
+transmit a packet in both directions between two devices, a single rule is sufficient, where
+the recipient is the computer that runs this rootkit.
+There are two ways to add firewall rules:
+
+
+Via the corresponding IOCTL code,
+
+
+By sending specially generated packets over the TCP Protocol.
+
+
+Special packet 1
+This is a TCP packet with the following parameters:
+
+
+The AckNum value is set to 0x87ED5409 ;
+
+
+The SeqNum value is set to 0x1243FDEC ;
+
+
+RST flag is set.
+When such a packet is received, a rule is added to the firewall that allows traffic to pass from
+the sender's IP address and the src_port + 1 port to the specified destination and in the
+opposite direction.
+Special packet 2
+This TCP packet size must be 32 bytes. The first 4 bytes are the key for decrypting the rest of
+the data. Decryption function:
+Next, bytes from 4 up to 12 are compared with the 1I2#aLeb string. If a match occurs, a
+rule is added to the firewall that allows traffic flow from the sender's IP address and port.
+It is worth noting that the TCP Handshake process is not performed and flags are ignored.
+Only the size of the data and the data itself matter.
+IOCTL codes
+The trojan’s IOCTL codes:
+0x80000800 — to insert hooks on network functions (only available on Windows versions
+up to Windows Vista)
+
+
+0x80000815 — to add a firewall rule for the TCP Protocol;
+
+
+0x80000819 — to delete a firewall rule for the TCP Protocol;
+
+
+0x8000081D — to add a firewall rule for the UDP Protocol;
+
+
+0x80000821 — to delete a firewall rule for the UDP Protocol;
+
+
+0x80001005 — to set the value of two variables (not used).
+
+
+IOCTL codes from WinDivert (available only for OS versions starting from Vista and higher):
+0x80002422 — to receive a diverted packet;
+0x80002425 — to send a packet;
+0x80002429 — to start filtering;
+
+0x8000242D — to set the level;
+
+0x80002431 — to set the priority;
+0x80002435 — to set the flags;
+0x80002439 — to set the parameter;
+0x8000243E — to receive the parameter’s value.
+Artifacts
+In addition to project files path disclosed in PDB:
+```
+ Z:\desk_codes\project_xpath\ObjFile\SecKernel\SecKernel.pdb
+ Z:\desk_codes\project_xpath\ObjFile\SecKernel64\SecKernel.pdb
+```
+The code contains the names of specific files with the trojan’s source codes:
+```
+ bwctrl.c
+Ndis5.c
+Ndis6.c
+SecKernel.c
+```
+There are also various debugging messages:
+```
+ out of memory2
+out of memory3
+out of memory4
+ del tcp pid:%d,%d,%d\n
+ size not match:%d,%d\n
+get:%wZ mac:%02x-%02x-%02x-%02x-%02x-%02x
+ test my tcp packet,eth len:%d,%d-->%d\n
+ init drv :%d,%d\n
+init drv :%x\n
+\C:\InjectIntoProcess crash
+\C:\NewProcess crash
+\C:\ProcessGone crash
+\C:\ProcessCallback crash
+\C:\InitDriver crash

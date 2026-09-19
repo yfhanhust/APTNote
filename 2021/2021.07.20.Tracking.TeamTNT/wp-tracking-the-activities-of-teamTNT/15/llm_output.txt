@@ -1,0 +1,86 @@
+
+
+
+Sentence : Diamorphine Rootkit
+Another trend we observed in 2020 is the integration of rootkits into Linux-based threats for persistence
+and stealth. [15] Stealth, in particular, is a crucial factor for cryptocurrency mining activities since, without
+any limitations in place, the mining process will quickly raise red flags as the CPU utilization spikes to
+100%. Even if this anomalous behavior is not spotted by an administrator, it will likely trigger warnings in
+the cloud provider’s system, which will then send a notification to the user. To get around this, malware
+authors have introduced new features to hide the process from administrators and system tools.
+TeamTNT is no exception. The group uses a kernel-mode open-source rootkit called Diamorphine, [16] which
+creates function hooks for the following system calls:
+
+getdents/getdents64: This hook allows hiding file system entries from user-mode applications. The
+
+actual process hiding is implemented in this hook as the Unix uses the /proc pseudo-file system as
+an interface to kernel process structures.
+
+kill: This hook implements the main functionality of the rootkit, which is dependent on the signal sent
+
+to the process based on the following:
+º The signal SIGINVIS = 31 flips the process custom PF_INVISIBLE flag to the task associated with
+the specified process ID (pid).
+if ((task = find_task(pid)) == NULL)
+return -ESRCH;
+task->flags ^= PF_INVISIBLE;
+break;
+º The signal SIGSUPER = 64 obtains root privileges by committing new credentials with uids = 0.
+º The signal SIGMODINVIS = 63 hides/reveals the presence of the kernel module.
+17 | Tracking the Activities of TeamTNT: A Closer Look at a Cloud-Focused Malicious Actor Group
+Diamorphine is used for hiding the cryptocurrency mining process in which, in this context, the kernel
+module itself is hidden by default as the hide function is called during the module initialization phase.
+Figure 17. The Diamorphine module initialization phase
+The following discussion demonstrates the described behavior of Diamorphine.
+After the cryptocurrency process using XMRig is started, the signal SIGINVIS is sent to the mining process.
+Figure 18. The XMRig process
+This is done by executing the kill utility with the argument SIGINVIS and the target process ID. The utility
+calls linux syscall, which is then intercepted by Diamorphine, rendering the process invisible to user-mode
+applications.
+Figure 19. Sending a SIGINVIS signal to the Diamorphine rootkit, effectively hiding
+the cryptocurrency mining process
+If we compare the output of the top utility before the hiding signal is sent to the rootkit module and after
+the signal is sent, we can observe that the XMRig process (pid = 12254) is causing the CPU usage to
+spike. [17]
+18 | Tracking the Activities of TeamTNT: A Closer Look at a Cloud-Focused Malicious Actor Group
+Figure 20. The top output before the signal is sent
+However, after the hiding signal is sent, the process is not seen by the utility and remains undetected.
+At this point, we should emphasize that a root user permission with CAP_SYS_ADMIN capability is
+required to install the kernel module. As malware authors target container environments, there is the
+danger of privileged containers that allow users to obtain full host root with all capabilities and thus can
+also be used to install kernel mode rootkits such as Diamorphine.
+Malware authors have also optimized the usability of XMRig for cloud environments by decreasing the
+maximum percentage of CPU usage in order to remain undetected and not trigger necessary alarms. It
+should be noted that running unwanted cryptocurrency miners in public clouds will lead to additional
+costs.
+19 | Tracking the Activities of TeamTNT: A Closer Look at a Cloud-Focused Malicious Actor Group
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "TeamTNT", "type" : "ACTO"},
+        {"id": 2, "description": "Diamorphine rootkit", "type" : "EXEF"},
+        {"id": 3, "description": "getdents/getdents64 system calls", "type" : "TTPS"},
+        {"id": 4, "description": "kill system call", "type" : "TTPS"},
+        {"id": 5, "description": "SIGINVIS = 31 signal", "type" : "TTPS"},
+        {"id": 6, "description": "SIGSUPER = 64 signal", "type" : "TTPS"},
+        {"id": 7, "description": "SIGMODINVIS = 63 signal", "type" : "TTPS"},
+        {"id": 8, "description": "XMRig process", "type" : "EXEF"},
+        {"id": 9, "description": "top utility", "type" : "APPS"},
+        {"id": 10, "description": "CAP_SYS_ADMIN capability", "type" : "TTPS"},
+        {"id": 11, "description": "container environments", "type" : "TAMP"},
+        {"id": 12, "description": "public clouds", "type" : "CLOUD"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "hooks"},
+        {"source": 2, "target": 4, "rel_name" : "hooks"},
+        {"source": 4, "target": 5, "rel_name" : "flips_flag"},
+        {"source": 4, "target": 6, "rel_name" : "obtains_root_privileges"},
+        {"source": 4, "target": 7, "rel_name" : "hides_reveals_kernel_module"},
+        {"source": 2, "target": 8, "rel_name" : "hides_process"},
+        {"source": 9, "target": 8, "rel_name" : "detects_before_hiding"},
+        {"source": 10, "target": 2, "rel_name" : "required_for_installation"},
+        {"source": 1, "target": 11, "rel_name" : "targets"},
+        {"source": 1, "target": 12, "rel_name" : "runs_malware_in"}
+    ]
+}

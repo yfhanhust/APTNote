@@ -1,0 +1,14 @@
+TDI FILTER DRIVER
+In addition to WFP, Snake also hooks the Transport Driver Interface (TDI) network routines by setting itself up as a TDI filter driver.
+TDI is considered deprecated and will be removed in future versions of Microsoft Windows, but it’s still supported on Windows 7.
+Being registered as a TDI driver on the device stack, Snake hooks TCP calls. This way it intercepts all requests along with their
+parameters via IRP (IO request package) hooks.
+By ‘sniffing’ all the requests, it can now inspect the traffic, looking for and then parsing GET/POST HTTP requests and also SMTP
+communications, in order to distinguish commands addressed to itself.
+If the rootkit detects that the OS version is pre-Vista (e.g. Windows XP) or Windows Server 2008 (e.g. Windows Server 2003), it will
+invoke FwpsStreamInjectAsync0() API in order to generate outbound requests.
+Whenever the client establishes connections, the TDI driver will also ‘pulse’ the \BaseNamedObjects\wininet_activate
+event, just like the WPF driver’s component of it, in order to notify the userland service about the event.
+The data that the driver intercepts, along with the important notifications, is passed to the userland DLL to be processed. If the
+data contains commands from C&C, the DLL module is expected to execute them and report results back to the driver to be
+delivered back to C&C.

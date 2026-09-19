@@ -1,0 +1,136 @@
+
+
+
+Sentence : Lo2 loaders
+Despite their classification, the trojans have different objectives. For instance, file Serviceflow.exe acts as a watchdog. It collects
+the following information about the system:
+Username
+Computer name
+Contents of \Program Files\ and \Program Files (x86)\
+OS version
+Data about the processor
+The watchdog records the results in file log.txt. It also checks Windows\Tasks\ for files A64.dll and sinter.exe . If necessary, it
+downloads the files from control server skillsnew[.]top and launches them on behalf of the current user. The corresponding token is
+extracted from process winlogon.exe. Trojan sinter.exe lets the attackers know about the infection by sending a request to
+hxxps://mystrylust.pw/confirm.php, and sends the collected information about the system to skillsnew[.]top. Then, if the attackers
+are still interested in the victim's computer, the trojan obtains contents of customer.txt file at hxxp://docs.google.com/uc?
+id=1wUaESzjGT2fSuP_hOJMpqidyzqwu15sz&export=download. The file contains the name for control server
+car[.]drivethrough.top, with which the trojan communicates further. Downloaded files are placed in folder
+\AppData\Roaming\InStore\, and launched with task scheduler.
+blog.ptsecurity.com/2019/11/studying-donot-team.html 4/8
+As a result of malicious loaders' activity, components of framework yty are inserted into the system, allowing the attackers to get
+more details about their victim, including files with a certain extension, intercepted input strings, list of processes, and screenshots.
+We will not discuss plugins in this article.
+When we studied other similar samples, we found some paths and project names left in the debugging information including the
+following:
+D:\Soft\DevelopedCode_Last\BitDefenderTest\m0\New_Single_File\Lo2\SingleV2\Release\BinWork.pdb
+D:\Soft\DevelopedCode_Last\BitDefenderTest\m0\New_Single_File\Lo2\SingleV2_Task_Layout_NewICON\Release\BinWork.pdb
+D:\Soft\DevelopedCode_Last\BitDefenderTest\m0\New_Single_File\Lo2\SingleV2_Task_Layout_NewICON_N_Lnk\Release\BinWork.pdb
+D:\Soft\DevelopedCode_Last\BitDefenderTest\m0\New_Single_File\Lo2\SingleV3\Release\WorkFile.pdb
+D:\Soft\DevelopedCode_Last\BitDefenderTest\m0\Off\Off_New_Api\Release\C++\ConnectLink.pdb
+D:\Soft\DevelopedCode_Last\BitDefenderTest\m0\Off\Off_New_Api\Release\C++\TerBin.pdb
+D:\Soft\DevelopedCode_Last\BitDefenderTest\m0\yty 2.0 - With AES Chunks LOC FOR XP Just Bit
+Change_Name\Release\TaskTool.pdb
+D:\Soft\DevelopedCode_Last\BitDefenderTest\yty 2.0 - With AES Chunks OFFS Just Bit\Release\C++\MsBuild.pdb
+D:\Soft\DevelopedCode_Last\yty 2.0\Release\C++\Setup.pdb
+In addition to substring yty 2.0 connecting the trojans with the framework, we also noticed substring Lo2, which may be an
+abbreviation from Loader 2.
+In loaders versions before mid-2018, all used strings were stored in the file in cleartext. In subsequent builds, the attackers started
+encrypting the strings. In different versions, the following changes were made to the algorithm:
+Since May 2018: reverse the string and encode with Base64
+Since April 2019: perform the previous actions twice.
+blog.ptsecurity.com/2019/11/studying-donot-team.html 5/8
+11/30/2019 Positive Technologies - learn and secure : Studying Donot Team
+Since January 2019: encrypt the string with AES in CBC mode and encode with Base64. Sample of Python code for
+decryption:
+import base64
+from Cryptodome.Cipher import AES
+aeskey = (0x23, 0xd4, 0x67, 0xad, 0x96, 0xc3, 0xd1, 0xa5, 0x23, 0x76, 0xae, 0x4e, 0xdd, 0xca, 0x13, 0x55)
+def aes_decrypt(data, aeskey):
+iv = bytes(list(range(0, 16)))
+key = bytes(aeskey)
+aes = AES.new(key, AES.MODE_CBC, iv)
+return aes.decrypt(data).decode().strip('\x00')
+def base64_aes_decrypt(data, aeskey):
+data = base64.b64decode(data)
+data = aes_decrypt(data, aeskey)
+return data
+Since June 2019: perform symbol-by-symbol circular subtraction with the set array of bytes, encode with UTF-8, and encode
+with Base64. Sample of Python code for decryption:
+subgamma = (0x2d, 0x55, 0xf, 0x59, 0xf, 0xb, 0x60, 0x33, 0x29, 0x4e, 0x19, 0x3e, 0x57, 0x4d, 0x56, 0xf)
+def sub_decrypt(data, subgamma):
+o = ''
+length = len(data)
+subgamma_length = len(subgamma)
+for i in range(length):
+o += chr((0x100 + ord(data[i]) - subgamma[i%subgamma_length]) & 0xff)
+return o
+def base64_utf8_sub_decrypt(data, subgamma):
+data = base64.b64decode(data)
+data = data.decode('utf-8')
+data = sub_decrypt(data, subgamma)
+return data
+Since October 2019: perform symbol-by-symbol circular modified XOR with the set array of bytes, and encode with Base64
+twice. The peculiarity of XOR algorithm is that if the string symbol value matches the value of the symbol in the set array of
+bytes, XOR is not required. Sample of Python code for decryption:
+xorgamma = (0x56, 0x2d, 0x61, 0x21, 0x16)
+def modxor_decrypt(data, xorgamma):
+o = ''
+length = len(data)
+xorgamma_length = len(xorgamma)
+for i in range(length):
+c = data[i]
+if c != xorgamma[i%xorgamma_length]:
+c = data[i] ^ xorgamma[i%xorgamma_length]
+o += chr(c)
+return o
+def base64_modxor_decrypt(data, xorgamma):
+data = base64.b64decode(data)
+data = modxor_decrypt(data, xorgamma)
+return data
+blog.ptsecurity.com/2019/11/studying-donot-team.html 6/8
+11/30/2019 Positive Technologies - learn and secure : Studying Donot Team
+When we were writing the decryption script, we found that some strings couldn’t be decrypted. But then we found that these lines
+can still be decrypted with one of the decryption methods mentioned earlier. After we verified that each sample uses only one
+decryption method, we concluded that the attackers had simply forgotten to delete unused strings or replace them with those
+correctly encrypted for the next version of the malware.
+Such mistakes are always advantageous for the researchers. For instance, the strings left by the attackers often contained the
+attackers' control servers which we did not know about before.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Serviceflow.exe", "type" : "EXEF"},
+        {"id": 2, "description": "\\Program Files\\ and \\Program Files (x86)\\", "type" : "SYSP"},
+        {"id": 3, "description": "Windows\\Tasks\\", "type" : "TPTH"},
+        {"id": 4, "description": "A64.dll", "type" : "EXEF"},
+        {"id": 5, "description": "sinter.exe", "type" : "EXEF"},
+        {"id": 6, "description": "skillsnew[.]top", "type" : "CCSH"},
+        {"id": 7, "description": "log.txt", "type" : "DOCF"},
+        {"id": 8, "description": "\\AppData\\Roaming\\InStore\\", "type" : "SYSP"},
+        {"id": 9, "description": "customer.txt", "type" : "DOCF"},
+        {"id": 10, "description": "car[.]drivethrough.top", "type" : "CCSH"},
+        {"id": 11, "description": "hxxps://mystrylust.pw/confirm.php", "type" : "URLS"},
+        {"id": 12, "description": "hxxp://docs.google.com/uc?id=1wUaESzjGT2fSuP_hOJMpqidyzqwu15sz&export=download", "type" : "URLS"},
+        {"id": 13, "description": "winlogon.exe", "type" : "EXEF"},
+        {"id": 14, "description": "framework yty", "type" : "TTPS"},
+        {"id": 15, "description": "Donot Team", "type" : "ACTO"},
+        {"id": 16, "description": "Base64", "type" : "TAMP"},
+        {"id": 17, "description": "AES in CBC mode", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "collects information from"},
+        {"source": 1, "target": 3, "rel_name" : "checks for files in"},
+        {"source": 1, "target": 4, "rel_name" : "downloads and launches"},
+        {"source": 1, "target": 5, "rel_name" : "downloads and launches"},
+        {"source": 1, "target": 6, "rel_name" : "communicates with"},
+        {"source": 1, "target": 7, "rel_name" : "records information in"},
+        {"source": 1, "target": 8, "rel_name" : "places files in"},
+        {"source": 5, "target": 6, "rel_name" : "sends information to"},
+        {"source": 5, "target": 10, "rel_name" : "communicates with"},
+        {"source": 5, "target": 9, "rel_name" : "downloads and uses content from"},
+        {"source": 5, "target": 12, "rel_name" : "downloads file from"},
+        {"source": 5, "target": 13, "rel_name" : "extracts token from process"},
+        {"source": 5, "target": 14, "rel_name" : "uses components of framework"},
+        {"source": 6, "target": 11, "rel_name" : "receives confirmation request at"}
+    ]
+}

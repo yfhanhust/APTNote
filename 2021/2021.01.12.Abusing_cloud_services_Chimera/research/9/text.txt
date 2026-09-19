@@ -1,0 +1,26 @@
+Privilege escalation (TA0004)
+The adversary started a password spraying attack against those domain admin accounts, and
+successfully got a valid domain admin account this way. In other cases, the adversary moved laterally
+to another system with a domain admin logged in. We observed the use of Mimikatz on this system
+3/22
+and saw the hashes of the logged in domain admin account going through the command and control
+channel of the adversary. The adversary used a tool called NtdsAudit to dump the password hashes of
+domain users as well as we observed the following command:
+```
+msadcs.exe "NTDS.dit" -s "SYSTEM" -p RecordedTV_pdmp.txt --users-csv RecordedTV_users.csv
+```
+Note: the adversary renamed ntdsaudit.exe to msadcs.exe.
+But we also observed the adversary using the tool ntdsutil to create a copy of the Active Directory
+database NTDS.dit followed by a repair action with esentutl to fix a possible corrupt NTDS.dit:
+```
+ntdsutil "ac i ntds" "ifm" "create full C:\Windows\Temp\tmp" q q
+esentutl /p /o ntds.dit
+```
+Both ntdsutil and esentutl are by default installed on a domain controller.
+A tool used by the adversary which wasn’t installed on the servers by default, was DSInternals.
+DSInternals is a PowerShell module that makes use of internal Active Directory features. The files and
+directories found on various systems of a victim match with DSInternals version 2.16.1. We have
+found traces that indicate DSInternals was executed and at which time, which match with the rest of
+the traces of the intrusion. We haven’t recovered traces of how the adversary used DSInternals, but
+considering the phase of the intrusion the adversary used the tool, it is likely they used it for either
+account discovery or privilege escalation, or both.

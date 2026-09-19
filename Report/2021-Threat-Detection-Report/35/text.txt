@@ -1,0 +1,74 @@
+Analysis
+Why do adversaries use Mshta?
+Mshta.exe is a Windows-native binary designed to execute Microsoft HTML
+Application (HTA) files. As its full name implies, Mshta can execute Windows
+Script Host code ( VBScript and JScript ) embedded within HTML in a network
+proxy-aware fashion. These capabilities make Mshta an appealing vehicle for
+adversaries to proxy execution of arbitrary script code through a trusted, signed
+utility, making it a reliable technique during both initial and later stages of an
+infection.
+How do adversaries use Mshta?
+There are four primary methods by which adversaries leverage Mshta to execute
+arbitrary VBScript and JScript:
+      - inline via an argument passed in the command line to Mshta
+
+      - file-based execution via an **[HTML Application (HTA) file](https://docs.microsoft.com/en-us/previous-versions/windows/desktop/wiaaut/-wiaaut-getting-started-samples)** and **[COM-based](https://codewhitesec.blogspot.com/2018/07/lethalhta.html)**
+
+execution for lateral movement
+      - by calling the ~~**[RunHTMLApplication](https://thisissecurity.stormshield.com/2014/08/20/poweliks-command-line-confusion/)**~~ export function of ~~**mshtml.dll**~~ with
+
+~~rundll32.exe~~ as an alternative to ~~mshta.exe~~
+The two most commonly abused Mshta technique variations we observed in
+2020 were inline and file-based execution.
+Inline execution of code doesn’t require the adversary to write additional files
+to disk. VBScript or JScript can be passed directly to Mshta via the command
+line for execution. This behavior gained notoriety several years ago with Kovter
+malware, remnants of which we still observed in 2020 despite this threat
+vanishing from the landscape following the 2018 indictment and arrest of the
+operators . Here’s an example of Kovter persistence in action:
+l [T1218.005: Mshta]
+27
+2021 Threat Detection Report
+Ursnif has used similar inline execution combined with code stored in the
+registry as part of its multistage initial access. Zscaler put out a great report
+detailing Ursnif’s technique shift from PowerShell to Mshta. Notice the use of
+~~ActiveXObject~~ and ~~regread~~ in both the Kovter example above and the Ursnif
+example below. Key terms like these make for reliable detection logic and are a
+good indication that Mshta is being mischievous.
+Conversely, some adversaries choose to execute code stored in a file.
+Adversaries can direct Mshta to execute HTA content stored in a local or remote
+file by passing a location on disk, a URI, or a Universal Naming Convention (UNC)
+path (i.e., a path prefixed with ~~\~~ that points to a file share or hosted WebDAV
+server) to the file in the command line. This technique is popular because the
+malicious payload is not directly visible in the command line, as it is with inline
+execution, and permits the execution of remotely hosted HTA content in a
+proxy-aware fashion. One threat we observed leveraging this technique in 2020
+dropped Remcos via HTA content hidden behind a shortened URL:
+l [T1218.005: Mshta]
+“Adversaries may abuse mshta.exe to
+proxy execution of malicious .hta files
+and Javascript or VBScript through
+a trusted Windows utility. There are
+several examples of different types of
+threats leveraging mshta.exe during
+initial compromise and for execution of
+code. Mshta.exe is a utility that executes
+Microsoft HTML Applications (HTA) files.
+HTAs are standalone applications that
+execute using the same models and
+technologies of Internet Explorer, but
+outside of the browser.”
+28
+2021 Threat Detection Report
+Emerging Mshta tradecraft
+Adversaries know that defenders are aware of Mshta’s potential for abuse.
+Therefore, it’s no surprise that in 2020 we observed an increase in adversary
+techniques to disguise Mshta execution and evade brittle detection logic. The
+Agent Tesla, Azorult, Lockbit, Lokibot, and Ursnif malware families all used inline
+execution of VBScript or JScript, or file-based execution of HTA content in files
+that did not have the commonly associated ~~.hta~~ file extension. This is because
+Mshta will execute HTA content in files with any extension (or none at all) as long
+as the file extension is not mapped to a ~~text/plain~~ MIME type (e.g., Mshta will not
+execute a file with a ~~.txt~~ extension). To further disguise Mshta execution, TA551
+renamed the binary in attempts to evade detection logic, which relied on Mshta
+executing with its expected filename of ~~mshta.exe~~ .

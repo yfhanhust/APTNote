@@ -1,0 +1,81 @@
+Technical analysis
+A new data exfiltration tool - LimePad
+We recently identified a new and previously undocumented data exfiltration tool used by
+this APT group. It is distributed as a Python-based application packaged inside a VHDX
+file. Based on the unique strings present in the first iteration of this stealer, we have
+named it LimePad.
+In this blog, we are sharing some of the key functionalities of this new tool. A more indepth technical analysis write up of this tool will be published by us as a follow-up blog
+since we are still investigating their activities.
+Similar to some of the other malicious binaries used by the SideCopy APT group in the
+past, this new tool is a PyInstaller-based payload as well. We found 2 unique examples of
+the new tool in-the-wild, both of which were distributed inside very large VHDX files with
+https://www.zscaler.com/blogs/security-research/apt-36-uses-new-ttps-and-new-tools-target-indian-governmental-organizations 7/25
+1/30/24, 2:11 PM Indian Governmental Organizations Targeted by APT-36
+size greater than 60 MB, each.
+The main purpose of this new tool is to constantly upload any new file of interest from the
+victim's machine to the attacker's server. It synchronizes this file stealing operation
+between the victim's machine and the attacker's server by maintaining a local custom
+SQLite database. This database holds the latest records of all the files which are
+uploaded, in queue or newly modified. It is done to ensure that any new files or
+modifications to existing local files are synced up with the remote server.
+Time zone check
+Before starting any malicious activity, it checks whether the keyword "india" is present in
+the timezone config of the machine. Due to this, the payload will execute only on
+machines configured in India time zone.
+Once it confirms that the user is located in India, it will download a decoy PDF from the
+attacker’s server which is displayed to the victim as a social engineering lure.
+We analyzed the objects in the decoy PDF file to recover the metadata corresponding to
+generation of the PDF and we uncovered a key indicator which further helped us
+correlate this activity to APT-36 with a high-confidence.
+Figure 8 shows the metadata which indicates that this PDF was created with the author
+name: “Apolo Jones” and Microsoft Word 2016 was used to generate the PDF.
+Figure 8: metadata of the decoy PDF file
+This is the same string present in the PDB path of multiple backdoored variants of
+Kavach application used by APT-36 in 2022.
+One such example is the backdoored Kavach binary with MD5 hash:
+6b552512c1b6479d8a8ae526663af864
+PDB path: C:\Users\Apolo Jones\source\repos\Kavach\obj\Release\Kavach.pdb
+https://www.zscaler.com/blogs/security-research/apt-36-uses-new-ttps-and-new-tools-target-indian-governmental-organizations 8/25
+1/30/24, 2:11 PM Indian Governmental Organizations Targeted by APT-36
+Key functionalities and configuration of Limepad
+This data exfiltration tool is modular and contains many custom Python libraries
+developed by the attacker to assist the main functionality of LimePad. There is also a
+config file called "control" which is used by LimePad for its settings. The complete config
+file is available in the Appendix. Below we give a brief overview of the config fields which
+can help understand the features and functionalities of this stealer at a high-level.
+VERSION field is configured as "0.1-18". This indicates that the tool is in very early
+stages of development by the threat actor.
+USERFILE defines the name of the local SQLite database which is used to keep track of
+the file sync operations. In the first version of this tool, it was configured as "Limepad.db"
+due to which we have named this tool as "Limepad"
+The fields, STARTDATA, LOCKDOORS, and DOORS are used to create a Windows URL
+Shortcut file which is used for the purpose of persistence. This URL shortcut file is placed
+in the Windows Startup directory with the name: "Limepad.dll" and it points to the local file
+path of the malicious payload as shown below.
+[InternetShortcut]
+URL=file:///
+A similar persistence mechanism was used by another tool in SideCopy APT's arsenal in
+2021.
+SERVERS field is used to configure an array of attacker-controlled C2 servers. In both
+the identified samples, only one C2 server was configured each time. However, the code
+has support for multiple C2 servers and will cycle through them until it finds a working C2
+server.
+DUSSEN field contains a hex-encoded version of the string - "india". This is what is used
+for the India time zone check in the main subroutine of Limepad before starting any
+malicious activity.
+The fields - DBTABLES, DBTABLES_INDEXES and SYNC_RULES_CONFIG all
+correspond to the structure and configuration of the tables in the local SQLite database.
+Figure 9 shows the structure of the local SQLite database used for synchronizing files
+between infected machine and server.
+https://www.zscaler.com/blogs/security-research/apt-36-uses-new-ttps-and-new-tools-target-indian-governmental-organizations 9/25
+1/30/24, 2:11 PM Indian Governmental Organizations Targeted by APT-36
+Figure 9: Structure of the local SQLite database
+Figure 10 shows an example of contents of the SQLite database on an infected VM.
+Figure 10: Contents of a database from an infected VM
+It is important to note that "SYNC_RULES_CONFIG" contains a set of rules which
+defines which files the attacker is interested in stealing.
+It has a different set of file extensions configured for HOME, FIXED and REMOVABLE
+drives. Based on the configured file extensions, it is evident that the threat actor is
+interested in stealing documents (PDF, text and MS Office files), email local databases
+(DBX format) and various drawing file extensions such as DWG and DXF. These drawing
+file extensions correspond to "AutoCAD" or computer-aided design vector files.

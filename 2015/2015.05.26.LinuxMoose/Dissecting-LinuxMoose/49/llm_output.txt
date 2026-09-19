@@ -1,0 +1,66 @@
+
+
+
+Sentence : Dissecting Linux/Moose
+Custom NAT traversal
+Another interesting capability related to network penetration is the custom NAT traversal
+implementation. It could be categorized as a simple implementation of the concepts behind
+the Session Traversal Utilities for NAT (STUN) and Traversal Using Relays around NAT (TURN)
+standards.
+The configuration given by the configuration C&C server to the infected host provides both its
+public IP address and the address of a system that is going to be used as a relay (relay C&C server).
+During our analysis of the threat the relay C&C IP address was always the same: ~~93.190.140.221~~ .
+The configuration values affecting the behavior of the NAT traversal are the following:
+~~Table 6.~~ ~~Moose Confguration Values Af~~ i ~~ecting the Behavior of the NAT Traversal~~ f
+Configuration parameter Description
+~~cnccfg_fag_nattraversal~~ l NAT traversal is or is not enabled
+~~cnccfg_relaycnc_ip~~ Relay C&C IP address
+~~cnccfg_relaycnc_sleep~~ Number of seconds to sleep in case of protocol failure
+with the relay C&C server
+~~cnccfg_relaycnc_timeout~~ Number of seconds to wait for data from the relay C&C
+server. Default: 300
+We will explain where these values come from when we will describe the confguration C&C network i
+protocol further along.
+If NAT traversal is enabled, two threads are created at start-up that are dedicated to reach
+the relay C&C server. The relay is queried at short intervals (defined by ~~cnccfg_relaycnc_sleep~~ )
+for anything to proxy through the infected host. The server replies either with one IP address and port
+(for outreach) or multiple pairs of IP addresses and ports (for relay).
+First the infected device reaches out to the relay with this hardcoded packet:
+```
+   18 00 00 00
+```
+The server responds with the following structure:
+~~Table 7.~~ ~~Moose~~ ~~relay C&C server~~ ~~response~~
+Name Size Description
+Command Short (2 bytes) Command given to the infected host to execute.
+See table below.
+Destination port Short (2 bytes) Tunnel destination port (network order)
+Destination IP address Integer (4 bytes) Tunnel destination IP address (network order)
+32
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Linux/Moose", "type" : "TTPS"},
+        {"id": 2, "description": "Custom NAT traversal implementation", "type" : "TTPS"},
+        {"id": 3, "description": "Session Traversal Utilities for NAT (STUN)", "type" : "TTPS"},
+        {"id": 4, "description": "Traversal Using Relays around NAT (TURN)", "type" : "TTPS"},
+        {"id": 5, "description": "C&C server", "type" : "CCSH"},
+        {"id": 6, "description": "93.190.140.221", "type" : "CCSH"},
+        {"id": 7, "description": "Relay C&C IP address (cnccfg_relaycnc_ip)", "type" : "REGI"},
+        {"id": 8, "description": "Number of seconds to sleep in case of protocol failure with the relay C&C server (cnccfg_relaycnc_sleep)", "type" : "REGI"},
+        {"id": 9, "description": "Number of seconds to wait for data from the relay C&C server (cnccfg_relaycnc_timeout)", "type" : "REGI"},
+        {"id": 10, "description": "Infected host", "type" : "SYSP"},
+        {"id": 11, "description": "Hardcoded packet: 18 00 00 00", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "related to"},
+        {"source": 2, "target": 4, "rel_name" : "related to"},
+        {"source": 5, "target": 6, "rel_name" : "provides"},
+        {"source": 7, "target": 6, "rel_name" : "is part of"},
+        {"source": 8, "target": 6, "rel_name" : "affects"},
+        {"source": 9, "target": 6, "rel_name" : "affects"},
+        {"source": 10, "target": 2, "rel_name" : "uses"},
+        {"source": 10, "target": 6, "rel_name" : "reaches out to"},
+        {"source": 10, "target": 11, "rel_name" : "sends"}
+    ]
+}

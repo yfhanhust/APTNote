@@ -1,0 +1,149 @@
+Detection
+Once OrcaRAT has been delivered to a victim system there are a number of ways to detect it.
+Firstly we will cover disk detection using Yara. The rule below will detect an OrcaRAT binary executable
+that has been written to a compromised machine’s disk.
+rule OrcaRAT
+{
+meta:
+author = “PwC Cyber Threat Operations  :: @tlansec"
+distribution = "TLP WHITE"
+sha1 =  "253a704acd7952677c70e0c2d787791b8359efe2c92a5e77acea028393a85613"
+strings:
+$MZ="MZ"
+$apptype1="application/x-ms-application"
+$apptype2="application/x-ms-xbap"
+$apptype3="application/vnd.ms-xpsdocument"
+$apptype4="application/xaml+xml"
+$apptype5="application/x-shockwave-flash"
+$apptype6="image/pjpeg"
+$err1="Set return time error =  %d!"
+$err2="Set return time  success!"
+$err3="Quit success!"
+condition:
+$MZ at 0 and filesize < 500KB and  (all of ($apptype) and 1 of ($err))
+}
+OrcaRAT can also be detected in two separate ways at the network level using a Snort or Suricata IDS rule.
+Detecting malware at different stages of connectivity can be important. By creating signatures with a
+nexus to the kill chain[6] we can determine which stage the intrusion has reached. The two signatures
+below will indicate whether the intrusion has reached the command and control or action-on phases.
+Snort:
+alert tcp any any -> any any (msg:"::[PwC CTD]:: - OrcaRAT implant check-in";
+flow:established,from_client; urilen: 67<>170; content:"User-Agent: Mozilla/4.0 (compatible\;
+MSIE 8.0\; Windows NT 5.1\; Trident/4.0\; .NET CLR 2.0.50727\; .NET CLR 3.0.04506.30\;
+.NET4.0C\; .NET4.0E)"; http_header; content:"GET"; http_method; pcre:"/^\/[A-Za-z0-9+~=]
+{14,18}\/[A-Za-z0-9+~=]{33,38}\/[A-Za-z0-9+~=]{6,9}\/[A-Za-z0-9+~=]{5,50}\/[A-Za-z09+~=]{5,50}$/U"; sid:YOUR_SID; rev:1;)
+alert tcp any any -> any any (msg:"::[PwC CTD]:: - OrcaRAT implant C2 confirmation response";
+flow:established,from_client; urilen: 67<>170; content:"User-Agent: Mozilla/4.0 (compatible\;
+MSIE 8.0\; Windows NT 5.1\; Trident/4.0\; .NET CLR 2.0.50727\; .NET CLR 3.0.04506.30\;
+.NET4.0C\; .NET4.0E)"; http_header; content:"POST"; http_method; pcre:"/^\/[A-Za-z0-9+~=]
+{14,18}\/[A-Za-z0-9+~=]{33,38}\/[A-Za-z0-9+~=]{6,9}\/[A-Za-z0-9+~=]{5,50}\/[A-Za-z09+~=]{5,50}$/U"; sid:YOUR_SID; rev:1;)
+Suricata:
+alert http any any -> any any (msg:"::[PwC CTD]:: - OrcaRAT implant check-in";
+flow:established,from_client; urilen: 67<>170; content:" Mozilla/4.0 (compatible\; MSIE 8.0\;
+Windows NT 5.1\; Trident/4.0\; .NET CLR 2.0.50727\; .NET CLR 3.0.04506.30\; .NET4.0C\;
+.NET4.0E)"; http_user_agent; content:"GET"; http_method; pcre:"/^\/[A-Za-z0-9+~=]
+{14,18}\/[A-Za-z0-9+~=]{33,38}\/[A-Za-z0-9+~=]{6,9}\/[A-Za-z0-9+~=]{5,50}\/[A-Za-z09+~=]{5,50}$/U"; sid:YOUR_SID; rev:1;)
+alert http any any -> any any (msg:"::[PwC CTD]:: - OrcaRAT implant C2 confirmation response";
+flow:established,from_client; urilen: 67<>170; content:" Mozilla/4.0 (compatible\; MSIE 8.0\;
+Windows NT 5.1\; Trident/4.0\; .NET CLR 2.0.50727\; .NET CLR 3.0.04506.30\; .NET4.0C\;
+.NET4.0E)"; http_user_agent; content:"POST"; http_method; pcre:"/^\/[A-Za-z0-9+~=]
+{14,18}\/[A-Za-z0-9+~=]{33,38}\/[A-Za-z0-9+~=]{6,9}\/[A-Za-z0-9+~=]{5,50}\/[A-Za-z09+~=]{5,50}$/U"; sid:YOUR_SID; rev:1;)
+Appendix A: Samples of Orca RAT:
+|Hash|C2|
+|---|---|
+|07b40312047f204a2c1fbd94fba6f53b|adda.lengendport.com|
+|f6456b115e325b612e0d144c8090720f|tsl.gettrials.com|
+|139b8e1b665bb9237ec51ec4bef22f58|auty.organiccrap.com|
+Appendix B: Related indicators
+|Indicator|Type|
+|---|---|
+|11.38.64.251|IP Address|
+|123.120.115.77|IP Address|
+|123.120.99.228|IP Address|
+|142.0.134.20|IP Address|
+|147.96.68.184|IP Address|
+|176.31.24.182|IP Address|
+|176.31.24.184|IP Address|
+|190.114.241.170|IP Address|
+|200.78.201.24|IP Address|
+|202.124.151.94|IP Address|
+|202.2.108.142|IP Address|
+|203.146.251.11|IP Address|
+|204.152.209.74|IP Address|
+|213.147.54.170|IP Address|
+|23.19.39.19|IP Address|
+|58.71.158.21|IP Address|
+|62.73.174.134|IP Address|
+|71.183.67.163|IP Address|
+|74.116.128.15|IP Address|
+|Col1|Col2|
+|---|---|
+|81.218.149.207|IP Address|
+|84c68f2d2dd569c4620dabcecd477e69|Hash|
+|8fbc8c7d62a41b6513603c4051a3ee7b|Hash|
+|91.198.50.31|IP Address|
+|adda.lengendport.com|Domain|
+|affisensors.com|Domain|
+|analysis.ittecbbs.com|Domain|
+|at.acmetoy.com|Domain|
+|aucy.affisensors.com|Domain|
+|auty.organiccrap.com|Domain|
+|bbs.dynssl.com|Domain|
+|bbs.serveuser.com|Domain|
+|bbslab.acmetoy.com|Domain|
+|bbslab.lflink.com|Domain|
+|cdna.acmetoy.com|Domain|
+|cune.lengendport.com|Domain|
+|cure.yourtrap.com|Domain|
+|dasheng.lonidc.com|Domain|
+|dns.affisensors.com|Domain|
+|edu.authorizeddns.org|Domain|
+|edu.onmypc.org|Domain|
+|fee0e6b8157099ad09380a94b7cbbea4|Hash|
+|ftp.bbs.dynssl.com|Domain|
+|ftp.bbs.serveuser.com|Domain|
+|ftp.bbslab.acmetoy.com|Domain|
+|ftp.edu.authorizeddns.org|Domain|
+|ftp.edu.onmypc.org|Domain|
+|ftp.lucy.justdied.com|Domain|
+|ftp.nuac.jkub.com|Domain|
+|ftp.osk.lflink.com|Domain|
+|ftp.reg.dsmtp.com|Domain|
+|ftp.tt0320.portrelay.com|Domain|
+|home.affisensors.com|Domain|
+|hot.mrface.com|Domain|
+|info.affisensors.com|Domain|
+|jucy.wikaba.com|Domain|
+|jutty.organiccrap.com|Domain|
+|lengendport.com|Domain|
+|lucy.justdied.com|Domain|
+|newtect.ddns.us|Domain|
+|Col1|Col2|
+|---|---|
+|nuac.jkub.com|Domain|
+|nunok.ninth.biz|Domain|
+|osk.lflink.com|Domain|
+|philipine.gnway.net|Domain|
+|pure.mypop3.org|Domain|
+|reg.dsmtp.com|Domain|
+|tt0320.portrelay.com|Domain|
+|venus.gr8domain.biz|Domain|
+|www.bbs.dynssl.com|Domain|
+|www.bbs.serveuser.com|Domain|
+|www.bbslab.acmetoy.com|Domain|
+|www.edu.authorizeddns.org|Domain|
+|www.edu.onmypc.org|Domain|
+|www.fgtr.info|Domain|
+|www.hot.mrface.com|Domain|
+|www.ktry.info|Domain|
+|www.lucy.justdied.com|Domain|
+|www.osk.lflink.com|Domain|
+|www.reg.dsmtp.com|Domain|
+|www.tt0320.portrelay.com|Domain|
+[1] http://www.secureworks.com/cyber-threat-intelligence/threats/secrets-of-the-comfoo-masters/
+[2] http://msdn.microsoft.com/en-gb/library/windows/desktop/aa380255(v=vs.85).aspx
+[3] http://en.wikipedia.org/wiki/RC4
+[4] http://en.wikipedia.org/wiki/MD5
+[5] http://intelreport.mandiant.com/Mandiant_APT1_Report.pdf
+[6] http://www.lockheedmartin.com/content/dam/lockheed/data/corporate/documents/LM-White
+Paper-Intel-Driven-Defense.pdf

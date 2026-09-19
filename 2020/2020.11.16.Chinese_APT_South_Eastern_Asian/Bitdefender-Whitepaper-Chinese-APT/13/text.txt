@@ -1,0 +1,28 @@
+Filepak
+The Filepak component is used for file collection, being deployed in the same manner as ccf32.exe:
+ C:\Windows\system32\cmd.exe /c “copy c:\users\public\bin\filepak.exe \\c$\users\public**
+/Y”**
+ schtasks /create /s  /u “” /p “” /ru “SYSTEM” /tn one /sc MONTHLY /tr “c:**
+users\public\filepak.exe 20191101” /F**
+All samples of that component related to the case have the “ C:\works\prjs\filepak\Release\filepak.pdb ” pdb path set
+and are deployed under the same name “ filepak.exe ”. Another observation about the FilePak is that it was deployed
+exclusively by FunnyDream backdoor, that fact being illustrated in the presented timeline.
+At runtime, the executable checks if another instance is already running by invoking the CreateFileA function with
+CREATE_NEW flag on the file “ zt ” (located in the same folder as the executable itself). It then checks if there is at least
+one command line argument and parses the first one. The first argument should contain at least 8 characters, the first
+8 being the representation of a timestamp in the “yyyymmdd” form (e.g. “20191101”). All remaining characters of the
+first argument, if such exists, are used as a key for a XOR operation, which will be described below.
+Next action is the listing of all logical drives (excluding CDROMs and some directories like “ c:\windows** ”) to collect all
+files that have a particular extension and a LastWriteTime** greater than the timestamp given as argument. The list of
+extension is hardcoded in the executable and is the same in all binaries we found - “ doc;docx;ppt;pptx;xls;xlsx;pdf;”.
+If a file matches the criteria, it is represented as a binary blob, and that blob is appended to the file “ pak ” (located in the
+same directory as the executable). The binary blob has a specific format presented in the next image:
+Fig. 9 - Archive blob format
+The file content is compressed with zLib algorithm and then is obfuscated with a XOR operation using the string key
+from the command line or the “ qwerasdf ” string if the command line argument doesn’t contain the key. The file name is
+obfuscated using XOR with the same key as the compressed file content. The file content may be uncompressed if the
+compression size is greater than the actual file size, the first segment being corresponding initialized.
+After the collection process is done, the “ pak ” file is renamed under the “ pak.z ” name.
+15
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions

@@ -1,0 +1,508 @@
+APPENDIX 2: SGH Modules – detailed analysis
+i) The “Scsimap” driver
+This driver is started by the system automatically as a service. It is responsible for
+loading the rest of the malware's components and providing communication facilities
+between them. It acts as a framework that glues together all the parts of the malware.
+```
+    File type: Win32 driver
+    Compilation timestamp: 2013.04.09 14:15:03 (GMT)
+File size: 14464 bytes
+
+```
+Technical details
+The file was compiled using Microsoft Visual Studio 2003.
+The driver exports three functions that provide the API for the malware's kernel-mode
+components:
+```
+   0001086C: IopQueryInterface
+   00010840: IopRegisterInterface
+   00010888: IopSetDeviceStatusChange
+```
+Creates a device: \Device{E07DB02C-387E-43b2-A6F2-C59B4934B7D6}
+Also creates a symbolic link to this device: \DosDevices{E07DB02C-387E-43b2A6F2-C59B4934B7D6}
+The “Scsimap” driver loads other modules from
+“\SystemRoot\System32\bootfont.bin”, which is an encrypted virtual file system. It
+decrypts it on the fly using RC4 and loads and executes all the additional modules
+which are present in that file.
+The module receives commands via DeviceIoControl function. It can be commanded
+to load a binary from the “bootfont.bin” file, to write a new “bootfont.bin” configuration,
+to return the contents of that file and overwrite its contents.
+A typical “bootfont.bin” virtual file system contains the following driver modules:
+```
+       Module config, 8272 bytes
+       Module storage, 12240 bytes
+       Module cipher, 7248 bytes
+       Module cmprss, 2640 bytes
+       Module loaddll, 14032 bytes
+       Module PGPsdkDriver, 7504 bytes
+       Module fileflt, 32080 bytes
+       Module stopsec, 2768 bytes
+       Module TdiFlt, 17616 bytes
+       Module TdiFlt2, 18512 bytes
+```
+The modules interact with each other by exporting and importing function pointers.
+Each function is identified by a numeric value. The module that provides the function
+first calls the function “IopRegisterInterface” exported by “scsimap”, and the
+consumer function can request the function pointer by calling the function
+IopQueryInterface with a proper function number.
+ii) Config module
+This modules operates the SGH's unified configuration data that is used by all other
+components.
+Exports the following functions:
+|0x00|ReadConfig|
+|---|---|
+|0x01|WriteConfig|
+The data is stored in the registry key:
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\scsimap\Params,
+Value
+The configuration block is encrypted with a hardcoded key using the RC4 algorithm.
+iii) Storage module
+This module maintains two storage files:
+```
+       \SystemRoot\System32\c_50229.nls
+       \SystemRoot\System32\c_50227.nls
+```
+The module receives information collected by other modules and stores them in a
+system activity log. Entries in the activity log are prepended with timestamps and text
+labels (see below). These label correspond to internal and system events, i.e. writing
+collected information to a file, starting a new process, etc.
+Exported functions:
+|0x08|Store a log entry with a label “GET”|
+|---|---|
+|0x09|Store a log entry with a label “DEL”|
+|0x0A|Store a log entry with a label “PUT” (new data collected)|
+|0x0B|Create an additional activity log file\SystemRoot\System32\~{7 hex digits}.tmp|
+|0x0C|Not implemented|
+|0x0D|Not implemented|
+|---|---|
+|0x0E|Not implemented|
+|0x0F|Not implemented|
+|0x15|Get internal storage state|
+|0x16|Get internal storage state|
+|0x18|Get internal storage state|
+|0x19|Store a log entry with a label “PURGE”|
+|0x1F|Store a log entry with a label “START” (system startup)|
+|0x20|Store a log entry with a label “STOP” (system shutdown)|
+iv) Storage module
+This module maintains two storage files:
+```
+       \SystemRoot\System32\c_50229.nls
+       \SystemRoot\System32\c_50227.nls
+```
+The module receives information collected by other modules and stores them in a
+system activity log. Entries in the activity log are prepended with timestamps and text
+labels (see below). These label correspond to internal and system events, i.e. writing
+collected information to a file, starting a new process, etc.
+Exported functions:
+|0x08|Store a log entry with a label “GET”|
+|---|---|
+|0x09|Store a log entry with a label “DEL”|
+|0x0A|Store a log entry with a label “PUT” (new data collected)|
+|0x0B|Create an additional activity log file\SystemRoot\System32\~{7 hex digits}.tmp|
+|0x0C|Not implemented|
+|0x0D|Not implemented|
+|0x0E|Not implemented|
+|0x0F|Not implemented|
+|0x15|Get internal storage state|
+|0x16|Get internal storage state|
+|0x18|Get internal storage state|
+|0x19|Store a log entry with a label “PURGE”|
+|0x1F|Store a log entry with a label “START” (system startup)|
+|0x20|Store a log entry with a label “STOP” (system shutdown)|
+v) Cipher module
+Provides cryptographic functions for other modules.
+Exported functions:
+|0x10|Encrypt data with AES-128|
+|---|---|
+|0x11|Encrypt data with AES-128|
+|0x12|Encrypt data with RC4|
+|0x13|Encrypt data with RC4|
+vi) Cmprss module
+Provides compression functions for other modules.
+Exported functions:
+|0x1A|Compress data with LZNT1 using the systemRtlCompressBuffer function.|
+|---|---|
+|0x1B|Decompress data with LZNT1 using the systemRtlDecompressBuffer function.|
+vii) LoadDll module
+Registers handler function for process-creation and image-load events. The module
+reads the list of DLL loading rules from the configuration block and checks them
+when a new process is created or a module is loaded. These rules specify the
+location of the DLL to be injected and the list of target process names to inject. An
+example list of rules follows.
+```
+       DLL: System32\vchw9x.dll targets:
+   IEXPLORE.EXE:FIREFOX.EXE:MOZILLA.EXE:OPERA.EXE:NETSCAPE.EXE:EMULE.E
+
+   XE:CHROME.EXE
+
+   DLL: none targets: @1:*SVCHOST.EXE
+   DLL: System32\awcodc32.dll targets: EXPLORER.EXE
+   DLL: System32\SkypeIE6Plugin.dll targets: SKYPE.EXE
+   DLL: System32\nmwcdlog.dll targets: PCSUITE.EXE:NOKIAOVISUITE.EXE
+   DLL: System32\awview32.dll targets: OUTLOOK.EXE
+
+```
+Exported functions:
+viii) PGPsdkDriver module
+This module is a kernel mode keylogger. It accesses the “\Driver\Kbdclass” object
+and intercepts the IRP_MJ_READ and IRP_MJ_PNP request handlers.
+On IRP_MJ_READ requests, it reports information about pressed keys as custom
+activity records named “KEYS”
+ix) Fileflt module
+Intercepts file operations and collects information and their content if they match the
+filtration rules.
+Maintains the file activity log file: “\SystemRoot\System32\c_50225.nls”
+Sample filtration rules follow:
+```
+       File mask: \ .PAB;.WAB
+       File mask: \ .WRD
+       File mask: \ .SKR;.PKR;.PGP;.GPG;.KEY;.PPK;.RDP;.ASC
+       File mask: \ .DOC;.XLS;.RTF
+       File mask: \ .PDF
+       File mask: \ .DOCX;.XLSX;.WPS;.ODT;.WPD
+       File mask: \ .GMG
+       File mask: \ .AXX;.CFE;.CFD;.AKF
+       File mask: \ .ENC;.MLS;.HSE;.P7M;.P7C;.P7Z
+       File mask: \ .OCFS;.M2O;.M2R;M2F;.M15;.OCU
+       File mask: \ .VSD;.OVPN;.SSH;.CRT
+       File mask: \ .SXW;.SDW;.PSW;.ODS;.SXC;.SDC;.PXL
+       File mask: \ .MDDATA
+       File mask: \ .EML
+       File mask: \WINNT\ .
+       File mask: \WINDOWS\ .
+       File mask: \PROGRAM FILES\ .DOC;.XLS;.PDF;.RTF
+       File mask: \PROGRAM FILES\ .DOCX;.XLSX;.WPS;.ODT;.WPD
+       File mask: \PROGRAM
+       FILES\ .SXW;.SDW;.PSW;.ODS;.SXC;.SDC;.PXL
+       File mask: \HARDDISKVOLUMESHADOWCOPY .
+       File mask: \ARCHIVOS DE PROGRAMA\ .DOC;.XLS;.PDF;.RTF
+       File mask: \ARCHIVOS DE PROGRAMA\ .DOCX;.XLSX;.WPS;.ODT;.WPD
+       File mask: \ARCHIVOS DE
+       PROGRAMA\ .SXW;.SDW;.PSW;.ODS;.SXC;.SDC;.PXL
+```
+Exported functions:
+|0x14|Update the file filtration rules|
+|---|---|
+|0x1E|Append the activity log with a new data record|
+|0x21|Append the activity log with a new data record|
+x) Stopsec module
+Interacts with the driver of Kaspersky products (“KLIF”) and tries to make own
+processes invisible to the anti-virus.
+Exported functions:
+|0x1C|Try to make the process with given PID invisible toKaspersky Anti-Virus|
+|---|---|
+|0x1D|Not implemented, only checks input parameters|
+xi) TdiFlt and TdiFlt2 modules
+These modules provide facilities for intercepting network traffic. The “TdiFlt” driver
+uses the IPFILTER driver while the “TdiFlt2” uses the Windows Filtering Platform API.
+Exported functions:
+Although main components of the SGH package operate in kernel mode, there are
+several components injected as DLLs in user mode. It is worth noting that we have
+only discovered a 32-bit version of the driver components while the DLL modules
+have corresponding 64-bit counterparts.
+xii) awdcxc32 module
+This library is injected into the “EXPLORER.EXE” prcess by the
+LoadDLL driver component.
+```
+    File type: PE32/PE32+ DLL
+File location: %windows%\System32\awcodc32.dll
+
+Compilation timestamps:
+   2012.07.03 19:53:02 (GMT),
+   2012.07.03 19:55:22 (GMT),
+   2013.03.22 11:55:12 (GMT)
+
+File sizes: 22016, 24576, 27136 bytes
+
+Exports:
+
+79002822: DllCanUnloadNow
+
+7900282B: DllGetClassObject
+C e e m ex “{649B015F-A15F-c56b-494B-550BB6237F51}_631345_221507”
+
+```
+Technical details
+All the functionality is implemented in the DllMain function.
+Connects to the “vchw9x” component using a pipe by name taken from the
+configuration block (“\.\pipe{807BF02B-3F5F-4570-970A-8AADBAA55AC1}”) and
+communicates with the C&C server using that component.
+All communication between the component and the server is encrypted using the
+RC4 encryption algorithm. The encryption key is read from the configuration block
+and equals to the string “Caguen1aMar” in all the configurations we discovered. It
+also loads additional libraries specified in the configuration, i.e. “mfcn30”.
+The module can execute the following commands provided by the C&C server:
+|2|Write a new executable file to disk and optionally start it|
+|---|---|
+|110|Update the configuration block with new C&C data: URLs, encryptionkey|
+|113|Update the configuration block with new file filtration rules|
+|120|Write a new DLL file to disk and load it|
+The files received from the C&C server can be saved to the default Windows,
+Temporary or System directories, or any other location specified in the command.
+xiii) mfcn30 module
+This library is loaded by “awcodc32”. It provides a framework for extending the
+malware with additional plugins and sending the results of their data collection
+routines to the C&C server.
+```
+    File type: PE32/PE32+ DLL
+File location: %windows%\System32\mfcn30.dll
+
+Compilation timestamps:
+   2012.07.03 19:53:03 (GMT),
+   2012.07.03 19:55:23 (GMT),
+   2013.03.22 11:55:12 (GMT)
+File sizes: 15872, 17920 bytes
+
+Exports:
+
+   77001295: DllCanUnloadNow
+
+   7700129E: DllGetClassObject
+
+```
+Technical details
+All the functionality is implemented in the DllMain function.
+Connects to the “vchw9x” component using a pipe name from the
+configuration block
+\.\pipe{807BF02B-3F5F-4570-970A-8AADBAA55AC1}
+for interacting with C&C server.
+The module reads a list of additional plugin DLLs from the configuration block, loads
+these libraries and then periodically queries them for collected information. The
+results are sent to the C&C server via the pipe interface provided by “vchw9x”.
+Figure 22: Sample list of additional plugins
+xiv) vchw9x module
+This module implements network connectivity features for the SGH
+components.
+```
+    File type: PE32/PE32+ DLL
+File location: %windows%\System32\vchw9x.dll
+Compilation timestamps: 2012.07.03 19:53:02 (GMT), 2012.07.03 19:55:21
+(GMT), 2013.03.22 11:55:11 (GMT)
+File sizes: 18432, 20992, 22528 bytes
+
+Exports:
+
+78001977: DllCanUnloadNow
+
+78001980: DllGetClassObject
+
+```
+Technical details
+This library is injected by the LoadDLL driver into processes from the following list:
+IEXPLORE.EXE NETSCAPE.EXE
+FIREFOX.EXE EMULE.EXE
+MOZILLA.EXE CHROME.EXE
+OPERA.EXE
+All the functionality is implemented in the DllMain function.
+Creates the pipe:
+\.\pipe{807BF02B-3F5F-4570-970A-8AADBAA55AC1}
+and processes commands sent via this pipe by other modules.
+xv) jpeg1x32 module
+```
+    File type: PE32 DLL
+File location: %windows%\System32\jpeg1x32.dll
+Compilation timestamps: 2013.04.09 14:15:17 (GMT)
+File sizes: 31744 bytes
+
+Exports:
+
+79002656: fnProcess
+
+```
+Technical details
+All the functionality is implemented in the fnProcess function. The function receives 4
+parameters that define the module's behavior. Depending on the parameters, it can:
+  - Delete the SGH components specified in the configuration block, effectively
+
+uninstalling it
+  - Delete the registry keys corresponding to the components of SGH
+
+  - Compile a complete system report, including directory locations, hardware
+
+parameters, list of users, processes, installed programs, MAC addresses of
+network adapters
+  - Call various functions of the “awdcxc32” module
+
+xvi) siiw9x module
+```
+    File type: PE32 DLL
+File location: %windows%\System32\siiw9x.dll
+Compilation timestamps: 2013.03.22 11:55:13 (GMT)
+File sizes: 15360 bytes
+
+Exports:
+
+78002078: DllEnumClass
+
+```
+Technical details
+Main functionality is implemented in the DllMain function. The module waits until a
+desktop named “screen-saver” appears and when that desktop becomes available it
+creates another desktop named “DZ9PADXF” and launches the default browser
+application there. This functionality may be useful for stable operation of the “vchw9x”
+module on rarely used computers since that module is activated only in browser
+processes.
+The “DllEnumClass” function deletes the module or removes its name from the
+configuration block, depending on the Windows version.
+xvii) SkypeIE6Plugin
+Intercepts and records audio streams from Skype. We have discovered only a 32-bit
+version of this plugin so far.
+```
+    File type: PE32 DLL
+File location: %windows%\System32\SkypeIE6Plugin.dll
+Compilation timestamps: 2011.01.17 14:30:23 (GMT)
+File sizes: 73728 bytes
+
+```
+Technical details
+The library has no exports, its functionality is implemented in the DllMain function.
+The library hides itself by modifying the list of loaded DLL files to that its own module
+name appears to be “%windows%\System32\authz.dll”. It intercepts several functions
+exported by system libraries to capture sound from the infected system:
+|kernel32.dll|CreateFileW|
+|---|---|
+|dsound.dll|DirectSoundCreate, DirectSoundCreate|
+|ole32.dll|CoCreateInstance|
+|winmm.dll|waveInOpen, waveInClose, waveOutOpen, waveOutClose|
+The module uses an additional library, “%windows%\System32\lame_enc.dll” to
+compress recorded audio data. The location of recorded data is specified in the
+configuration block.
+xviii) nmwcdlog module
+Gathers information from Nokia mobile devices using the Nokia OVI/PC Suite API.
+```
+    File type: PE32 DLL
+    File location: %windows%\System32\nmwcdlog.dll
+    Compilation timestamps: 2011.04.26 15:07:26 (GMT)
+    File sizes: 106496 bytes
+C e e even o jec  “Glo l\9D14093C-8B2C-49aa-A328-35C1BDB2BC15”,
+
+“Glo l\8427ACED-9495-4cb7-A13D-B98012DF6654”.
+
+```
+Technical details
+The library has no exports, its functionality is implemented in the DllMain function. It
+loads the Nokia Connectivity API libraries “ConnAPI.dll”, “DAAPI.dll” and tries to
+extract data from all available devices.
+The module collects the following information:
+- device name
+
+
+- manufacturer name
+
+
+- model
+
+
+- serial number
+
+
+ - list of contacts
+
+
+- calendar
+
+
+- bookmarks
+
+
+SMS and MMS messages
+
+xix) d3dx8_20 module
+This data collection plugin makes screenshots of the victim's desktop.
+```
+    File type: PE32/PE32+ DLL
+File location: %windows%\System32\d3dx8_20.dll
+Compilation timestamps: 2011.03.25 10:49:57 (GMT), 2011.03.29 13:40:06
+(GMT)
+File sizes: 130560, 145920 bytes.
+
+```
+Technical details
+The library has no exports, its functionality is implemented in the DllMain function. It
+makes screenshots of the desktop and marks the position of the mouse cursor.
+Additionally, it captures the title of the foreground window. Collected data is stored in
+multi-volume ZIP archives and then delivered to the C&C server.
+xx) WifiScan module
+Retrieves the list of available Wi-Fi networks. We have discovered only a 64-bit version of
+this plugin so far.
+```
+    File type: PE32+ DLL
+File location: %windows%\System32\WifiScan.dll
+Compilation timestamps: 2011.03.23 08:04:43 (GMT)
+File sizes: 62464 bytes.
+
+```
+Technical details
+The library has no exports, its functionality is implemented in the DllMain function. It
+uses the API provided by the library “wlanapi.dll” to retrieve information about the
+wireless networks visible to the infected machine's Wi-Fi interfaces.
+xxi) awview32 module
+This module is injected in Microsoft Outlook processes. Collects victim's email messages.
+```
+File type: PE32/PE32+ DLL
+File location: %windows%\System32\awview32.dll
+Compilation timestamps: 2011.06.10 12:27:40 (GMT), 2011.06.10 16:46:57
+(GMT)
+File sizes: 26624, 45056 bytes.
+```
+Technical details
+The library has no exports, its functionality is implemented in the DllMain function.
+The module implements the Microsoft Outlook add-in interface and ensures it is
+requested by hooking the OLE2 API. It receives events from the Outlook application,
+collects the e-mail messages and writes them to the temporary directory.
+xxii) CDllUninstall module
+```
+File type: PE32/PE32+ DLL
+File location: non, is executed in memory
+Compilation timestamps: 2013.06.20 11:58:03 (GMT), 2013.06.20 11:58:08
+(GMT)
+File sizes: 11264, 13824 bytes
+```
+Technical details
+Having its filename related to the SGH package, this module is actually a command
+package for Careto. It is transmitted by the C&C servers as a CAB archive containing
+32-bit and 64-bit versions of its DLL and the accompanying “Meta.inf” file. The
+contents of the archive follow:
+|Name|File Size|Date Time|
+|---|---|---|
+|Meta.inf548 bytes28.10.2013 17:20:12CDllUninstallSGH64.dllCDllUninstallSGH32.dll13824 bytes11264 bytes28.10.2013 17:20:1228.10.2013 17:20:12|Meta.inf548 bytes28.10.2013 17:20:12CDllUninstallSGH64.dllCDllUninstallSGH32.dll13824 bytes11264 bytes28.10.2013 17:20:1228.10.2013 17:20:12|Meta.inf548 bytes28.10.2013 17:20:12CDllUninstallSGH64.dllCDllUninstallSGH32.dll13824 bytes11264 bytes28.10.2013 17:20:1228.10.2013 17:20:12|
+The “Meta.inf” instructs the Careto instance to load the DLL appropriate for the
+system architecture:
+```
+Mon Oct 28 17:20:14 GMT 2013
+DLL32_FILE_NAME=CDllUninstallSGH32.dll
+DLL64_FILE_NAME=CDllUninstallSGH64.dll
+DATE_GENERATION=20131028T172014.101
+TYPE=CMD
+CLIENT_ID= %client id%
+CMD_SEQ=0002
+INST_ID= %installation id%
+SUB_TYPE=CANNEDDLL
+TARGET_PROCESS=EXPLORER
+PRODUCT_CODE=C316
+```
+The module uninstalls both Careto and SGH from the infected computer. Its internal
+name is “CDllUninstall v1.0.0". It explicitly names the software packages with their
+original names by writing the following strings in the uninstallation log:
+```
+    1. Unistalling SGH
+...
+
+2. Unistalling Careto
+
+```
+The module contains hardcoded locations of the files that are removed and registry
+keys to be removed or restored. For SGH, these are:
+HKLM\SYSTEM*ControlSet*\Services\scsimap
+%systemroot%\System32\bootfont.bin
+c:\Windows\System32\bootfont.bin
+%systemroot%\System32\drivers\scsimap.sys
+c:\Windows\System32\drivers\scsimap.sys
+For Careto, it first determines the location of the main module by reading the registry
+value from:
+HKLM/HKCU\SOFTWARE\CLASSES\CLSID{ECD4FC4D-521C-11D0-B792-
+00A0C90312E1}
+The main module is removed and the original registry value is restored from the
+registry key:
+SOFTWARE\CLASSES\CLSID{E6BB64BE-0618-4353-9193-
+0AFE606D6F0C}\InprocServer32

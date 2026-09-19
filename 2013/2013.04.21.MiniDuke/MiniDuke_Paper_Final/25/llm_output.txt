@@ -1,0 +1,88 @@
+
+
+
+Sentence : 6.2 The Communication Protocol
+The malware performs a GET request to a server with a Base64-encoded string that, if
+decoded, reads the following:
+For 2011 samples:
+crc32
+country_code
+ComputerName/%USERDOMAIN%
+OS major, minor, sp_major, prod_type, architecture(32/64bit)
+antivirus_list
+proxy_list
+version (the version of the malicious sample)
+All values are split with ”|”. The entire string is encoded in Base64.
+For 2012/2013 samples:
+These samples send additional data, such as the system username. Another significant change
+is the fact that the malware encodes the text using XOR and a key that results from SHA-1
+hashing of the Google identifier. The resulting buffer is then encoded with Base64.
+This is a practical example of the GET request:
+?a=MjIzMTQyMzkzM3xST3xIT01FL0hPTUV8NXwxfDN8MXwwfC18LXwyLjEy&g=MjIzMTQy
+M.
+The variables names in the GET requests are randomly-picked. The second variable holds a
+CRC modulo 13D455h on the encoded string. The server responds with a GIF file that holds
+either a DLL or an EXE file.
+16
+© 2013 Bitdefender
+6.3 Adding Modules and Updates
+After a request is sent to the C2, the malware receives a file with a .GIF header. This is usually
+a valid image that has appended to it a payload or an update in an encrypted form.
+The malware checks for the ‘GIF8’ magic at the beginning of the file and looks for the 0x3b00
+word. If the pattern is found, the malware isolates the next four bytes that actually represent
+the decryption key, followed by the encrypted payload. Next, the digital signature is verified
+and then the payload is decrypted. If it is a DLL file, it attempts to load it via LoadLibrary() ; if it
+is an EXE file, it gets written on disk with one of the following names: winupdt.exe,
+wcsntfy.exe, netmngr.exe, dumpreport.exe, taskhosts.exe, wupdmngr.exe, winhlp.exe,
+dllhosts.exe, dxdiagupd.exe, dialers.exe, netschd.exe, connwiz.exe, certupdt.exe,
+repfault.exe, wuapreport.exe, lanmgr.exe . The file is then executed.
+The GIF file is digitally signed with RSA 2048bit. The signature is located at the end of the GIF
+file and uses SHA-1. This mechanism ensures that the updates are “legit” and prevents an
+outsider from pushing a fake update.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Malware", "type" : "APPS"},
+        {"id": 2, "description": "GET request to server", "type" : "NETP"},
+        {"id": 3, "description": "Base64-encoded string", "type" : "TAMP"},
+        {"id": 4, "description": "crc32", "type" : "TAMP"},
+        {"id": 5, "description": "country_code", "type" : "COUN"},
+        {"id": 6, "description": "ComputerName/%USERDOMAIN%", "type" : "SYSP"},
+        {"id": 7, "description": "OS major, minor, sp_major, prod_type, architecture(32/64bit)", "type" : "OPPS"},
+        {"id": 8, "description": "antivirus_list", "type" : "TAMP"},
+        {"id": 9, "description": "proxy_list", "type" : "NETP"},
+        {"id": 10, "description": "version (the version of the malicious sample)", "type" : "TAMP"},
+        {"id": 11, "description": "System username", "type" : "TAMP"},
+        {"id": 12, "description": "Google identifier", "type" : "TAMP"},
+        {"id": 13, "description": "SHA-1 hash of the Google identifier", "type" : "TAMP"},
+        {"id": 14, "description": "XOR encoded text", "type" : "TAMP"},
+        {"id": 15, "description": "Base64-encoded XOR buffer", "type" : "TAMP"},
+        {"id": 16, "description": "GIF file (holds either a DLL or EXE)", "type" : "DOCF"},
+        {"id": 17, "description": "C2 server", "type" : "CCSH"},
+        {"id": 18, "description": "'GIF8' magic at the beginning of the file", "type" : "TAMP"},
+        {"id": 19, "description": "0x3b00 word", "type" : "TAMP"},
+        {"id": 20, "description": "Decryption key (next four bytes)", "type" : "TAMP"},
+        {"id": 21, "description": "Encrypted payload", "type" : "DOCF"},
+        {"id": 22, "description": "Digital signature (SHA-1, RSA 2048bit)", "type" : "TAMP"},
+        {"id": 23, "description": "DLL file", "type" : "EXEF"},
+        {"id": 24, "description": "EXE file with names like winupdt.exe, wcsntfy.exe, netmngr.exe, etc.", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "sends"},
+        {"source": 2, "target": 3, "rel_name" : "contains"},
+        {"source": 3, "source": 4, "target": 5, "target": 6, "target": 7, "target": 8, "target": 9, "target": 10, "rel_name" : "includes"},
+        {"source": 11, "target": 3, "rel_name" : "appended to"},
+        {"source": 12, "target": 13, "rel_name" : "hashed using"},
+        {"source": 13, "target": 14, "rel_name" : "used for encoding"},
+        {"source": 14, "target": 15, "rel_name" : "encoded with Base64"},
+        {"source": 2, "target": 17, "rel_name" : "sent to"},
+        {"source": 17, "target": 16, "rel_name" : "responds with"},
+        {"source": 16, "target": 18, "rel_name" : "contains magic"},
+        {"source": 16, "target": 19, "rel_name" : "contains word"},
+        {"source": 19, "target": 20, "rel_name" : "followed by"},
+        {"source": 20, "target": 21, "rel_name" : "decrypts"},
+        {"source": 21, "target": 22, "rel_name" : "signed with"},
+        {"source": 21, "target": 23, "rel_name" : "can be a"},
+        {"source": 21, "target": 24, "rel_name" : "can be a"}
+    ]
+}

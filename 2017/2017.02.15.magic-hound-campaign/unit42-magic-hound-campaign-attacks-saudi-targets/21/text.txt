@@ -1,0 +1,75 @@
+MPKBot
+We also found a second IRC bot called MPK (SHA256:
+d08d737fa59edbea4568100cf83cff7bf930087aaa640f1b4edf48eea4e07b19) using an IP that a�
+Retriever sample was hosted on as a C2 server instead. This MPK IRC bot is very similar to the MPK
+Trojan that used a custom C2 communications protocol, as discussed in the whitepaper by
+CheckPoint discussing a threat group called Rocket Kitten. We believe this version of the MPK Trojan
+is based on the same code base, as both the IRC version and the one discussed in the above white
+paper have considerable similarities from a behavior standpoint and both Trojan have direct code
+sharing between them.
+From a behaviorial standpoint, both the IRC and custom protocol version of MPK save “tmp.vbs”
+and “tmp1.vbs” to the %TEMP% folder (both differed slightly but used the same variable names�
+within the script) in order to copy the Trojan to its final location and to execute it. Both variants need�
+to be executed with the command line argument “[2]” to avoid continually attempting to copy and
+execute the Trojan using the “tmp.vbs” and “tmp1.vbs” files. The two variants of MPK share the�
+same registry key that the Trojan uses to automatically run each time the system starts, specifically:�
+[HKLM and HKCU]\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\explorer
+Both MPK variants include key loggers that are extremely similar in functionality in addition to having
+the same strings used for headers within the key log file. The MPK IRC Bot monitors active�
+application windows and writes the title of the open window along with the logged keystrokes to a
+file at “%temp%\Save.tmp”. The MPK Trojan also monitors specifically for windows that are likely to�
+contain login forms for popular web-based email clients, such as titles that contain:
+“Gmail -”
+“Yahoo – login”
+“Sign In -”
+“Outlook.com -“
+MPK will attempt to parse these window titles to identify the associated email address and record
+these to the log file using the following format:�
+/////////////
+Mail Find 
+///////////
+If the Trojan does not find the window titles associated with Gmail, Yahoo or Outlook, it saves the�
+title to the “Save.tmp” file in the following format:�
++++++++++++++
+Window= 
++++++++++++++
+The major difference between the IRC variant and non-IRC variant of MPK is the C2 protocol used.�
+The IRC variant creates a mutex named “mpk1” and attempts to connect to an IRC server at
+45.58.37[.]142:6667. The MPK bot generates a random lowercase name and uses it to log into the
+IRC server. It then sends the following IRC commands:
+NICK bxphzrjbxp
+USER bxphzrjbxp bxphzrjbxp bxphzrjbxp bxphzrjbxp
+To make sure it connected to the correct server, the Trojan checks for the message sent from the IRC
+server after the bot connects:
+Welcome to the MpkNet IRC Network
+The MPK bot does not join a specific IRC channel, instead sending private messages (PRIVMSG) to�
+a user with the nick “mpk”. After connecting to the IRC server, the MPK bot sends custom ping
+messages and provides an introduction via a “!Hello” message that contains the current logged in
+user of the infected host, if the user has administrator privileges, the hostname, the UUID of the
+system, and operating system version. Figure 7 shows the initial private messages sent from the
+MPK bot to the “mpk” account on the C2 server.
+Figure 7 Initial private messages sent from MPK to the IRC C2 server
+The commands available within the MPK IRC bot are called via a jump table, rather than a switch
+statement used in the custom protocol variant of MPK. The IRC variant of MPK has a command set
+(Table 2) that makes this an effective backdoor Trojan, specifically allowing the actors to steal�
+credentials from the targeted system via keylogging, to navigate and interact with the file system, to�
+|run arbitrary commands, and to|download and execute additional tools on the system.|
+|---|---|
+|Command|Description|
+|!Dir|Lists the contents of a speciﬁed directory�|
+|!Drives|Enumerates the storage drives attached to the system and theirrespective type.|
+|!DeleteFile|Deletes a speciﬁed ﬁle�|
+|!NickChange|Changes the nickname that the Trojan uses to log into the C2 IRCserver. Writes it to “nick435.tmp” for subsequent logins.|
+|!ProcessList|List running processes, including their PID, parent PID, executablename and priority|
+|!SendFileToServer|Uploads a speciﬁed ﬁle to the C2 server�|
+|!CaptureScreen|Takes a screenshot that it saves to a ﬁle and uploads to the C2�server.|
+|!Hello|The Trojan introduces itself by sending the current username, if itsan admin account or not, the computer name, the system UUID andthe OS version.|
+|!ProcessKill|Terminates a process based on PID|
+|!RenameFileFolder|Renames a ﬁle or folder and returns a list of the containing folder to�the C2 server.|
+|!GetFileOfServer|Writes a ﬁle from the C2 server to a speciﬁed ﬁle�|
+|!ExecuteCommand|Uses the command prompt sub-process to execute commands andreturns their results to the C2.|
+|!ExeCuteFile|Executes a speciﬁed ﬁle using ShellExecuteA�|
+|!DeleteFileFolder|Deletes a ﬁle or a folder�|
+|!SendkeyLogToServer|Uploads the %TEMP%\Save.tmp ﬁle to the C2 server�|
+|!DeleteKeyloggerLog|Deletes the %TEMP%\Save.tmp ﬁle on the system�|
+Table 2 Commands available within MPK IRC Bot

@@ -1,0 +1,147 @@
+
+
+
+Sentence : Windows Malware
+|Sample #10|Col2|
+|---|---|
+|MD5|a59c83285679296758bf8589277abde7|
+|SHA1|2ff1ff96fe83c607c8b7a4a279b6bc3103de1d33|
+|SHA-256|f7d69c21c683e19624169d3bc70d06b2896a9ccf6186301d16f500db520d3b19|
+|File size|219,648 bytes|
+|File Name:|C:\ProgramData\NSIProvider\NSIProvider.dll|
+Sample #11 - encrypted payload
+|MD5|76380fea8fb56d3bb3c329f193883edf|
+|---|---|
+|SHA1|cd848eb12be9588609ed9e5afad74adfd5c3798a|
+|SHA-256|2bc8fea05b1e9409c3cf065a30aa450ace911d91fdbb55ad282c2925a9aac766|
+|File size|516,097 bytes|
+|File Name:|C:\ProgramData\NSIProvider\NSIProvider.dll.crt|
+NSIProvider.dll is a malicious Windows service DLL, executed under svchost.exe.
+The service name is NSIProvider, registered with the description name "Netword Store Interface
+Provider."
+NOTE : 'Netword' with 'd'.
+Cloud Snooper - SophosLabs Page 23 of 29
+Cloud Snooper - SophosLabs
+The DLL is heavily obfuscated.
+Once started as a service, it conveniently spits out debug messages documenting the operation.
+Sysinternal's DebugView shows these messages:
+Once loaded, the DLL locates the encrypted payload file and loads it into memory.
+The steps are:
+
+Get current module filename with GetModuleFileName() API, i.e.
+```
+   %PATH%\NSIProvider.dll
+
+```
+
+
+Concatenate current module filename with ' .crt ', e.g. %PATH%\NSIProvider.dll.crt
+
+
+Allocate memory VirtualAlloc() and read the entire payload file into memory
+
+
+Initialise a permutation table that consists of 256 DWORDs
+
+
+Each value of the permutation table is calculated as:
+
+Start decryption loop – in this loop, a key value is subtracted from each byte of the encrypted
+
+payload; the key value itself is calculated in each iteration based on the previous key value,
+current index of the decrypted byte, and the permutation table:
+Cloud Snooper - SophosLabs Page 24 of 29
+Cloud Snooper - SophosLabs
+
+The decrypted payload reveals a checksum, a number of zero bytes, followed by the initial
+
+shellcode itself:
+The decrypted payload blob is copied into a newly allocated memory buffer and the initial shellcode
+(starts from bytes EB 17 58 in the image above) is called.
+The initial shellcode will then decrypt the rest of the blob using an XOR key that starts from 0x2B, and
+then incremented by the index of the decrypted byte, i.e. the XOR key values are: 0x2B, 0x2C, 0x2E,
+0x31, etc.
+As the rest of the blob is decrypted, the configuration file is decrypted as well, followed by other parts.
+After the initial shellcode has finished the decryption, the fully decrypted blob will consist of:
+
+Initial shellcode
+
+Decrypted config:
+Zlib-compressed LIBEAY32.dll (77,871 bytes, 167,936 bytes when decompressed)
+Zlib-compressed LIBEAY32.dll (386,876 bytes, 851,968 bytes when decompressed)
+Backdoor, implemented in the form of a second-stage shellcode
+Once it's decoded, the second-stage shellcode is called – this is the backdoor itself.
+Cloud Snooper - SophosLabs Page 25 of 29
+Cloud Snooper - SophosLabs
+When it gets control, it dynamically obtains all the APIs it needs by using hard-coded API hashes. To find
+matching hashes from the API names, the shellcode relies on a slight modification of the ROR-13
+algorithm. The only difference is that it checks if the zero byte character is at the end of the loop, and
+thus has an additional ROR for the terminating zero byte.
+All the required DLLs are loaded dynamically.
+Next, it will decompress and load two stubs as DLLs. Both DLLs have the internal name LIBEAY32.dll.
+Both DLLs rely on an older (2004) build of the libeay32.dll. Below are some strings found in the body of
+these DLLs:
+The backdoor relies on these DLLs for crypto-functions required to communicate with the C2.
+The config format is consistent with the ELF binaries, i.e., the seven '1;' means the bot should be active
+seven days a week, all hours (00-24), the C2 communicates via HTTPS.
+The. sSame config is known to be used by the Gh0st RAT.
+Just like /bin/snort described above, the bot also checks if the current day and hour match what's
+specified in the config.
+If there is no match, the bot also falls asleep for just over seven minutes (423.756 seconds), then checks
+the time again.
+The code snippets below demonstrate that the 423,756-millisecond delay specified within /bin/snort
+executable is identical to its Windows counter-part:
+ELF executable: /bin/snort Windows shellcode:
+Cloud Snooper - SophosLabs Page 26 of 29
+Cloud Snooper - SophosLabs
+On Linux, the number 423,756 is multiplied by 1,000, then passed to usleep() syscall that takes an
+argument in microseconds.
+On Windows, the same number is passed to Sleep() API, which takes the argument in milliseconds.
+In both cases, the achieved delay is identical: 7.062 seconds.
+Cloud Snooper - SophosLabs Page 27 of 29
+Cloud Snooper - SophosLabs
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "C:\\ProgramData\\NSIProvider\\NSIProvider.dll", "type": "DOCF"},
+        {"id": 2, "description": "C:\\ProgramData\\NSIProvider\\NSIProvider.dll.crt", "type": "DOCF"},
+        {"id": 3, "description": "svchost.exe", "type": "APPS"},
+        {"id": 4, "description": "MD5: a59c83285679296758bf8589277abde7", "type": "IOCS"},
+        {"id": 5, "description": "SHA1: 2ff1ff96fe83c607c8b7a4a279b6bc3103de1d33", "type": "IOCS"},
+        {"id": 6, "description": "SHA-256: f7d69c21c683e19624169d3bc70d06b2896a9ccf6186301d16f500db520d3b19", "type": "IOCS"},
+        {"id": 7, "description": "MD5: 76380fea8fb56d3bb3c329f193883edf", "type": "IOCS"},
+        {"id": 8, "description": "SHA1: cd848eb12be9588609ed9e5afad74adfd5c3798a", "type": "IOCS"},
+        {"id": 9, "description": "SHA-256: 2bc8fea05b1e9409c3cf065a30aa450ace911d91fdbb55ad282c2925a9aac766", "type": "IOCS"},
+        {"id": 10, "description": "NSIProvider service", "type": "EXEF"},
+        {"id": 11, "description": "GetModuleFileName() API", "type": "APPS"},
+        {"id": 12, "description": "VirtualAlloc() API", "type": "APPS"},
+        {"id": 13, "description": "Zlib-compressed LIBEAY32.dll (77,871 bytes)", "type": "DOCF"},
+        {"id": 14, "description": "Zlib-compressed LIBEAY32.dll (386,876 bytes)", "type": "DOCF"},
+        {"id": 15, "description": "Backdoor (second-stage shellcode)", "type": "EXEF"},
+        {"id": 16, "description": "HTTPS", "type": "NETP"},
+        {"id": 17, "description": "Gh0st RAT", "type": "ACTO"},
+        {"id": 18, "description": "/bin/snort executable", "type": "EXEF"},
+        {"id": 19, "description": "Sleep() API", "type": "APPS"},
+        {"id": 20, "description": "usleep() syscall", "type": "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name": "executed by"},
+        {"source": 1, "target": 4, "rel_name": "has hash"},
+        {"source": 1, "target": 5, "rel_name": "has hash"},
+        {"source": 1, "target": 6, "rel_name": "has hash"},
+        {"source": 2, "target": 7, "rel_name": "has hash"},
+        {"source": 2, "target": 8, "rel_name": "has hash"},
+        {"source": 2, "target": 9, "rel_name": "has hash"},
+        {"source": 1, "target": 2, "rel_name": "decrypts"},
+        {"source": 10, "description": "registers service", "type": "EXEF"},
+        {"source": 1, "target": 11, "rel_name": "uses API"},
+        {"source": 1, "target": 12, "rel_name": "uses API"},
+        {"source": 2, "target": 13, "rel_name": "contains"},
+        {"source": 2, "target": 14, "rel_name": "contains"},
+        {"source": 2, "target": 15, "rel_name": "decrypts to"},
+        {"source": 15, "target": 16, "rel_name": "communicates via"},
+        {"source": 17, "target": 13, "rel_name": "uses config from"},
+        {"source": 18, "target": 19, "rel_name": "calls API"},
+        {"source": 15, "target": 20, "rel_name": "calls syscall"}
+    ]
+}

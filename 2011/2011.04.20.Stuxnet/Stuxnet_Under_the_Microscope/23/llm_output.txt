@@ -1,0 +1,177 @@
+
+
+
+Sentence : 
+51
+In kernel32.dll:
+o FindFirstFileW;
+o FindNextFileW;
+o FindFirstFileExW; 
+In ntdll.dll:
+o NtQueryDirectoryFile;
+o ZwQueryDirectoryFile.
+This function filters the files that satisfy the following criteria from being displayed: 
+files with " .LNK " extension of which the file size is equal to 1471 (0x104b) bytes; 
+files with " .TMP " extension of which the name consists of 12 characters (including filename
+extension) in the following format: "~ WTRabcd.TMP ", where a,b,c,d are digits from 0 to 9 which
+sum modulo 10 equals 0 (" ~WTR4411.TMP " for example).
+This module loads another module. ~WTR4132.TMP, using a method described in previous
+section. ~WTR4132.TMP extracts from its section with ".stub" name another component – the main
+dynamic link library of Stuxnet - then loads it and calls exported function number 15.
+Figure 4.7 – Installation of the Malware
+This function checks whether the token of the current user belongs to the group of the local
+administrators on the computer: if so, it executes the exported function with ordinal 0x10 in a new
+process. This function installs Stuxnet's components onto the system.
+www.eset.com
+52
+4.1.6 Exported functions
+Here we will describe the functions exported by the main module.
+Export 1
+This function has the same functionality as the function number 32 except it waits for 60 seconds prior
+creating and starting Stuxnet's RPC Server.
+Export 2
+This function is called in address space of the process with name s7tgtopx.exe and CCProjectMgr.exe
+and hooks certain functions by modifying the import address table of the corresponding modules. The
+table below gives the names of the patched modules and hooked functions:
+Table 4.1.1 – Patched Modules and Hooked Functions
+|Patched module|Hooked function|Library exporting hookedfunction|
+|---|---|---|
+|s7apromx.dll|CreateFileA|kernel32.dll|
+|mfc42.dll|CreateFileA|kernel32.dll|
+|msvcrt.dll|CreateFileA|kernel32.dll|
+|CCProjectMgr.exe|StgOpenStorage|ole32.dll|
+The hook for CreateFileA monitors opening files with the extension .S7P while the hook for
+StgOpenStorage monitors files with extension .MCP.
+Export 4
+This function performs the full cleanup of the malware from the system. It starts a new process, injects
+the main module into it and calls exported function 18 (see 18).
+Export 5
+This function checks whether the kernel-mode driver MrxCls.sys is properly installed in the system.
+Export 6
+This function returns current version of Stuxnet installed in the system.
+Export 7
+The same as function number 6
+www.eset.com
+53
+Export 9
+This function builds Stuxnet's dropper from the files located in the system and runs it. The dropper is
+constructed from the following files which seems to be a components of Stuxnet: 
+%Dir%\XUTILS\listen\XR000000.MDX; 
+%Dir%\XUTILS\links\S7P00001.DBF; 
+%Dir%\XUTILS\listen\S7000001.MDX .
+%Dir% passed as a parameter by a caller of the function.
+Export 10
+This function performs the same actions as function number 9 which builds and runs the Stuxnet
+dropper. The only difference between these functions is that this function can build the dropper from
+the set of the files used in function number 9 as well as from the following files: 
+%Dir%\GracS\cc_alg.sav; 
+%Dir%\GracS\db_log.sav; 
+%Dir%\GracS\cc_tag.sav.
+Parameter %Dir% is also specified by a caller.
+Export 14
+This function manipulates with files which paths it receives as a parameter.
+Export 15
+This routine initiates infection of the system. See section 4.1.5 for more details.
+Export 16
+This function installs the malware's components in the system and performs the following tasks: 
+Drops and installs kernel-mode drivers: MrxNet.sys and MrxCls.sys; 
+Drops the main dll in %SystemRoot%\inf\oem7A.PNF; 
+Drops Stuxnet's configuration data in %SystemRoot%\inf\mdmcpq3.PNF; 
+Creates tracing file in %SystemRoot%\inf\oem6C.PNF; 
+Drops data file in %SystemRoot%\inf\mdmeric3.PNF; 
+Injects the main dll into services.exe process and executes the function exported as
+ordinal 32; 
+Injects the main dll into the s7tgtopx.exe process if any exists, and executes exported
+function 2 there.
+Export 17
+This function replaces s7otbxdx.dll with a malicious DLL. It moves the original library into a file called
+s7otbxdsx.dll. The malicious library is a wrapper for the original DLL: that is, it simply passes control to
+the original library, except in the case of certain functions which it hooks: 
+s7_event; 
+s7ag_bub_cycl_read_create;
+www.eset.com
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "kernel32.dll", "type" : "APPS"},
+        {"id": 2, "description": "FindFirstFileW", "type" : "EXEF"},
+        {"id": 3, "description": "FindNextFileW", "type" : "EXEF"},
+        {"id": 4, "description": "FindFirstFileExW", "type" : "EXEF"},
+        {"id": 5, "description": "ntdll.dll", "type" : "APPS"},
+        {"id": 6, "description": "NtQueryDirectoryFile", "type" : "EXEF"},
+        {"id": 7, "description": "ZwQueryDirectoryFile", "type" : "EXEF"},
+        {"id": 8, "description": ".LNK files with size 1471 bytes", "type" : "DOCF"},
+        {"id": 9, "description": ".TMP files (e.g., ~WTR4411.TMP)", "type" : "DOCF"},
+        {"id": 10, "description": "~WTR4132.TMP", "type" : "DOCF"},
+        {"id": 11, "description": ".stub section in ~WTR4132.TMP", "type" : "SYSP"},
+        {"id": 12, "description": "Stuxnet main dynamic link library", "type" : "APPS"},
+        {"id": 13, "description": "Exported function number 15", "type" : "EXEF"},
+        {"id": 14, "description": "Local administrators group", "type" : "TAMP"},
+        {"id": 15, "description": "s7tgtopx.exe", "type" : "APPS"},
+        {"id": 16, "description": "CCProjectMgr.exe", "type" : "APPS"},
+        {"id": 17, "description": "s7apromx.dll", "type" : "APPS"},
+        {"id": 18, "description": "CreateFileA (kernel32.dll)", "type" : "EXEF"},
+        {"id": 19, "description": "mfc42.dll", "type" : "APPS"},
+        {"id": 20, "description": "msvcrt.dll", "type" : "APPS"},
+        {"id": 21, "description": "CCProjectMgr.exe (StgOpenStorage)", "type" : "EXEF"},
+        {"id": 22, "description": "ole32.dll", "type" : "APPS"},
+        {"id": 23, "description": ".S7P files", "type" : "DOCF"},
+        {"id": 24, "description": ".MCP files", "type" : "DOCF"},
+        {"id": 25, "description": "MrxCls.sys", "type" : "EXEF"},
+        {"id": 26, "description": "Stuxnet's components", "type" : "APPS"},
+        {"id": 27, "description": "%Dir%\\XUTILS\\listen\\XR000000.MDX", "type" : "DOCF"},
+        {"id": 28, "description": "%Dir%\\XUTILS\\links\\S7P00001.DBF", "type" : "DOCF"},
+        {"id": 29, "description": "%Dir%\\XUTILS\\listen\\S7000001.MDX", "type" : "DOCF"},
+        {"id": 30, "description": "%Dir%\\GracS\\cc_alg.sav", "type" : "DOCF"},
+        {"id": 31, "description": "%Dir%\\GracS\\db_log.sav", "type" : "DOCF"},
+        {"id": 32, "description": "%Dir%\\GracS\\cc_tag.sav", "type" : "DOCF"},
+        {"id": 33, "description": "%SystemRoot%\\inf\\oem7A.PNF", "type" : "SYSP"},
+        {"id": 34, "description": "%SystemRoot%\\inf\\mdmcpq3.PNF", "type" : "SYSP"},
+        {"id": 35, "description": "%SystemRoot%\\inf\\oem6C.PNF", "type" : "SYSP"},
+        {"id": 36, "description": "%SystemRoot%\\inf\\mdmeric3.PNF", "type" : "SYSP"},
+        {"id": 37, "description": "services.exe process", "type" : "APPS"},
+        {"id": 38, "description": "Exported function ordinal 32", "type" : "EXEF"},
+        {"id": 39, "description": "s7tgtopx.exe process", "type" : "APPS"},
+        {"id": 40, "description": "Exported function ordinal 2", "type" : "EXEF"},
+        {"id": 41, "description": "s7otbxdx.dll", "type" : "APPS"},
+        {"id": 42, "description": "Malicious s7otbxdx.dll wrapper", "type" : "APPS"},
+        {"id": 43, "description": "Original s7otbxdx.dll moved to s7otbxdsx.dll", "type" : "DOCF"},
+        {"id": 44, "description": "s7_event function", "type" : "EXEF"},
+        {"id": 45, "description": "s7ag_bub_cycl_read_create function", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 1, "target": 3, "rel_name" : "contains"},
+        {"source": 1, "target": 4, "rel_name" : "contains"},
+        {"source": 5, "target": 6, "rel_name" : "contains"},
+        {"source": 5, "target": 7, "rel_name" : "contains"},
+        {"source": 8, "target": 10, "rel_name" : "filtered by"},
+        {"source": 9, "target": 10, "rel_name" : "filtered by"},
+        {"source": 10, "target": 12, "rel_name" : "extracts and loads"},
+        {"source": 13, "target": 14, "rel_name" : "checks for"},
+        {"source": 15, "target": 16, "rel_name" : "hooks in"},
+        {"source": 17, "target": 18, "rel_name" : "patches and hooks"},
+        {"source": 19, "target": 18, "rel_name" : "patches and hooks"},
+        {"source": 20, "target": 18, "rel_name" : "patches and hooks"},
+        {"source": 21, "target": 22, "rel_name" : "hooks in"},
+        {"source": 13, "target": 15, "rel_name" : "executes in"},
+        {"source": 25, "target": 26, "rel_name" : "checks for installation of"},
+        {"source": 27, "target": 26, "rel_name" : "component of"},
+        {"source": 28, "target": 26, "rel_name" : "component of"},
+        {"source": 29, "target": 26, "rel_name" : "component of"},
+        {"source": 30, "target": 26, "rel_name" : "component of"},
+        {"source": 31, "target": 26, "rel_name" : "component of"},
+        {"source": 32, "target": 26, "rel_name" : "component of"},
+        {"source": 33, "target": 26, "rel_name" : "drops and installs"},
+        {"source": 34, "target": 26, "rel_name" : "drops and installs"},
+        {"source": 35, "target": 26, "rel_name" : "creates"},
+        {"source": 36, "target": 26, "rel_name" : "drops data file"},
+        {"source": 37, "target": 12, "rel_name" : "injects and executes"},
+        {"source": 38, "target": 37, "rel_name" : "calls function in"},
+        {"source": 39, "target": 40, "rel_name" : "executes in if exists"},
+        {"source": 41, "target": 42, "rel_name" : "replaces with malicious wrapper"},
+        {"source": 41, "target": 43, "rel_name" : "moves original to"},
+        {"source": 42, "target": 44, "rel_name" : "hooks"},
+        {"source": 42, "target": 45, "rel_name" : "hooks"}
+    ]
+}

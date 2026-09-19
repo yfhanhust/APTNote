@@ -1,0 +1,64 @@
+
+
+
+Sentence : ATMitch Payload
+Sha256 e372631f96face11e803e812d9a77a25d0a81fa41e4ac362dc8aee5c8a021000
+Threat ATMitch ATM malware
+Brief description ATMitch payload
+Ssdeep 768:N/qZvnFW5PJizM5qy1ucRM7YNNsrGkc+uW9LMQDFd+MbfRprj:N/0vniPJiz3yUrvGkc+uylR
+Table 2: Information about the payload (DLL contained as resource in the Dropper/Loader)
+The injected DLL has a very characteristic dependency: it requires the “ msxfs.dll ”. This library provides
+access to the E X tension for F inancial S ervice (XFS) API, the communication interface needed to interact
+with AMT components such as PIN pad and cash dispenser. Again, this is a very particular dependency
+can only be resolved on special purpose Windows environment, like the Wincor machines.
+Figure 5: “msxfs.dll”, library required by malware to communicate with ATM device
+The malware is quite simple: it reads commands from a file included into “c:\intel” folder and interacts with
+the ATM drivers in order to retrieve information about the current amount and to dispense money at the
+right time. In the following screen is shown a function used to initiate the communication with the PinPad
+and Dispenser ATM components.
+https://blog.yoroi.company/research/atmitch-new-evidence-spotted-in-the-wild/ 5/10
+5/8/2019 ATMitch: New Evidence Spotted In The Wild – Yoroi Blog
+Figure 6: Discovering of PinPad and Dispenser components
+Using the functions provided by “msxfs.dll” library, the malware can easily interact with these components.
+For example, using the WFSExecute function it is possible to send one of the supported commands to the
+dispenser, like OPEN_SHUTTER or OPEN_SAFE_DOOR .
+https://blog.yoroi.company/research/atmitch-new-evidence-spotted-in-the-wild/ 6/10
+5/8/2019 ATMitch: New Evidence Spotted In The Wild – Yoroi Blog
+Figure 7: Part of commands accepted by ATM
+In the specific case, the malware uses the function to dispense money through the command
+WFS_CMD_CDM_DISPENSE, as shown in figure:
+Figure 8: Command “WFS_CMD_CDM_DISPENSE” used by malware to dispense money
+The core of the malware is the following switch structure: after reading the new command from the specific
+file, it compares the command code with the embedded ones, such as “code 2” for retrieving information or
+“code 7” for dispensing money.
+https://blog.yoroi.company/research/atmitch-new-evidence-spotted-in-the-wild/ 7/10
+5/8/2019 ATMitch: New Evidence Spotted In The Wild – Yoroi Blog
+Figure 9: Malware’ switch structure
+Moreover, the malware provides a well-structured logging system: all actions are traced and logged into
+“c:\intel__log.txt” . In relation to the action that needs to be logged, it is able to set a specific logging level
+(FATAL, ERROR, DEBUG etc.).
+https://blog.yoroi.company/research/atmitch-new-evidence-spotted-in-the-wild/ 8/10
+5/8/2019 ATMitch: New Evidence Spotted In The Wild – Yoroi Blog
+Figure 10: Logging-level of the malware logging system
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "ATMitch Payload", "type" : "EXEF"},
+        {"id": 2, "description": "e372631f96face11e803e812d9a77a25d0a81fa41e4ac362dc8aee5c8a021000", "type" : "IOCS"},
+        {"id": 3, "description": "msxfs.dll", "type" : "APPS"},
+        {"id": 4, "description": "c:\\intel", "type" : "SYSP"},
+        {"id": 5, "description": "PinPad and Dispenser ATM components", "type" : "MTCP"},
+        {"id": 6, "description": "WFSExecute function", "type" : "TTPS"},
+        {"id": 7, "description": "WFS_CMD_CDM_DISPENSE command", "type" : "TTPS"},
+        {"id": 8, "description": "c:\\intel__log.txt", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has_hash"},
+        {"source": 1, "target": 3, "rel_name" : "depends_on"},
+        {"source": 1, "target": 4, "rel_name" : "reads_from"},
+        {"source": 1, "target": 5, "rel_name" : "interacts_with"},
+        {"source": 1, "target": 6, "rel_name" : "uses"},
+        {"source": 1, "target": 7, "rel_name" : "sends_command"},
+        {"source": 1, "target": 8, "rel_name" : "logs_to"}
+    ]
+}

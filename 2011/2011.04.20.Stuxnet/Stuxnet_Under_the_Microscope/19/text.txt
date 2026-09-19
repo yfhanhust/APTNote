@@ -1,0 +1,99 @@
+3.6 MS10-092: Exploiting a 0-day in Task Scheduler
+Yet another vulnerability that Stuxnet exploits in order to elevate privileges concerns the Task Scheduler
+Service implemented in Windows operating systems starting from Windows Vista. Remarkably enough,
+64-bit version of the operating systems are vulnerable as well as x86 versions. Exploiation of the
+vulnerability allows Stuxnet to elevate its privileges up to SYSTEM level.
+There vulnerability represented a serious flaw in the original design of the service: namely in the way it
+controlled integrity of the metadata describing scheduled jobs. In operating systems after Windows
+Vista, Task Scheduler creates an xml file with configuration information for each registered job. These
+files are usually located in the %SystemRoot%\system32\Tasks folder (if not otherwise specified) and
+contain such information as type of the job, path to the executable and command line arguments,
+account that the executable will be run under, required privileges and so on.
+Figure 3.25 – A part of the configuration file describing a job
+In the figure above you can see part of the configuration xml file for a task. The Principals section in the
+file defines required privileges for the job, while the Actions section defines what the job should do (to
+get the full list of possible job actions we refer the reader to MSDN). In particular case as described in
+figure 3.25 the job will run the notepad application with no command line arguments, using the
+LocalSystem account with the highest available privileges.
+Although the Task Scheduler directory can be read only by LocalSystem and members of the local
+administrators group, the file describing the task scheduled by a user is fully accessible to him as long as
+he isn’t a Guest( as can be seen on the following figure 3.26). To protect the integrity of the job
+configuration files and prevent users from modifying them (for instance to elevate privileges by
+overwriting the Principals section), Task Scheduler calculates a checksum on creating a task. When it is
+time to start the job, Task Scheduler recalculates it and compares the new check sum to the original
+value: if they match the job is run.
+The flaw in the aforementioned scenario is that Task Scheduler calculates the checksum with the CRC32
+algorithm (you can find a description of the algorithm in Appendix D). This is known to be good for
+detecting unintentional errors (mainly due to transmitting data through communication channels) but
+not intentional as in the case. It is known also that the CRC32 algorithm has linear properties that make
+it very easy to create another message with the same checksum as the specified message.
+www.eset.com
+41
+Figure 3.26 – Access permissions to the Task folder and a task file
+This is exactly what Stuxnet does in order to elevate its privileges in unpatched Vista and later operating
+systems. Here is a brief summary of the algorithm that Stuxnet uses to exploit the vulnerability:
+
+Create a job that will be run under the current user account with the least available
+
+privileges;
+
+Read the task configuration file corresponding to the task created at step 1 and calculate
+
+its CRC32 checksum;
+
+Modify the task configuration file corresponding to the task created at step 1 so that it
+
+matches the same check sum as the original file and set the following properties:
+a. Principal Id=LocalSystem (principal for the task that provides security
+credentials);
+b. UserId=S-1-5-18 (SID of the LocalSystem);
+c. RunLevel=HighestAvailable (run with the highest available privileges);
+d. Actions Context=LocalSystem (security context under which the actions of the
+task are performed);
+
+Run the task.
+
+To ensure that the modified file has the same check sum value as the original, it appends a special
+comment of the form  to the end of the file and calculates XY (the algorithm for calculating this
+www.eset.com
+42
+value is presented in Appendex E) such that it has the specified CRC32 check sum value. The result of
+such manipulations is as shown in figure 3.27:
+Figure 3.27 – Forged task configuration file
+As a result Task Scheduler will start the task normally with the specified privileges.
+Microsoft's patch
+On the 14th of December 2010 Microsoft released a security update (MS10-092) to fix the vulnerability
+in Windows Task Scheduler service which allows elevation of privilege, as described above. To protect
+the integrity of the xml schema describing a task, the service already used the crc-32 algorithm. Thus,
+given a task xml schema, it is possible to create another schema with the same checksum.
+To fix the vulnerability Microsoft implemented an additional SHA-256 cryptographic hash algorithm to
+check the integrity of a task xml schema. If we look into the updated schedsvc.dll library which
+implements the service, we can find a type HashCompute which is not present in the unpatched library:
+Figure 3.28 - Available methods of the HashCompute type
+The type was implemented to provide integrity checking for the xml schemas that define tasks. Here are
+cross-references to the HashCompute::ComputeHash method which tell us when the hash value is
+calculated and when it is checked:
+Figure 3.29 - Cross-references to HashCompute::ComputeHash method
+If we look at the implementation of the HashCompute::ComputeHash method, the following code can be
+found, which calculates hash value of the xml schema:
+www.eset.com
+43
+Figure 3.30 - Opening handle to Microsoft Enhanced RDA and EAS Cryptographic Provider
+Figure 3.31 - Computing SHA-256 of xml schema
+The SHA-256 hash function is known to be secure against finding the second pre-image and collisions,
+unlike the crc-32 checksum algorithm. Thus given an xml schema that define a task it is impossible in
+polynomial (real) time to construct another xml schema with the same hash value. This means that it is
+no longer possible to exploit the vulnerability on a patched system in the way that Win32/Stuxnet
+attempts.
+MS10-092 in Win32/Olmarik
+A new modification of the notorious rootkit Win32/Olmarik.AIY, also known as TDL4 (you can read
+"TDL3: The Rootkit of All Evil?" report for detailed information about previous version of the rootkit)
+appeared in the end of November which is capable of elevating privileges on Microsoft Windows
+operating systems starting from Windows Vista by means of exploiting the MS10-092 vulnerability.
+TDL4's implementation of the code that exploits the vulnerability doesn't essentially differ from that of
+Stuxnet's code. The rootkit creates a legitimate task by means of the available interface in the system,
+then reads the xml schema corresponding to the task directly from the file in the Task Scheduler folder,
+and then modifies it:
+Fig. 3.32: Modification of xml Schema
+It sets certain attributes with the following values:
+www.eset.com

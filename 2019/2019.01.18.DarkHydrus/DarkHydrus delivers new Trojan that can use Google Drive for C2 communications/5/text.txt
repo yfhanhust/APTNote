@@ -1,0 +1,96 @@
+Using Google Drive for C2
+A command that was not available in the original PowerShell variant of RogueRobin but is available with the new C#
+variant is the x_mode. This command is particularly interesting as it enables an alternative command and control
+channel that uses the Google Drive API. The x_mode command is disabled by default, but when enabled via a
+command received from the DNS tunneling channel, it allows RogueRobin to receive a unique identifier and to get
+jobs by using Google Drive API requests.
+In x_mode, RogueRobin uploads a file to the Google Drive account and continually checks the file’s modification time
+to see if the actor has made any changes to it. The actor will first modify the file to include a unique identifier that the
+Trojan will use for future communications. The Trojan will treat all subsequent changes to the file made by the actor
+as jobs and will treat them as commands, which it will handle with the same command handler seen in Table 5.
+To use Google Drive, the x_mode command received from the C2 server via DNS tunneling will be followed by a
+newline-delimited list of settings needed to interact with the Google Drive account. Figure 4 shows the code in
+RogueRobin that handles the x_mode command, specifically splitting the command data on newlines and using the
+resulting array to set variables used as x_mode settings.
+Figure 4 x_mode command and new line delimited settings
+As seen in Figure 4, the settings are stored in variables seen in Table 6, which are used to authenticate to the actorcontrolled Google account before uploading and downloading files from Google Drive.
+Variable Name Description
+gdu Google Drive URL for downloading files to the Google Drive account
+gduu Google Drive URL for uploading files to the Google Drive account
+gdue Google Drive URL for updating a file on the Google Drive account
+gdo2t Google Drive URL used to get the OAUTH access_token
+https://www.printfriendly.com/p/g/Th9KZF 5/11
+2/12/2019 DarkHydrus delivers new Trojan that can use Google Drive for C2 communications
+client_id The client_id for the OAUTH application
+cs The client_secret for OAUTH
+r_t The refresh_token for OAUTH
+Table 6 Variables used to store settings needed to use Google Drive as a C2
+To obtain an OAUTH access token to authenticate to the actor provided Google account, the Trojan sends an HTTP
+POST request to a URL stored in the gdo2t variable with grant_type, client_id, client_secret, and refresh_token fields
+added to the HTTP header and in the POST data. As seen in Figure 5, the values for these fields are set to variables
+initially set upon issuing of the x_mode command.
+Figure 5 HTTP POST request to obtain an OAUTH access token
+Figure 5 shows that the Trojan then uses the following regular expression to obtain the access token from the HTTP
+response:
+\”access_token\”:(.*)
+Once authenticated with a valid access token, the Trojan will attempt to upload a file to the Google Drive account. To
+upload a file, the Trojan first creates an HTTP POST request to the URL stored in gduu to send the following JSON
+data to the Google Drive account:
+{ “name” : “.txt” }
+Google Drive will respond to this request with an HTTP response whose header contains a Location field. This field
+contains a URL that the Trojan will use to upload the contents of the .txt file, which will be
+structured as . where the process ID is encoded with the same character
+substitution function as seen previously in Table 4. The Trojan will then use the following regular expression to check
+the HTTP response to the content upload request for the file identifier value:
+\”id\”:(.*)
+The Trojan will use this file identifier value to monitor for changes made to the file by the actor by checking for
+changes to the modification time of the .txt file. The Trojan checks the modified time of the file
+by creating an HTTP request to a URL structured as follows:
+ +  + “?supportTeamDrives=true&fields=modifiedTime”
+The Trojan then uses the following regular expression to obtain the modified time of the file from the HTTP response,
+which is saved to the variable named modification_time:
+\”modifiedTime\”:(.*)
+The Trojan then uploads a second file to the Google Drive, the purpose of which is to allow the Trojan to continually
+write to this file as it waits for the actor to modify the first file uploaded. The Trojan will write  to
+a second file stored on the Google Drive instance named -U.txt. In each iteration of the
+communications loop, the Trojan will check to see if the modification time of the first file changed, and if it is not
+updated the Trojan will update the second file by writing the string bc<5 random lowercase
+characters>. to the file by creating an HTTP POST request to a URL structured as follows:
+ +  + “?
+supportsTeamDrive=true&uploadType=resumable&fields=kind,id,name,mimeType,parents”
+https://www.printfriendly.com/p/g/Th9KZF 6/11
+2/12/2019 DarkHydrus delivers new Trojan that can use Google Drive for C2 communications
+In one RogueRobin sample (SHA256: f1b2bc0831…), the author did not use the Google Drive URL provided by the
+actor when issuing the x_mode command, and instead included a hardcoded Google Drive URL, as seen in Figure 6.
+This is the only instance we observed where a hardcoded Google Drive URL was included in RogueRobin, which may
+suggest that the author may have overlooked this during testing.
+Figure 6 Hardcoded Google Drive URL used in RogueRobin sample
+When the modification_time for the first file changes, the Trojan downloads the contents from the first file uploaded to
+the Google Drive. The Trojan downloads the contents of this file by crafting an HTTP request to a URL structured as
+follows:
+ +  + “?alt=media”
+With the contents of the file downloaded, the Trojan sets the modification_time variable to the current modification
+time so the Trojan knows when the actor makes further changes to the file. The Trojan processes the downloaded
+data the same way it would for a unique identifier as if the data was obtained via the DNS tunneling protocol using the
+TXT query mode, specifically by searching the data using the following regular expression:
+\”(\w+).(||).\”
+With the unique identifier value obtained from the file on Google Drive, the Trojan will attempt to obtain jobs using the
+Google Drive communications channel. To get a job from the Google Drive account, the Trojan starts by creating a
+string that has the following structure with each element within the subdomain subjected to the number to character
+substitution from Table 4:
+cc.
+The Trojan will then obtain an OAUTH access token to the Google Drive in the same manner as before when
+obtaining the unique identifier. The Trojan uses the access token to write the string above to the first file uploaded to
+Google drive whose filename is .txt. After writing to this file, the Trojan will enter a loop to
+continually to check for changes to the modification time of this file, effectively waiting for the actor to make
+modifications to the file. When the actor modifies the file and changes the modification_time, the Trojan downloads
+the contents from the file by creating an HTTP request to a URL structured as follows:
+ +  + “?alt=media”
+The Trojan processes the downloaded data within the file the same way it would to obtain a job from data received
+from the DNS tunneling channel using the TXT query mode, specifically by searching the data using the following
+regular expression:
+([^r-v\s]+)r-v.(||)
+The Trojan function splits the matching data, specifically the subdomain on a separator that is a character between r
+and v and uses the data before the separator to get the sequence number and a Boolean value (0 or 1) if more data
+is expected. It will use the data after the separator as the string that it will subject to the command handler seen in
+Table 5.

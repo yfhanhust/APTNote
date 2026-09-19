@@ -1,0 +1,254 @@
+WE ARE BEACON
+As you’re gathering data, it’s important to understand one aspect of Cobalt Strike functionality, as it
+makes a big difference in our ability to create clusters. Cobalt Strike Beacons are highly configurable
+through their use of Malleable profiles, which offer an unusual opportunity for both defenders and threat
+actors.
+Malleable profiles specify how a Beacon acts and looks in the target environment. These profiles also
+specify what parameters are to be used within their communication protocol, and even the method that
+Beacon uses to inject into other processes.
+Malleable profiles use their own “profile language” that allows the attacker to state individual Beacon
+parameters. It also enables attackers to craft a bespoke binary so that they can remain undetected by
+security solutions and blend in with existing activity on the endpoint.
+Cobalt Strike uses the phrase “Malleable C2” as an umbrella term, but it describes more than just communications settings. The highly configurable and malleable nature of Cobalt Strike can be broken down
+into several sections:
+- Malleable C2:
+
+ - General settings
+
+ - HTTP stager options
+
+ - HTTP GET/POST request metadata
+
+ - HTTPS certificates
+
+- Malleable PE:
+
+ - Process injection
+
+ - Post exploitation
+
+Before we delve into the nuts and bolts of Malleable profiles, it’s probably best to introduce some terminology around “stagers” first.
+stager vs. stageless
+A Cobalt Strike Beacon can be either served by a payload stager or deployed directly in the form of a
+so-called “stageless package”.
+A stager is a small executable that will download the Beacon payload DLL from a remote Team Server.
+The executable consists of a simple routine that uses Windows® APIs to pull down the payload and run
+it directly from memory.
+The downloaded Beacon binary starts with a small shellcode stub that is placed at the beginning of its
+DOS header. The shellcode executes the ReflectiveLoader (or renamed) export, which in turn loads the
+Beacon DLL into memory and executes it.
+40
+There are several types of Cobalt Strike stagers working over different protocols, the most common
+being:
+- HTTP/HTTPS stagers that simply download a Beacon payload using the _InternetReadFile_ API
+
+- DNS stagers that use the _DNSQuery_A_ API to read a Beacon payload from DNS TXT record
+
+responses
+- CP/Bind stagers that connect to the specifi ed IP address using raw sockets and read a
+
+Beacon payload directly over the socket
+- SMB stagers that read a Beacon payload locally through a Windows named pipe
+
+Conversely, stageless payloads do not rely on any network/inter-process communication to pull down a
+Beacon payload. Instead, the Beacon DLL is obfuscated and embedded inside the initial shellcode. The
+shellcode then decrypts the DLL and executes the code in its header, which in turn refl ectively injects
+the DLL into memory.
+malleable c2
+The Malleable C2 section of the profi le refers specifi cally to the defi nition of the communication protocol used between the Beacon and the Team Server. In the Malleable C2 language, each section is
+referred to as a “block,” which delineates the grouping of parameters to be set within each section.
+The following examples of these blocks have been taken from the “jquery-c2.3.14.profi le ” Malleable C2
+profi le.
+Cobalt Strike
+Malleable Command and Control
+https://www.cobaltstrike.com/help-malleable-c2
+Threat Express
+malleable-c2/jquery-c2.3.14.profi le
+https://github.com/threatexpress/malleable-c2/blob/master/jquery-c2.3.14.profi le
+General
+These are general options that defi ne operational settings for the Beacon’s C2 communication such as
+useragent, tcp_port, pipename etc.
+Figure 23 – Example Malleable C2 profi le
+41
+HTTP-Confi g
+The http-confi g block is a server-side block that defi nes the served HTTP response headers, as well as
+which user-agents are allowed or blocked when specifi ed by clients in their HTTP request headers. If the
+user-agent is blocked, the requestor will receive a 404 error.
+If the server is behind an HTTP redirector, the trust_x_forwarder_for parameter can be set. However, both
+this option and the user-agent permission modifi er are not used within the following example.
+Figure 24 – Example HTTP confi guration options
+HTTP-Stager
+The http-stager block defi nes the parameters used within the HTTP staging process for the Beacon
+binary itself. These are used to retrieve the Beacon binary from the Team Server. The http-get and http-
+post blocks aren’t used until the Beacon has been loaded into memory on the victim machine. While not
+shown here, a nested server block can also be specifi ed for server-side confi guration. We have chosen
+to omit the server block from the subsequent examples, as they are not as relevant to the confi guration
+extraction as the client block.
+Figure 25 – Example HTTP stager options
+HTTP-GET
+The http-get block defi nes both server-side and client-side parameters such as the URI to be used in
+facilitating GET requests. In the following example a nested client block then holds client-specifi c GET
+request modifi ers, such as header fi elds and encoding. This block and the subsequent http-post block in
+the next example also have client/server agnostic parameters, as well as the nested blocks.
+42
+Figure 26 – Example HTTP GET options
+HTTP-POST
+Like the http-get block, the http-post block defi nes the parameters to be used in sending POST requests.
+The id block specifi es the parameter to be appended to the POST request URI and the output block
+determines how the data is encoded.
+Figure 27 – Example HTTP POST options
+43
+HTTPS-Certifi cate
+The https-certifi cate block enables the operator to fully customize the certifi cate that they use for Cobalt
+Strike C2 communications. Three scenarios are possible when encrypting the communication:
+- Use a trusted and signed certifi cate stored within a Java Keystore fi le
+
+- Create your own self-signed certifi cate
+
+- Specify values to be used with the default Cobalt Strike self-signed certifi cate
+
+Figure 28 – Example HTTPS certifi cate options
+malleable pe
+While the section on Malleable C2 deals with the communication between Team Server and Beacon, the
+Malleable PE section defi nes the in-memory characteristics and non-network-related behaviors of the
+Beacon payload on a victim’s machine.
+Stage
+The stage block is largely responsible for the physical attributes of a Beacon binary. Various parameters
+can be toggled to enable different methods of detection evasion, such as the stomppe, obfuscate and
+sleep_mask boolean operators.
+Other values such as compile_time, and rich_header can help in further obfuscating the binary by altering attributes that researchers might use to identify or track the actor.
+Of special note are the transform-x86 and transform-x64 blocks, which allow for further modifi cation of
+the Beacon’s injection stage using three operators: prepend, append and strrep, depending on the target
+architecture of the Beacon.
+As the name suggests, prepend is used to prepend bytes to this stage, append to append, and strrep to
+replace or remove default strings (for example, null out the beacon.dll module name).
+In the example below we can see several bytes being prepended. This is in fact a NOP sled.
+44
+Figure 29 – Example Beacon stager options
+Cobalt Strike
+PE and Memory Indicators
+https://www.cobaltstrike.com/help-malleable-postex#memory
+Process Injection
+The process-inject block is responsible for the parameters used to facilitate process injection. This includes the technique to be used to allocate memory and the allocation size, among others. Like the
+stage block, the transform-* blocks are used to pad and transform the injected data.
+Lastly, an execute block is used to specify the methods by which the Beacon will inject into a process.
+You can specify multiple values here and they will be tried if previous values fail. As the documentation
+says, the execute options must cover all “corner-cases” such as self-injection, or cross-session remote
+process injection. With this said, we will see these parameters when extracting the confi guration from
+the binary.
+45
+Figure 30 – Example Process injection options
+Cobalt Strike
+Process Injection
+https://www.cobaltstrike.com/help-malleable-postex#processinject
+Post Exploitation
+The spawnto options are used by Beacon to control which process it will spawn and inject certain payloads into. Several payloads, such as screenshots, keyloggers, and hash dumping are implemented as
+Windows DLLs. Because of this, they require a target process to be injected into in order to execute.
+The spawnto paths must be the full path to the target process, although environment variables are
+accepted, and special keywords, syswow64 (x86) and sysnative (x64) are resolved by Beacon to their
+respective paths, depending on architecture.
+Figure 31 – Post exploitation options
+46
+In addition, it is also possible to supply settings to configure output pipe names, perform “smart” injection, enable/disable AMSI (the Windows Antimalware Scan Interface), and obfuscate post-exploitation
+payload DLLs.
+Cobalt Strike
+Post Exploitation Jobs
+https://www.cobaltstrike.com/help-malleable-postex#postex
+Example Extracted Beacon Configuration
+You can see an example of some of the settings that can be extracted from a Beacon below. Depending
+on the configuration and version of Cobalt Strike, not all settings will be present or populated. We’ve
+included the most popular values observed across our dataset for reference purposes:
+|ID|Name|Type|SettingDescription|CommonValues|
+|---|---|---|---|---|
+|1|BEACONTYPE|SHORT|Type of Cobalt StrikeBeacon|0x0 (HTTP – windows/beacon_http/reverse_http)0x1 (Hybrid HTTP and DNS – win-dows/beacon_dns/reverse_http)0x2 (SMB – windows/beacon_smb)0x4 (TCP – windows/beacon_tcp)0x8 (HTTPS – windows/beacon_https/reverse_https)0x10 (Bind TCP – windows/beacon_tcp/bind_tcp)|
+|2|PORT|SHORT|Port to use for C2communication|80, 443, 8080, …|
+|3|SLEEPTIME|INT|Time between C2check-ins (in millisec-onds).|60000, 5000, …|
+|4|MAXGETSIZE|INT|Maximum size of GETtransaction.|1048616, 1398104, …|
+|5|JITTER|SHORT|Percentage variationabove and below thevalue of SLEEPTIME,which creates a sleeprange from which arandom sleep value ischosen.|0, 20, 37, …|
+|6|MAX_DNS|SHORT|Maximum lengthof hostname whenuploading data overDNS.|255|
+47
+|7|PUBKEY_MD5|STRING|MD5 hash of SSLpublic key used formetadata encryptionwhenever a Beaconchecks-in.|e9ae865f5ce035176457188409f6020a,…|
+|---|---|---|---|---|
+|8|C2SERVER|STRING|List of C2 Team ServerIPs/domains andURIs.May be indicative ofdomain fronting.|192.168.0.1,/cxtencentcs.com,/cxamazonaws.com,/cxcloudfront.net,/cx…|
+|9|USERAGENT|STRING|User-Agent for HTTPcommunications.Default is randomIE11.|Mozilla/5.0 (Windows NT 6.1; WOW64;Trident/7.0; yie11; rv:11.0) like Gecko|
+|10|SUBMITURI|STRING|URI used in HTTP GETtransactions.|/submit.php|
+|11|C2_MAL-LEABLE_IN-STRUCTIONS|STRING|Operations to carryout on C2 responsedata buffer – see blogpost: https://usualsus-pect.re/article/cobalt-strikes-malleable-c2-under-the-hood|Base64 decode, NetBIOS decode “a”, …|
+|12|C2_GETREQ_META|STRING|Metadata feldspassed in HTTP GETrequest.|Cookie|
+|13|C2_POST-REQ_META|STRING|Metadata passed inHTTP POST request.|Content-Type: application/oc-tet-stream, id|
+|14|DEPRECAT-ED_SPAWNTO|STRING|Formerly a hex encod-ed process name.Currently an MD5 hashof a fle (sometimesreleasenotes.txt) onthe Team Server.|72756e646c6c33322e657865 (run-dll32.exe)fbf34aa48d6080bf8ef3eaff8ecf9a31|
+|15|PIPENAME|STRING|Name of the pipe touse for SMB Beacon’speer-to-peer commu-nication.|\%s\pipe\msagent_%x|
+|16|DEPRECAT-ED_KILLDATE_YEAR|INT|Date after which Bea-con will refuse to run– Year component.|0|
+48
+|17|DEPRECAT-ED_KILLDATE_MONTH|INT|Date after which Bea-con will refuse to run– Month component.|0|
+|---|---|---|---|---|
+|18|DEPRECAT-ED_KILLDATE_DAY|INT|Date after which Bea-con will refuse to run– Day component.|0|
+|19|DNS_IDLE|INT|IP address used toindicate no tasks areavailable for DNSBeacon.|0.0.0.0|
+|20|DNS_SLEEP|INT|Force a sleep prior toeach DNS request.|0, 1|
+|21|SSH_HOST|STRING|SSH hostname|ssh.example.com|
+|22|SSH_PORT|SHORT|SSH port|22|
+|23|SSH_USER-NAME|STRING|SSH username|username|
+|24|SSH_PASS-WORD|STRING|SSH password|password|
+|25|SSH_PUBKEY|STRING|Base 64 encoded SSLpublic key used formetadata encryptionwhenever a Beaconchecks in.|MIGfMA0GCSqGSIb3DQEB-AQUAA4GNADCBiQKBgQC-D+Oczoukk74PeZXRGOM2yY3qhD-D26eZpDSzwrw78VelF8lpJ8pNZ-rrkgrSaeN60KUCaWoyxRCL1AA7/zwXEpg1lzpDcP1iVdFxyFD-40Dg1EMn4Cw4t3GkwtAnD6HqTK-wvGm2ThqVZH2hH3tu5HIt7u/xIerzsY-JReoVoR3dsqmQIDAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==|
+|26|C2_VERB_GET|STRING|Verb to use for GETtransaction.|GET, POST|
+|27|C2_VERB_POST|STRING|Verb to use for POSTtransaction.|POST, GET|
+|28|C2_CHUNK_POST|INT|Chunk Beacon re-sponses.|0, 1|
+|29|SPAWNTO_X86|STRING|The 32-bit programthat the Beacon willinject DLL payloadsinto.|%windir%\syswow64\rundll32.exe|
+49
+|30|SPAWNTO_X64|STRING|The 64-bit programthat the Beacon willinject DLL payloadsinto.|%windir%\sysnative\rundll32.exe|
+|---|---|---|---|---|
+|31|CRYPTO_SCHEME|SHORT|Encrypt Beacon C2communications.|0, 1|
+|32|PROXY_CON-FIG|STRING|Address of SOCKSproxy server.|http://127.0.0.1:8080|
+|33|PROXY_USER|STRING|SOCKS proxy user-name.|test|
+|34|PROXY_BE-HAVIOR|STRING|SOCKS proxy Pass-word.|test|
+|35|PROXY_BE-HAVIOR|SHORT|Proxy behavior setting.|Use IE settings, Use direct connection,Use Proxy Server|
+|36|DEPRECATEDINJECT_OP-TIONS|SHORT|Replaced by PRO-CINJ_ALLOWED.|1, 3|
+|37|WATERMARK|INT|Cobalt Strike custom-er ID.|305419896, 0, 1873433027,1359593325, …|
+|38|CLEANUP|SHORT|Determines if Beaconwill attempt to freememory associatedwith the RefectiveDLL package thatinitialized it.|0, 1|
+|39|CFG_CAU-TION|SHORT|Perform CreateThreadbefore injecting codeinto memory.|0, 1|
+|40|KILLDATE|INT|Date after which Bea-con will refuse to run(YYYYMMDD).|0, 20211231, 20990101, …|
+|41|GARGLENOOK|INT|Obfuscate .text sec-tion size.|0, 152826, …|
+|42|GARGLE_SEC-TIONS|STRING|Obfuscate sectioninformation.|00600200b1fb-020000000300c0a0030000b003008c-cd03|
+|43|PROCINJ_PERMS_I|SHORT|Initial permissions forinjected content.|PAGE_EXECUTE_READWRITE|
+50
+|44|PROCINJ_PERMS|SHORT|Final permissions forinjected content.|PAGE_EXECUTE_READWRITE|
+|---|---|---|---|---|
+|45|PROCINJ_MI-NALLOC|INT|Minimum amount ofmemory to request forinjected content.|17500|
+|46|PROCINJ_TRANSFORM_X86|STRING|Transform x86 inject-ed content.|Prepend: b’\x90\x90’|
+|47|PROCINJ_TRANSFORM_X64|STRING|Transform x64 inject-ed content.|Prepend: b’\x90\x90’|
+|48|DEPRECAT-ED_PROCINJ_ALLOWED|SHORT|Replaced by PRO-CINJ_EXECUTE.|5, 7|
+|49|BIND_HOST|SHORT|Bind to 0.0.0.0 or local-host (applies to BindBeacon only).|0, 1|
+|50|USES_COOK-IES|SHORT|Store transformedmetadata into HTTPheader Cookie.|0, 1|
+|51|PROCINJ_EX-ECUTE|STRING|Windows APIs used inprocess injection to aremote process.|CreateThreadSetThreadContextCreateRemoteThreadRtlCreateUserThreadNtQueueApcThread-sNtQueueApcThread|
+|52|PROCINJ_AL-LOCMETHOD|SHORT|Allocation method/API used by Refective-Loader.|VirtualAllocEx, NtMapViewOfSection|
+|53|PROCINJ_STUB|STRING|MD5 hash of thecobaltstrike.jar TeamServer JAR archive.|b2736f1cbba90d42286fc42bfba74f4d|
+|54|HOST_HEAD-ER|STRING|Host header value inHTTP communica-tions.|Host: 8.8.8.8|
+|55|EXIT_FUNK|SHORT|If set, sleep indefnite-ly instead of callingExitThread.Only used if CFG_CAU-TION is also set.|0, 1|
+|56|SSH_BANNER|STRING|SSH Banner.|-|
+51
+|57|SMB_FRAME_HEADER|STRING|Header to prepend toSMB messages.|Prepend: b’\x04’Prepend: b’\x05\x80’Prepend: b’\x07\x80\x80\x80’|
+|---|---|---|---|---|
+|58|TCP_FRAME_HEADER|STRING|Header to prepend toTCP messages.|Prepend: b’\x04’Prepend: b’\x05\x80’|
+|59|HEADERS_TO_REMOVE|STRING|List of HTTP clientheaders to removefrom Beacon C2.|-|
+|60|DNS_BEA-CONING|STRING|DNS subhost prefx forbeaconing requests.|-|
+|61|DNS_GET_A_RECORD|STRING|DNS subhost prefx forA record requests.|cdn., …|
+|62|DNS_GET_AAAA_RE-CORD|STRING|DNS subhost prefx forAAAA record requests.|www6., …|
+|63|DNS_GET_TXT_RECORD|STRING|DNS subhost prefx forTXT record requests.|api., …|
+|64|DNS_PUT_METADATA|STRING|DNS subhost prefxfor metadata recordrequests.|www[.], …|
+|65|DNS_PUT_OUTPUT|STRING|DNS subhost prefx forPUT record requests.|post., …|
+|66|DNS_RESOLV-ER|STRING|List of IP addressesfor the DNS resolver touse for egress.|1.1.1.18.8.8.8…|
+|67|DNS_STRAT-EGY|SHORT|Behavior for choosingwhich host to use foregress.|round-robinrandomfailoverduration|
+|68|DNS_STRATE-GY_ROTATE_SECONDS|INIT|Duration to use eachhost before using thenext host.|-1|
+|69|DNS_STRATE-GY_FAIL_X|INT|Failover retry count.|-1|
+|70|DNS_STRATE-GY_FAIL_SEC-ONDS|INT|Failover retry timeout.|-1|
+Table 2 – Cobalt Strike Beacon configuration structure showing common default values
+52
+detecting the beacon configuration with yara
+The following YARA rule can be used to detect the XOR encoded configuration used by Cobalt Strike
+Beacon stagers based on commonly observed values. The rule is optimized to first check for one of the
+common XOR encoded configuration headers in the .data section, before checking the .data section for
+various XOR encoded strings commonly found in Beacon profiles.
+Figure 32 – YARA rule for detecting Cobalt Strike Beacon XOR encoded configurations in PE files
+The rule will detect more than 99.9% of the Beacons DLL payloads we’ve encountered. It typically only
+fails on payloads that have been manually reconfigured to use non-standard XOR keys or those that use
+a very sparse configuration.
+53

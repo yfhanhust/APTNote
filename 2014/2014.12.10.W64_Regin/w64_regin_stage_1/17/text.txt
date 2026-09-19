@@ -1,0 +1,40 @@
+4.2.1 The virtual machine and its meta-language
+The sample is designed to retrieve, map and execute a payload from a previously infected system; the payload is a PE32+
+DLL for Microsoft Windows. How such payload is retrieved and what transformations are applied to it are controlled by
+a meta program for a simple virtual machine that is embedded in the malware. The malware will locate and decrypt this
+program from its own body as the first step in attempting to find and load its payload.
+The structure of a program written for this Virtual Machine is presented in Listing 2.
+Listing 2: Structure of a program for the virtual machine
+typedef struct VMProgram {
+QWORD dqField_0 ;
+DWORD ddField_8 ;
+DWORD ddPayloadSize ;
+DWORD ddField_10 ;
+DWORD ddSizeOfCode ;
+VM_OPCODE voProgramCode [ ] ; // Variable sized array containing
+// the sequence of operations that
+// the VM needs to execute
+} VMProgram;
+The structure of a program for this custom virtual machine is relatively simple, as it consists of what we believe to be a
+small header and of a sequence of operations. While the program’s header is still largely undocumented [[2]], the purpose
+of each of the opcodes has been completely discovered. The set of virtual machine operations in the code embedded
+in the sample we analyzed does not include any conditional instruction, which partially accounts for the simplicity of the
+program structure.
+Each instruction of the virtual machine is characterized by a few fields and is optionally followed by enough space to hold
+a variable sized input argument. The format of an opcode is presented in Listing 3.
+Listing 3: Structure of an individual operation for the virtual machine
+define OPERATION_TYPE_LOAD 1
+define OPERATION_TYPE_DECRYPT 2
+define OPERATION_TYPE_DECOMPRESS 3
+define OPERATION_TYPE_CLEAN 4
+typedef struct VMOpcode {
+BYTE dbOperationType ;
+BYTE dbField_1 ;
+DWORD ddVe r s ionInformat ion ; // Suspected
+DWORD ddSizeOfIncomingArguments ;
+BYTE dbArgument [ ] ; // Variable sized array containing the
+// (optional) argument to the opcode
+} VMOpcode ;
+[2] The sample we analyzed neither accessed most of this header at any point during execution nor referenced it anywhere in its
+code,making it impossible to completely reconstruct this structure's fields. We were however able to infer the meaning of some
+of its fields from other information gathered in the course of our analysis.

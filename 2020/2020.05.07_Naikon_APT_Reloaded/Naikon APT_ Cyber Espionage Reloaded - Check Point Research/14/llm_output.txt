@@ -1,0 +1,82 @@
+
+
+
+Sentence : Unique Characteristics
+In the following section, we go over some of the techniques by which the backdoor was
+implemented, and highlight the characteristics that might help other researchers recognize this
+backdoor and correlate it with other samples.
+Initialization
+As previously mentioned, the backdoor contains an exported function, which the previous loader
+calls after loading the payload into the memory. Upon executing the backdoor, it initializes a struct
+named MyDerived and several structs used for HTTP and TCP connection.
+Information Gathering
+Aria-body starts with gathering data on the victim’s machine, including:
+Host-name, computer-name, username, domain name, windows version, processor ~MHz,
+MachineGuid, 64bit or not, and public IP (using checkip.amazonaws.com ).
+Aria-body using checkip.amazonaws.com service to get victim’s IP
+https://research.checkpoint.com/2020/naikon-apt-cyber-espionage-reloaded/ 8/20
+5/8/2020 Naikon APT: Cyber Espionage Reloaded - Check Point Research
+This data is gathered into an information structure which the RAT zips with an 8 bytes random
+generated password, which is then XORed with one byte.
+C&C Communication
+The communication to the C&C server is available by either HTTP or TCP protocols. The
+malware decides which protocol to use by a flag in the configuration of the loader. The collected
+data is sent to the C&C domain along with the XORed password, and the XOR key in the
+following format:
+C&C communication structure
+Whether the message is sent by TCP or HTTP, the payload format is the same. However, when
+HTTP is selected, the following GET request format is used:
+```
+    https://%s:%d/list.html?q=
+```
+After the initial request to the C&C server, the backdoor then keeps listening to additional
+commands from the server. When a command is received, it is matched against a list of
+commands, and executed accordingly. A full list of supported commands is available in Appendix
+A .
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "backdoor", "type" : "EXEF"},
+        {"id": 2, "description": "exported function", "type" : "TTPS"},
+        {"id": 3, "description": "loader", "type" : "APPS"},
+        {"id": 4, "description": "HTTP and TCP connection structs", "type" : "NETP"},
+        {"id": 5, "description": "victim’s machine", "type" : "TAMP"},
+        {"id": 6, "description": "Host-name", "type" : "TAMP"},
+        {"id": 7, "description": "computer-name", "type" : "TAMP"},
+        {"id": 8, "description": "username", "type" : "TAMP"},
+        {"id": 9, "description": "domain name", "type" : "TAMP"},
+        {"id": 10, "description": "windows version", "type" : "OPPS"},
+        {"id": 11, "description": "processor ~MHz", "type" : "TAMP"},
+        {"id": 12, "description": "MachineGuid", "type" : "REGI"},
+        {"id": 13, "description": "64bit or not", "type" : "SYSP"},
+        {"id": 14, "description": "public IP", "type" : "TAMP"},
+        {"id": 15, "description": "checkip.amazonaws.com", "type" : "URLS"},
+        {"id": 16, "description": "8 bytes random generated password", "type" : "IOCS"},
+        {"id": 17, "description": "XORed password", "type" : "TAMP"},
+        {"id": 18, "description": "C&C server", "type" : "CCSH"},
+        {"id": 19, "description": "configuration of the loader", "type" : "TTPS"},
+        {"id": 20, "description": "XOR key", "type" : "IOCS"},
+        {"id": 21, "description": "GET request format: https://%s:%d/list.html?q=", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "loaded by"},
+        {"source": 1, "target": 2, "rel_name" : "calls"},
+        {"source": 1, "target": 4, "rel_name" : "initializes"},
+        {"source": 1, "target": 5, "rel_name" : "targets"},
+        {"source": 6, "target": 5, "rel_name" : "collected from"},
+        {"source": 7, "target": 5, "rel_name" : "collected from"},
+        {"source": 8, "target": 5, "rel_name" : "collected from"},
+        {"source": 9, "target": 5, "rel_name" : "collected from"},
+        {"source": 10, "target": 5, "rel_name" : "collected from"},
+        {"source": 11, "target": 5, "rel_name" : "collected from"},
+        {"source": 12, "target": 5, "rel_name" : "collected from"},
+        {"source": 13, "target": 5, "rel_name" : "collected from"},
+        {"source": 14, "target": 15, "rel_name" : "retrieved from"},
+        {"source": 16, "target": 5, "rel_name" : "used for zipping data"},
+        {"source": 17, "target": 16, "rel_name" : "generated from"},
+        {"source": 18, "target": 1, "rel_name" : "communicates with"},
+        {"source": 19, "target": 3, "rel_name" : "part of"},
+        {"source": 20, "target": 17, "rel_name" : "used to XOR"},
+        {"source": 21, "target": 18, "rel_name" : "uses for communication"}
+    ]
+}

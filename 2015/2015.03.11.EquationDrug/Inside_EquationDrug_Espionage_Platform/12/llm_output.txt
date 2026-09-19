@@ -1,0 +1,214 @@
+
+
+
+Sentence : Platform orchestrator - mscfg32.dll, svchost32.dll
+MD5 5767b9d851d0c24e13eca1bfd16ea424
+Size 249 856 bytes
+Format PE32 DLL
+Compiled 2008.01.24 22:11:34 (GMT)
+Location %System%\mscfg32.dll
+Creates mutex: " 01C482BA-BD31-4874-A08B-A93EA5BCE511 ", or terminates if one already exists.
+Writes a timestamped log �le to one of the following locations:
+%SystemRoot%\temp\~yh56816.tmp
+12 of 30 03/22/2015 10:21 PM
+http://securelist.com/blog/research/69203/inside-t...
+C:\Windows\Temp\~yh56816.tmp
+%Registry_SystemRoot_Value%\temp\~yh56816.tmp
+Value of [HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\MemSubSys] D
+The �le "~yh56816.tmp" retains the history of execution. It comprises debug records of simple structure:
+Stage: DWORD | DateTimeLow: DWORD | DateTimeHigh: DWORD
+Basically, it logs the execution of every stage of the orchestrator and the time of execution. The Stage is
+an integer number starting from 1.
+This module spawns a new thread in the DllMain function which contains the main function body. The
+procedure disables application error popups shown by the default exception handler. This is probably
+done only in the "Release" version of the malware, because the following code generates exceptions that
+are reported to the user if application error popups are not disabled. We assume that the "Debug" version
+of the code doesn't suppress error popups when exception occurs as this helps with the debugging of the
+code.
+The module checks the OS version and if it encounters an unsupported operating system the code
+generates an exception which terminates the application. The list of OS versions that pass this test:
+Windows 95/98/ME
+Windows NT 4.0 and above.
+If the module runs on Win9x, it executes Win9x-speci�c function RegisterServiceProcess to hide from the
+Windows Task Manager application. If the module is NOT running on WinNT6.0+, it then attempts to
+open a virtual device �le with one of the following names:
+\.\MSSVC32 on Win9x
+\.\MSNDSRV on WinNT
+If the device �le is successfully opened, the module activates a rootkit for its process and for the �le
+location "%SYSTEM%\unilay.dll" local path. This is followed by �nding and terminating a process named
+" winproc.exe " which is the name of another component of the platform. Note that this part of the code is
+executed only on platforms different from WinNT 6.x (Windows Vista and later).
+The module was designed to fetch or update its main con�guration data from different places. There are
+some default values set inside the code, such as some timeout values and the following C&Cs:
+www.waeservices[.]com
+213.198.79.49
+These default values can be overwritten later.
+Next, it locates a data section called " Share2 " in the current module and veri�es the starting magic
+number. If it is 0x63959700, it then decrypts the rest of the data in the section and interprets it as a
+13 of 30 03/22/2015 10:21 PM
+http://securelist.com/blog/research/69203/inside-t...
+con�guration block. However, data from the next location can override all previous settings. This is a
+registry value with special name.
+The naming of the registry location is the same GUID-like SHA1 value as the one used in the loader
+("mscfg32.exe"), and is produced from the source string "Con�guration":
+[HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\MemSubSys] {42E14DD3-
+F07A-78F1-7659-26AE141569AC-E0B3EE89}
+The con�guration block stored in the registry value is encrypted using RC5 with the 1024-bit key. Both the
+loader and the orchestrator share the same key for encrypting and decrypting the registry values in the
+"MemSubSys" key.
+The decrypted con�guration block consists of a series of tagged con�guration records in the following
+format:
+[RecordType:DWORD][RecordSize: DWORD][RecordValue: %RecordSize%]
+We retrieved a copy of a con�guration block and decrypted and partly interpreted it. We are including the
+results for one of the con�guration blocks:
+Time value : 1 year 0 months 1 days 22 hours 6 mins 52 secs. The orchestrator is expected to set this �eld
+to the time of initial con�guration.
+Binaries : 3x1024-bit encryption keys
+1b8e7818dad6345c53c2707a2c44648eee700d5cf34fea6a19a3fa0a6a871c72963fdded
+91e2703c82b7747b8793e3063700da32cfb8d907dcce1beb36edd575418d1134ef188b
+27ec3ce23711a656b0a8bf28921fbf1c39b4c90ad561e4174ed90f26ce11245bb9deb4b
+4720403f47ca865ec8bbd3c1df9d93d042ff5b52ec6
+05000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000
+ed04953f3452068ae6439f04c7904c8be5e98e66e2cd0f267d65240aeed88bd4d3c6105
+c99950dd42ccde4bc6bbaf9f6cb1b4e628d943e91f8f97f2aff705fdd25e3af6ba0bc4fd13
+d67a2bcb751bb8f21f3d4b66c599f3e572802911394d142f8cf3a299d6d4558f9f0f01634
+9afd1888472f4f8c729ffe913f670931f1a227
+C&C domain : www[dot]waeservices[dot]com
+C&C IP address : 213.198.79.49
+C&C port : 443
+Timestamp : 2010-12-08 11:35:57
+Tool Reference : VTT/82055898/STEALTHFIGHTER/ 2008-10-16/14:59:06.229-04:00
+TimeoutA : 25200 sec (7 hours)
+TimeoutB : 32400 sec (9 hours)
+TimeoutC : 3600 sec (1 hour)
+14 of 30 03/22/2015 10:21 PM
+http://securelist.com/blog/research/69203/inside-t...
+TimeoutD : 172800 sec (48 hours)
++Several Unknown Values
+Other con�guration blocks we discovered contained similar information, with only some unique values:
+Timestamp : 2009-11-23 14:10:15
+Tool Reference : Manual/DRINKPARSLEY/2008-09-30/10:06:46.468-04:00
+Tool Reference : VTT/82053737/STRAITACID/2008-09-03/10:44:56.361-04:00
+Tool Reference : STRAITSHOOTER30.ex_
+Tool Reference: VTT/82051410/ LUTEUSOBSTOS /2008-07-30/17:27:23.715-04:00
+Tool Reference: BACKSNARF_AB25
+During the next step, the module obtains PE �le version information from the resource section. It loads
+the version info using hard-coded module names, which are supposed to match the current module name:
+SVCHOST32.DLL for Windows 9x
+MSCFG32.DLL for Windows NT
+If �le version information is available, it gets language-speci�c values of the PrivateBuild block. The
+codepage and languages that are veri�ed: Unicode, LANG_NEUTRAL and LANG_ENGLISH_US . When this
+check passes, the module gets @default registry value from the following location:
+[HKLM\SOFTWARE\Classes\CLSID{091FD378-422D-A36E-8487-83B57ADD2109}] TypeLib
+If the key is not found, the code checks for registry value TypeLib in the following key:
+[HKLM\SOFTWARE\Classes\CLSID{091FD378-422D-A36E-8487-83B57ADD2109}]
+If such a value is found, it is then deleted along with the Version value if it exists in the same key.
+The string obtained from one of two possible registry values is processed as if this value is a CLSID-like
+string: the code takes the last 16 hexadecimal digits, splits them in two 8-chars values, converts them to
+binary form (two DWORDs) and reverses the order of bytes in each DWORD and XORs, the �rst value with
+0x8ED400C0, and the second with 0x4FC2C17B . Next, the �rst DWORD value becomes second and the
+second becomes �rst. In this order, they are stored in a structure in memory. These two values seem to be
+very important as they override a few values in the previously known con�guration. If they don't exist,
+values from the current con�guration replace them and are stored back in the registry following the
+reverse procedure:
+1.
+2.
+[HKLM\SOFTWARE\Classes\CLSID{091FD378-422D-A36E-8487-83B57ADD2109}\Version] is created
+and @default value is set to version obtained from �le version information PrivateBuild �eld (i.e.
+3.04.00.0001 ). This seems to be used as kit version number .
+[HKLM\SOFTWARE\Classes\CLSID{091FD378-422D-A36E-8487-83B57ADD2109}\Version] is created
+and @default value is set to a CLSID like string generated from the following:
+Fixed pre�x string: "{8C936AF9-243D-11D0-"
+Two important DWORD values in the format of "%04X-%04X%08X}" string.
+15 of 30 03/22/2015 10:21 PM
+http://securelist.com/blog/research/69203/inside-t...
+We collected and decrypted several samples of such values. According to the code, they are initialized with
+values of the Microsoft �letime format. So, we decided to interpret them as �letime values:
+20101C04EC2C17B: 1 year(s) 7 month(s) 21 day(s) 23 hour(s) 32 min(s) 1 sec(s)
+81E01C04EC2C17B: 1 year(s) 7 month(s) 8 day(s) 12 hour(s) 13 min(s) 5 sec(s)
+E0001C04EC2C17B: 1 year(s) 7 month(s) 21 day(s) 1 hour(s) 6 min(s) 15 sec(s)
+77101C04EC2C17B: 1 year(s) 5 month(s) 20 day(s) 19 hour(s) 15 min(s) 4 sec(s)
+30F01C04EC2C17B: 1 year(s) 8 month(s) 0 day(s) 6 hour(s) 10 min(s) 33 sec(s)
+C0901C04EC2C17B: 1 year(s) 8 month(s) 2 day(s) 6 hour(s) 29 min(s) 39 sec(s)
+66701C04EC2C17B: 1 year(s) 6 month(s) 9 day(s) 2 hour(s) 10 min(s) 23 sec(s)
+F6501C04EC2C17B: 1 year(s) 6 month(s) 6 day(s) 19 hour(s) 53 min(s) 22 sec(s)
+01401C04EC2C17B: 1 year(s) 6 month(s) 25 day(s) 23 hour(s) 34 min(s) 13 sec(s)
+After that, the module stores current time values in encrypted form in the registry value:
+[HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\MemSubSys] {08DAB849-0E1E-
+A1F0-DCF1-457081E091DB-117DB663} (encoded SHA1 of "StartTime")
+The module contains an additional compressed Windows DLL �le in the resource section, which is
+extracted as "unilay.dll" (see below). This DLL exports a number of functions that are just wrappers of the
+system API used to work with �les and the registry, and also start processes and load additional DLL �les.
+The orchestrator contains several built-in plugins that form the core of the platform. These are initialized
+in the �rst place, and then additional plugins are loaded. All the plugins are indexed in a single encrypted
+registry value:
+[HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\MemSubSys] 1
+This value has information about all the components of the current kit. It may include Unicode strings
+with paths to extra DLLs which serve as plugins. Each DLL exports at least four functions which are
+imported by ordinal numbers from 1 to 4.
+The structure of the registry value "1":
+[Count:DWORD]{ [Plugin Id:WORD][Plugin Path Length:DWORD][Plugin Path String:VARIABLE] }
+Plugins interact with each other and with the orchestrator by exchanging messages of pre-de�ned format.
+The message transport is implemented as a global object that contains four communication streams.
+Every stream contains a pair of kernel synchronization object handles (a semaphore with �xed maximum
+value defaulted to 1000 and a mutex) and a message queue as an array. A dedicated thread processes
+messages that appear in the message queues.
+A message arrives in a parcel, represented as two DWORD values that contain the size of the message and
+a pointer to the message data. The message data starts with a DWORD identifying a class of message (a
+16 of 30 03/22/2015 10:21 PM
+http://securelist.com/blog/research/69203/inside-t...
+request, reply, etc).
+The orchestrator contains the following built-in plugins (listed by internal ID): 8000, 8022, 8024, 803C,
+8046, 800A, 8042, 8002, 8004, 8006, 8008, 8070, 808E. Several additional built-in modules have been
+discovered in newer versions of the orchestrator that was shipped with the GrayFish platform.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "mscfg32.dll", "type": "EXEF"},
+        {"id": 2, "description": "svchost32.dll", "type": "EXEF"},
+        {"id": 3, "description": "5767b9d851d0c24e13eca1bfd16ea424", "type": "IOCS"},
+        {"id": 4, "description": "%System%\\mscfg32.dll", "type": "SYSP"},
+        {"id": 5, "description": "01C482BA-BD31-4874-A08B-A93EA5BCE511", "type": "TAMP"},
+        {"id": 6, "description": "%SystemRoot%\\temp\\~yh56816.tmp", "type": "SYSP"},
+        {"id": 7, "description": "C:\\Windows\\Temp\\~yh56816.tmp", "type": "SYSP"},
+        {"id": 8, "description": "%Registry_SystemRoot_Value%\\temp\\~yh56816.tmp", "type": "SYSP"},
+        {"id": 9, "description": "[HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\MemSubSys]", "type": "REGI"},
+        {"id": 10, "description": "\\.\MSSVC32", "type": "TAMP"},
+        {"id": 11, "description": "\\.\MSNDSRV", "type": "TAMP"},
+        {"id": 12, "description": "%SYSTEM%\\unilay.dll", "type": "SYSP"},
+        {"id": 13, "description": "winproc.exe", "type": "EXEF"},
+        {"id": 14, "description": "www.waeservices[.]com", "type": "CCSH"},
+        {"id": 15, "description": "213.198.79.49", "type": "CCSH"},
+        {"id": 16, "description": "{42E14DD3-F07A-78F1-7659-26AE141569AC-E0B3EE89}", "type": "TAMP"},
+        {"id": 17, "description": "[HKLM\\SOFTWARE\\Classes\\CLSID{091FD378-422D-A36E-8487-83B57ADD2109}]", "type": "REGI"},
+        {"id": 18, "description": "[HKLM\\SOFTWARE\\Classes\\CLSID{091FD378-422D-A36E-8487-83B57ADD2109}\\Version]", "type": "REGI"},
+        {"id": 19, "description": "{8C936AF9-243D-11D0-}", "type": "TAMP"},
+        {"id": 20, "description": "[HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\MemSubSys] {08DAB849-0E1E-A1F0-DCF1-457081E091DB-117DB663}", "type": "REGI"},
+        {"id": 21, "description": "unilay.dll", "type": "EXEF"},
+        {"id": 22, "description": "GrayFish platform", "type": "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 4, "rel_name": "located at"},
+        {"source": 1, "target": 5, "rel_name": "creates mutex"},
+        {"source": 1, "target": 6, "rel_name": "writes log to"},
+        {"source": 1, "target": 7, "rel_name": "writes log to"},
+        {"source": 1, "target": 8, "rel_name": "writes log to"},
+        {"source": 1, "target": 9, "rel_name": "reads from"},
+        {"source": 1, "target": 10, "rel_name": "opens device file"},
+        {"source": 1, "target": 11, "rel_name": "opens device file"},
+        {"source": 1, "target": 12, "rel_name": "activates rootkit for"},
+        {"source": 1, "target": 13, "rel_name": "terminates"},
+        {"source": 1, "target": 14, "rel_name": "fetches configuration from"},
+        {"source": 1, "target": 15, "rel_name": "fetches configuration from"},
+        {"source": 1, "target": 16, "rel_name": "reads from"},
+        {"source": 1, "target": 17, "rel_name": "reads from"},
+        {"source": 1, "target": 18, "rel_name": "writes to"},
+        {"source": 1, "target": 19, "rel_name": "generates"},
+        {"source": 1, "target": 20, "rel_name": "stores time in"},
+        {"source": 1, "target": 21, "rel_name": "contains"},
+        {"source": 1, "target": 22, "rel_name": "part of"}
+    ]
+}

@@ -1,0 +1,67 @@
+
+
+
+Sentence : PowerSpritz
+PowerSpritz is a Windows executable that hides both its legitimate payload and malicious PowerShell command using
+a non-standard implementation of the already rarely used Spritz encryption algorithm (see the Attribution section for
+additional analysis of the Spritz implementation). This malicious downloader has been observed being delivered via
+spearphishing attacks using the TinyCC link shortener service to redirect to likely attacker-controlled servers hosting the
+malicious PowerSpritz payload. In early July 2017 an individual on Twitter shared an attack they observed targeting them
+(Fig. 3) utilizing a fake Skype update lure to trick users into clicking on a link to hxxps://skype.2[.]vu/1. The TinyCC link
+redirected to a server that, at the time, would have likely returned a PowerSpritz payload: hxxp://201.211.183[.]215:8080/
+update.php?t=Skype&r=update
+Figure 3: PowerSpritz spearphishing email shared on Twitter by @LeoAW, abusing Skype name and branding
+North Korea Bitten by Bitcoin Bug 6
+We have since discovered three additional TinyCC URLs utilized to spread PowerSpritz: one with a Telegram theme (hxxp://
+telegramupdate.2[.]vu/5 -> hxxp://122.248.34[.]23/lndex.php?t=Telegram&r=1.1.9) and two more with Skype theme
+(hxxp://skypeupdate.2[.]vu/1 -> hxxp://122.248.34[.]23/lndex.php?t=SkypeSetup&r=mail_new and hxxp://skype.2[.]vu/k
+-> unknown). Some of the PowerSpritz payloads were previously hosted on Google Drive; however, we were unable to
+determine if that service was actually used to spread the payloads in-the-wild (ITW).
+PowerSpritz decrypts a legitimate Skype or Telegram installer using a custom Spritz implementation with the key “Znxkai@
+if8qa9w9489”. PowerSpritz then writes the legitimate installer to disk in the directory returned by GetTempPathA either as
+a hardcoded filename such as SkypeSetup.exe or, in some versions, as the filename returned by GetTempFileNameA.
+The installer is then executed to trick the potential victim into thinking they downloaded a legitimate, working application
+installer or update. Finally, Spritz uses the same key to decrypt a PowerShell command that downloads the first stage of
+PowerRatankba (Fig. 4). All three PowerSpritz samples we discovered executed the identical PowerShell command.
+Figure 4: Script output showing PowerSpritz PowerShell encoded and decoded command
+North Korea Bitten by Bitcoin Bug 7
+As shown in the above decoded script (Fig. 4), PowerSpritz attempts to retrieve a payload from hxxp://dogecoin.
+deaftone[.]com:8080/mainls.cs that is expected to be a Base64-encoded PowerShell script. After decoding mainls.cs,
+a PowerRatankba.A implant is revealed (Fig. 5) with hxxp://vietcasino.linkpc[.]net:8080/search.jsp as its command and
+control (C&C).
+Figure 5: PowerSpritz retrieving Base64-encoded PowerRatankba
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PowerSpritz", "type" : "EXEF"},
+        {"id": 2, "description": "Spritz encryption algorithm", "type" : "TTPS"},
+        {"id": 3, "description": "TinyCC link shortener service", "type" : "URLS"},
+        {"id": 4, "description": "@LeoAW (Twitter user)", "type" : "ACTO"},
+        {"id": 5, "description": "Skype update lure", "type" : "APPS"},
+        {"id": 6, "description": "hxxps://skype.2[.]vu/1", "type" : "URLS"},
+        {"id": 7, "description": "hxxp://201.211.183[.]215:8080/update.php?t=Skype&r=update", "type" : "CCSH"},
+        {"id": 8, "description": "Telegram theme URL (hxxp://telegramupdate.2[.]vu/5)", "type" : "URLS"},
+        {"id": 9, "description": "hxxp://122.248.34[.]23/lndex.php?t=Telegram&r=1.1.9", "type" : "CCSH"},
+        {"id": 10, "description": "Skype theme URLs (hxxp://skypeupdate.2[.]vu/1 and hxxp://skype.2[.]vu/k)", "type" : "URLS"},
+        {"id": 11, "description": "Google Drive", "type" : "STOR"},
+        {"id": 12, "description": "GetTempPathA directory", "type" : "SYSP"},
+        {"id": 13, "description": "SkypeSetup.exe or GetTempFileNameA filename", "type" : "EXEF"},
+        {"id": 14, "description": "Base64-encoded PowerShell script (mainls.cs)", "type" : "DOCF"},
+        {"id": 15, "description": "hxxp://dogecoin.deaftone[.]com:8080/mainls.cs", "type" : "CCSH"},
+        {"id": 16, "description": "PowerRatankba.A implant", "type" : "EXEF"},
+        {"id": 17, "description": "hxxp://vietcasino.linkpc[.]net:8080/search.jsp", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "delivered via"},
+        {"source": 4, "target": 6, "rel_name" : "shared on Twitter"},
+        {"source": 6, "target": 7, "rel_name" : "redirects to"},
+        {"source": 8, "target": 9, "rel_name" : "redirects to"},
+        {"source": 10, "target": 7, "rel_name" : "redirects to"},
+        {"source": 1, "target": 12, "rel_name" : "writes to"},
+        {"source": 13, "target": 12, "rel_name" : "located in"},
+        {"source": 1, "target": 14, "rel_name" : "downloads and decrypts"},
+        {"source": 15, "target": 14, "rel_name" : "hosts"},
+        {"source": 16, "target": 17, "rel_name" : "communicates with"}
+    ]
+}

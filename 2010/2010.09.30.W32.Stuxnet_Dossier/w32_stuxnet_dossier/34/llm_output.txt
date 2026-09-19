@@ -1,0 +1,124 @@
+
+
+
+Sentence : Simatic PLC 101
+To access a PLC, specific
+software needs to be in­
+stalled. Stuxnet specifically
+targets the WinCC/Step 7
+software.
+With this software installed,
+the programmer can con­
+nect to the PLC with a data
+cable and access the mem­
+ory contents, reconfigure it,
+download a program onto it,
+or debug previously loaded
+code. Once the PLC has been
+configured and programmed,
+the Windows computer can
+be disconnected and the PLC
+will function by itself. To give
+you an idea of what this looks
+like, figure 20 is a photo of
+some basic test equipment.
+Figure 20
+Test equipment
+Figure 21 shows a portion of Stuxnet’s malicious code in the Step7 STL editor. The beginning of the MC7 code for
+one of Stuxnet’s Function Code (FC) blocks is visible. The code shown is from the disassembled block FC1873.
+Figure 21
+Stuxnet code in the Step7 STL editor
+Figure 22
+Step7 and PCL communicating via s7otbxdx.dll
+As mentioned previously, the Step 7 soft­
+ware uses a library file called s7otbxdx.dll
+to perform the actual communication with
+the PLC. The Step7 program calls differ­
+ent routines in this .dll file when it wants
+to access the PLC. For example, if a block
+of code is to be read from the PLC using
+Step7, the routine s7blk_read is called.
+The code in s7otbxdx.dll accesses the PLC,
+reads the code, and passes it back to the
+Step7 program, as shown in figure 22.
+Looking at how access to the PLC works
+when Stuxnet is installed, once Stux­
+net executes, it renames the original
+s7otbxdx.dll file to s7otbxsx.dll. It then
+replaces the original .dll file with its own
+version. Stuxnet can now intercept any
+call that is made to access the PLC from
+any software package.
+Stuxnet’s s7otbxdx.dll file contains all
+potential exports of the original .dll file
+– a maximum of 109 – which allows it to
+handle all the same requests. The major­
+ity of these exports are simply forwarded
+to the real .dll file, now called s7otbxsx.
+dll, and nothing untoward happens. In
+fact, 93 of the original 109 exports are
+dealt with in this manner. The trick, how­
+ever, lies in the 16 exports that are not
+simply forwarded but are instead inter­
+cepted by the custom .dll file. The inter­
+cepted exports are the routines to read,
+write, and enumerate code blocks on the
+PLC, among others. By intercepting these
+requests, Stuxnet is able to modify the
+data sent to or returned from the PLC
+without the operator of the PLC realizing
+it. It is also through these routines that
+Stuxnet is able to hide the malicious code
+that is on the PLC.
+The following are the most common
+types of blocks used by a PLC:
+  - Data Blocks (DB) contain program-spe­
+
+Figure 23
+Communication with malicious version of s7otbxdx.dll
+cific data, such as numbers, structures,
+and so on.
+
+System Data Blocks (SDB) contain information about how the PLC is configured. They are created depending
+
+on the number and type of hardware modules that are connected to the PLC.
+
+Organization Blocks (OB) are the entry point of programs. They are executed cyclically by the CPU. In regards
+
+to Stuxnet, two notable OBs are:
+- OB1 is the main entry-point of the PLC program. It is executed cyclically, without specific time requirements.
+
+- OB35 is a standard watchdog Organization Block, executed by the system every 100 ms. This function may
+
+contain any logic that needs to monitor critical input in order to respond immediately or perform functions
+in a time critical manner.
+
+Function Blocks (FC) are standard code blocks. They contain the code to be executed by the PLC. Generally, the
+
+OB1 block references at least one FC block.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Simatic PLC 101", "type": "EXEF"},
+        {"id": 2, "description": "WinCC/Step 7 software", "type": "APPS"},
+        {"id": 3, "description": "Stuxnet", "type": "ACTO"},
+        {"id": 4, "description": "s7otbxdx.dll", "type": "EXEF"},
+        {"id": 5, "description": "s7otbxsx.dll", "type": "EXEF"},
+        {"id": 6, "description": "Data Blocks (DB)", "type": "TAMP"},
+        {"id": 7, "description": "System Data Blocks (SDB)", "type": "TAMP"},
+        {"id": 8, "description": "Organization Blocks (OB)", "type": "TAMP"},
+        {"id": 9, "description": "OB1", "type": "TAMP"},
+        {"id": 10, "description": "OB35", "type": "TAMP"},
+        {"id": 11, "description": "Function Blocks (FC)", "type": "TAMP"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name": "connects to"},
+        {"source": 3, "target": 4, "rel_name": "renames and replaces"},
+        {"source": 3, "target": 5, "rel_name": "creates"},
+        {"source": 4, "target": 1, "rel_name": "accesses"},
+        {"source": 2, "target": 4, "rel_name": "uses"},
+        {"source": 3, "target": 8, "rel_name": "modifies and hides"},
+        {"source": 9, "rel_name": "references", "target": 11},
+        {"source": 10, "rel_name": "executes", "target": 1}
+    ]
+}

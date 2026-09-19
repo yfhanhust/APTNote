@@ -1,0 +1,175 @@
+
+
+
+Sentence : 1.1. Detecting ShadowPad
+Initially, when the xDll backdoor was analyzed (see Section 2.2), it could not be clearly tied to any
+APT group. The sample had a very interesting C2 server, www.g00gle_jp.dynamic-dns[.]net, which
+potentially could indicate attacks against Japan. When we studied the network infrastructure and
+searched for similar samples, we found several domains with similar names.
+Figure 1. Network infrastructure of the Winnti group at the initial stage of analysis
+The domain names give reason to suspect that attacks
+also target South Korea, Mongolia, Russia, and the
+United States. When we studied the infrastructure
+further, we found several simple downloaders
+unfamiliar to us (see Section 2.1). They contact related
+C2 servers, and in the response should receive a XOR
+encrypted payload with key 0x37. The downloader
+we found was named SkinnyD (Skinny Downloader)
+for its small size and bare-bones functionality. The
+URL structure and some lines in SkinnyD make it very
+similar to the xDll backdoor.
+At first, we could not obtain the payload for SkinnyD,
+because all C2 servers were inactive. But after a
+while, we found new samples of the xDII backdoor.
+When we analyzed one of the samples, we found
+some public directories on its С2 server. The file
+called x.jpg is an xDll backdoor encrypted with XOR
+with key 0x37. This suggests that xDll is a payload
+for SkinnyD.
+Figure 2. Structure of public directories
+on the discovered C2 server
+4
+The most interesting thing on the server is the
+contents of the "cache" directory.
+Figure 3. Contents of the "cache" directory
+Figure 4. Example of lines from the log (for detailed description of
+parameter values, see xDII analysis)
+It contains data about the victims and
+the malware downloaded to infected
+computers. The name of the victim file
+contains an MD5 hash of the MAC address
+for the infected computer sent by xDll; the
+file contents include the time of the last
+connection to the C2 server. Based on the
+changes in the second part of the name of
+the malware file, server time might seem
+to be indicated in nanoseconds. But that
+cannot be true, since that would take us
+back all the way to March 1990. Ultimately,
+we don't know why this time period was
+selected.
+In the malware files, we found ShadowPad, a
+previously unknown Python backdoor, and
+utilities for progressing the attack. Detailed
+analysis of the malware and utilities is
+provided in Section 2.
+At certain intervals, the attackers request
+information from infected computers via
+the xDII backdoor. This information is saved
+to the file list.gif.
+We should note that in the xDII samples we
+have, the Domain field contains the name
+of the domain where the infected computer
+is located. However, in the log that field for
+almost all computers contains the SID of
+the user whose name was used to launch
+xDII. That may be an error in the code of
+a certain xDII version, because this value
+does not provide any useful information to
+the attackers.
+Going deeper into the network
+infrastructure, we found that many servers
+have the same chain of SSL certificates with
+the following parameters:
+� Root: C=CN, ST=myprovince, L=mycity,
+O=myorganization, OU=mygroup,
+CN=myCA, SHA1=0a71519f5549b21510
+410cdf4a85701489676ddb
+� Base: C=CN, ST=myprovince, L=mycity,
+O=myorganization, OU=mygroup,
+CN=myServer, SHA1=2d2d79c478e92a7
+de25e661ff1a68de0833b9d9b
+5
+Figure 5. Parameters of the SSL certificate
+We have encountered this certificate in several publications about ShadowPad attacks.
+The first one is an investigation of the 2017 attack on CCleaner. Avast has provided details [7] regarding the
+attack. A screenshot, included there, shows the same certificate.
+The second is a talk by FireEye researchers at Code Blue 2019 about cyberattacks against Japanese
+targets. [8] In one of the attacks, the researchers found the use of POISONPLUG (the name for ShadowPad
+used by FireEye). Analysis of the infrastructure revealed the same certificate on ShadowPad C2 servers.
+Figure 6. Slide from the FireEye presentation
+7. blog.avast.com/update-ccleaner-attackers-entered-via-teamviewer
+8. slideshare.net/codeblue_jp/cb19-cyber-threat-landscape-in-japan-revealing-threat-in-the-shadow-by-chi-en-shen-ashley-oleg-
+bondarenko
+6
+Searching for servers with this certificate helped us not only detect new ShadowPad samples and C2
+servers, but also find connections to other attacks previously not attributed to Winnti (see Section 1.2).
+As a result, we found over 150 IP addresses with this certificate, or addresses where it had been installed
+previously. Of these, 24 addresses were active at the time of writing of this article. There were also 147
+domains related to those addresses. For the domains, we found Winnti malware.
+During our research, the group's domains relocated from one IP address to another many times, which
+is indicative of active attack operations.
+However, the motive for using the same SSL certificate on almost all ShadowPad C2 servers was not
+clear. This may be the result of having the same system image installed on the C2 servers, or else simple
+overconfidence.
+We saw the same thing with certificates when researching the activity of the TaskMasters [9] group. At
+some point, the attackers started installing self-signed certificates with identical metadata on their
+servers, which ultimately helped us in finding their infrastructure.
+The following figure shows distribution of detected IP addresses by location:
+4.4%
+3.4%
+3.8%
+18.3% 20.2%
+Hong Kong
+U.S.
+South Korea
+Malaysia
+Singapore
+China
+Others
+Russia 1.9%
+United Kingdom 1%
+Netherlands 0.5%
+Lithuania 0.5%
+Germany 0.5%
+Figure 7. Geolocation of C2 servers
+About half of the group's servers are located in Hong Kong. The IP addresses are distributed between
+45 unique providers. More than half of the servers are concentrated on the IP addresses of six providers,
+five of which are in Asia (Hong Kong, China, and South Korea).
+9. ptsecurity.com/ww-en/analytics/operation-taskmasters-2019/
+7
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "xDll backdoor", "type" : "EXEF"},
+        {"id": 2, "description": "www.g00gle_jp.dynamic-dns[.]net", "type" : "CCSH"},
+        {"id": 3, "description": "South Korea", "type" : "COUN"},
+        {"id": 4, "description": "Mongolia", "type" : "COUN"},
+        {"id": 5, "description": "Russia", "type" : "COUN"},
+        {"id": 6, "description": "United States", "type" : "COUN"},
+        {"id": 7, "description": "SkinnyD (Skinny Downloader)", "type" : "EXEF"},
+        {"id": 8, "description": "XOR encrypted payload with key 0x37", "type" : "DOCF"},
+        {"id": 9, "description": "xDll backdoor encrypted with XOR with key 0x37", "type" : "DOCF"},
+        {"id": 10, "description": "x.jpg", "type" : "DOCF"},
+        {"id": 11, "description": "cache directory", "type" : "SYSP"},
+        {"id": 12, "description": "list.gif", "type" : "DOCF"},
+        {"id": 13, "description": "ShadowPad (Python backdoor)", "type" : "EXEF"},
+        {"id": 14, "description": "MD5 hash of the MAC address", "type" : "IOCS"},
+        {"id": 15, "description": "C2 server of xDII backdoor", "type" : "CCSH"},
+        {"id": 16, "description": "Root SSL certificate (C=CN, ST=myprovince, L=mycity, O=myorganization, OU=mygroup, CN=myCA, SHA1=0a71519f5549b21510410cdf4a85701489676ddb)", "type" : "IOCS"},
+        {"id": 17, "description": "Base SSL certificate (C=CN, ST=myprovince, L=mycity, O=myorganization, OU=mygroup, CN=myServer, SHA1=2d2d79c478e92a7de25e661ff1a68de0833b9d9b)", "type" : "IOCS"},
+        {"id": 18, "description": "CCleaner attack", "type" : "TAMP"},
+        {"id": 19, "description": "POISONPLUG (ShadowPad used by FireEye)", "type" : "EXEF"},
+        {"id": 20, "description": "TaskMasters group", "type" : "ACTO"},
+        {"id": 21, "description": "Hong Kong", "type" : "COUN"},
+        {"id": 22, "description": "U.S.", "type" : "COUN"},
+        {"id": 23, "description": "China", "type" : "COUN"},
+        {"id": 24, "description": "Malaysia", "type" : "COUN"},
+        {"id": 25, "description": "Singapore", "type" : "COUN"},
+        {"id": 26, "description": "Russia", "type" : "COUN"},
+        {"id": 27, "description": "United Kingdom", "type" : "COUN"},
+        {"id": 28, "description": "Netherlands", "type" : "COUN"},
+        {"id": 29, "description": "Lithuania", "type" : "COUN"},
+        {"id": 30, "description": "Germany", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "communicates with"},
+        {"source": 1, "target": 8, "rel_name" : "downloads"},
+        {"source": 7, "target": 8, "rel_name" : "downloads"},
+        {"source": 9, "target": 10, "rel_name" : "stored as"},
+        {"source": 13, "target": 15, "rel_name" : "communicates with"},
+        {"source": 14, "target": 12, "rel_name" : "used in"},
+        {"source": 15, "target": 16, "rel_name" : "uses certificate"},
+        {"source": 15, "target": 17, "rel_name" : "uses certificate"}
+    ]
+}

@@ -1,0 +1,69 @@
+
+
+
+Sentence : Dropper
+The dropper is used to install four files on the infected system. The dropped files are stored in the
+resources of the binary. The dropper has the 32-bit and the 64-bit version of the executable files
+embedded. It installs the following files:
+miniport.dat: configuration file;
+stage 1: the file name is randomly chosen from ipvpn.dll,srsvc.dll or kmsvc.dll. This library is
+registered as a service;
+stage 2: the file name is msimghlp.dll. It’s the orchestrator of the malware (called “system” by the
+author);
+stage 3: the file name is msximl.dll. This library (called “user” by the authors) is injected in the
+browsers and the email clients in order to communicate to the outside via web requests.
+The persistence is performed by the creation of a service (HKLM\SYSTEM\CurrentControlSet\Service).
+The service name depends on the chosen stage 1 file name:
+|FileName|ServiceName|DisplayName|Description(Copy&Paste from the binary)|
+|---|---|---|---|
+|ipvpn.dll|ipvpn|VirtualPrivateNetworkRoutingService|Provides enchanced network management while active VPN connectionestablished. Support All necessary functions and maintain dynamic tablerules. Enforcement technologies that use virtual networks may notfunction properly without this service|
+|srsvc.dll|srservice|SystemRestoreService|Performs system restore functions. To stop service, turn off SystemRestore from the System Restore tab in My Computer.|
+|kmsvc.dll|hkmsvc|Health KeyandCertificateManagementService|Provides X.509 certificate and key management services for the NetworkAccess Protection Agent (NAPAgent). Enforcement technologies that useX.509 certificates may not function properly without this service|
+The descriptions reveal spelling mistakes and the sentence structure may indicate that the texts have been
+written by non-native speakers.
+Stage 1 is always installed in %SystemRoot%\system32\ To install something into %SystemRoot%, the
+attackers have to have gained administration privileges before they executed the dropper. The three other
+dropped files are stored in an existing directory in %ProgramFiles%, randomly chosen.
+During the installation, executed in a command line, the dropper displays the following information:
+The screenshot shows the string “LUCKY STRIKE!!!”, displayed in case the installation was carried out
+successfully and “Idioten???” in case of any installation error. To be able to find the random installation
+path, the dropper modifies a legitimate .inf file (also chosen randomly) in %SystemRoot%\inf\ to add the
+following information to the end of the file:
+[B8744A58]root=C:\Program Files\Windows NT\Accessoiries\en-US
+The ID between the brackets is a unique ID and the root variable contains the path in which the three
+additional files are installed.
+The tricks put in place by the authors – random file names and random installation paths – are used to
+limit the detection possible with Indicators of Compromise. Generally, security researchers use these
+kinds of artifacts in order to detect the compromise of systems.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Dropper", "type" : "EXEF"},
+        {"id": 2, "description": "miniport.dat: configuration file", "type" : "DOCF"},
+        {"id": 3, "description": "ipvpn.dll (stage 1)", "type" : "EXEF"},
+        {"id": 4, "description": "srsvc.dll (stage 1)", "type" : "EXEF"},
+        {"id": 5, "description": "kmsvc.dll (stage 1)", "type" : "EXEF"},
+        {"id": 6, "description": "msimghlp.dll (stage 2)", "type" : "EXEF"},
+        {"id": 7, "description": "msximl.dll (stage 3)", "type" : "EXEF"},
+        {"id": 8, "description": "%SystemRoot%\\system32\\", "type" : "SYSP"},
+        {"id": 9, "description": "%ProgramFiles%", "type" : "SYSP"},
+        {"id": 10, "description": ".inf file (modified)", "type" : "DOCF"},
+        {"id": 11, "description": "C:\\Program Files\\Windows NT\\Accessoiries\\en-US", "type" : "TPTH"},
+        {"id": 12, "description": "LUCKY STRIKE!!!", "type" : "TAMP"},
+        {"id": 13, "description": "Idioten???", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "installs"},
+        {"source": 1, "target": 3, "rel_name" : "installs"},
+        {"source": 1, "target": 4, "rel_name" : "installs"},
+        {"source": 1, "target": 5, "rel_name" : "installs"},
+        {"source": 1, "target": 6, "rel_name" : "installs"},
+        {"source": 1, "target": 7, "rel_name" : "installs"},
+        {"source": 3, "target": 8, "rel_name" : "stored in"},
+        {"source": 4, "target": 8, "rel_name" : "stored in"},
+        {"source": 5, "target": 8, "rel_name" : "stored in"},
+        {"source": 6, "target": 9, "rel_name" : "stored in"},
+        {"source": 7, "target": 9, "rel_name" : "stored in"},
+        {"source": 10, "target": 11, "rel_name" : "modified to add path"}
+    ]
+}

@@ -1,0 +1,58 @@
+
+
+
+Sentence : Load Point
+Stuxnet drops Resource 242 MrxCls.sys via Export 16. MrxCls is a driver digitally signed with a compromised
+Realtek certificate that was revoked on July 16, 2010 by Verisign. A different version of the driver was also found
+signed by a different compromised digital certificate from JMicron.
+Mrxcls.sys is a driver that allows Stuxnet to be executed every time an infected system boots and thus acts as
+the main load-point for the threat. The driver is registered as a boot start service creating the registry key HKEY_
+LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\MRxCls\”ImagePath” = “%System%\drivers\mrxcls.sys”
+and thus loading early in the Windows boot process.
+The goal of the driver is to inject and execute copies of Stuxnet into specific processes.
+The driver contains an encrypted data block. After decryption, this block contains (among others) a registry key/
+value pair, which is normally HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\MrxCls\“Data”.
+The driver reads this binary value (previously set by Stuxnet during the installation process). The value is de­
+crypted. It contains a list of pairs (target process name, module to inject):
+  - services.exe — %Windir%\inf\oem7A.PNF
+
+  - S7tgtopx.exe — %Windir%\inf\oem7A.PNF
+
+  - CCProjectMgr.exe — %Windir%\inf\oem7A.PNF
+
+  - explorer.exe — %Windir%\inf\oem7m.PNF
+
+The services.exe, s7tgtopx.exe (Simatic manager) and CCProjectMgr.exe (WinCC project manager) will be inject­
+ed with oem7a.pnf, which is a copy of the main Stuxnet dll. Once injected, Stuxnet executes on the compromised
+computer.
+Explorer.exe is injected with oem7m.pnf, an unknown file, which does not appear to be dropped by Stuxnet.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Stuxnet", "type" : "EXEF"},
+        {"id": 2, "description": "Resource 242 MrxCls.sys", "type" : "EXEF"},
+        {"id": 3, "description": "Realtek certificate", "type" : "TAMP"},
+        {"id": 4, "description": "JMicron digital certificate", "type" : "TAMP"},
+        {"id": 5, "description": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\MRxCls\\\"ImagePath\"", "type" : "REGI"},
+        {"id": 6, "description": "%System%\\drivers\\mrxcls.sys", "type" : "SYSP"},
+        {"id": 7, "description": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\MrxCls\\\"Data\"", "type" : "REGI"},
+        {"id": 8, "description": "%Windir%\\inf\\oem7A.PNF", "type" : "SYSP"},
+        {"id": 9, "description": "%Windir%\\inf\\oem7m.PNF", "type" : "SYSP"},
+        {"id": 10, "description": "services.exe", "type" : "EXEF"},
+        {"id": 11, "description": "s7tgtopx.exe (Simatic manager)", "type" : "APPS"},
+        {"id": 12, "description": "CCProjectMgr.exe (WinCC project manager)", "type" : "APPS"},
+        {"id": 13, "description": "explorer.exe", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "drops"},
+        {"source": 2, "target": 5, "rel_name" : "registers as a boot start service"},
+        {"source": 5, "target": 6, "rel_name" : "points to"},
+        {"source": 2, "target": 7, "rel_name" : "reads and decrypts"},
+        {"source": 7, "target": 8, "rel_name" : "contains list of pairs (process name, module to inject)"},
+        {"source": 7, "target": 9, "rel_name" : "contains list of pairs (process name, module to inject)"},
+        {"source": 10, "target": 8, "rel_name" : "is injected with"},
+        {"source": 11, "target": 8, "rel_name" : "is injected with"},
+        {"source": 12, "target": 8, "rel_name" : "is injected with"},
+        {"source": 13, "target": 9, "rel_name" : "is injected with"}
+    ]
+}

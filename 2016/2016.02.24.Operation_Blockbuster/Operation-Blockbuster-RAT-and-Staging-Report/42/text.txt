@@ -1,0 +1,55 @@
+13.1 RomeoWhiskey-One (Base Code)
+Based on the premise that RomeoWhiskey-One is the base code for the entirety of the RomeoWhiskey samples, this
+section will refer to RomeoWhiskey-One simply as RomeoWhiskey when addressing information that relates to both
+observed variants. When a piece of information is specific to only the RomeoWhiskey-One variants, this section will use
+the full name of RomeoWhiskey-One.
+RomeoWhiskey exports two functions in addition to the DllMain : ServiceMain and SecuritySetting .
+The ServiceMain function provides the scaffolding necessary for a legitimate Windows service before calling
+CreateThread to activate the function housing the core functionality of RomeoWhiskey. The SecuritySetting
+function is simply a wrapper to the function housing the core functionality of RomeoWhiskey. While both
+ServiceMain and SecuritySetting ultimately activate the core functionality of RomeoWhiskey, the distinction
+between the two is that ServiceMain causes the core functionality to activate asynchronously to the calling process,
+while SecuritySetting does not return control to the calling process until the core functionality returns control.
+The startup sequence for RomeoWhiskey is as follows:
+
+
+Dynamically load API functions
+
+
+Attempt to load the configuration file
+
+
+bind to a listening port
+
+
+Save the configuration
+
+
+Open a hole in the Windows firewall
+
+
+listen for incoming connections
+
+
+Perform the authentication handshake and spawn a handler thread if successful
+
+
+Repeat steps 6-8 indefinitely.
+
+
+The functions that dynamically load API functions can be found in other Lazarus Group malware families with the function
+responsible for loading the kernel32.dll API functions being identical to the same function used in IndiaWhiskey. The
+kernel32.dll API loader function also generates the names of the RomeoWhiskey service, its service display name, its
+service description, and, most importantly for RomeoWhiskey, the name of the configuration file. The reuse of this code
+clearly ties the developer(s) of the IndiaWhiskey family to the developer(s) of the RomeoWhiskey family.
+RomeoWhiskey attempts to load the configuration file from %SYSDIR%\dayipmr.tbl (for command base 0x7D50
+samples) or %SYSDIR%\ansi.nls (for command base 0x1E10 samples). The 240-byte file, if found, is read into memory and
+decoded using DNSCALC-style. If the 101 [st] byte is set to 1 then RomeoWhiskey will read the 4-byte value starting at the
+217 [th] byte as a DWORD containing the listening port for the RomeoWhiskey instance.
+The act of establishing the listening port is somewhat more involved than merely calling bind on a new socket. Situated
+within a loop that can iterate 30 times, the process of binding a listening port consists of first attempting to bind to the
+port specified in the configuration file, if it exists. Failing to bind on the specified port results in up to 4 additional bind
+attempts using the ports 173, 155, 129, and 192 (in that order). If RomeoWhiskey still hasn’t found a suitable port, the
+remaining iterations calculate a new potential listening port that is 1046 ports higher than the previous attempt (starting
+at an initial offset of 4). With a suitable listening port found, the configuration file is replaced with the new port value set,
+and the configuration file’s timestamp is set to match that of kernel32.dll ’s timestamp.

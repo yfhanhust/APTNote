@@ -1,0 +1,26 @@
+3.1 IndiaBravo-RomeoBravo Variant
+IndiaBravo-RomeoBravo (IBRB) is the installer responsible for dropping the RomeoBravo malware. IBRB begins by dropping
+the malware binary at %SYSDIR%\wmisecsvc.dll . Compared to other IndiaBravo variants, the line of demarcation
+between IBRB’s ExtractDll and functions is more blurred based on the fact that ExtractDll also
+WriteConfig
+extracts a configuration data blob of 456 bytes from the IBRB binary. The configuration data exists immediately before the
+RomeoBravo image and is stored in plaintext. ExtractDll loads the configuration blob into memory.
+Once ExtractDll completes the file and configuration data extraction, WriteConfig modifies the configuration
+data blob by assigning a 64-bit, randomly generated value to the qwIdentifier field of the RomeoBravo configuration.
+The WriteConfig encrypts the configuration data using the DNSCALC-style encoding scheme, and the encrypted
+configuration is then dropped to disk at %SYSDIR%\tmscompg.ini .
+The CreateSVC function follows the general IndiaBravo method of establishing a new service, but, specifically, the
+function generates a new service group named LocalWmiSecurity after establishing the registry entries necessary to
+define the WmiSecSvc service.
+IBRB monitors the status of each of the installation tasks and, if any of the tasks fails, calls a suicide script (saved in the
+%TEMP% directory as cvrit000.bat ) to remove its binary. The suicide script, Figure 3-2, only removes the IBRB binary
+and will not attempt to clean up any of the successful steps that may have occurred during the installation process.
+```
+  :L1
+del "wmisecsvc.dll"
+  if exist "wmisecsvc.dll" goto L1
+  del cvrit000.bat
+```
+Figure 3-2: IndiaBravo-RomeoBravo’s Suicide Script
+After completing the installation and activation tasks, IBRB then calls the suicide script to remove itself from the victim’s
+machine.

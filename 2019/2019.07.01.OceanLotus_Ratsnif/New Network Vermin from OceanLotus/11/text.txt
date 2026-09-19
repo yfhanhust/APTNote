@@ -1,0 +1,31 @@
+Analysis
+Upon execution, Ratsnif creates a run once mutex named "onceinstance", initialises
+Winsock version 2.2, and harvests system information such as the username, computer
+name, workstation configuration (via NetWkstaGetInfo API), Windows system directory
+and network adapter information. This information will then be sent to the attacker's C2
+server via an HTTP post to the / cl_client_online.php API endpoint. Next, a logging thread
+is created, which is used to route log messages to the C2 via HTTP POST requests to
+/cl_client_logs.php. The malware then proceeds to load wpcap.dll, before importing the
+following functions:
+pcap_sendqueue_transmit
+pcap_findalldevs
+pcap_freealldevs
+pcap_open_live
+pcap_sendqueue_alloc
+pcap_next_ex
+pcap_sendqueue_queue
+pcap_sendpacket
+pcap_close
+pcap_sendqueue_destroy
+pcap_dump_open
+pcap_dump_ftell
+pcap_dump_flush
+pcap_dump_close
+pcap_dump
+https://threatvector.cylance.com/en_us/home/threat-spotlight-ratsnif-new-network-vermin-from-oceanlotus.html 5/18
+7/2/2019 Threat Spotlight: Ratsnif - New Network Vermin from OceanLotus
+With WinPcap successfully loaded, a further HTTP POST request is made to
+/cl_client_cmd.php, which is used to obtain a command code from the attacker. This
+code will check for commands every 10 seconds. C2 commands are decrypted using
+AES with a hard-coded static key via Windows APIs, before being dispatched by a
+simple command processor.

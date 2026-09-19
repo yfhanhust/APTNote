@@ -1,0 +1,36 @@
+Dropper analysis
+The dropper is usually created using the Nullsoft Scriptable Install System (NSIS)
+installer (although in the past we have seen variants created with Inno Setup), a powerful
+tool for creating scriptable program installers. The dropper (NSIS installer) file contains
+just one randomly named encrypted binary file.
+The NSIS installer script then calls
+Microsoft CryptoAPIs to decrypt the
+binary file, which then becomes a 7Zip archive that will extract the
+files. Figure 10 shows a string
+(tno7wul0zusmglmdl) used for
+deriving the decryption key on line 578.
+Figure 9. Installer with one randomly named binary file
+Figure 10. Code showing a password to derive the RC4 decryption key used to decrypt random
+binary files
+This string is then hashed with MD5 algorithm (see constant 0x00008003).
+Figure 11. MD5 hashing of the password
+Figure 12. Deriving RC4 key
+The dwFlags parameter (see value 0x280011) tells us the length of the key modulus in
+bits, which is set with the upper 16 bits (0x28 / 8 = 40 / 8 = 5 bytes ). Lower 16 bits are
+flags CRYPT_EXPORTABLE and CRYPT_NO_SALT.
+Therefore, the first five bytes of the MD5 of the string for key derivation is the RC4 key
+used to decrypt the 7-Zip archive.
+Figure 13. Documentation explaining the computation of the length of the key
+https://www.trendmicro.com/en_us/research/21/k/campaign-abusing-rats-uses-fake-websites.html 7/13
+3/2/22, 10:34 AM Campaign Abusing Legitimate Remote Administrator Tools Uses Fake Cryptocurrency Websites
+The extracted 7-Zip archive contains several files, most of which are legitimate nonmalicious files belonging to the RAT. In Figure 14, only those files in red indicate the
+additions by malware developers.
+The batch file (.bat) is a starter of the main executable (Assistant, ast.exe) file, while the
+Config file (.cfg) contains encrypted configuration. The bitmap file (.bmp) is used for
+deriving the key to decrypt the config file. Finally, the quartz.dll is the malicious DLL
+containing the malware that is sideloaded by ast.exe. Although the real length of the
+quartz DLL is several dozens of kilobytes, its length is artificially inflated by appending a
+huge overlay of zeroes. This is likely to prevent or discourage some security solutions
+from uploading these large files for further analysis.
+Figure 14. Contents of the 7-Zip archive with the RAT. The files in red are the ones added by the
+malware developer.

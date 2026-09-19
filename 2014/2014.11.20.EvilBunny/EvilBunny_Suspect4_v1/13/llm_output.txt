@@ -1,0 +1,114 @@
+
+
+
+Sentence : 2.6 LUA ENGINE INTEGRATION
+Suspect #4 incorporates an interpreter for Lua 5.1, LuaSocket 2.0.2 and C/Invoke Lua
+bindings. Lua is a lightweight programming language designed as a scripting language
+which can be embedded into applications, providing a C API for doing so. C bindings are
+provided through C/Invoke and enable Lua scripts to perform callbacks to C/C++ code.
+This constellation can be found in many video game engines to provide polymorphic
+behavior in games. Engine and game play features are injected through Lua scripts, which
+instrument the game engine code.
+The Lua interpreter is very small, compiled roughly 180kB, thus can easily be integrated in
+an application. The C/Invoke bindings enable Lua to be completely independent from the
+C/C++ application, so injected scripts can be pure Lua code.
+page | 17
+Illustration 8: A small portion of Lua callback functions
+A script, if delivered to one of the hearer threads, will be provided through the
+corresponding net.cap-file of the hearer along with a C&C command. If a script is included
+in the data read from the net.cap-file, this is indicated by the start sentinel '<$'. Likewise,
+the end of a script is indicated by '$>'.
+Illustration 9: Command and script execution go hand in hand
+Command execution goes hand in hand with Lua script execution, thus is dependent of the
+four hearer threads. The work flow for each hearer per execution loop in the main thread is
+as follows:
+
+
+Read and decrypt content from according net.cap-file
+
+
+See if an entry of the C&C command list can be found in the decrypted data
+
+
+page | 18
+
+
+If so, execute the command
+
+
+Hand the data over to the Lua
+
+
+interpreter thread
+
+See if a Lua script can be located,
+
+searching for start and end
+sentinel
+
+If so, start Lua thread and execute
+
+script
+
+If more than one script can be
+
+found start more Lua threads
+recursively
+Illustration 10: Command and script execution in detail
+After starting the Lua thread requests a value from Windows registry named 'EnableLua'
+under SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System. This key name
+stands for enable limited user account. When set to zero this key effectively disables UAC
+(User Account Control). The malware only requests the key value but does not change it.
+The value is later used by a callback function named 'popenWin' to decide on a way how a
+sub process should be started. Options are via WMIC using wmic.exe, Microsoft CScript
+engine using cscript.exe or directly via spawning a command line through cmd.exe.
+However, spawning sub processes is not the only feature which comes with Lua. The Lua
+interpreter is a powerful code base which enables suspect #4 to change functionality on
+the fly, as different scripts are downloaded and executed. The scripts define the
+functionality as they perform callbacks to the C/C++ code in the malware binary. The
+potential of the Lua interpreter can be investigated on the project homepage [4].
+Like command execution, Lua script execution also returns a status message which is
+extended by a time stamp and forwarded to one of the C&C servers, as well as written to
+the backfile log in Perflib_Perfdat_dmpbX.dat. Likewise, the Lua threads log their activity
+to Perflib_Perfdata_41X.dat/42X.dat.
+Due to the absence of C&C servers which hold the Lua scripts for the bot's Lua interpreter
+the true nature of this feature remains unclear.
+page | 19
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Suspect #4", "type" : "ACTO"},
+        {"id": 2, "description": "Lua 5.1 interpreter", "type" : "APPS"},
+        {"id": 3, "description": "LuaSocket 2.0.2", "type" : "APPS"},
+        {"id": 4, "description": "C/Invoke Lua bindings", "type" : "APPS"},
+        {"id": 5, "description": "180kB compiled Lua interpreter", "type" : "DOCF"},
+        {"id": 6, "description": "net.cap-file", "type" : "DOCF"},
+        {"id": 7, "description": "C&C command list", "type" : "REGI"},
+        {"id": 8, "description": "<$ start sentinel", "type" : "TAMP"},
+        {"id": 9, "description": "$> end sentinel", "type" : "TAMP"},
+        {"id": 10, "description": "'EnableLua' registry key", "type" : "REGI"},
+        {"id": 11, "description": "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "type" : "SYSP"},
+        {"id": 12, "description": "wmic.exe", "type" : "EXEF"},
+        {"id": 13, "description": "cscript.exe", "type" : "EXEF"},
+        {"id": 14, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 15, "description": "C&C servers", "type" : "CCSH"},
+        {"id": 16, "description": "Perflib_Perfdat_dmpbX.dat backfile log", "type" : "DOCF"},
+        {"id": 17, "description": "Perflib_Perfdata_41X.dat/42X.dat logs", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "uses"},
+        {"source": 1, "target": 4, "rel_name" : "uses"},
+        {"source": 2, "target": 5, "rel_name" : "compiled as"},
+        {"source": 6, "target": 7, "rel_name" : "contains"},
+        {"source": 6, "target": 8, "rel_name" : "starts with"},
+        {"source": 6, "target": 9, "rel_name" : "ends with"},
+        {"source": 10, "target": 11, "rel_name" : "located in"},
+        {"source": 12, "target": 14, "rel_name" : "alternative to"},
+        {"source": 13, "target": 14, "rel_name" : "alternative to"},
+        {"source": 7, "target": 6, "rel_name" : "executed from"},
+        {"source": 2, "target": 10, "rel_name" : "requests"},
+        {"source": 15, "target": 16, "rel_name" : "sends to"},
+        {"source": 15, "target": 17, "rel_name" : "logs to"}
+    ]
+}

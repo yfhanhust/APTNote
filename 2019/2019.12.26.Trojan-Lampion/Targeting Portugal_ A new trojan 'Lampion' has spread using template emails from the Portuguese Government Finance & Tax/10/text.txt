@@ -1,0 +1,70 @@
+Lampion – Dynamic Analysis
+At the moment, the file 0.zip has not been used (the second one that was downloaded and presented in Figure 16).
+When the Lampion is running, it will try to read the 0.zip file from the same directory where it is executing (AppData, in this
+case).
+Figure 26: 0.zip file not found and a popup message is presented. The malware
+terminates its execution.
+The 0.zip file was not found (the second file downloaded by VBScript). By
+submitting the executable file to sandboxes on the Internet, it will never be run
+derived from this dependency. This can be seen as a mechanism for a dynamic
+analysis not to be performed properly.
+By fixing this detail, we can validate that malware actually can read the file.
+Figure 27 : 0.zip file is now accessed by Lampion and its content is loaded.
+The 0.zip file is a compressed file with a DLL inside it with additional code. But the file is protected with a password. Only
+the 2nd stage (Lampion) has that password inside.
+https://seguranca-informatica.pt/targeting-portugal-a-new-trojan-lampion-has-spread-using-template-emails-from-the-portuguese-government-finance-tax/#.X… 17/25
+1/6/2020 Targeting Portugal: A new trojan 'Lampion' has spread using template emails from the Portuguese Government Finance & Tax
+Figure 28: 0.zip file protected by a password hardcoded inside the malware 2nd stage (Lampion trojan).
+This can be seen as yet another anti-reversing mechanism introduced by malware authors.
+To get details about the library inside the 0.zip file, we analyzed the 2nd stage and identified the right moment the file is
+unzipped to obtain the password hardcoded from memory (as it is obfuscated).
+Figure 29: Password of 0.zip file extracted from memory.
+After extracting the files, we can see that its name has Chinese characters. Through the translated message “ Your group
+of Portuguese suckers ” we can conclude that this threat is targeting Portuguese citizens.
+https://seguranca-informatica.pt/targeting-portugal-a-new-trojan-lampion-has-spread-using-template-emails-from-the-portuguese-government-finance-tax/#.X… 18/25
+1/6/2020 Targeting Portugal: A new trojan 'Lampion' has spread using template emails from the Portuguese Government Finance & Tax
+Figure 30 : Message left by criminals indicating that the threat is targeting Portuguese citizens.
+Again, this file is also protected with VMProtector 3.x. This can be observed in Figure 31.
+Figure 31: 0.zip file sections.
+As shown, most of the file content and EP address are located in the vmp01 section. From Figure 32, we can observe the
+DLL export address table (EAT).
+Figure 32: Export Address Table (EAT) from the DLL inside 0.zip.
+That DLL contains part of the trojan code. Those functions are imported
+from this DLL. Some of the available functions are:
+WNetUseConnectionW : It makes a connection to a network
+resource.
+WNetGetConnectionW : This function retrieves the name of the
+network resource associated with a local device.
+WNetAddConnection2W : This function makes a connection to a
+network resource and can redirect a local device to the network
+resource.
+SHGetFolderPathW : Gets the path of a folder identified by
+a CSIDL value.
+FilterSendMessage : This function sends a message to a kernelmode minifilter.
+FilterConnectCommunicationPort : It opens a new connection to
+a communication server port
+DoThisBicht : Function invoked when the DLL file is loaded.
+CryptUIDIgCertMgr : It is a function that displays a dialog box that
+allows users to manage certificates.
+CallFormPrincipal : It has the source-code logic about keylogger
+and C2.
+In detail, we can examine all the malware operations while we open a browser for accessing a home banking website (the
+malware is activated during the https operation because the certmgr.exe is launched).
+An interesting detail found on “CallFormPrincipal” is the request method and C2 IP address.
+
+
+$_POST=&plug=NAO&sowin=Windows%207%20Home%20Premium%20-%206.1%20-%207601
+
+
+hxxp://18.219.52.4/PT/VaiPostaProPai.php
+
+
+It also validates the windows hosts file to check the remote system discovery.
+
+C:\Windows\System32\drivers\etc\hosts
+
+https://seguranca-informatica.pt/targeting-portugal-a-new-trojan-lampion-has-spread-using-template-emails-from-the-portuguese-government-finance-tax/#.X… 19/25
+1/6/2020 Targeting Portugal: A new trojan 'Lampion' has spread using template emails from the Portuguese Government Finance & Tax
+During malware execution, we verify that it collects data from clipboard, disk, browsers, and sends the details via a
+request to the C2 server available on the Internet.
+Figure 33: POST request sent to the C2 available online with details about the victim’s computer.

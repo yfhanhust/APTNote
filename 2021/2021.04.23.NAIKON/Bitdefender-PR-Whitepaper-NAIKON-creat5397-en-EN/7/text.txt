@@ -1,0 +1,93 @@
+Rainyday backdoor execution
+During the investigation, we observed a particular technique to be extensively used for tool execution, namely SideLoading. This technique was always used for RainyDay execution and there was always a vulnerable executable along
+with a DLL file and the rdmin.src file containing the encrypted backdoor payload.
+We also noticed 2 flows of execution of the RainyDay backdoor, one of which is the execution of a SFX file that drops
+all 3 files in a temporary folder:
+The RainyDay execution from SFX
+The other flow was the execution of a vulnerable executable after manually planting all files in the same folder:
+Direct RainyDay execution
+The SFX file used in the operation contains the legitimate Mobile Popup Application from Quick Heal AntiVirus, the DLL
+file pc2msupp.dll that extracts the payload from rdmin.src .
+6
+Bitdefender Whitepaper
+NAIKON – Traces from a Military Cyber-Espionage Operation
+Another side-loading triad used by the actor was the Outlook Item Finder and the outllib.dll that obtains the payload
+from rdmin.src.
+After the malicious DLL file is loaded, it changes the flow of the legitimate executable to run code that reads the
+content of the rdmin.src file, decrypts the shellcode by XOR-ing the content with the value of 0x7A, and finally, executes
+the shellcode. The result is the presence of the RainyDay in memory.
+If visualizing the RainyDay memory dump, available on VirusTotal in a hex viewer it’s easy to observe the config section
+that appears to be obfuscated by XOR-ing with the 0x2D value. After decryption the config looks as shown in the image
+below:
+RainyDay config
+At a glance, the configuration data contains the C&C address, a folder name, a service description, a mutex name and a
+service name, all this information being confirmed during the analysis.
+As shown in the image, the C&C address of the RainyDay extracted from the SFX sample is cat.suttiphong.com.
+Next step taken was collecting more rdmin.src samples from our file collection, which led us to more RainyDay
+payloads, as shown in the following table:
+|rdmin.src|C&C addresses|
+|---|---|
+|78782a24805b52713cb63ba3cad2569b905edea96ca3609f8464f1b7c1ba05dc|asp.asphspes.com|
+|ff13e4561460f00a2777ce7a70902d65fd7b8c38a5aa90ac1d8bd868c271da29|www.tnelgnmc.com www.dthjxc.com|
+|5dc87097c6ff85df9a6ca03f35ad9a2fc0b7b1a3083a4a30d1d64b51f88e452a|172.245.23.143 185.199.226.106|
+|0569ea0c080e9ed28d2cf6dce03123d93d100fd59e3a6f4719ff4a0aebf5ebb6|172.245.244.86|
+One of the samples has many debug logs that indicate that all payloads in their initial form are DLL files that export a
+function called fdvbfa, which is actually the entry point of the RainyDay backdoor. Its execution starts 4 threads with
+very suggestive functionality:
+
+
+“[*] Start to create register service thread...” - it registers the current process as a service process
+
+
+“[*] Start to create main work thread...” - it contacts the C&C server and executes the received commands
+
+
+“[] Start to create self protect thread...” - it sets the SE_DACL_PROTECTED* for process protection
+
+
+“[*] Start to create hide service thread...”- it manipulates service settings in order to hide the service activity
+
+
+More about backdoor capabilities that may be executed by the main thread are listed below:
+|MAJOR code|command|note|
+|---|---|---|
+|1004|CMD_MAJOR_FILE|File manipulation, fle upload and download|
+|1005|CMD_MAJOR_CMD|Cmd shell|
+7
+Bitdefender Whitepaper
+NAIKON – Traces from a Military Cyber-Espionage Operation
+|MAJOR code|command|note|
+|---|---|---|
+|1009|CMD_MAJOR_UNISTALL|Uninstall by deleting the service and triad fles|
+|1010|CMD_MAJOR_PROCESS|Process termination and listing|
+|1011|CMD_MAJOR_SERVICES|Service manipulation|
+|1013|CMD_MAJOR_SCREENSHOT|Screen Capture with subsequent sending to c&c|
+|1190|CMD_DEAL_HTTP_UPLOAD||
+|1191|Unknown name||
+The communication is realized through the TCP and HTTP (if the first method is not working).
+An interesting fact is that the traffic seems to be encrypted using RC4 algorithm and all samples we analyzed uses the
+same key - “ aefbA_(*vaER#$78B?>C ”.
+The binaries FINDER.exe, MOBPOPUP.exe and the SFX file were found under many file paths:
+|FINDER.exe|C:\windows\lsm.exeC:\Program Files (x86)\Google\Update\GooleUpdates.exeC:\ProgramData\Chrome\lsm.exeC:\Windows\Chrome.exeC:\Program Files(x86)\Google\Chrome\Chrome.exeC:\ProgramData\Keven\front.exeC:\ProgramData\Chrome\dwm.exeC:\StorageReports\Scheduled\front.exe|
+|---|---|
+|MOBPOPUP.exe|c:\windows\sploor.exe  %ProgramData%\Adobe\explorer.exe|
+|SFX|%PROGRAM_FILES%\vmware\vmware tools\vmtools.exe|
+By looking at the specific file paths used to hide the abused files and the malicious dropper, we assume that the actors
+try to mimic the legitimate software that is running on the machine. This fact is particularly highlighted by the vmtools.
+exe that differs by one letter from the legitimate executable vmtoolsd.exe.
+We made similar observations in services and scheduled task names used to achieve persistence and to perform
+lateral movement:
+
+
+Malicious service “sstpsvces” mimics the legitimate Secure Socket Tunneling Protocol Service(SstpSvc)
+
+
+Malicious service “ GoogleUpdate ” mimics google update services
+
+
+Malicious service “ taskmgr ” mimics the legitimate taskmgr command
+
+
+• Malicious task “ sharpcifs ” mimics software name from SharpCifs - Cross-Platform SMB Client
+• Other malicious task names observed - “ Check ”, “ ChromeCheck ”, “ googleupdate ”
+It is worth mentioning that the actors used WMIC.exe and schtaks.exe for the lateral movement step.

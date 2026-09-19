@@ -1,0 +1,97 @@
+
+
+
+Sentence : Chain of Attack
+While examining customer alerts and telemetry, we noticed several infiltrations into victim
+networks that were achieved via a Log4Shell exploitation of vulnerable VMware Horizon servers.
+These attacks spawned a new PowerShell process to download and execute a chain of scripts that
+ended with the installation of a malicious DLL.
+https://www.fortinet.com/blog/threat-research/deep-panda-log4shell-fire-chili-rootkits 1/16
+4/27/22, 3:49 PM New Milestones for Deep Panda: Log4Shell and Digitally Signed Fire Chili Rootkits
+Figure 1: Flow of events from Log4Shell exploitation to execution of the final payload
+The encoded PowerShell command downloads another PowerShell script from a remote server
+and executes it.
+Figure 2: The decoded PowerShell command
+The next stage PowerShell script downloads three additional files from the same server: 1.bat,
+syn.exe and 1.dll.
+https://www.fortinet.com/blog/threat-research/deep-panda-log4shell-fire-chili-rootkits 2/16
+4/27/22, 3:49 PM New Milestones for Deep Panda: Log4Shell and Digitally Signed Fire Chili Rootkits
+Figure 3: Content of the p.txt PowerShell script downloaded from the server
+The script then executes 1.bat, which in turn executes syn.exe and proceeds to delete all three
+files from the disk.
+Figure 4: Content of 1.bat script downloaded from the server
+syn.exe is a program that loads its first command-line argument using LoadLibrary, in this case,
+1.dll. The 1.dll module is the final payload, a backdoor that we have dubbed Milestone. Its code is
+based on the leaked source code of Gh0st RAT/Netbot Attacker and is packed with Themida.
+The backdoor copies itself to %APPDATA%\newdev.dll and creates a service named
+msupdate2 by creating the service entry directly in the registry. Several other service names and
+descriptions have been observed among different samples.
+Figure 5: “msupdate2” service registered by Milestone
+While it has the same name as the legitimate Microsoft newdev.dll, it has only two of the real
+newdev.dll's exports plus an additional ServiceMain export.
+Figure 6: Exports of the malicious Milestone
+https://www.fortinet.com/blog/threat-research/deep-panda-log4shell-fire-chili-rootkits 3/16
+4/27/22, 3:49 PM New Milestones for Deep Panda: Log4Shell and Digitally Signed Fire Chili Rootkits
+Overall, the backdoor has capabilities similar to Gh0st RAT’s, with notable differences. Its C2
+communication is uncompressed, unlike Gh0st RAT communication which is zlib-compressed.
+There are differences in commands as well. For example, in the CMD command, some variants
+first copy cmd.exe to dllhost.exe to avoid detection by security products that monitor CMD
+executions. Additionally, the backdoor supports a command that sends information about the
+current sessions on the system to the server. This command does not exist in the original Gh0st
+RAT source code.
+Among the many backdoor samples we hunted down, there are two distinguishable versions:
+binaries compiled in 2016 contain the version string MileStone2016, while those compiled in
+2017 contain MileStone2017. The samples used in the recent infections we detected are only the
+2017 variants.
+There are several differences between the 2016 and 2017 Milestones. First, 2017 Milestones are
+typically packed with Themida, while 2016 ones are unpacked. Secondly, although 2016
+Milestones have plausible timestamps, all 2017 Milestones share an identical timestamp, which
+leads us to believe they are forged. Combined with the fact that 2017 backdoors are used in
+attacks to this day, it is uncertain whether they were compiled in 2017 or much later.
+The two versions also slightly differ in commands and communication. 2016 Milestones apply
+XOR encryption to their communication, as well as support a command to execute as a new user
+with administrator privileges. To do so, the backdoor first creates a new administrator user on
+the system, with the username ANONYMOUS and the password MileSt0ne2@16. It then
+executes another instance of itself as that user with CreateProcessAsUser and proceeds to
+remove the user from the system immediately thereafter.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "VMware Horizon servers", "type" : "APPS"},
+        {"id": 2, "description": "Log4Shell (CVE-2021-44228)", "type" : "CVES"},
+        {"id": 3, "description": "PowerShell process", "type" : "EXEF"},
+        {"id": 4, "description": "malicious DLL", "type" : "DOCF"},
+        {"id": 5, "description": "remote server", "type" : "CCSH"},
+        {"id": 6, "description": "1.bat", "type" : "EXEF"},
+        {"id": 7, "description": "syn.exe", "type" : "EXEF"},
+        {"id": 8, "description": "1.dll", "type" : "DOCF"},
+        {"id": 9, "description": "%APPDATA%\\newdev.dll", "type" : "SYSP"},
+        {"id": 10, "description": "msupdate2 service", "type" : "REGI"},
+        {"id": 11, "description": "Gh0st RAT/Netbot Attacker", "type" : "APPS"},
+        {"id": 12, "description": "Themida", "type" : "APPS"},
+        {"id": 13, "description": "MileStone (backdoor)", "type" : "APPS"},
+        {"id": 14, "description": "C2 server", "type" : "CCSH"},
+        {"id": 15, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 16, "description": "dllhost.exe", "type" : "EXEF"},
+        {"id": 17, "description": "MileStone2016 version string", "type" : "TAMP"},
+        {"id": 18, "description": "MileStone2017 version string", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "vulnerable to"},
+        {"source": 2, "target": 3, "rel_name" : "exploited by"},
+        {"source": 3, "target": 4, "rel_name" : "downloads and executes"},
+        {"source": 3, "target": 5, "rel_name" : "connects to"},
+        {"source": 5, "target": 6, "rel_name" : "hosts"},
+        {"source": 5, "target": 7, "rel_name" : "hosts"},
+        {"source": 5, "target": 8, "rel_name" : "hosts"},
+        {"source": 6, "target": 7, "rel_name" : "executes"},
+        {"source": 6, "target": 8, "rel_name" : "deletes after execution"},
+        {"source": 7, "target": 8, "rel_name" : "loads using LoadLibrary"},
+        {"source": 8, "target": 9, "rel_name" : "copies to"},
+        {"source": 13, "target": 10, "rel_name" : "creates service entry in registry"},
+        {"source": 13, "target": 14, "rel_name" : "communicates with"},
+        {"source": 15, "target": 16, "rel_name" : "copies to"},
+        {"source": 17, "target": 13, "rel_name" : "version string in"},
+        {"source": 18, "target": 13, "rel_name" : "version string in"}
+    ]
+}

@@ -1,0 +1,129 @@
+
+
+
+Sentence : Command and Control
+After the threat has installed itself, dropped its files, and gathered some information about the system it con­
+tacts the command and control server on port 80 and sends some basic information about the compromised
+computer to the attacker via HTTP. Two command and control servers have been used in known samples:
+  - www[.]mypremierfutbol[.]com
+
+  - www[.]todaysfutbol[.]com
+
+The two URLs above previously pointed to servers in Malaysia and Denmark; however they have since been
+redirected to prevent the attackers from controlling any compromised computers. The threat has the capability
+to update itself with new command and control domains, but we have not seen any files with updated configu­
+rations as yet. A configuration file named %Windir%\inf\mdmcpq3.PNF is read and the updated configuration
+information from that file is written to the main dll and the checksum of the dll is recalculated to ensure it is still
+correct.
+System data is gathered by export 28 and consists of the following information in the following format:
+Part 1:
+0x00 byte 1, fixed value
+0x01 byte from Configuration Data (at offset 14h)
+0x02 byte OS major version
+0x03 byte OS minor version
+0x04 byte OS service pack major version
+0x05 byte size of part 1 of payload
+0x06 byte unused, 0
+0x07 byte unused, 0
+0x08 dword from C. Data (at offset 10h, Sequence ID)
+0x0C word unknown
+0x0E word OS suite mask
+0x10 byte unused, 0
+0x11 byte flags
+0x12 string computer name, null-terminated
+0xXX string domain name, null-terminated
+Part 2, following part 1:
+0x00 dword IP address of interface 1, if any
+0x04 dword IP address of interface 2, if any
+0x08 dword IP address of interface 3, if any
+0x0C dword from Configuration Data (at offset 9Ch)
+0x10 byte unused, 0
+0x11 string copy of S7P string from C. Data (418h)
+Note that the payload contains the machine and domain name, as well as OS information. The flags at offset 11h
+have the 4th bit set if at least one of the two registry values is found:
+  - HKEY_LOCAL_MACHINE\Software\Siemens\Step7, value: STEP7_Version
+
+  - HKEY_LOCAL_MACHINE\Software\Siemens\WinCC\Setup, value: Version
+
+This informs the attackers if the machine is running the targeted ICS programming software Siemens Step7 or
+WinCC.
+The payload data is then XOR-ed with the byte value 0xFF.
+After the data is gathered, export #29 will then be executed (using the previously mentioned injection technique)
+to send the payload to a target server. The target process can be an existing Internet Explorer process (iexplore.
+exe), by default or if no iexplore.exe process is found the target browser process will be determined by examining
+the registry key HKEY_CLASSES_ROOT\HTTP\SHELL\OPEN\COMMAND. A browser process is then created and
+injected to run Export #29.
+Export #29 is used to send the above information to one of the malicious Stuxnet servers specified in the Con­
+figuration Data block. First, one of the two below legitimate web servers referenced in the Configuration Data
+block are queried, to test network connectivity:
+  - www.windowsupdate.com
+
+
+  - www.msn.com
+
+If the test passes, the network packet is built. It has the following format:
+0x00 dword 1, fixed value
+0x04 clsid unknown
+0x14 byte[6] unknown
+0x1A dword IP address of main interface
+0x1E byte[size] payload
+The payload is then XOR-ed with a static 31-byte long byte string found inside Stuxnet:
+0x67, 0xA9, 0x6E, 0x28, 0x90, 0x0D, 0x58, 0xD6, 0xA4, 0x5D, 0xE2, 0x72, 0x66, 0xC0, 0x4A, 0x57, 0x88, 0x5A,
+0xB0, 0x5C, 0x6E, 0x45, 0x56, 0x1A, 0xBD, 0x7C, 0x71, 0x5E, 0x42, 0xE4, 0xC1
+The result is « hexified » (in order to transform binary data to an ascii string). For instance, the sequence of bytes
+(0x12, 0x34) becomes the string “1234”.
+The payload is then sent to one of the two aforementioned URLs, as the “data” parameter. For example:
+[http://]www.mypremierfutbol.com/index.php?data=1234...
+Using the HTTP protocol as well as pure ASCII parameters is a common way by malware (and legitimate applica­
+tions for that matter) to bypass corporate firewall blocking rules.
+The malicious Stuxnet server processes the query and may send a response to the client. The response payload
+is located in the HTTP Content section. Contrary to the payload sent by the client, it is pure binary data. How­
+ever, it is encrypted with the following static 31-byte long XOR key:
+0xF1, 0x17, 0xFA, 0x1C, 0xE2, 0x33, 0xC1, 0xD7, 0xBB, 0x77, 0x26, 0xC0, 0xE4, 0x96, 0x15, 0xC4, 0x62, 0x2E,
+0x2D, 0x18, 0x95, 0xF0, 0xD8, 0xAD, 0x4B, 0x23, 0xBA, 0xDC, 0x4F, 0xD7, 0x0C
+The decrypted server response has the following format:
+0x00 dword payload module size (n)
+0x04 byte command byte, can be 0 or 1
+0x05 byte[n] payload module (Windows executable)
+Depending on the command byte, the payload module is either loaded in the current process, or in a separate
+process via RPC. Then, the payload module’s export #1 is executed.
+This feature gave Stuxnet backdoor functionality, as it had the possibility (before the futbol domains were
+blocked) to upload and run any code on an infected machine. At the time of writing no additional executables
+were detected as being sent by the attackers, but this method likely allowed them to download and execute ad­
+ditional tools or deliver updated versions of Stuxnet.
+Figure 12
+Command and Control
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "www.mypremierfutbol.com", "type" : "CCSH"},
+        {"id": 2, "description": "www.todaysfutbol.com", "type" : "CCSH"},
+        {"id": 3, "description": "%Windir%\\inf\\mdmcpq3.PNF", "type" : "DOCF"},
+        {"id": 4, "description": "HTTP", "type" : "NETP"},
+        {"id": 5, "description": "HKEY_LOCAL_MACHINE\\Software\\Siemens\\Step7, value: STEP7_Version", "type" : "REGI"},
+        {"id": 6, "description": "HKEY_LOCAL_MACHINE\\Software\\Siemens\\WinCC\\Setup, value: Version", "type" : "REGI"},
+        {"id": 7, "description": "iexplore.exe", "type" : "EXEF"},
+        {"id": 8, "description": "HKEY_CLASSES_ROOT\\HTTP\\SHELL\\OPEN\\COMMAND", "type" : "REGI"},
+        {"id": 9, "description": "www.windowsupdate.com", "type" : "CCSH"},
+        {"id": 10, "description": "www.msn.com", "type" : "CCSH"},
+        {"id": 11, "description": "Stuxnet server", "type" : "CCSH"},
+        {"id": 12, "description": "XOR key: 0x67, 0xA9, 0x6E, 0x28, 0x90, 0x0D, 0x58, 0xD6, 0xA4, 0x5D, 0xE2, 0x72, 0x66, 0xC0, 0x4A, 0x57, 0x88, 0x5A, 0xB0, 0x5C, 0x6E, 0x45, 0x56, 0x1A, 0xBD, 0x7C, 0x71, 0x5E, 0x42, 0xE4, 0xC1", "type" : "TAMP"},
+        {"id": 13, "description": "XOR key: 0xF1, 0x17, 0xFA, 0x1C, 0xE2, 0x33, 0xC1, 0xD7, 0xBB, 0x77, 0x26, 0xC0, 0xE4, 0x96, 0x15, 0xC4, 0x62, 0x2E, 0x2D, 0x18, 0x95, 0xF0, 0xD8, 0xAD, 0x4B, 0x23, 0xBA, 0xDC, 0x4F, 0xD7, 0x0C", "type" : "TAMP"},
+        {"id": 14, "description": "Malicious Stuxnet server", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 11, "rel_name" : "controlled by"},
+        {"source": 2, "target": 11, "rel_name" : "controlled by"},
+        {"source": 3, "target": 14, "rel_name" : "read by"},
+        {"source": 5, "target": 14, "rel_name" : "checked by"},
+        {"source": 6, "target": 14, "rel_name" : "checked by"},
+        {"source": 7, "target": 14, "rel_name" : "used by"},
+        {"source": 8, "target": 14, "rel_name" : "queried by"},
+        {"source": 9, "target": 14, "rel_name" : "tested connectivity with"},
+        {"source": 10, "target": 14, "rel_name" : "tested connectivity with"},
+        {"source": 12, "target": 14, "rel_name" : "used to encrypt payload"},
+        {"source": 13, "target": 14, "rel_name" : "used to decrypt server response"},
+        {"source": 14, "target": 1, "rel_name" : "sends data to"},
+        {"source": 14, "target": 2, "rel_name" : "sends data to"}
+    ]
+}

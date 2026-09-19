@@ -1,0 +1,51 @@
+C&C Communication
+After extracting the configuration, the malware uses the same one-byte XOR to decrypt a
+shellcode responsible for establishing the C&C communication channel by listening to the
+provided URL prefixes list. While the concept of passive backdoors on web-facing
+Windows servers is not new and was observed in the wild hijacking the same Windows
+DLL wblsctrl.dll as early as 2019 (by Chinese-linked Operation ShadowHammer), the
+LIONTAIL developers elevated their approach. Instead of using the HTTP API, the
+malware uses IOCTLs to interact directly with the underlying HTTP.sys driver. This
+approach is stealthier as it doesn’t involve IIS or HTTP API, which are usually closely
+monitored by security solutions, but is not a straightforward task given that the IOCTLs for
+HTTP.sys are undocumented and require additional research efforts by the threat actors.
+First, the shellcode registers the URL prefixes with HTTP.sys using the following IOCTLs:
+0x128000 – UlCreateServerSessionIoctl – Creates an HTTP/2.0 session.
+0x128010 – UlCreateUrlGroupIoctl – Creates a new UrlGroup. UrlGroups are
+configuration containers for a set of URLs created under the server session and
+inherit its configuration settings.
+0x12801d – UlSetUrlGroupIoctl – Associates the UrlGroup with the request
+queue by setting HttpServerBindingProperty .
+0x128020 – UlAddUrlToUrlGroupIoctl – Adds the array of listen_urls to the
+newly created UrlGroup.
+https://research.checkpoint.com/2023/from-albania-to-the-middle-east-the-scarred-manticore-is-listening/ 5/21
+1/16/24, 1:06 PM From Albania to the Middle East: The Scarred Manticore is Listening - Check Point Research
+Figure 3 – HTTP.sys IOCTL table.
+After registering the URL prefixes, the backdoor initiates a loop responsible for handling
+the incoming requests. The loop continues until it gets the request from a URL equal to
+the end_string provided in the backdoor’s configuration.
+The backdoor receives requests from HTTP.sys using 0x124036 –
+UlReceiveHttpRequestIoctl IOCTL.
+Depending on the version of the compromised server, the body of the request is received
+using 0x12403B – UlReceiveEntityBodyIoctl or (if higher than 20348) 0x12403A –
+UlReceiveEntityBodyFastIo . It is then base64-decoded and decrypted by XORing the
+whole data with the first byte of the data. This is a common method of encryption
+observed in multiple malware families, including but not limited to DEV-0861’s web
+deployed Reverse proxy.
+https://research.checkpoint.com/2023/from-albania-to-the-middle-east-the-scarred-manticore-is-listening/ 6/21
+1/16/24, 1:06 PM From Albania to the Middle East: The Scarred Manticore is Listening - Check Point Research
+Figure 4 – C&C decryption scheme from the LIONTAIL payload.
+The decrypted payload has the following structure:
+QWORD shellcode_size
+_BYTE[] shellcode
+QWORD shellcode_output (should be 0 in the incoming msg)
+QWORD shellcode_output_size (should be 0 in the incoming msg)
+QWORD MAGIC_NUM (has to be 0x18)
+_BYTE[] argument
+The malware creates a new thread and runs the shellcode in memory. For some reason,
+it uses shellcode_output and shellcode_output_size in the request message as
+pointers to the respective data in memory.
+To encrypt the response, the malware chooses a random byte, XOR-encodes the data
+using it as a key, prepends the key to the result, and then base64-encodes the entire
+result before sending it back to the C&C server using the IOCTL 0x12403F –
+UlSendHttpResponseIoctl .

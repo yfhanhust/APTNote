@@ -1,0 +1,25 @@
+Regular reporting
+To report infection status, the malware reads from C:Program FilesCommon FilesSystemOle
+DBoledvbs.inc which contains the systeminfo command output. If the file exists, it is deleted after reading.
+Then, it reads user-related info from the file sqlxmlx.inc in the same folder (we can see strings referencing
+to "UserID" commentary in this part of the code). But this file was never created. As you recall, there is a
+function that should have collected this data and should have saved it into this sqlxmlx.inc file. However,
+on the first launch, the collected user information is saved into " xmlrwbin.inc" . This effectively means that
+the malware writer mistakenly coded the bot to save user information into the wrong file. There is a
+chance for the mistaken code to still work -- user information could be copied into the send information
+heap. But not in this case - at the time of writing, the gathered user information variable which should
+point to the xmlrwbin.inc filename has not yet been initialized, causing the file write to fail. We see that
+sqlxmlx.inc is not created to store user information.
+Next, the intercepted keystrokes are read from the file and sent to the master. Keystrokes are logged and
+kept in an ordinary and consistent format in this file - both the names of windows in which keys were
+typed and the actual sequence of keyboard entry. This data is found in the file C:Program FilesCommon
+FilesSystemOle DBmsolui80.inc created by the external key logger module.
+All this data is merged in one file xmlrwbin.inc, which is then encrypted with RC4. The RC4 key is
+generated as an MD5 hash of a randomly generated 117-bytes buffer. To be able to decipher the data, the
+attacker should certainly know either the MD5 hash or the whole buffer content. This data is also sent, but
+RSA encrypted. The malware constructs a 1120 bit public key, uses it to encrypt the 117-bytes buffer. The
+malware then concatenates all the data to be sent as a 128-bytes block. The resulting data is saved in
+C:Program FilesCommon FilesSystemOle DB to a file named according to the following format:
+"_.txt", for example, "08191757_beautifl@mail.bg.txt".
+The file is then attached to an e-mail and sent to the master's e-mail account. Following transmission, it is
+immediately deleted from the victim system.

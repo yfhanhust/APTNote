@@ -1,0 +1,33 @@
+Chinoxy
+As mentioned, the starting point of the investigation was the unusual activity of the ccf32.exe. Investigating the Root
+Cause Analysis for this process, we observed that the parent processes of the ccf32.exe was Chinoxy malware.
+One of the analyzed samples was 1afff5b9026bdf27a0c111b50d28ae92, which has proven to be the dropper for the
+Chinoxy backdoor. An interesting fact about this sample is that the function responsible for extracting and dropping
+the backdoor is hidden in a virtual function table of a class that extends CDialog::CDialog (the function overrides
+OnInitDialog ), this being done for anti-analyzing purposes.
+The dropping function initiates the decryption of the config by extracting the content of the “GGMM” resource. It uses
+“18113289765” and “19888889999” strings as keys for XOR-ing. After the decryption, the config is written to the k1.ini
+file in the %TEMP% folder.
+Fig. 2 - k1.ini file
+5
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+The Config value from the k1.ini file contains the base64 representation of the C&C string which, after decoding, is
+“www.eofficeupdate.com:80|www.eofficeupdate.com:443|www.eofficeupdate.com:1080|”.
+Once executed, it will extract two binaries, named LBTServ.dll and unio.exe . The binaries are located in two
+resources with ids 0x81 and 0x83, respectively, both resources having the language set to Chinese and being
+compressed using aPLib algorithm. After the LBTServ.dll ( 132227d867e63f8bce24ae5741791d7a ) and unio.
+exe ( ff992b4aa59884ad153c887fbb7155fc ) files are dropped into the %TEMP% folder, the latter is executed.
+The unio.exe file (ff992b4aa59884ad153c887fbb7155fc), is actually a digitally signed binary, LBTWizGi.exe (Logitech
+Blutooth Wizard Host Process) vulnerable to Side-Loading which is exploited by the attackers to load LBTServ.dll
+(Chinoxy backdoor) from the current directory.
+After being loaded, the backdoor writes to the HKCU\Software\Microsoft\Windows\CurrentVersion\Run registry
+key the path to the unio.exe under the “ UNI ” key value. This is not the only persistence used, some of the Chinoxy
+droppers, in particular the 1afff5b9026bdf27a0c111b50d28ae92 sample, was located in the startup folder ( %COMMON_
+).
+STARTUP%\eoffice.exe
+In the context of the current attack, the Chinoxy backdoor was mainly used to execute ccf32.exe for data collection.
+The attackers copied ccf32.exe to \\C$\Users\Public** folder, along with a bat file (e.g. \\C$\Users\Public\11.bat** ), then executed the bat daily, using schtasks.exe:
+ schtasks /create /s  /u “” /p “” /ru “SYSTEM” /tn one /sc DAILY /tr “c:**
+users\public\11.bat” /F**
+The bat file will execute ccf32.exe.

@@ -1,0 +1,153 @@
+Operating routine
+Trojan.XPath.3 has the following system exports:
+
+
+DllCanUnloadNow
+
+
+DllGetClassObject
+
+
+DllGetVersion
+
+
+DllInstall
+
+
+DllRegisterServer
+
+
+DllUnregisterServer
+
+
+The trojan receives all the necessary imports through the WinAPI
+LoadLibraryA/GetProcAddress, while the names of the required functions in its code
+are not encrypted.
+If the trojan runs in the context of the explorer.exe, it checks for the version of the OS where
+it is launched.
+For the operating systems below Windows Vista, Trojan.XPath.3 receives function exports
+from the themeui.dll:
+
+
+DllCanUnloadNow
+
+
+DllGetClassObject
+
+
+DllInstall
+
+
+DllRegisterServer
+
+
+DllUnregisterServer
+
+
+For the operating systems starting from Windows Vista and higher, it receives function
+exports from the ExplorerFrame.dll:
+
+
+DllCanUnloadNow
+
+
+DllGetClassObject
+
+
+DllGetVersion
+
+
+0x6E
+
+
+0x6F
+
+
+0x86
+
+
+The trojan requires these function addresses in order to call the corresponding functions
+whenever a trojan library export of the same name is called.
+Using the Global\\RunThreadOfWinDDK8O98 mutex, Trojan.XPath.3 verifies only one
+instance of it is running.
+Using ZwQuerySystemInformation, the trojan counts the number of processes running in
+the system. It waits until their number exceeds 7, then starts the %WINDIR%\\system32\
+\svchost.exe process with the CREATE_SUSPENDED flag.
+Trojan.XPath.3 reads the DirectShow parameter from the registry thread [HKLM\
+\SOFTWARE\\Microsoft\\LoginInfo] or [HKCU\\SOFTWARE\\Microsoft\
+\LoginInfo] where the payload is stored. It then unpacks the payload using the APLib
+library.
+Next, the trojan allocates a memory block of 0xC80F0 bytes. At the beginning of the block it
+forms the following structure:
+```
+ #pragma pack(push,1)
+struct mod
+{
+char char0[128];
+_QWORD LdrLoadDll;
+ _QWORD LdrGetProcedureAddress;
+ _QWORD ZwProtectVirtualMemory;
+ _QWORD ZwCreateSection;
+ _QWORD ZwMapViewOfSection;
+ _QWORD qwordA8;
+ _QWORD NtTerminateThread;
+ _QWORD qwordB8;
+ _QWORD qwordc0;
+ _QWORD is_x64;
+ _QWORD payload_size;
+ _QWORD qwordd8;
+ _BYTE payload[payload_size];
+ };
+#pragma pack(pop)
+```
+Herewith, in the analyzed sample the char0 value represents a asdsad11111222333
+constant.
+The trojan allocates a memory block of the size of 0xD80F0 bytes to the previously launched
+svchost.exe process and copies the entire region of 0xC80F0 bytes onto it.
+Next, Trojan.XPath.3 searches for the 0x12345688 constant, which is located in the
+shellcode built into it and replaces it with the memory block address, previously allocated in
+the svchost.exe process. It then copies this shellcode onto the allocated block using the
+0xC90F0 offset.
+For systems below Windows 8, the trojan receives CONTEXT of the thread in the svchost.exe
+process and patches the RIP/EIP register with the shellcode, adding 8 bytes to it. For more
+recent OS versions, Trojan.XPath.3 launches the thread through NtCreateThreadEx .
+Artifacts
+Traces of the debug information inside the trojan library allow finding the name of the
+trojan’s source code file: PayloadDll.c.
+Various debugging messages, which are stored in the library:
+```
+ os ver:%d,%d,%d
+payload_%04d-%02d-%02d_%02d-%02d-%02d.dmp
+ get target api address false\n
+ depack get packed size error:%d\n
+ depack false\n
+ Alloc Mem in target process false!!!\n
+writing info to target process false!!!,%d,%d,%x
+ get magic false\n
+```
+```
+ writing stub to same architecture process:%p\n
+writing payload to target process false!!!,%d
+ GetProcessEntryPoint is:%x\n
+ !OpenProcessToken,%d\n
+ !DuplicateTokenEx,%d\n
+ get TokenInformation,%d\n
+ !SetTokenInformation,%d\n
+ !pCreateEnvironmentBlock,%d\n
+ !xOpenProcess \n
+ loader path:%s\n
+Creaet Process All Failed ERROR=%d\n
+try gen info\n
+ gen info ok\n
+ WritePayloadToRemote false\n
+write info ok\n
+error thread
+GetThreadContext Error\n
+GetThreadContext eip:%p\n
+set thread context error\n
+SetThreadContext eip:%p\n
+create thread ok\n
+get func error in payload\n
+ get lib error in payload\n
+ try runthread in payload\n
+ in payload\n

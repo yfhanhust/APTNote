@@ -1,0 +1,26 @@
+Persistence through regularly scheduled malware updates
+The two monitoring services simultaneously check the status of all three malicious processes.
+Having dual monitoring services provides redundancy in case one of the monitoring processes is
+halted. If any of the processes are terminated, the monitors immediately identify the situation,
+terminate all remaining malicious processes, and re-infect the device. This forced update/reinfection process is started by a PowerShell command similar to the one below:
+The monitoring components also detect freshly launched cmd.exe processes and terminate them
+promptly. As a final fail-safe, Dexphot uses schtasks.exe to create scheduled tasks, with the
+command below.
+This persistence technique is interesting, because it employs two distinct MITRE ATT&CK
+techniques: Scheduled Task and Signed Binary Proxy Execution.
+The scheduled tasks call msiexec.exe as a proxy to run the malicious code, much like how
+msiexec.exe was used during installation. Using msiexec.exe, a legitimate system process, can
+make it harder to trace the source of malicious activity.
+https://www.microsoft.com/security/blog/2019/11/26/insights-from-one-year-of-tracking-a-polymorphic-threat/ 5/10
+11/27/2019 Insights from one year of tracking a polymorphic threat - Microsoft Security
+Furthermore, the tasks allow Dexphot to conveniently update the payload from the web every
+time the tasks run. They automatically update all of Dexphot’s components, both upon system
+reboot as well as every 90 or 110 minutes while the system is running.
+Dexphot also generates the names for the tasks at runtime, which means a simple block list of
+hardcoded task names will not be effective in preventing them from running. The names are
+usually in a GUID format, although after we released our first round of Dexphot-blocking
+protections, the threat authors began to use random strings.
+The threat authors have one more evasion technique for these scheduled tasks: some Dexphot
+variants copy msiexec.exe to an arbitrary location and give it a random name, such as
+%AppData%\.exe . This makes the system process running malicious code a literal
+moving target.

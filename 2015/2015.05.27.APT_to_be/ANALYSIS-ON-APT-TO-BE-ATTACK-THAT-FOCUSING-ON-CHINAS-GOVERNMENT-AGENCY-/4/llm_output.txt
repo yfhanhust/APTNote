@@ -1,0 +1,132 @@
+
+
+
+Sentence : 2 Analysis on incident sample
+2.1 Leading files and sample downloading
+APT-TOCS used “powershell.exe” to execute Shellcode scripts to realize remote control on targeted system. The
+analysts of Antiy thought that the attacker might know several remote injection methods of script downloading
+privilege, such as directly making the scrip be executed on the host by using security vulnerabilities. Meanwhile,
+we found the following binary leading attack files (hereinafter referred to as Sample A) were used in similar attacks
+before:
+|Virus name|Trojan/Win32.MSShell|
+|---|---|
+|Original file name|ab.exe|
+|MD5|44BCF2DD262F12222ADEAB6F59B2975B|
+|Processor structure|X86|
+|File size|72.0 KB (73,802 bytes)|
+© Antiy Labs. All rights reserved. Page 1
+Analysis on APT-to-be Attack That Focusing on China's Government Agency
+|File format|BinExecute/Microsoft.EXE[:X86]|
+|---|---|
+|Time Stamp|2009-05-10 07:02:12|
+|Digital signature|NO|
+|Shell type|Unknown|
+|Compilation language|Microsoft Visual C++|
+The functionality code of the scripts embedded in this PE sample is completely the same with the one of Shellcode
+script Antiy has acquired, while the encryption data of them differs from each other. This PE sample was firstly
+uploaded to Virustotal on May 2, 2015:
+Figure 1 Downloading encryption data using powershell.exe embedded in PE files
+The PE sample used WinExec to operate embedded malware:
+Figure 2 Using function WinExec to call powershell.exe to download leading data
+Therefore, we can see that the “leading file” can be regarded as the leading part of attack. However, the execution
+and control still can be made depending on system and application vulnerabilities without this leading file.
+According to above information, we cannot make sure this leading sample has relationship with this APT incident.
+© Antiy Labs. All rights reserved. Page 2
+Analysis on APT-to-be Attack That Focusing on China's Government Agency
+2.2 Key mechanism
+The core part of APT-TOCS relies on the encrypted data scripts (hereinafter referred to as Sample B) downloaded
+by PowerShell. Figure 1 consists of various derivation relationships and major module functionalities:
+Figure 3 Various derivation relationships and major module functionalities
+2.3 Analysis on the major sample (Sample B) of APT-TOCS
+The content (Here omitted the content of base64.) of Sample B is as follows:
+Figure 4 Content of Sample B
+The functionality of this part of script is: decrypting the encrypted content of base64, decompressing with Gzip,
+resulting in module 1 and using PowerShell to download and execute.
+2.4 Analysis on script 1
+The content of script 1 is as follows:
+© Antiy Labs. All rights reserved. Page 3
+Analysis on APT-to-be Attack That Focusing on China's Government Agency
+Figure 5 Content of script 1
+The functionality of this part is: decrypting data with base64 encryption and getting module 1, then writing to
+process powershell.exe, and executing and operating.
+2.5 Analysis on module 1
+The functionality of this module is as follows: calling the function of wininet module, connecting the network,
+downloading operations of module 2; and executing by downloading to the memory.
+© Antiy Labs. All rights reserved. Page 4
+Analysis on APT-to-be Attack That Focusing on China's Government Agency
+Figure 6 Request of HTTP GET
+Figure 6 shows that using request of HTTP GET to get file: http://146.0.43.107/hfYn.
+2.6 Analysis on module 2
+Module 2 established and listed system process rundll32.exe:
+Figure 7 Establishing and listing process rundll32.exe
+Data that has been written into module 3:
+Figure 8 Data that has been written into module 3
+© Antiy Labs. All rights reserved. Page 5
+Analysis on APT-to-be Attack That Focusing on China's Government Agency
+Though the data of module 3 started with “MZ”, it does not belong to PE files. Instead, it is the Shellcode with
+backdoor functionality.
+Figure 9 Shellcode that started with MZ （ 4D 5A ）
+2.7 Analysis on module 3
+The module might connect the following 2 addresses with port 80:
+ 146.0.. (Romania)
+ dc.**69.info (146.0..**) (Romania)
+Sending request data and receiving return data.
+Figure 10 Sending request data
+The decryption to above IP, domains and accessing addresses is “XOR 0x69”.
+Judging from the module strings and the system functions, the module belongs to backdoor program that can send
+GET request to designated addresses and heartbeat packages by using Cookie fields with 60 seconds’ interval. The
+heartbeat package data includes: check code, process ID, system version, IP address, computer name, account,
+whether it is 64 bit process. Then it transmits by making use of both RSA and BASE64 encryption.
+© Antiy Labs. All rights reserved. Page 6
+Analysis on APT-to-be Attack That Focusing on China's Government Agency
+Figure 11 The original data of heartbeat package
+As the process ID and check code are different, the transmitted heartbeat package data are different each time. The
+check code is calculated through using process ID and the millisecond process during system startup. The algorithm
+is as follows:
+Figure 12 Algorithm of check code
+The encrypted heartbeat package used Cookie field to transmit:
+Figure 13 Content of the data package
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "APT-TOCS", "type" : "ACTO"},
+        {"id": 2, "description": "powershell.exe", "type" : "EXEF"},
+        {"id": 3, "description": "Shellcode scripts", "type" : "EXEF"},
+        {"id": 4, "description": "ab.exe", "type" : "EXEF"},
+        {"id": 5, "description": "44BCF2DD262F12222ADEAB6F59B2975B", "type" : "IOCS"},
+        {"id": 6, "description": "WinExec", "type" : "EXEF"},
+        {"id": 7, "description": "encrypted data scripts (Sample B)", "type" : "DOCF"},
+        {"id": 8, "description": "Gzip", "type" : "APPS"},
+        {"id": 9, "description": "base64", "type" : "TTPS"},
+        {"id": 10, "description": "wininet module", "type" : "APPS"},
+        {"id": 11, "description": "HTTP GET", "type" : "NETP"},
+        {"id": 12, "description": "http://146.0.43.107/hfYn", "type" : "URLS"},
+        {"id": 13, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 14, "description": "Shellcode with backdoor functionality", "type" : "EXEF"},
+        {"id": 15, "description": "146.0.. (Romania)", "type" : "CCSH"},
+        {"id": 16, "description": "dc.**69.info (146.0..**) (Romania)", "type" : "CCSH"},
+        {"id": 17, "description": "XOR 0x69", "type" : "TTPS"},
+        {"id": 18, "description": "RSA and BASE64 encryption", "type" : "TTPS"},
+        {"id": 19, "description": "China's Government Agency", "type" : "COUN"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 2, "target": 3, "rel_name" : "executes"},
+        {"source": 1, "target": 4, "rel_name" : "downloads"},
+        {"source": 4, "target": 5, "rel_name" : "has_hash"},
+        {"source": 4, "target": 6, "rel_name" : "uses"},
+        {"source": 1, "target": 7, "rel_name" : "downloads"},
+        {"source": 7, "target": 8, "rel_name" : "uses"},
+        {"source": 7, "target": 9, "rel_name" : "uses"},
+        {"source": 7, "target": 10, "rel_name" : "calls"},
+        {"source": 7, "target": 11, "rel_name" : "sends"},
+        {"source": 7, "target": 12, "rel_name" : "requests"},
+        {"source": 7, "target": 13, "rel_name" : "creates"},
+        {"source": 7, "target": 14, "rel_name" : "writes"},
+        {"source": 14, "target": 15, "rel_name" : "connects_to"},
+        {"source": 14, "target": 16, "rel_name" : "connects_to"},
+        {"source": 14, "target": 17, "rel_name" : "uses"},
+        {"source": 14, "target": 18, "rel_name" : "encrypts_with"},
+        {"source": 1, "target": 19, "rel_name" : "targets"}
+    ]
+}

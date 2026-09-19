@@ -1,0 +1,52 @@
+
+
+
+Sentence : Network code
+Each packet has the following structure:
+Struct Packet{
+Struct Header{
+_ DWORD rand _ k1;
+_ DWORD rand _ k2;
+_ DWORD rand _ k3;
+_ DWORD szPaylaod;
+_ DWORD protoConst;
+_ DWORD packetId;
+_ DWORD unk1;
+_ DWORD packetKey;
+};
+_ BYTE [max 0x2000] packetPayload;
+};
+Each packet has a unique key calculated as szPayload + GetTickCount() % hardcodedConst. This
+key is saved in the corresponding packetKey header field. It is used to generate another key for
+encrypting the packet header with RC4 (encryption will not occur without the packetKey field).
+RC4 key generation is demonstrated in the following figure.
+17
+Figure 22. Generating RC4 key for the header
+Then yet another RC4 key is generated from the encrypted fields szPayload, packetId, proto
+Const, and rand_k3. This key is used to encrypt the packet payload.
+Figure 23. Generating RC4 key for the packet payload
+18
+Next the shellcode forms the HTTP headers and the created packet is sent to C2. In addition,
+each packet gets its own number, indicated in the URL. Modules may pass their ID, which is used
+to look up the connection established during module launch. Module ID 0 is reserved for the main
+connection of the stager.
+Figure 24. Forming HTTP headers
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Packet", "type" : "EXEF"},
+        {"id": 2, "description": "Header", "type" : "EXEF"},
+        {"id": 3, "description": "packetKey", "type" : "REGI"},
+        {"id": 4, "description": "RC4 encryption algorithm", "type" : "TTPS"},
+        {"id": 5, "description": "HTTP headers", "type" : "EXEF"},
+        {"id": 6, "description": "C2 (Command & Control server)", "type" : "CCSH"},
+        {"id": 7, "description": "Module ID 0", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "includes"},
+        {"source": 3, "target": 4, "rel_name" : "used for"},
+        {"source": 5, "target": 6, "rel_name" : "sent to"},
+        {"source": 7, "target": 1, "rel_name" : "identifies"}
+    ]
+}

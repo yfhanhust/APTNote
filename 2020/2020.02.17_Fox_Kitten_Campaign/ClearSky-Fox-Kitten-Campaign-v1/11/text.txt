@@ -1,0 +1,240 @@
+4.4 Backdoor Installation and C&C Communication Tools
+After the attackers gained access to the target computers and in parallel to the lateral movement, they
+started leaking files from the attacked systems back to their own computers. Our understanding is that
+this is the goal of the campaign – information theft, and this even though the campaign possibly
+cooperated with APT33, known for its destructive malware-spreading capabilities, which we didn’t
+identify in this campaign.
+In this chapter we will review several tools used to leak the information and communicate with the
+targeted computers. This stage’s main concept is establishing the ability to connect, through RDP, to
+the target company, categorizing relevant files either by looking at them online or through file name
+lists, and then exfiltrating them to the attacker in different ways. Note, that the tools and techniques
+changed between different attacks, and therefore this chapter lists them, again, not necessarily in
+chronological order.
+The following scheme represents the different ways for the attackers to connect to the targets:
+12 github.com/Kevin-Robertson/Invoke-TheHash
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+20 | P a g e
+Backdoor - RDP over
+Serveo
+SSH with malware
+Exfiltration channel C&C
+Local IIS
+Local Webshell via
+IIS
+Virtual Directory in
+IIS
+Reverse Proxy / SSH
+Forwarding
+Ngrok
+FRP
+Infiltrate Network
+Socket
+RDP over SSH
+Tunneling
+Webshells
+4.4.1 “POWSSHNET”
+MITRE ATT&CK Tactic: Lateral Movement, Credential Access (TA0008, TA0006)
+MITRE ATT&CK Technique: Remote Services, Remote Desktop Protocol, Credentials in Files
+(T1021, T1076, T1081)
+“Backdoor POWSSHNET -RDP over SSH Tunneling” is a self-developed tool used by the attackers to
+open an SSH tunneling through an executable that allows RDP connection to the computer. Most of
+the files used in the campaign are PE EXE files. The use of those files is divided into two periods: in 2017
+the attackers used files for 32-bit systems, while in 2019 they used files for 64-bit systems. It should be
+noted that this kind of files is very rarely identified by the different anti-virus engines. Thus, the files
+relevant to the 2017 attacks are completely unidentified as infect by Virus Total; the files used in 2019
+are identified only by a few AV companies.
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+21 | P a g e
+During the attack, the attackers install on target computers an exe file that is named differently, while
+the naming mainly has the term “SSH”. Several examples of the files’ naming: Svchosts.exe, Sshnet.exe,
+Ssh2.exe, Isaa.exe, cssrss.exe.
+Those malwares have the following PDB path:
+C:\Users\Administrator\Desktop\sshnet\sshnet\obj\Release\sshnet.pdb
+Those files share some common characteristics. First, those files share the same VS version,
+FEEF04BDh, that is otherwise uncommon.
+All the files, both from 2017 and 2019, share the same version that is characterized by a file description
+that has the word “sshnet” and a copyright for 2017:
+These files are characterized by a global unique identifier (GUID) that is common to most of the infected
+files in this infrastructure: $68c4e12f-221f-4580-9631-940208a4306c.
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+22 | P a g e
+When the file is run on the attacked computer (after the appropriate credentials are acquired), an SSH
+tunnel will be opened to an SSH server, whose address and authentication credentials are embedded
+in the malware’s source code. It should be noted that in each file there were two different pairs of
+username and password embedded. Analyzing the files used to attack in Israel, we have found several
+important points:
+
+The first username used to attempt establish a connection is “Arbab”. This word exists in the
+
+Persian language and means “boss”, “manager”, “lord” or, in a more archaic context, “tribe
+chief”. It should be noted the “Arbab” is also the name of a Saudi VPN operator, and it’s
+possible that it was another target in this campaign.
+2. The first password used in the files repeats itself in all the files in the infrastructure, both from
+2017 and 2019. The password is “G654g654!”.
+3. The attacker connects twice – once to the server itself, and once to a relevant folder in the
+target server. This folder is characterized by the path that is also hard-coded.
+As it can be seen in the screenshot, the malware connects to the C2 server (redacted for privacy
+reasons) and then connects to the following routing: jdomain\jbreports . To connect to the C2 server,
+a legitimate DLL called Renci.SshNet and the “ Idstr ” value are used. As can be seen from the source
+code sample, this action invokes a specific content from a string found in the metadata. Another
+meaningful credential is the “VPNADM” username, which could be a credential for the VPN on target
+host. Following is a list of processes that occur during the malware’s run and communication with the
+server:
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+23 | P a g e
+After successful installation and connection, the attacker connects by RDP to a user that he/she had
+created on the server, collects relevant files (mainly documents), and then compiles and uploads them
+in different ways, also through different webshells.
+Additionally, the attacker can change the code remotely, by using remote procedures (RPC). This can
+be seen by the string we’ve found in several files:
+RPC Control\ConsoleLPC-0x00000D00--4464068031611364423-192740709229075714434655797
+2141428712-859675490-1693773642
+4.4.2 Socket-based Backdoor for Socket Opening
+MITRE ATT&CK Tactic: Command and Control (TA0005)
+MITRE ATT&CK Technique: Uncommonly Used Port (T1065)
+This is a tool which allows opening sockets and it’s based on several publicly available scripts, modified
+by the group. The attackers use the tool, named “cs.exe” on target network, to create a backdoor as an
+additional communication channel. As part of the tool’s activity, it allows creating a communication
+channel based on two-way, connection-based byte streams between to end points. The piece of code
+that defines the channel’s properties is called “eifHEY”, and with it the type of the socket
+(SocketType.Stream) and the protocol over which the information will be transmitted
+(ProtocolType.Tcp) are defined as well:
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+24 | P a g e
+In the main function, the hard-coded IP address (95.211.104[.]253) and the port (2255) are defined:
+Upon starting a connection with this tool to the C2 server, the “Idstr” value will contain the server’s
+address:
+The backdoor is identified by 39 Anti-Virus engines:
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+25 | P a g e
+Additionally, we’ve identified several files connected to this backdoor, called
+“ConsoleApplication5.exe”, and establishing a connection with the same server at 95.211.104[.]253.
+The PDB route of the files is:
+C:\users\administrator\documents\visual studio
+2015\Projects\ConsoleApplication5\ConsoleApplication5\obj\Release\ConsoleApplication5.pdb
+4.4.3 “Servo”, “Ngrok”, and “FRP”
+MITRE ATT&CK Tactic: Command And Control, Defense Evasion (TA0011, TA0005)
+MITRE ATT&CK Technique: Connection Proxy (T1090)
+During analysis, we have identified three public tools used as reverse proxy/SSH forwarding by the
+attackers – Ngrok, Servo, and FRP.
+Ngrok
+Ngrok is a publicly available tool that allows a free, secure connection between the corporate
+network’s localhost and the internet [13] . Using Ngrok, the attacker can securely exfiltrate any file present
+on the corporate network, including those that the attacker created him/herself. The attacker can
+connect to the target station with RDP, activate a webshell, for example, and remotely access files that
+are not supposed to be exposed. In parallel, the attacker can monitor any HTTP connection attempt
+to Ngrok’s address and see its exposure to the outside world. Moreover, the attacker can create
+domains even for services that don’t use HTTP, e.g. SSH tunneling, which can be useful for the
+operation of the tools discussed earlier. An example of this tool being used is the IP address
+18.211.150[.]202, operated by Amazon and used by the Iranians for this campaign.
+13 ngrok.com/
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+26 | P a g e
+Serveo
+Serveo is a free tool for opening outside-facing servers and applications on a corporate network [14],
+whether on localhost or elsewhere. Unlike Ngrok, Serveo is an SSH-only server; also, any port that will
+be defined to it (safe for 22, 80, and 443 which are accessible from outside) will get another, unassigned
+TCP port instead. Using this service, the attacker was operating different services inside the network.
+Thus, for instance, the attacker had operated an RDP connection through the localhost on port 3389
+(RDP); using Serveo, the attacker has opened this RDP for the outside world through port 12618 (TCP).
+The attacker has opened an SSH tunneling to another port in order to maintain an encrypted RDP on
+the attacked target.
+Moreover, like with the backdoor that had hardcoded and predefined credentials, here too the attacker
+separated every server that was opened to the outside world. In the example above (whereas the
+original credentials were omitted), the attacker had created a personal user in Serveo for a specific
+server.
+FRP
+Fast Reverse Proxy (FRP) [15] is a method for revealing servers behind NAT or a firewall to the outside
+world. To bypass it, the attacker uses the company’s original proxy and from there goes out.
+4.4.4 Internal and External Webshells
+MITRE ATT&CK Tactic: Persistence, Command And Control (TA0008, TA0011)
+MITRE ATT&CK Technique: WebShell, Connection Proxy, Remote Services (T1100, T1090,
+T1021)
+The attacker used a variety of methods to maintain his/her access to the numerous servers inside the
+targeted organization. This access allowed the attacker to continue establishing the foothold in the
+organization and exfiltrate stolen files. These actions were carried out, amongst other things, through
+webshells of two kinds:
+
+
+A webshell inside the organization accessible to the network.
+
+
+An external webshell where files can be uploaded to.
+
+
+Local IIS webshells and virtual directory
+Upon breaching the network, the attacker creates a webshell using IIS on a server to which the attacker
+got the permissions. The webshell is either downloaded directly, using aspx files, some of which the
+attacker finds on the internet, or using a self-developed webshell, hidden under other file extensions,
+e.g. .gif or .jpg.
+One of the webshell files was uploaded to Virus Total from Iran on November 27 [th], 2019, close to the
+peak of attacks against Israeli companies. This file, called warn.aspx, contains a form that will be
+established in the company and will allow CMD run inside the corporate network. The script allowing
+14 serveo.net/
+15 github.com/fatedier/frp
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+27 | P a g e
+it is written in C. This file will be part of the applications used by the attacker, through IIS, on the client
+side:
+Another file was written in Jscript and contains evidence of using base64 encoding (note the
+“admin@123” user):
+For reasons unclear to us at this time, we have found the attackers executing a process focused on
+numerous servers on the company’s internal network. First, the attackers created a webshell through
+IIS exposed to the world. Parallelly, they created a virtual directory on another server to which they also
+had access. In this directory the attackers installed the aspx file. Thus, when the attackers wanted to
+communicate with another server sitting on the same corporate LAN, they could do this using one
+webshell. Following is a scheme of this action:
+Exfiltration channel – communicating with the C2 server
+We have found open directories, exposed through port 80 to the outside world on external servers used
+throughout the campaign.
+On one of the PHP files we have found a form that allows to upload files directly to the server
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+28 | P a g e
+In the attack scenarios discovered by us, four C2 servers were used. Each server has four open ports –
+80, 443, and 22 (OpenSSH). The address of the chosen server was hardcoded in the malware’s source
+code and the connection to it was performed using methods elaborated earlier. It appears that only in
+singular cases the same server was reused. The servers active throughout the October 2019 attacks
+were of the Apache type . Every such server got a separate and server-specific key.
+In 2017, the APT34 group attacked several IT companies in Israel, similar to the targeting in this
+campaign. In order to perform the initial infection of the company, the group has used the CVE-20170199 vulnerability to salvage and HTA script from an RTF file.
+Using a tool called “rtfdump”, we have analyzed the aforementioned file, in order to understand
+whether there are OLE actions, for instance, which could allow the activation of the vulnerability.
+As can be seen from the output, those components were not used. However, in Level 3, under the
+Generator title, there is data that can be salvaged and describes the file’s version and language:
+{*\generator LibreOffice/5.0.6.2
+LibreOffice_project/00m02}{\info{\creatim\yr2017\mo3\dy27\hr14\min10
+As one can see, the file exists since March 27 [th], 2017, close to the APT34 attacks in Israel using RTF files.
+Also, the file’s language is “Arabic – Saudi Arabia”:
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+29 | P a g e
+              4.4.5 Archives (WinRAR or 7 zip)
+
+MITRE ATT&CK Tactic: Exfiltration (TA0010)
+MITRE ATT&CK Technique: Data Compressed (T1002)
+During our analysis of the different targets, we have seen that the attackers are manually sifting the
+relevant intelligence before sending it back to Iran. After marking all the desired files, the material will
+be compressed into WinRAR or 7-ZIP files, and only then will be sent to the attackers.
+
+©All rights reserved to ClearSky Cyber Security ltd. www.clearskysec.com
+TLP:White                                     info@clearskysec.com
+30 | P a g e

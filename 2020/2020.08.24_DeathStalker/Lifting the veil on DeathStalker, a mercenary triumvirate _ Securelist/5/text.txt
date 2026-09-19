@@ -1,0 +1,65 @@
+Dead drop resolvers
+The DeathStalkers toolchain leverages a number of public services as dead drop resolvers.
+These services provide a way for attackers to store data at a fixed URL through public posts,
+comments, user profiles, content descriptions, etc. Messages left by the attackers follow the
+following patterns: “My keyboard doesn’t work… [string].” and “Yo bro I sing [Base64
+encoded string] yeah”.
+https://securelist.com/deathstalker-mercenary-triumvirate/98177/ 4/13
+11/26/2020 Lifting the veil on DeathStalker, a mercenary triumvirate | Securelist
+During our investigation of this threat actor, we discovered such messages on:
+In all likelihood, this list isn’t exhaustive. A number of these messages can be discovered
+through simple Google queries. Powersing’s first order of business is to connect to any dead
+drop resolver it knows to retrieve this information. Stage 1 consumes the first string of these
+messages, which contains the AES key used to decode stage 2. Then stage 2 connects to the
+dead drop resolver to obtain the integer encoded in the second string. As the code excerpt
+below shows, this integer is divided by an arbitrary constant (which varies depending on the
+sample) before being converted to an IP address:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+public string LongToIP(string long_ip_string)
+{
+long longIP;
+long.TryParse(long_ip_string, out longIP);
+longIP = longIP / 25835; // NB: divide integer by an arbitrary constant
+string ip = string.Empty;
+for (int i = 0; i < 4; i++)
+{
+int num = (int)(longIP / Math.Pow(256, (3 - i)));
+longIP = longIP - (long)(num * Math.Pow(256, (3 - i)));
+if (i == 0)
+ip = num.ToString();
+else
+ip = ip + "." + num.ToString();
+}
+return ip;
+}
+This IP address is then stored on the user’s hard drive and used to establish a connection to
+the real C&C server used by the operators to control Powersing. Relying on well-known
+public services allows cybercriminals to blend initial backdoor communications into
+legitimate network traffic. It also limits what defenders can do to hinder their operations, as
+these platforms can’t generally be blocklisted at the company level, and getting content taken
+down from them can be a difficult and lengthy process. However, this comes at a price: the
+internet never forgets, and it’s also difficult for cybercriminals to remove traces of their
+operations. Thanks to the data indexed or archived by search engines, we estimate that
+Powersing was first used around August 2017.
+https://securelist.com/deathstalker-mercenary-triumvirate/98177/ 5/13
+11/26/2020 Lifting the veil on DeathStalker, a mercenary triumvirate | Securelist
+A final detail we’d like to mention is that a number of Powersing C&Cs we discovered had
+SSL certificates reminiscent of Sofacy’s infamous Chopstick C&C “IT Department”
+certificates. We’re confident this infrastructure isn’t linked with Sofacy and believe this is an
+attempt by the threat actor to lead defenders to erroneous conclusions.

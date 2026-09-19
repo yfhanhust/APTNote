@@ -1,0 +1,57 @@
+Command 0x8006100D: Add/Update Command
+The Add/Update Command command allows the ZoxPNG to expand its capabilities by
+installing load-on-demand subroutines to the running ZoxPNG process. The command handler
+uses the payload data that immediately follows the CommandHeader structure from the C2
+server, allocates enough memory to copy the entirety of the payload (minus four bytes), and
+then copies the payload starting at offset 4 to the newly generated buffer. The first four bytes (a
+DWORD) of the payload contains the desired command ID for the new command.
+The command handler calls the new function which will return a pointer to the real command
+handler that is being installed. This indicates that the data coming from the C2 server is an
+installer subroutine that loads the necessary DLLs and API functions and returns a pointer to the
+new command handler. If the subroutine returns a valid (non-NULL) pointer, the Add/Update
+Command command handler attempts to install the new command handler.
+The command handler attempts to install the new command handler into the array of existing
+command handlers ( pfnHandlers[] ) using the desired command ID ( desiredCmdID value).
+Figure 5 illustrates, in pseudo-C, the procedure that the Add/Update Command command
+handler install the new command handler.
+```
+memcpy(installerFunction, &data[1], data->header.dwPayloadSize - 4);
+pFunc = installerFunction();
+if (pFunc)
+{
+desiredCmdID = data->dwHandlerID;
+v5 = dwHandlersCnt;
+if ( dwHandlersCnt <= desiredCmdID )
+{
+while (dwHandlersCnt != data->dwHandlerID )
+{
+pfnHandlers[dwHandlersCnt++ - 397312] = PlaceHolderCommand;
+}
+pfnHandlers[dwHandlersCnt - 397312] = pFunc;
+dwHandlerID = dwHandlersCnt++;
+}
+else if ( pfnHandlers )
+{
+pfnHandlers[desiredCmdID - 397312] = pFunc;
+dwHandlerID = data->dwHandlerID;
+}
+}
+```
+Figure 5: Command Handler Installation/Update Routine
+If the desiredCmdID is a value larger than the next available command ID, the command
+handler will fill the command IDs between the last valid command ID and the desiredCmdID
+will a filler function ( PlaceHolderCommand ). The PlaceHolderCommand returns a
+CommandHeader with the dwCommandID set to the requested command ID, the dwLastError
+set to 2 ( ERROR_FILE_NOT_FOUND ), the dwPayloadSize set to the length of the string within
+the payload, and the payload containing the NULL-terminated string “ Not Support This
+Function! ”.
+What is not obvious, but important to note, is that not only can the Add/Update Command
+command add new functionality, it can replace existing commands.
+After the command handler has concluded the installation of the new (or updated) command
+handler, the command handler will return a CommandHeader with the dwCommandID field
+within the CommandData structure set to 0x8006100D . If the installation of the new command
+handler was successful, the command handler will append the new command handler’s
+command ID value to the end of the CommandHeader and set the dwPayloadSize to 4 . If,
+however, installation of the new command handler was unsuccessful, the command handler will
+return only a CommandHeader structure with the dwCommandID field set to 0x8006100D and
+the dwLastError set to the return value from GetLastError .

@@ -1,0 +1,144 @@
+
+
+
+Sentence : Sigs Up Dudes! Indicators, Toolmarks, and Detection Opportunities
+While FireEye does not release our production detection logic for the code families, this section
+does contain some identification and hunting concepts that we adopt in our layered detection
+strategy. Table 4 contains malware samples referenced in this blog that FireEye is able to share
+from the larger set recovered during active investigations.
+Type Indicator(s)
+BOOSTWRITE (signed) MD5: a67d6e87283c34459b4660f19747a306
+SHA-1: a873f3417d54220e978d0ca9ceb63cf13ec71f84
+SHA-256:
+18cc54e2fbdad5a317b6aeb2e7db3973cc5ffb01bbf810869d79e9cb3bf02bd5
+C2: 109.230.199[.]227
+BOOSTWRITE
+(unsigned)
+MD5: af2f4142463f42548b8650a3adf5ceb2
+SHA1: 09f3c9ae382fbd29fb47ecdfeb3bb149d7e961a1
+SHA256:
+8773aeb53d9034dc8de339651e61d8d6ae0a895c4c89b670d501db8dc60cd2d0
+C2: 109.230.199[.]227
+Table 4: Publicly-shareable BOOSTWRITE samples
+The signed BOOSTWRITE sample has a PE Authenticode anomaly that can be detected using
+yara’s PE signature module. Specifically, the PE linker timestamp is prior to the Authenticode
+validity period, as seen in Table 5.
+Timestamp Description
+2019-05-20 09:50:55
+UTC
+2019-05-22 00:00 UTC
+through
+2020-05-21 23:59 UTC
+Signed BOOSTWRITE’s PE compilation time
+Signed BOOSTWRITE’s “mango ENTERPRISE LIMITED” certificate validity
+window
+Table 5: Relevant executabe timestamps
+A public example of a Yara rule covering this particular PE Authenticode timestamp anomaly is
+available in a blog post from David Cannings, with the key logic shown in Figure 3.
+https://www.fireeye.com/blog/threat-research/2019/10/mahalo-fin7-responding-to-new-tools-and-techniques.html 5/9
+10/11/2019 Mahalo FIN7: Responding to the Criminal Operators’ New Tools and Techniques | FireEye Inc
+pe.number_of_signatures > 0 and not for all i in (0..pe.number_of_signatures - 1):
+pe.signatures[i].valid_on(pe.timestamp)
+Figure 3: Excerpt of NCC Group’s research Yara rule
+There are other PE Authenticode anomalies that can also be represented as Yara rules to surface
+similarly suspicious files. Of note, this signed BOOSTWRITE sample has no counter signature
+and, while the unauthenticated attributes timestamp structure is present, it is empty. In preparing
+this blog, FireEye’s Advanced Practices team identified a possible issue with VirusTotal’s parsing
+of signed executable timestamps as seen in Figure 4.
+Figure 4: Inconsistency in VirusTotal file signature timestamps for the signed BOOSTWRITE
+sample
+FireEye filed a bug report with Google to address the discrepancy in VirusTotal in order to remove
+confusion for other users.
+https://www.fireeye.com/blog/threat-research/2019/10/mahalo-fin7-responding-to-new-tools-and-techniques.html 6/9
+10/11/2019 Mahalo FIN7: Responding to the Criminal Operators’ New Tools and Techniques | FireEye Inc
+To account for the detection weaknesses introduced by techniques like code signing, our
+Advanced Practices team combines the malicious confidence spectrum that comes from ML
+detection systems with file oddities and anomalies (weak signals) to surface highly interesting and
+evasive malware. This technique was recently described in our own Dr. Steven Miller’s Definitive
+Dossier of Devilish Debug Details. In fact, the exact same program database (PDB) path-based
+approach from his blog can be applied to the toolmarks seen in this sample for a quick hunting
+rule. Figure 5 provides the PDB path of the BOOSTWRITE samples from this blog.
+F:\projects\DWriteImpl\Release\DWriteImpl.pdb
+Figure 5: BOOSTWRITE PDB path
+The Yara rule template can be applied to result in the quick rule in Figure 6.
+rule ConventionEngine_BOOSTWRITE
+{
+meta:
+author = "Nick Carr (@itsreallynick)"
+reference = "https://www.fireeye.com/blog/threat-research/2019/08/definitive-dossier-of-devilish-debugdetails-part-one-pdb-paths-malware.html"
+strings:
+$weetPDB = /RSDS[\x00-\xFF]{20}[a-zA-Z]?:?\[\\s|\s]?.{0,250}\DWriteImpl[\\s|\s]?.{0,250}.pdb\x00/
+nocase
+condition:
+(uint16(0) == 0x5A4D) and uint32(uint32(0x3C)) == 0x00004550 and $weetPDB and filesize < 6MB
+}
+Figure 6: Applying BOOSTWRITE’s PDB path to a Yara rule
+We can apply this same concept across other executable traits, such as BOOSTWRITE’s export
+DLL name (DWriteImpl.dll), to create quick and easy rules that can aid in quick discovery as seen
+in Figure 7.
+rule Exports_BOOSTWRITE
+{
+meta:
+author = "Steve Miller (@stvemillertime) & Nick Carr (@itsreallynick)"
+strings:
+$exyPants = "DWriteImpl.dll" nocase
+condition:
+uint16(0) == 0x5A4D and uint32(uint32(0x3C)) == 0x00004550 and $exyPants at pe.rva_to_offset(uin‐
+t32(pe.rva_to_offset(pe.data_directories[pe.IMAGE_DIRECTORY_ENTRY_EXPORT].virtual_address) +
+12)) and filesize < 6MB
+}
+Figure 7: Applying BOOSTWRITE’s export DLL names to a Yara rule (Note: this rule was updated
+following publication. It previously read "module_ls.dll", which is for Turla and unrelated.)
+Of course, resilient prevention capabilities are needed and to that end, FireEye detects this
+activity across our platforms. Table 6 contains several specific detection names from a larger list
+of detection capabilities that captured this activity natively.
+https://www.fireeye.com/blog/threat-research/2019/10/mahalo-fin7-responding-to-new-tools-and-techniques.html 7/9
+10/11/2019 Mahalo FIN7: Responding to the Criminal Operators’ New Tools and Techniques | FireEye Inc
+Platform Signature Name
+Endpoint Security MalwareGuard ML detection (unsigned variants)
+Network Security and Email
+Security
+Table 6: FireEye detection matrix
+Malware.binary.dll (dynamic detection)
+MalwareGuard ML detection (unsigned variants)
+APTFIN.Dropper.Win.BOOSTWRITE (network traffic)
+APTFIN.Backdoor.Win.RDFSNIFFER (network traffic)
+FE_APTFIN_Dropper_Win_BOOSTWRITE (static code family detec‐
+tion)
+FE_APTFIN_Backdoor_Win_RDFSNIFFER (static code family
+detection)
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "BOOSTWRITE (signed)", "type" : "EXEF"},
+        {"id": 2, "description": "a67d6e87283c34459b4660f19747a306", "type" : "IOCS"},
+        {"id": 3, "description": "a873f3417d54220e978d0ca9ceb63cf13ec71f84", "type" : "IOCS"},
+        {"id": 4, "description": "18cc54e2fbdad5a317b6aeb2e7db3973cc5ffb01bbf810869d79e9cb3bf02bd5", "type" : "IOCS"},
+        {"id": 5, "description": "109.230.199[.]227", "type" : "CCSH"},
+        {"id": 6, "description": "BOOSTWRITE (unsigned)", "type" : "EXEF"},
+        {"id": 7, "description": "af2f4142463f42548b8650a3adf5ceb2", "type" : "IOCS"},
+        {"id": 8, "description": "09f3c9ae382fbd29fb47ecdfeb3bb149d7e961a1", "type" : "IOCS"},
+        {"id": 9, "description": "8773aeb53d9034dc8de339651e61d8d6ae0a895c4c89b670d501db8dc60cd2d0", "type" : "IOCS"},
+        {"id": 10, "description": "mango ENTERPRISE LIMITED", "type" : "TAMP"},
+        {"id": 11, "description": "F:\\projects\\DWriteImpl\\Release\\DWriteImpl.pdb", "type" : "SYSP"},
+        {"id": 12, "description": "DWriteImpl.dll", "type" : "EXEF"},
+        {"id": 13, "description": "MalwareGuard ML detection (unsigned variants)", "type" : "TAMP"},
+        {"id": 14, "description": "APTFIN.Dropper.Win.BOOSTWRITE", "type" : "TAMP"},
+        {"id": 15, "description": "APTFIN.Backdoor.Win.RDFSNIFFER", "type" : "TAMP"},
+        {"id": 16, "description": "FE_APTFIN_Dropper_Win_BOOSTWRITE", "type" : "TAMP"},
+        {"id": 17, "description": "FE_APTFIN_Backdoor_Win_RDFSNIFFER", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "has_hash"},
+        {"source": 1, "target": 3, "rel_name" : "has_hash"},
+        {"source": 1, "target": 4, "rel_name" : "has_hash"},
+        {"source": 1, "target": 5, "rel_name" : "communicates_with"},
+        {"source": 6, "target": 7, "rel_name" : "has_hash"},
+        {"source": 6, "target": 8, "rel_name" : "has_hash"},
+        {"source": 6, "target": 9, "rel_name" : "has_hash"},
+        {"source": 6, "target": 5, "rel_name" : "communicates_with"},
+        {"source": 1, "target": 10, "rel_name" : "signed_by"},
+        {"source": 11, "target": 1, "rel_name" : "contains_path_of"},
+        {"source": 12, "target": 6, "rel_name" : "exported_from"}
+    ]
+}

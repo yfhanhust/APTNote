@@ -1,0 +1,97 @@
+
+
+
+Sentence : MOONRAKER PETYA
+In December 2016 the attackers deployed a worm that we believe to have been a predecessor to
+NotPetya (also known in as Petya, ExPetr, Nyetya, EternalPetya). This worm was deployed against a
+small number of targets and had limited spreading capabilities, which is why it wasn’t generally known
+to the security research community.
+The worm is a DLL file deployed under the name ~~msvcrt120b.dll~~ in the Windows directory. The
+internal name of the DLL is ~~moonraker.dll~~, which is possibly a reference to a James Bond movie and
+novel of the same name, hence we named this worm Moonraker Petya.
+Figure 24. // An internal name of the worm deployed in December 2016.
+The PE Timestamp of the DLL suggests that it was compiled in December 2016, probably immediately
+before deployment.
+22 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+Moonraker Petya contains code that makes the computer unbootable. Specifically, it rewrites the
+~~ImagePath~~ registry value in the ~~[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\ACPI]~~
+and ~~[HKEY_LOCAL_MACHINE\System\ControlSet002\Services\ACPI]~~ registry keys and wipes
+the first sector of the system drive. However, unlike NotPetya, Moonraker Petya does not contain code
+that directly interacts with the MBR and bootloader. Instead, the Moonraker Petya DLL contains an
+encrypted blob of binary data. The malware expects a command line argument, which will later be
+used as a decryption key. After decryption and decompression using the zlib library, this code is loaded
+into memory as a PE binary and executed. We do not have the key for decryption, but we analyzed disk
+images of affected computers. These images contained MBR and bootloader code that exactly matches
+code found in the original Green Petya, which was used by various cybercrime groups. This leads us to
+believe that this blob may contain the original Green Petya malware.
+Figure 25. // The splash screen displayed after reboot on computers affected by Moonraker Petya.
+Interestingly, the decryption routine used by Moonraker Petya is very similar to a routine used by
+GreyEnergy in-memory-only DLL files.
+23 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+Figure 26. // Comparison of decompiled code of Moonraker Petya (left) and GreyEnergy (right)
+Moonraker Petya is able to spread through the local network using SysInternals PsExec. The malware
+contains a zlib-compressed binary of PsExec in its resources. Later this binary is dropped into the
+Windows directory with the filename ~~conhost.exe~~ .
+The malware spreads itself in a similar manner to NotPetya: it enumerates network hosts using various
+methods ( ~~WNetEnumResourceW, GetIpNetTable, GetExtendedTcpTable, NetServerEnum~~ ~~,~~
+TERMSRV-records using ~~CredEnumerateW~~ ~~)~~, then it connects to a network host using the
+~~WNetAddConnection2W~~ function and saves the malware as ~~\\%TARGET-HOST%\admin$\%MALWARE%~~ ~~.~~
+Afterward, Moonraker Petya executes the following command, which starts the malware on the remote
+computer using the dropped PsExec:
+```
+    C:\Windows\conhost.exe \%TARGET-HOST% -accepteula -s -d C:\Windows\
+System32\rundll32.exe “C:\Windows\msvcrt120b.dll”, #1 %TIMEOUT%
+
+```
+~~“USER1:PASSWORD1;USER2:PASSWORD2” “%DECRYPTIONKEY%”~~
+It is important to note that the malware does not contain a credential-harvesting functionality using
+Mimikatz, nor does it contain the EternalBlue exploit.
+In addition to all the functionality already mentioned, Moonraker Petya features file encryption. The
+malware enumerates all files on all fixed drives. After that, it attempts to encrypt them using the AES
+256 encryption algorithm. After the file encryption process has finished the malware may create a
+~~README.txt~~ file with payment instructions.
+24 GreyEnergy: A successor to BlackEnergy TLP: WHITE
+The payment instruction file contains a personal key encrypted with RSA-2048. In addition, it contains
+the same text and onion addresses as the original Green Petya. It seems that the attackers wanted to
+disguise usage of this malware as a Green Petya attack.
+Figure 27. // The Readme file with payment instructions created by Moonraker Petya
+As the final step, Moonraker Petya attempts to reboot the computer.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "MOONRAKER PETYA", "type" : "ACTO"},
+        {"id": 2, "description": "NotPetya (also known in as Petya, ExPetr, Nyetya, EternalPetya)", "type" : "ACTO"},
+        {"id": 3, "description": "msvcrt120b.dll", "type" : "DOCF"},
+        {"id": 4, "description": "moonraker.dll", "type" : "DOCF"},
+        {"id": 5, "description": "[HKEY_LOCAL_MACHINE\\System\\ControlSet001\\Services\\ACPI]", "type" : "REGI"},
+        {"id": 6, "description": "[HKEY_LOCAL_MACHINE\\System\\ControlSet002\\Services\\ACPI]", "type" : "REGI"},
+        {"id": 7, "description": "MBR and bootloader code", "type" : "TAMP"},
+        {"id": 8, "description": "Green Petya", "type" : "ACTO"},
+        {"id": 9, "description": "GreyEnergy in-memory-only DLL files", "type" : "DOCF"},
+        {"id": 10, "description": "SysInternals PsExec", "type" : "APPS"},
+        {"id": 11, "description": "conhost.exe", "type" : "EXEF"},
+        {"id": 12, "description": "\\%TARGET-HOST%\\admin$\\%MALWARE%", "type" : "SYSP"},
+        {"id": 13, "description": "C:\\Windows\\System32\\rundll32.exe", "type" : "EXEF"},
+        {"id": 14, "description": "AES 256 encryption algorithm", "type" : "TTPS"},
+        {"id": 15, "description": "README.txt", "type" : "DOCF"},
+        {"id": 16, "description": "RSA-2048", "type" : "TTPS"},
+        {"id": 17, "description": "onion addresses", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 3, "rel_name" : "deploys"},
+        {"source": 1, "target": 4, "rel_name" : "internal name of"},
+        {"source": 1, "target": 5, "rel_name" : "modifies registry key"},
+        {"source": 1, "target": 6, "rel_name" : "modifies registry key"},
+        {"source": 1, "target": 7, "rel_name" : "contains encrypted blob of"},
+        {"source": 1, "target": 8, "rel_name" : "related to"},
+        {"source": 1, "target": 9, "rel_name" : "uses similar decryption routine as"},
+        {"source": 1, "target": 10, "rel_name" : "spreads through using"},
+        {"source": 1, "target": 11, "rel_name" : "drops and uses"},
+        {"source": 1, "target": 12, "rel_name" : "saves malware as"},
+        {"source": 1, "target": 13, "rel_name" : "executes command with"},
+        {"source": 1, "target": 14, "rel_name" : "uses for file encryption"},
+        {"source": 1, "target": 15, "rel_name" : "creates file"},
+        {"source": 1, "target": 16, "rel_name" : "encrypts personal key with"},
+        {"source": 1, "target": 17, "rel_name" : "contains in payment instructions"}
+    ]
+}

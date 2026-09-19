@@ -1,0 +1,88 @@
+Injection Technique
+Whenever an export is called, Stuxnet typically injects the entire DLL into another process and then just calls the
+particular export. Stuxnet can inject into an existing or newly created arbitrary process or a preselected trusted
+process. When injecting into a trusted process, Stuxnet may keep the injected code in the trusted process or
+instruct the trusted process to inject the code into another currently running process.
+The trusted process consists of a set of default Windows processes and a variety of security products. The cur­
+rently running processes are enumerated for the following:
+  - Kaspersky KAV (avp.exe)
+
+  - Mcafee (Mcshield.exe)
+
+  - AntiVir (avguard.exe)
+
+  - BitDefender (bdagent.exe)
+
+  - Etrust (UmxCfg.exe)
+
+  - F-Secure (fsdfwd.exe)
+
+  - Symantec (rtvscan.exe)
+
+  - Symantec Common Client (ccSvcHst.exe)
+
+  - Eset NOD32 (ekrn.exe)
+
+  - Trend Pc-Cillin (tmpproxy.exe)
+
+In addition, the registry is searched for indicators that the following programs are installed:
+  - KAV v6 to v9
+
+
+  - McAfee
+
+
+  - Trend PcCillin
+
+If one of the above security product processes are detected, version information of the main image is extracted.
+Based on the version number, the target process of injection will be determined or the injection process will fail
+if the threat considers the security product non-bypassable.
+The potential target processes for the injection are as follows:
+  - Lsass.exe
+
+
+  - Winlogon.exe
+
+  - Svchost.exe
+
+
+  - The installed security product process
+
+Table 5 describes which process is used for injection depending on which security products are installed. In ad­
+dition, Stuxnet will determine if it needs to use one of the two currently undisclosed privilege escalation vulner­
+abilities before injecting. Then, Stuxnet executes the target process in suspended mode.
+A template PE file is extracted from itself and a new
+section called .verif is created. The section is made
+large enough so that the entry point address of
+the target process falls within the .verif section. At
+that address in the template PE file, Stuxnet places
+a jump to the actual desired entry point of the
+injected code. These bytes are then written to the
+target process and ResumeThread is called allowing
+the process to execute and call the injected code.
+This technique may bypass security products that
+employ behavior-blocking.
+In addition to creating the new section and patch­
+ing the entry point, the .stub section of the wrapper
+.dll file (that contains the main .dll file and configu­
+ration data) is mapped to the memory of the new
+process by means of shared sections. So the new
+|Table 5|Col2|
+|---|---|
+|Process Injection|Process Injection|
+|Security Product Installed|Injection target|
+|KAV v1 to v7|LSASS.EXE|
+|KAV v8 to v9|KAV Process|
+|McAfee|Winlogon.exe|
+|AntiVir|Lsass.exe|
+|BitDefender|Lsass.exe|
+|ETrust v5 to v6|Fails to Inject|
+|ETrust (Other)|Lsass.exe|
+|F-Secure|Lsass.exe|
+|Symantec|Lsass.exe|
+|ESET NOD32|Lsass.exe|
+|Trend PC Cillin|Trend Process|
+process has access to the original .stub section. When the newly injected process is resumed, the injected code
+unpacks the .dll file from the mapped .stub section and calls the desired export.
+Instead of executing the export directly, the injected code can also be instructed to inject into another arbitrary
+process instead and within that secondary process execute the desired export.

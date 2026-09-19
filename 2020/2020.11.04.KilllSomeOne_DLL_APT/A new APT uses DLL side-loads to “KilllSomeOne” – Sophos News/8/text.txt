@@ -1,0 +1,57 @@
+I think I smell a rat
+https://news.sophos.com/en-us/2020/11/04/a-new-apt-uses-dll-side-loads-to-killlsomeone/ 10/15
+11/5/2020 A new APT uses DLL side-loads to “KilllSomeOne” – Sophos News
+The initial stage extracted from the two payload files in both these scenarios is the installer,
+which is loaded into memory from the .dat file by the initial malicious DLL. When loaded, it
+drops all components for another DLL side-loading cases to several directories:
+C:\ProgramData\UsersData\Windows_NT\Windows\User\Desktop
+C:\Users\All Users\UsersData\Windows_NT\Windows\User\Desktop
+%PROFILE%\Users
+C:\Users\Public\Public Media
+The installer also assigns the files the “hidden” and “system” attributes to conceal them from
+users.
+Some of the components dropped by the KillSomeOne installer payload.
+The installer then closes the executable used in the initial stage of the attack, and starts a new
+instance of explorer.exe to side-load the dropped DLL component. This is an effort to
+conceal the execution, since the targeted system’s process list will only show another
+explorer.exe process (and not the renamed clean executable, which might stand out upon
+examination).
+The installer also looks for a running process with a name starting with “AAM,” then kills the
+process and deletes the file associated with it in C:\ProgramData and C:\Users\All Users.
+This is likely because earlier PlugX side-loading scenarios used the clean files name “AAM
+Updates.exe”, and this mechanism removes earlier infections. It also takes several steps to
+ensure persistence, including the creation of a task that executes the side-loading executable
+that began the deployment:
+```
+   schtasks /create /sc minute /mo 5 /tn LKUFORYOU_1 /tr
+```
+https://news.sophos.com/en-us/2020/11/04/a-new-apt-uses-dll-side-loads-to-killlsomeone/ 11/15
+11/5/2020 A new APT uses DLL side-loads to “KilllSomeOne” – Sophos News
+Additionally, it creates a registry auto-run key that does the same thing:
+```
+   Software\Microsoft\Windows\CurrentVersion\Run\SafeGuard
+```
+The side loaded DLL uses an event name to identify itself when running—LKU_Test_0.1 if
+running from C:\ProgramData, or LKU_Test_0.2 if running from %USERHOME%.
+The installer also configures the system for data exfiltration. On removable and non-system
+drives, it creates a desktop.ini file with settings to create a folder to the “Recycle Bin” type):
+```
+   [.ShellClassInfo]
+   CLSID={645FF040-5081-101B-9F08-00AA002F954E}
+   IconResource=%systemroot%\system32\SHELL32.dll,7
+```
+It then copies files to the Recycle Bin on the drive in the subfolder ‘files,’ and also collects
+system information, including volume names and free disk space. And lastly, it copies all the
+.dat files dropped—including those used in the other side-loading scenarios—into the
+installation directories, Then the installer loads akm.dat, the file containing the next payload
+—the loader.
+The loader is a simple DLL file, which, unlike the rest of the payloads, is not encrypted. It is a
+plain Windows PE file with a single export name, Start— the main function in the DLL,
+which builds a command line with the location of AUG.exe (the renamed Microsoft
+DISM.EXE):
+c:\programdata\usersdate\windows_nt\windows\user\desktop\AUG.exe
+https://news.sophos.com/en-us/2020/11/04/a-new-apt-uses-dll-side-loads-to-killlsomeone/ 12/15
+11/5/2020 A new APT uses DLL side-loads to “KilllSomeOne” – Sophos News
+Then in executes the command line, which would invoke side-loading scenario 1 or 2.
+https://news.sophos.com/en-us/2020/11/04/a-new-apt-uses-dll-side-loads-to-killlsomeone/ 13/15
+11/5/2020 A new APT uses DLL side-loads to “KilllSomeOne” – Sophos News

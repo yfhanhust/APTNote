@@ -1,0 +1,90 @@
+
+
+
+Sentence : From Helminth to ISMAgent
+During our data collection process, we discovered a Clayslide delivery document (SHA256:
+ca8cec08b4c74cf68c71a39176bfc8ee1ae4372f98f75c892706b2648b1e7530) from
+September 2016 containing a payload that appeared to be the Helminth script variant as
+found in other Clayslide documents, but upon further examination was wholly different. The�
+macro within this Clayslide documents obtains a PowerShell script from a cell in the
+“Incompatible” worksheet, much like previous samples. The macro then saves a VBScript to
+%PUBLIC%\Libraries\LicenseCheck.vbs to run this PowerShell script every 3 minutes.
+Like the Helminth script variants, this PowerShell script is a malicious payload that uses both
+HTTP requests and DNS tunneling to interact with its C2 server. However, the HTTP requests
+and the protocol employed to perform DNS tunneling differs dramatically from Helminth�
+scripts installed by all other known Clayslide samples. The HTTP requests and DNS tunneling
+protocol found in this PowerShell script are instead identical to ISMAgent.
+The C2 domain used for this script was mslicensecheck[.]com, which had previously been
+reported by LogRhythm in their OilRig whitepaper. Interestingly, it was the only domain
+associated with OilRig that did not have an IP resolution at its second-level, much like the
+ISMAgent samples.
+The “doIt” function within the PowerShell script, seen in Figure 7, is responsible for initiating
+the C2 communications, as well as parsing the data provided by the C2 server to run the
+appropriate commands. This function uses the strings “/action2/”, “/response/” and
+“/upload/” within the C2 URLs when using HTTP to communicate with the C2 server. This
+behavior and these strings were also observed in the ISMAgent C2 behavior. The “doIt”
+function also shows that the C2 server will respond with data structured the same way as
+ISMAgent, using “#” as a delimiter and various offsets such as offset 0 used in subsequent�
+requests with the C2, offset 2 specifying a URL to download a file from, offset 3 specifying a�
+command to execute using command-prompt, and offset 4 specifying a path to a file to�
+upload to the C2 server.
+Figure 7 The ‘doIt’ function within the PowerShell script handles C2 interaction and
+functionality
+The commonalities between this PowerShell script and ISMAgent do not stop there. The
+HTTP requests to the C2 server use the exact same URL structure. For instance, the payload
+generates a URL using the following line of code, which results in a base64 encoded string
+that contains [hostname/username]:
+1 $id=[Convert]::ToBase64String($Enc.GetBytes([System.Net.Dns]::GetHostEntry([string]"localho
+Also, as seen in the code above, the PowerShell script makes sure the base64 encoded data
+used is safe to use in an HTTP URL, by replacing the characters “=”, “/” and “+” characters
+with hexadecimal equivalent. The ISMAgent payloads also performed the exact same
+replacement, as seen in the portion of code in Figure 8.
+Figure 8 Code within ISMAgent payload that overlaps character replacement HTTP
+communications functionality within PowerShell script
+The DNS tunneling protocol within the PowerShell script is the same as the ISMAgent
+payload, which can be visualized by the following beacon sent from the PowerShell script:
+1 n.n.c.55957d20569c43c9a401e5d446b92b9e.mslicensecheck.com
+To facilitate the DNS tunneling functionality, the PowerShell script replaces the “=”, “/” and
+“+” characters within the base64 data sent to the C2 server within the subdomains of DNS
+queries. However, DNS queries cannot include the “%” character, so it uses the following line
+of code to replace them with “-“, “-s-“ and “-p-“ instead:
+1 $b64=[Convert]::ToBase64String($dt).Replace('=','-').Replace("/","-s-").Replace("+","-p-")
+This functionality is again replicated within the ISMAgent payload for its DNS tunneling
+functionality, as shown in Figure 9.
+Figure 9 Code within ISMAgent payload that overlaps character replacement within DNS
+tunneling functionality within PowerShell script
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Clayslide delivery document", "type" : "DOCF"},
+        {"id": 2, "description": "SHA256: ca8cec08b4c74cf68c71a39176bfc8ee1ae4372f98f75c892706b2648b1e7530", "type" : "IOCS"},
+        {"id": 3, "description": "Helminth script variant", "type" : "EXEF"},
+        {"id": 4, "description": "%PUBLIC%\\Libraries\\LicenseCheck.vbs", "type" : "SYSP"},
+        {"id": 5, "description": "PowerShell script", "type" : "EXEF"},
+        {"id": 6, "description": "mslicensecheck[.]com", "type" : "CCSH"},
+        {"id": 7, "description": "OilRig", "type" : "ACTO"},
+        {"id": 8, "description": "ISMAgent", "type" : "EXEF"},
+        {"id": 9, "description": "/action2/", "type" : "URLS"},
+        {"id": 10, "description": "/response/", "type" : "URLS"},
+        {"id": 11, "description": "/upload/", "type" : "URLS"},
+        {"id": 12, "description": "command-prompt", "type" : "APPS"},
+        {"id": 13, "description": "n.n.c.55957d20569c43c9a401e5d446b92b9e.mslicensecheck.com", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 1, "target": 3, "rel_name" : "contains variant of"},
+        {"source": 1, "target": 4, "rel_name" : "saves to"},
+        {"source": 4, "target": 5, "rel_name" : "runs every 3 minutes"},
+        {"source": 5, "target": 6, "rel_name" : "communicates with C2 via HTTP and DNS tunneling"},
+        {"source": 7, "target": 6, "rel_name" : "uses domain for C2"},
+        {"source": 8, "target": 6, "rel_name" : "similar to ISMAgent's C2 domain"},
+        {"source": 5, "target": 9, "rel_name" : "uses in HTTP requests"},
+        {"source": 5, "target": 10, "rel_name" : "uses in HTTP requests"},
+        {"source": 5, "target": 11, "rel_name" : "uses in HTTP requests"},
+        {"source": 8, "target": 9, "rel_name" : "similar to ISMAgent's HTTP structure"},
+        {"source": 8, "target": 10, "rel_name" : "similar to ISMAgent's HTTP structure"},
+        {"source": 8, "target": 11, "rel_name" : "similar to ISMAgent's HTTP structure"},
+        {"source": 5, "target": 12, "rel_name" : "executes commands using"},
+        {"source": 5, "target": 13, "rel_name" : "sends DNS queries to"}
+    ]
+}

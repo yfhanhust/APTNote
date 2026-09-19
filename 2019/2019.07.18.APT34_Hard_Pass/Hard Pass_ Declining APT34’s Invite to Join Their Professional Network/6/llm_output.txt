@@ -1,0 +1,97 @@
+
+
+
+Sentence : Utilizing Cambridge University to Establish Trust
+On June 19, 2019, FireEye’s Managed Defense Security Operations Center received an
+exploit detection alert on one of our FireEye Endpoint Security appliances. The offending
+application was identified as Microsoft Excel and was stopped immediately by FireEye
+Endpoint Security’s ExploitGuard engine. ExploitGuard is our behavioral monitoring,
+detection, and prevention capability that monitors application behavior, looking for
+various anomalies that threat actors use to subvert traditional detection mechanisms.
+Offending applications can subsequently be sandboxed or terminated, preventing an
+exploit from reaching its next programmed step.
+The Managed Defense SOC analyzed the alert and identified a malicious file named
+System.doc (MD5: b338baa673ac007d7af54075ea69660b), located in C:\Users\
+.templates. The file System.doc is a Windows Portable Executable (PE),
+despite having a "doc" file extension. FireEye identified this new malware family as
+TONEDEAF.
+A backdoor that communicates with a single command and control (C2) server using
+HTTP GET and POST requests, TONEDEAF supports collecting system information,
+uploading and downloading of files, and arbitrary shell command execution. When
+executed, this variant of TONEDEAF wrote encrypted data to two temporary files –
+temp.txt and temp2.txt – within the same directory of its execution. We explore additional
+technical details of TONEDEAF in the malware appendix of this post.
+Retracing the steps preceding exploit detection, FireEye identified that System.doc was
+dropped by a file named ERFT-Details.xls. Combining endpoint- and network-visibility,
+we were able to correlate that ERFT-Details.xls originated from the URL http://www.cam
+research-ac[.]com/Documents/ERFT-Details.xls. Network evidence also showed the
+access of a LinkedIn message directly preceding the spreadsheet download.
+Managed Defense reached out to the impacted customer’s security team, who confirmed
+the file was received via a LinkedIn message. The targeted employee conversed with
+"Rebecca Watts", allegedly employed as "Research Staff at University of Cambridge".
+https://www.fireeye.com/blog/threat-research/2019/07/hard-pass-declining-apt34-invite-to-join-their-professional-network.html 2/10
+7/19/2019 Hard Pass: Declining APT34’s Invite to Join Their Professional Network « Hard Pass: Declining APT34’s Invite to Join Their Professional Networ…
+The conversation with Ms. Watts, provided in Figure 1, began with the solicitation of
+resumes for potential job opportunities.
+Figure 1: Screenshot of LinkedIn message asking to download TONEDEAF
+This is not the first time we’ve seen APT34 utilize academia and/or job offer
+conversations in their various campaigns. These conversations often take place on
+social media platforms, which can be an effective delivery mechanism if a targeted
+organization is focusing heavily on e-mail defenses to prevent intrusions.
+FireEye examined the original file ERFT-Details.xls, which was observed with at least
+two unique MD5 file hashes:
+96feed478c347d4b95a8224de26a1b2c
+caf418cbf6a9c4e93e79d4714d5d3b87
+A snippet of the VBA code, provided in Figure 2, creates System.doc in the target
+directory from base64-encoded text upon opening.
+https://www.fireeye.com/blog/threat-research/2019/07/hard-pass-declining-apt34-invite-to-join-their-professional-network.html 3/10
+7/19/2019 Hard Pass: Declining APT34’s Invite to Join Their Professional Network « Hard Pass: Declining APT34’s Invite to Join Their Professional Networ…
+Figure 2: Screenshot of VBA code from System.doc
+The spreadsheet also creates a scheduled task named "windows update check" that
+runs the file C:\Users\.templates\System Manager.exe every minute. Upon
+closing the spreadsheet, a final VBA function will rename System.doc to System
+Manager.exe. Figure 3 provides a snippet of VBA code that creates the scheduled task,
+clearly obfuscated to avoid simple detection.
+Figure 3: Additional VBA code from System.doc
+Upon first execution of TONEDEAF, FireEye identified a callback to the C2 server
+offlineearthquake[.]com over port 80.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "FireEye’s Managed Defense Security Operations Center", "type" : "ACTO"},
+        {"id": 2, "description": "Microsoft Excel", "type" : "APPS"},
+        {"id": 3, "description": "ExploitGuard engine", "type" : "APPS"},
+        {"id": 4, "description": "System.doc (MD5: b338baa673ac007d7af54075ea69660b)", "type" : "DOCF"},
+        {"id": 5, "description": "C:\\Users\\.templates", "type" : "SYSP"},
+        {"id": 6, "description": "TONEDEAF malware family", "type" : "EXEF"},
+        {"id": 7, "description": "HTTP GET and POST requests", "type" : "NETP"},
+        {"id": 8, "description": "temp.txt", "type" : "DOCF"},
+        {"id": 9, "description": "temp2.txt", "type" : "DOCF"},
+        {"id": 10, "description": "ERFT-Details.xls", "type" : "DOCF"},
+        {"id": 11, "description": "http://www.camresearch-ac[.]com/Documents/ERFT-Details.xls", "type" : "URLS"},
+        {"id": 12, "description": "LinkedIn message", "type" : "MAIL"},
+        {"id": 13, "description": "Rebecca Watts (Research Staff at University of Cambridge)", "type" : "ACTO"},
+        {"id": 14, "description": "APT34", "type" : "ACTO"},
+        {"id": 15, "description": "96feed478c347d4b95a8224de26a1b2c", "type" : "IOCS"},
+        {"id": 16, "description": "caf418cbf6a9c4e93e79d4714d5d3b87", "type" : "IOCS"},
+        {"id": 17, "description": "VBA code", "type" : "EXEF"},
+        {"id": 18, "description": "windows update check scheduled task", "type" : "TTPS"},
+        {"id": 19, "description": "C:\\Users\\.templates\\System Manager.exe", "type" : "EXEF"},
+        {"id": 20, "description": "offlineearthquake[.]com", "type" : "CCSH"}
+    ],
+    "edges": [
+        {"source": 4, "target": 5, "rel_name" : "located in"},
+        {"source": 6, "target": 7, "rel_name" : "communicates using"},
+        {"source": 10, "target": 4, "rel_name" : "drops"},
+        {"source": 11, "target": 10, "rel_name" : "hosts"},
+        {"source": 12, "target": 13, "rel_name" : "sent by"},
+        {"source": 12, "target": 10, "rel_name" : "leads to download of"},
+        {"source": 17, "target": 4, "rel_name" : "creates"},
+        {"source": 18, "target": 19, "rel_name" : "runs"},
+        {"source": 10, "target": 15, "rel_name" : "has MD5 hash"},
+        {"source": 10, "target": 16, "rel_name" : "has MD5 hash"},
+        {"source": 4, "target": 8, "rel_name" : "writes encrypted data to"},
+        {"source": 4, "target": 9, "rel_name" : "writes encrypted data to"},
+        {"source": 6, "target": 20, "rel_name" : "communicates with"}
+    ]
+}

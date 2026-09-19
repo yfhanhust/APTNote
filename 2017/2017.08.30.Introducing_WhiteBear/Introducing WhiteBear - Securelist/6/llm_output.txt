@@ -1,0 +1,116 @@
+
+
+
+Sentence : Pipe Transport
+The module generates the pipe name (with the same prefix as the loader);
+waits for incoming connections; receives data and pushes it to the
+‘message processing system’. The module generates the pipe name (with
+the same prefix as the loader); waits for incoming connections; receives
+data and pushes it to the ‘message processing system’. Every packet is
+expected to be at least 6 bytes and contain the following header:   [4:ID]
+[2:command]
+List of commands:
+1 : new task
+2 : update the loader + orchestrator file
+4 : send task result
+5 : send settings
+6 : write results to registry/file storage
+7 : enable / disable c2 transport / update status
+8 : uninstall
+9 : nop
+10 : “CMessageProcessingSystem::Receive_NO_CONNECT_TO_GAYZER”;
+write results to registry
+11: write the last connection data ‘{56594FEA-5774-746D-4496
+6361266C40D0}’ aka “last connection” storage value
+12: “give cache” – write cached commands from the C&C
+13: “take cache” – append C&C commands to the cache
+Depending on the command, the module returns the results from
+previously run tasks, the configuration of the module, or a confirmation
+message.
+An example of these tasks is shown below:
+
+write a file and execute it with CreateProcess() capturing all of the
+
+standard output
+
+
+update C&C configuration, plugin storage, etc
+
+
+update autoruns
+
+
+write arbitrary files to the filesystem (“File Upload”)
+
+
+read arbitrary files from the filesystem (“File Download”)
+
+
+update itself
+
+
+uninstall
+
+
+push task results to C2 servers
+
+
+The “LocalTransport manager” handles named pipe communication and
+identifies if the packet received is designated to the current instance or to
+someone else (down the route). In the latter scenario the LocalTansport
+manager re-encrypts the packet, serializes it (again), and pushes the
+packet via a named pipe on the local network to another hop,
+(NullSessionPipes). This effectively makes each infected node a packet
+router.
+The Autorun manager subsystem is responsible for tracking the way that
+the malicious module starts in the system and it maintains several
+different methods for starting automatically (shown below):
+LinkAutorun The subsystem searches for a LNK file in the target directory,
+changes the path to “cmd.exe” and the description to ‘ /q /c start “” “%s”
+&& start “” “%s” ‘
+TaskScheduler20Autorun The subsystem creates the ITaskService (works
+only on Windows Vista+) and uses the ITaskService interface to create a
+new task with a logon trigger
+StartupAutorun The subsystem creates a LNK file in %STARTUP%
+ScreenSaverAutorun The subsystem installs as a current screensaver with
+a hidden window
+HiddenTaskAutorun The subsystem creates the task ITaskScheduler
+(works only on pre-Vista NT). The task trigger start date is set to the
+creation date of the Windows directory
+ShellAutorun Winlogon registry [HKCU\Software\Microsoft\Windows
+NT\CurrentVersion\Winlogon] Shell=”explorer.exe, …”
+File Uninstallation is done in a discreet manner. The file is filled with
+zeroes, then renamed to a temporary filename before being deleted
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Pipe Transport", "type" : "TTPS"},
+        {"id": 2, "description": "loader", "type" : "EXEF"},
+        {"id": 3, "description": "message processing system", "type" : "APPS"},
+        {"id": 4, "description": "CMessageProcessingSystem::Receive_NO_CONNECT_TO_GAYZER", "type" : "TTPS"},
+        {"id": 5, "description": "{56594FEA-5774-746D-4496-6361266C40D0}", "type" : "REGI"},
+        {"id": 6, "description": "C&C", "type" : "CCSH"},
+        {"id": 7, "description": "LocalTransport manager", "type" : "TTPS"},
+        {"id": 8, "description": "NullSessionPipes", "type" : "NETP"},
+        {"id": 9, "description": "Autorun manager subsystem", "type" : "TTPS"},
+        {"id": 10, "description": "LinkAutorun LNK file", "type" : "DOCF"},
+        {"id": 11, "description": "TaskScheduler20Autorun ITaskService interface", "type" : "APPS"},
+        {"id": 12, "description": "StartupAutorun LNK file in %STARTUP%", "type" : "DOCF"},
+        {"id": 13, "description": "ScreenSaverAutorun screensaver with a hidden window", "type" : "TTPS"},
+        {"id": 14, "description": "HiddenTaskAutorun ITaskScheduler interface", "type" : "APPS"},
+        {"id": 15, "description": "ShellAutorun Winlogon registry key [HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon] Shell='explorer.exe'", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "generates pipe name"},
+        {"source": 1, "target": 3, "rel_name" : "pushes data to"},
+        {"source": 4, "target": 5, "rel_name" : "writes to registry"},
+        {"source": 6, "target": 1, "rel_name" : "sends commands to"},
+        {"source": 7, "target": 8, "rel_name" : "handles communication via"},
+        {"source": 9, "target": 10, "rel_name" : "searches for and modifies"},
+        {"source": 9, "target": 11, "rel_name" : "creates task using"},
+        {"source": 9, "target": 12, "rel_name" : "creates LNK file in"},
+        {"source": 9, "target": 13, "rel_name" : "installs as screensaver with hidden window"},
+        {"source": 9, "target": 14, "rel_name" : "creates task using"},
+        {"source": 9, "target": 15, "rel_name" : "modifies registry key"}
+    ]
+}

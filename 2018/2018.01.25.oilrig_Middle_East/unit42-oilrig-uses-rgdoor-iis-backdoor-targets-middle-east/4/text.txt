@@ -1,0 +1,21 @@
+RGDoor
+Unlike TwoFace, the actors did not develop RGDoor in C# to be interacted with at specific URLs hosted by the targeted IIS
+web server. Instead, the developer created RGDoor using C++, which results in a compiled dynamic link library (DLL). The
+DLL has an exported function named “RegisterModule”, which is important as it led us to believe that this DLL was used as
+a custom native-code HTTP module that the threat actor would load into IIS. Starting with IIS 7
+(https://msdn.microsoft.com/en-us/library/bb757040.aspx), developers could create modules in C++ that the IIS webserver
+would load to extend IIS’ capabilities, such as carry out custom actions on requests. The fact that RGDoor is an IIS HTTP
+module suggests that there is no visual representation of the shell for actors to interact with, which also differs from
+TwoFace’s interface that actors can interact with by visiting the URL to the TwoFace ASPX file.
+According to Microsoft’s documentation (https://technet.microsoft.com/en-us/library/cc771133(v=ws.10).aspx), native-code
+modules can be installed either in the IIS Manager GUI or via the command-line using the “appcmd” application. While we
+do not have logs to determine exactly how the actors install RGDoor, the actor can use the TwoFace webshell to install the
+RGDoor module via the command line. The following command could be used to install the HTTP module on an IIS server:
+%systemroot%\system32\inetsrv\APPCMD.EXE install module /name:[module name] /image:[path to
+RGDoor DLL] /add:true
+We confirmed the command above successfully installed the RGDoor backdoor in our test environment. Figure 1 shows the
+specific command we used to install RGDoor on our IIS server.
+Figure 1 Command-line used to install RGDoor module into IIS
+We confirmed RGDoor installed correctly into IIS by checking the HTTP Modules display in IIS Manager. Figure 2 shows the
+RGDoor DLL (HTTPParser.dll) was loaded into IIS using the module name HTTPParser.
+Figure 2 Installed RGDoor module displayed in the HTTP Modules list in IIS Manger

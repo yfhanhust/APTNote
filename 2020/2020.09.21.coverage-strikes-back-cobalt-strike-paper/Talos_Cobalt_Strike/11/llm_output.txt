@@ -1,0 +1,82 @@
+
+
+
+Sentence : The art and science of detecting Cobalt Strike
+name. The hashing algorithm used is
+a simple ROR13, the same one used
+by Metasploit.
+The retrieved DLL + Function name
+is compared to a calculated hash
+against the hex value (0x726774C)
+passed in earlier as an argument
+to call_by_hash(). If the match is
+successful, Cobalt Strike calls that
+function immediately with the other
+arguments passed.
+l
+Figure 11 shows the relevant
+functionality from the Metasploit’s
+hash.py:
+The payload makes an outbound
+HTTP call to the configured HTTP
+C2 server.
+The Cobalt Strike C2 server responds
+with an HTTP 200 OK, containing a
+very large binary blob. This blob is
+the core functionality of Cobalt Strike,
+better known as “beacon.dll.” From
+here on out, this is the code that will
+be used to control an infected host.
+After retrieving the DLL, it is loaded
+via a technique called Reflective DLL
+injection.
+DETECTION
+Now that we have a good
+understanding of how a Cobalt
+Strike payload works, we can work
+on creating detection for these
+payloads. The goal when creating
+detection content is to cover
+something in its entirety, with the
+fewest rules, without triggering false
+positives. This, for the most part,
+ensures we are creating generic
+detection rather than something that
+only targets one thing. At Talos, we
+want our detection to catch variants
+and potential future threats.
+When looking into coverage for the
+Cobalt Strike payloads, we found we
+l
+Figure 10
+l
+l
+Figure 11
+l
+© 2020 Cisco. All rights reserved. talos-external@cisco.com | talosintelligence.com page 7 of 29
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Cobalt Strike", "type" : "APPS"},
+        {"id": 2, "description": "ROR13 hashing algorithm", "type" : "TTPS"},
+        {"id": 3, "description": "Metasploit", "type" : "APPS"},
+        {"id": 4, "description": "DLL + Function name", "type" : "EXEF"},
+        {"id": 5, "description": "0x726774C (hex value)", "type" : "TAMP"},
+        {"id": 6, "description": "call_by_hash() function", "type" : "TTPS"},
+        {"id": 7, "description": "HTTP C2 server", "type" : "CCSH"},
+        {"id": 8, "description": "HTTP 200 OK response", "type" : "NETP"},
+        {"id": 9, "description": "beacon.dll (Cobalt Strike core functionality)", "type" : "EXEF"},
+        {"id": 10, "description": "Reflective DLL injection technique", "type" : "TTPS"},
+        {"id": 11, "description": "Infected host", "type" : "TAMP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 4, "rel_name" : "calls"},
+        {"source": 6, "target": 5, "rel_name" : "compares against"},
+        {"source": 1, "target": 7, "rel_name" : "makes HTTP call to"},
+        {"source": 7, "target": 8, "rel_name" : "responds with"},
+        {"source": 8, "target": 9, "rel_name" : "contains"},
+        {"source": 1, "target": 9, "rel_name" : "loads via"},
+        {"source": 10, "target": 9, "rel_name" : "technique used for"}
+    ]
+}

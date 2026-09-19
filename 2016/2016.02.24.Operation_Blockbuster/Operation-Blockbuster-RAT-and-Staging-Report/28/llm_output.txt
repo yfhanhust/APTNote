@@ -1,0 +1,76 @@
+
+
+
+Sentence : Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 27
+The communications loop begins each loop by receiving a 4-byte (DWORD) value from the client specifying the size
+of the next packet that the client is to send. The client then sends the specified number of bytes to the RomeoEcho
+instance. Effectively, RomeoEcho is using a datagram format found in many of the Lazarus Group’s families but at a much
+more simplified level. The datagram received by RomeoEcho specifies the particular command to execute as an ASCII
+string with the command and arguments delimitated by a pipe ( | ) characters. At its most basic, the format for incoming
+commands is:
+{command name} | {optional arguments 1} | {optional argument 2} | {and so on}
+RomeoEcho supports seven commands, identified in Table 7-1.
+|COMMANDIDENTIFIER|ARGUMENTCOUNT|DESCRIPTION|
+|---|---|---|
+|_del|1|Securely deletes the file specified|
+|_dir|1|Returns the list of files and their attributes (flags, size, timestamps) in the specifieddirectory.|
+|_exe|1|Executes the specified command line viaWinExec|
+|_get|2|Transfers the specified file (first argument) from the victim’s machine to the client. Thesecond argument is unused.|
+|_got|2|Transfers the specified file (first argument) from the victim’s machine to the client andthen securely deletes the file on the victim’s computer. The second argument is unused.|
+|_quit|0|Terminates the session between the client and RomeoEcho.|
+|_put|2|Transfers a file from the client to the victim’s machine and saves the file at the specifiedlocation (second argument). The first argument is unused.|
+Table 7-1:RomeoEcho’s Supported Commands
+The Windows operating system provides a variety of APIs for interfacing with the file system. The two most notable APIs
+are the Windows-native APIs (such as CreateFile, ReadFile, and WriteFile ) and the POSIX APIs (such as _open,
+_read, and _write ). RomeoEcho uses the POSIX API when dealing with a victim’s file system for the _get, _ got,
+and _put commands. However, the _del command uses the Windows API primarily for the destruction of files. It
+is somewhat unusual for a developer to switch to a different API so abruptly, possibly suggesting that more than one
+developer was responsible for the RomeoEcho source code.
+The _del function deviates from the normal secure delete functionality found in many of the Lazarus Group’s families.
+The _del command begins by determining the size of the file to destroy and then generating a heap of equal size.
+The heap is then zeroed and written to the target file. The file is read into memory, in its entirety, and compared to the
+zeroed buffer to ensure the write was successful. The heap buffer is set to all 0xFF values and written to the target, and
+the write is verified. The buffer is filled with cryptographically strong random data by calling CryptGenRandom from
+the Microsoft cryptographic API and written to the target file, and the write is, again, verified. Finally, the heap buffer
+is again zeroed and written to the disk with one final verification that the write was successful. The deletion of the file
+consists of calling the POSIX function _chsize to set the file’s size to 0 bytes, then calling DeviceIoControl with
+FSCTL_DELETE_OBJECT_ID to attempt to unlink the file from the file system, followed by calls to MoveFileExA and
+DeleteFileA . The secure deletion functionality of RomeoEcho is thorough and exhibits coding styles contrary to the
+level of sophistication found in other parts of the RomeoEcho code base.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "RomeoEcho", "type" : "EXEF"},
+        {"id": 2, "description": "Lazarus Group", "type" : "ACTO"},
+        {"id": 3, "description": "Client", "type" : "ACTO"},
+        {"id": 4, "description": "Windows operating system", "type" : "OPPS"},
+        {"id": 5, "description": "CreateFile API", "type" : "APPS"},
+        {"id": 6, "description": "ReadFile API", "type" : "APPS"},
+        {"id": 7, "description": "WriteFile API", "type" : "APPS"},
+        {"id": 8, "description": "_open POSIX API", "type" : "APPS"},
+        {"id": 9, "description": "_read POSIX API", "type" : "APPS"},
+        {"id": 10, "description": "_write POSIX API", "type" : "APPS"},
+        {"id": 11, "description": "_chsize POSIX function", "type" : "APPS"},
+        {"id": 12, "description": "DeviceIoControl function", "type" : "APPS"},
+        {"id": 13, "description": "MoveFileExA function", "type" : "APPS"},
+        {"id": 14, "description": "DeleteFileA function", "type" : "APPS"},
+        {"id": 15, "description": "CryptGenRandom API", "type" : "APPS"},
+        {"id": 16, "description": "Microsoft cryptographic API", "type" : "OPPS"}
+    ],
+    "edges": [
+        {"source": 3, "target": 1, "rel_name" : "sends datagram to"},
+        {"source": 1, "target": 4, "rel_name" : "uses APIs from"},
+        {"source": 1, "target": 8, "rel_name" : "uses for file system operations"},
+        {"source": 1, "target": 9, "rel_name" : "uses for file system operations"},
+        {"source": 1, "target": 10, "rel_name" : "uses for file system operations"},
+        {"source": 1, "target": 5, "rel_name" : "calls to create file"},
+        {"source": 1, "target": 6, "rel_name" : "calls to read file"},
+        {"source": 1, "target": 7, "rel_name" : "calls to write file"},
+        {"source": 1, "target": 11, "rel_name" : "calls to set file size to 0 bytes"},
+        {"source": 1, "target": 12, "rel_name" : "calls to unlink file from file system"},
+        {"source": 1, "target": 13, "rel_name" : "calls to move or delete file"},
+        {"source": 1, "target": 14, "rel_name" : "calls to delete file"},
+        {"source": 1, "target": 15, "rel_name" : "calls to generate random data"},
+        {"source": 15, "target": 16, "rel_name" : "is part of"}
+    ]
+}

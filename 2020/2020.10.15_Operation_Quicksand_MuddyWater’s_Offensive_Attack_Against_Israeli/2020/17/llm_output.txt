@@ -1,0 +1,105 @@
+
+
+
+Sentence : Actions on Objectives
+PowGoop Loader
+If the connection to the C2 was successful, the PowGoop loader will be installed in the system. After
+the installation, the attacker tried to delete SSF.mx task from the network by using the following
+command:
+In our research, we found five components of PowGoop array:
+
+
+GoogleUpdate.exe - Legitimate signed binary
+
+
+goopdate86.dll - Legitimate DLL, vulnerable to a DLL sideloading attack.
+
+
+goopdate.dll - First loader of PowGoop.
+
+
+goopdate.dat - Second loader of PowGoop. Obfuscated on disk. Decodes PowerShell
+
+
+downloader component
+
+config.txt - Encoded PowerShell downloader
+
+This is a slightly different variant originally found in the report by Palo Alto (which reported about 4
+components). The loader from PaloAlto report was split into two components. The second loader
+found in this attack matches the functionality of the only loader described in Palo Alto’s report . This
+suggests it was used as a technique by the attacker to obfuscate part of the loader that was detected
+by antivirus scanners.
+The GoogleUpdate.exe used with the malware is a legitimate binary, but it is vulnerable to a DLL
+sideloading attack. One of Google Update’s dependencies is a DLL named goopdate86.dll which then
+has a dependency of goopdate.dll. The malware works by replacing the original goopdate.dll by a
+malicious DLL containing the same filename. By replacing the legitimate goopdate.dll with a malicious
+one, GoogleUpdater.exe ends up loading the malicious payload into memory.
+The PowGoop malware works as follows:
+
+
+GoogleUpdate.exe (legitimate binary) loads legitimate goopdate86.dll into memory.
+
+
+goopdate86.dll loads the malicious goopdate.dll into memory (side-loading).
+
+
+Malicious goopdate.dll launches rundll32.exe with the parameter DllRegisterServer.
+
+
+The export DllRegisterServer from the malicious goopdate.dll gets run, which loads the
+
+
+second, obfuscated loader goopdate.dat, into memory.
+
+The script embedded in the second loader then decodes config.txt, revealing another
+
+PowerShell script once decoded, and then executing the now decoded script.
+
+The encoded script then connects to an C2 and acts as a downloader waiting for new
+
+payloads.
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2020
+TLP: WHITE - Subject to standard copyright rules, information may be distributed freely, without restriction
+17 | P a g e
+Following a screenshot from our investigation, presents the execution of PowGoop in the machine, and
+the PowerShell script that was extracted from [22] .
+Unlike the .dat file in PaloAlto report, in this case the loader used goopdate.dat file:
+Note that this file shares the same PDB path with the Covicli backdoor:
+G:\Project\Covic\Modules\goopdate.pdb
+In both cases, the PowGoop loader payload was downloaded from the C2 (which we attributed to
+MuddyWater based on unique server signature). Once this payload is run successfully, a Thanos
+Ransomware payload can be downloaded to the server, which is compatible with the scenario
+PaloAlto described in their report .
+22 The photo was based on the service Tria.ge
+
+www.clearskysec.com © All rights reserved to ClearSky Cyber Security ltd. 2020
+TLP: WHITE - Subject to standard copyright rules, information may be distributed freely, without restriction
+18 | P a g e
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "PowGoop Loader", "type" : "APPS"},
+        {"id": 2, "description": "C2 server", "type" : "CCSH"},
+        {"id": 3, "description": "SSF.mx task", "type" : "TPTH"},
+        {"id": 4, "description": "GoogleUpdate.exe", "type" : "EXEF"},
+        {"id": 5, "description": "goopdate86.dll", "type" : "APPS"},
+        {"id": 6, "description": "goopdate.dll", "type" : "APPS"},
+        {"id": 7, "description": "goopdate.dat", "type" : "DOCF"},
+        {"id": 8, "description": "config.txt", "type" : "DOCF"},
+        {"id": 9, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 10, "description": "PowerShell script (decoded from config.txt)", "type" : "EXEF"},
+        {"id": 11, "description": "Thanos Ransomware payload", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "controls"},
+        {"source": 4, "target": 5, "rel_name" : "loads"},
+        {"source": 5, "target": 6, "rel_name" : "loads"},
+        {"source": 6, "target": 9, "rel_name" : "launches with parameter DllRegisterServer"},
+        {"source": 6, "target": 7, "rel_name" : "loads into memory"},
+        {"source": 7, "target": 8, "rel_name" : "decodes and executes"},
+        {"source": 10, "target": 2, "rel_name" : "connects to and downloads payloads from"},
+        {"source": 2, "target": 11, "rel_name" : "downloads"}
+    ]
+}

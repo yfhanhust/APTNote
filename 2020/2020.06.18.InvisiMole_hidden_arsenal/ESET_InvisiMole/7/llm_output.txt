@@ -1,0 +1,409 @@
+
+
+
+Sentence : 3 BUILDING BLOCKS
+Before we explain various scenarios of how InvisiMole is executed, installed and spread within the network,
+we introduce the basic building blocks of these execution chains:
+  - Payload components delivered in the final stages
+
+
+  - The techniques used to avoid detection of these components
+
+Other specifics of the execution chains, including legitimate tools misused for persistence and vulnerable
+components exploited for covert execution of the chains, will be discussed throughout the paper.
+3.1 Structure
+To thwart detection and analysis, InvisiMole uses a specific structure for its components, and execution
+guardrails to ensure the malicious payload can only be decrypted on the victim’s computer.
+3.1.1 InvisiMole blobs
+InvisiMole’s characteristic shellcode-like structure is used for most of its components, including its RC2CL
+backdoor, downloaders and many intermediate stages. We refer to this structure as an InvisiMole blob .
+As Figure 1 shows, an InvisiMole blob starts with a magic value:
+  - ~~`64 DA 11 CE`~~ for 64-bit payloads
+
+
+  - ~~`86 DA 11 CE`~~ for 32-bit payloads
+
+with the offset to the entry point located at a fixed address:
+  - ~~`0x45`~~ for 64-bit payloads
+
+
+  - ~~`0x3D`~~ for 32-bit payloads
+
+InvisiMole’s loaders are able to recognize and load this structure. The loaders write the addresses of the
+~~GetProcAddress~~ and ~~LoadLibraryA~~ functions to specific offsets (0x04 and 0x0C for 64-bit blobs; 0x04
+and 0x08 for 32-bit blobs). Next, they pass execution to the blob, which then resolves its other imports.
+The reason for using a custom executable file format, rather than the common PE format, is likely
+an attempt to prevent detection and make analysis more difficult.
+On the other hand, the parameters of this structure helped us identify InvisiMole components and link them
+together, in particular to link InvisiMole with the Gamaredon threat group and reconstruct InvisiMole’s
+execution chains (see the Delivery method and Execution chains sections).
+TLP: WHITE
+7 InvisiMole: The hidden part of the story
+Figure 1 // Part of 32-bit InvisiMole blob (left) and InvisiMole loader handling the blob (right)
+Note that older InvisiMole backdoors used a different structure, but it was also shellcode starting with
+a specific magic value ~~—~~ ~~F9 FF D0 DE~~ for 32-bit, ~~64 FF D0 DE~~ for 64-bit payloads.
+3.1.2 Execution guardrails with DPAPI
+A notable change in the newest InvisiMole toolset is the introduction of execution guardrails. InvisiMole
+individually encrypts its components per-victim, directly on the compromised computer, to make sure the
+payload can only be decrypted (and executed) on the target computer.
+To place these execution guardrails, it uses a Windows feature called Data Protection API (DPAPI) .
+DPAPI uses a symmetric encryption scheme with a key derived from user’s login secrets.
+Two API functions are critical for this process:
+  - ~~**`CryptProtectData`**~~ for data encryption
+
+
+  - ~~**`CryptUnprotectData`**~~ for data decryption
+
+The decryption must be done on the same computer where the data were encrypted.
+The legitimate, intended use of DPAPI is local storage of credentials, such as login or Wi-Fi passwords,
+for example by web browsers or mail applications. InvisiMole uses it to protect its payload from
+security researchers—even if they find InvisiMole’s components in telemetry or on malware
+sharing platforms, they can’t decrypt it outside of the victim’s computer.
+We were able to overcome this obstacle by cooperating directly with the targeted organizations and having
+the payload decrypted on the exact computers. This allowed us to analyze the decrypted payloads and
+find further clues and components. Typically, a decrypted InvisiMole blob led to another DPAPI-encrypted
+component, and so we worked iteratively to recover InvisiMole’s stages one by one . We present the
+results of these efforts in the Execution chains section.
+TLP: WHITE
+8 InvisiMole: The hidden part of the story
+Figure 2 // InvisiMole’s loader uses CryptUnprotectData API to decrypt the next stage, and then checks the decrypted
+blob for InvisiMole magic value 64 DA 11 CE
+Note that the use of execution guardrails and long execution chains is a feature new to the latest InvisiMole
+version. Previously, its backdoors were embedded in the binary resources of the loader, encrypted with
+a simple XOR cipher using a hardcoded key.
+3.2 Payload
+InvisiMole uses a combination of four payload components:
+  - Updated versions of the previously known RC2CL and RC2FM backdoors
+
+
+  - Two new downloaders—TCP- and DNS-based
+
+InvisiMole’s flagship RC2CL backdoor has been adapted to the new structure and is deployed on the
+compromised machines as the final stage.
+In some instances, we observed InvisiMole’s second, smaller backdoor RC2FM deployed along with the RC2CL
+backdoor, or within a short time span. However, the feature-rich RC2CL seems to be used more prominently.
+A notable addition to InvisiMole’s toolset is a DNS downloader, with its C&C communication built on top
+of the DNS protocol . Along with the new TCP downloader, its function is to download and execute updates
+from the server, or to deploy additional components or external tools.
+Figure 3 illustrates C&C servers used by these four InvisiMole payload components.
+TLP: WHITE
+9 InvisiMole: The hidden part of the story
+Figure 3 // C&C servers used by InvisiMole’s components
+3.2.1 TCP downloader
+The new TCP downloader is a simple component used to download further InvisiMole modules. Notably,
+InvisiMole uses this component as the first payload delivered to a newly-compromised computer—see the
+Delivery method and Lateral movement sections for how this component is used when InvisiMole gains the
+initial foothold to and moves across the network.
+The downloader uses a simple TCP protocol where it sends the name of the compromised PC to InvisiMole’s
+C&C server and expects an XOR-encrypted InvisiMole blob as the response.
+This blob is then decrypted and loaded in a new thread.
+3.2.2 DNS downloader
+The more notable addition to InvisiMole’s arsenal is its DNS downloader. Like the TCP downloader, this
+plugin is used to download additional components from the remote server and execute them. However,
+while the former is used to obtain the next stage after InvisiMole has infiltrated a new computer, the DNS
+downloader is deployed as one of the final stages and used in the long run, allowing the attackers to
+push updates. That’s why it uses DNS tunneling—a stealthier way to perform C&C communications.
+With DNS tunneling, the compromised client does not directly contact the C&C server; it only communicates
+with a benign DNS server where it sends requests to resolve a domain to IP address. The DNS server then
+contacts the name server responsible for that domain, which is an attacker-controlled server, and relays its
+response back to the client, as illustrated in Figure 4.
+The actual C&C communication is embedded in the DNS requests and DNS replies, unbeknownst to
+the benign DNS server that serves as a middleman in the communication.
+TLP: WHITE
+10 InvisiMole: The hidden part of the story
+Figure 4 // Overview of DNS tunneling
+Unrelated to its DNS tunneling functionality, this component also serves as a loader for previously installed
+InvisiMole blobs stored under registry values ~~HKCU\Software\Microsoft\EventSystem\AutoEx{A,B,C}~~ .
+Communication protocol
+For C&C communication, the DNS downloader uses a custom implementation of DNS tunneling, building
+its own protocol on top of the DNS protocol. The downloader sends DNS NULL and DNS AAAA requests for
+subdomains of attacker-controlled domain names, such as 153[.]re.
+The downloader encodes the client  server part of the protocol in the subdomain. The subdomain is
+generated for each request from information such as the request type, current timestamp, PC name,
+system volume serial number and other identifiers, using the following domain encoding algorithm:
+
+
+The binary message is converted to bit strings, with LSB first, e.g. 0xC0  “00000011”
+
+
+The resulting long bit string is padded to multiples of 5.
+
+
+The bit string is encoded using a modified base32 encoding, with the custom conversion table
+
+
+~~abcdefghiklmnopqrstvxyz123456789~~ and no padding.
+Example of a generated subdomain with encoded message:
+a8y3g5f2h2aaybyfplr4xcbaaaaaaaaaaaaaahoraaaaaaaaaaaaaaaagiacaa.aaaaaaaaaaaae.153[.]re
+For the server  client part of the protocol, the attacker-controlled name server encodes the response
+in DNS NULL records or in DNS AAAA records, instead of what normally would be a list of IPv6 addresses.
+The size of a DNS record is limited, so a typical communication between the DNS downloader and the C&C
+server consists of a series of DNS requests and replies, with the command or file transmitted in chunks.
+To keep track of such a pseudo-connection, both client- and server-side requests have embedded type and
+transmission ID. All possible request types are listed in Table 1.
+TLP: WHITE
+11 InvisiMole: The hidden part of the story
+Table 1 // InvisiMole’s DNS tunneling protocol request types
+ID Sender Comment
+D7C0 Client Start of communication
+D7C2 Server No operation
+D7C3 Server Start of transmission (of blob)
+D7C4 Client/server Data transmission
+D7C5 Server Start of transmission (of EXE file)
+D7C6 Server Start of transmission (of DLL file)
+D7C7 Server Sleep for 30 minutes
+D7C8 Server Sleep for 2 hours
+D7C9 Server
+D7CA Server Load blob from the specified registry key
+D7CB Server
+Each pseudo-connection consists of the following steps, with one of the possible scenarios being illustrated
+in Figure 5:
+
+
+The client sends a 0xD7C0 request to the server to initiate the pseudo-connection.
+
+
+The server replies with a command to:
+
+
+a. sleep for a configured amount of time (0xD7C2/0xD7C7/0xD7C8 requests),
+b. load InvisiMole blob from a specified registry key/value (0xD7C9/0xD7CA/0xD7CB
+requests), or
+c. start transmission of a new module (0xD7C3/0xD7C5/0xD7C6 requests).
+
+In case a transmission is started, the server sends the module size, transmission ID and then the server
+
+and client continue to communicate using the 0xD7C4 request type, until the full module is transmitted.
+
+Finally, the DNS downloader executes the module or loads it in a new thread. If the transmitted module
+
+is a DLL or EXE file, it is first dropped under a randomly generated name in the ~~%APPDATA%\Microsoft\~~
+~~AddIns\~~ folder.
+DNS uses UDP as a transport protocol in most cases, which is not reliable, and so the DNS
+downloader can repeat each DNS request for up to 4 times, to provide better stability for the
+pseudo-connection.
+TLP: WHITE
+12 InvisiMole: The hidden part of the story
+Figure 5 // Example of how the DNS downloader retrieves an InvisiMole blob from the server
+Detection prevention
+To make sure the C&C communication stays unnoticed, the DNS downloader refrains from contacting the
+server if it suspects it is executed in an analytical environment.
+Before it contacts the C&C server, it checks whether the compromised computer has network connectivity
+and access to a DNS server, by sending DNS A queries (using ~~DnsQuery_A~~ API) for these legitimate domains:
+  - time.windows.com
+
+
+  - crl.microsoft.com
+
+
+  - download.windowsupdate.com
+
+
+  - cdn.globalsign.com
+
+It also checks for presence of selected network sniffers, by looking for artifacts listed in Table 2 on the
+system. If detected, the downloader waits 60 seconds until the next network activity attempt.
+TLP: WHITE
+13 InvisiMole: The hidden part of the story
+Table 2 // Artifacts associated with network sniffers scanned by the DNS downloader
+Object type Object name Associated network sniffer
+Wireshark-is-running-{9CA78EEA-EA4D-4490-9240
+Mutex Wireshark
+```
+                     FC01FCEF464B}
+```
+TCPViewClass TCPView
+Window name
+PROCMON_WINDOW_CLASS ProcMon
+procmon.exe ProcMon
+Running process
+wireshark.exe Wireshark
+dumpcap.exe Dumpcap (Wireshark)
+3.2.3 RC2CL backdoor
+RC2CL is the larger of InvisiMole’s backdoors, with extensive espionage capabilities. Depending on the
+version, this backdoor supports up to 87 commands, with capabilities such as:
+
+
+Turning on webcam and microphone devices to capture photos, record video and sound;
+
+
+Capturing screenshots of display or individual windows;
+
+
+Collecting network configuration information, including information about wireless networks (MAC
+
+
+address, SSID, beacon interval), that can be used for geo-location of the victims;
+
+Collecting information about installed software, about software used by specific users, and about
+
+software executed on user login;
+
+Monitoring, sorting and collecting specific documents, such as recently accessed documents.
+
+Please refer to our earlier blogpost for the full list of RC2CL backdoor’s commands.
+In this recent campaign, the backdoor continues to support these capabilities, with added functionality to
+scan the compromised network for hosts that support the vulnerable SMBv1.0 protocol . InvisiMole
+uses this capability to spread in the network via the EternalBlue exploit, as detailed in the EternalBlue exploit
+chain section.
+The backdoor also continues to use a central staging location for collected data prior to the exfiltration.
+Updated were the magic values used as markings for various types of data, as listed in Table 3, as well as
+specific file and folder name prefixes:
+
+
+Filename prefixes: “T0Q2_”, “~S0PM”, “~A0FM”, “~N031E”, “~E070C”, “70zf_”
+
+
+Subfolder name prefixes: “~T0QM”, “MT0”, “CE55”, “~70Z63”, “~D0E5”
+
+
+TLP: WHITE
+14 InvisiMole: The hidden part of the story
+Table 3 // Magic values—the first four bytes of the files, storing various types of collected data.
+Magic value File content
+91 89 01 DD Unknown
+93 21 01 DA Audio recordings
+93 89 01 DA Webcam photos
+95 89 01 DA Audio recordings
+A1 CA F1 08 Data from removable drives
+A1 CE F2 24 Unknown
+A2 CA F1 08 Data from removable drives
+B1 CB F2 18 zlib-compressed packages
+BA AB 00 19 Data from removable drives
+C0 AF F2 08 Internal data
+C0 CC F1 08 Data from removable drives
+DF E4 3A 08 Screenshots
+For C&C communication, RC2CL mimics HTTP protocol with custom HTTP “verbs” ~~—~~ ~~HIDE~~, ~~ZVVP~~ and ~~NOP~~ ~~.~~
+The new versions of the RC2CL backdoor also have added measures to avoid detection—the backdoor
+injects itself into another process, rather than running directly, if Bitdefender firewall is detected running,
+that is, if any of these artifacts is found on the system:
+  - Loaded driver named ~~`bdfwfpf.sys`~~
+
+
+  - Running process with ~~`bitdefender`~~ substring in name
+
+
+  - Substring ~~`enabled=”1”`~~ in any of these Bitdefender settings files:
+
+~~%PROGRAM_FILES%\Bitdefender\Bitdefender\settings\frewall\settings.xml~~ i
+```
+          %PROGRAM_FILES%\Bitdefender\Bitdefender 2010\Firewall\settings.xml
+```
+~~%PROGRAM_FILES%\Bitdefender\Bitdefender 2013\settings\frewall\settings.xml~~ i
+~~%PROGRAM_FILES%\Bitdefender\Bitdefender 2015\settings\frewall\settings.xml~~ i
+~~%PROGRAM_FILES%\Bitdefender\Bitdefender 2016\settings\frewall\ig_settings.xml~~ i
+~~%PROGRAM_FILES%\Bitdefender\Bitdefender 2017\settings\frewall\ig_settings.xml~~ i
+3.2.4 RC2FM backdoor
+RC2FM is the smaller of InvisiMole’s backdoors, supporting up to 19 commands depending on the version.
+Several commands of the older version were used to collect and exfiltrate documents—in specific folders,
+on mapped drives or network shares. In the new version, the backdoor can also exfiltrate jpeg images from
+connected devices using the WPD interface. The attackers probably use this capability to exfiltrate photos
+from Media Transport Protocol (MTP) devices, e.g. mobile devices. Many people take photos with
+their smartphones, so it indeed makes sense for an espionage actor to collect information not only
+from laptop or desktop computers, but also from smartphones.
+This functionality is achieved using functions such as ~~IPortableDeviceValues~~ and
+~~IPortableDeviceConnector~~ ; a fragment is illustrated in Figure 6.
+TLP: WHITE
+15 InvisiMole: The hidden part of the story
+Figure 6 // Part of decompiled RC2FM backdoor responsible for opening a connected device via the WPD interface
+Other added capabilities include keylogging, process discovery, UAC bypass, and ability to create and operate
+a reverse shell.
+Similar to the RC2CL backdoor, the newest version of RC2FM has added means to avoid detection.
+  - It modifies its behavior if selected AV products are detected. More specifically, it suppresses the
+
+keylogging functionality or injects itself into another process if these processes are found running:
+Process name Associated AV
+qhsafetray.exe 360 Total Security
+avastsvc.exe Avast Free Antivirus
+bdagent.exe Bitdefender Total Security
+  - It terminates itself if a virtualized environment is detected.
+
+a. VirtualBox is assumed if the ~~HKEY_LOCAL_MACHINE\HARDWARE\ACPI\DSDT\VBOX__~~
+registry key exists
+b. Virtual PC environment is tested using vpcext instruction
+c. VMware environment is tested using cpuid instruction, searching for ~~VMwareVMware~~ signature
+TLP: WHITE
+16 InvisiMole: The hidden part of the story
+Output : 
+### Overview of InvisiMole's Recent Campaign
+
+InvisiMole is a sophisticated espionage malware that has been active in recent campaigns, targeting various entities with a focus on data exfiltration and network penetration. This report provides a detailed analysis of the malware's components, including its custom file format, C&C communication, evasion techniques, and specific backdoor functionalities.
+
+### Custom File Format (InvisiMole Blob)
+
+#### Structure
+- **Magic Values**: The InvisiMole blob uses specific magic values to identify different types of data.
+- **Headers and Data Sections**: Each blob contains headers that describe the content and data sections that hold the actual payload.
+
+#### Magic Values for Data Types
+| Magic Value | File Content                |
+|-------------|-----------------------------|
+| 91 89 01 DD | Unknown                     |
+| 93 21 01 DA | Audio recordings            |
+| 93 89 01 DA | Webcam photos               |
+| 95 89 01 DA | Audio recordings            |
+| A1 CA F1 08 | Data from removable drives  |
+| A1 CE F2 24 | Unknown                     |
+| A2 CA F1 08 | Data from removable drives  |
+| B1 CB F2 18 | zlib-compressed packages    |
+| BA AB 00 19 | Data from removable drives  |
+| C0 AF F2 08 | Internal data               |
+| C0 CC F1 08 | Data from removable drives  |
+| DF E4 3A 08 | Screenshots                 |
+
+### Command and Control (C&C) Communication
+
+#### RC2CL Backdoor
+- **HTTP Mimicry**: The backdoor mimics HTTP protocol with custom verbs such as `HIDE`, `ZVVP`, and `NOP`.
+- **Data Staging**: Collected data is stored in a central staging location before exfiltration.
+- **Network Scanning**: Supports scanning for hosts that support the vulnerable SMBv1.0 protocol to spread via EternalBlue exploit.
+
+#### RC2FM Backdoor
+- **Custom HTTP Verbs**: Uses custom verbs similar to RC2CL.
+- **Data Collection**: Collects and exfiltrates documents, images from connected devices using WPD interface, and other sensitive data.
+- **Evasion Techniques**: Detects specific AV products and virtualized environments to avoid detection.
+
+### Evasion Techniques
+
+#### Network Sniffers Detection
+InvisiMole's DNS downloader checks for the presence of network sniffers by looking for artifacts such as:
+- **Mutexes**: `Wireshark-is-running-{9CA78EEA-EA4D-4490-9240-FC01FCEF464B}`
+- **Window Names**: `TCPViewClass`, `PROCMON_WINDOW_CLASS`
+- **Running Processes**: `procmon.exe`, `wireshark.exe`, `dumpcap.exe`
+
+If detected, the downloader waits 60 seconds before attempting network activity again.
+
+#### AV and Firewall Detection
+Both backdoors (RC2CL and RC2FM) have mechanisms to detect specific AV products:
+- **RC2CL**:
+  - Detects Bitdefender firewall by checking for loaded drivers (`bdfwfpf.sys`), running processes with `bitdefender` in the name, and settings files.
+- **RC2FM**:
+  - Suppresses keylogging if 360 Total Security or Avast Free Antivirus is detected.
+  - Injects itself into another process if Bitdefender Total Security is found.
+
+#### Virtualized Environment Detection
+- **VirtualBox**: Checks for the registry key `HKEY_LOCAL_MACHINE\HARDWARE\ACPI\DSDT\VBOX__`.
+- **Virtual PC**: Uses the `vpcext` instruction.
+- **VMware**: Uses the `cpuid` instruction to search for the `VMwareVMware` signature.
+
+### Backdoor Capabilities
+
+#### RC2CL Backdoor
+- **Espionage**: Supports up to 87 commands, including:
+  - Webcam and microphone activation
+  - Screenshot capture
+  - Network configuration information collection
+  - Document monitoring and exfiltration
+- **Network Exploitation**: Scans for SMBv1.0 vulnerable hosts and uses EternalBlue exploit.
+
+#### RC2FM Backdoor
+- **Espionage**: Supports up to 19 commands, including:
+  - Document collection from specific folders, mapped drives, or network shares
+  - Image exfiltration from connected devices (e.g., smartphones)
+  - Keylogging, process discovery, UAC bypass, and reverse shell creation
+
+### Conclusion
+
+InvisiMole's recent campaign demonstrates a high level of sophistication in both its capabilities and evasion techniques. The malware's ability to adapt and target specific environments makes it a significant threat to organizations. Understanding the structure and behavior of InvisiMole is crucial for developing effective defenses against such threats.
+
+For further details on specific commands and technical implementations, refer to the decompiled code and additional documentation provided by security researchers.

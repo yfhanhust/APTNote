@@ -1,0 +1,100 @@
+
+
+
+Sentence : Operation Blockbuster: Loaders, Installers and Uninstallers Report 39
+Observed as the payload of IndiaHotel, IndiaIndia is an installer that uses the same method of encapsulating payload files
+as IndiaHotel, but it also boasts the ability to report to a C2 information about the infected computer. Structured as a
+DLL, IndiaIndia begins executing its core functionality as soon as the loading binary (e.g. IndiaHotel) loads the DLL and
+activates the DllMain function.
+IndiaIndia performs the following set of tasks before terminating:
+
+
+Dynamically load API functions
+
+
+Generate a name for the configuration file
+
+
+Generate information about the victim’s system and report the information to the C2 server
+
+
+Drop the configuration file (using the name specified in Task #2)
+
+
+Install a service for the malicious binary being dropped
+
+
+Drop the malicious binary (IndiaKilo)
+
+
+Tie the newly installed service to svchost as a subservice
+
+
+Activate the new service
+
+
+Generate and execute a suicide script to clean up the IndiaIndia artifacts
+
+
+Novetta observed IndiaHotel dropping a file with the name dvpi.dna alongside IndiaIndia. The file is the configuration,
+in plaintext, for both IndiaIndia and IndiaKilo. The data within the configuration is eventually saved to the victim’s
+machine (Task 4) in an encrypted form (using a currently unidentified encryption scheme) and saved to a filename that
+is specific to the victim’s machine. Task 2 generates a 6-character filename with a 3-character extension. The filename
+and its extension consist solely of lowercase letters that are randomly selected using the rand function. Prior to the
+generation of the filename, however, IndiaIndia calls srand to seed the pseudorandom number generator (PRNG)
+with the value of the primary hard drive’s serial number. The effect of calling of srand with a repeatable seed value
+is that the output of rand becomes predictable and repeatable itself. IndiaKilo uses the same method for generating
+its configuration file’s filename, thereby locking an infection resulting from IndiaIndia to a specific machine or, more
+precisely, a specific hard drive.
+Using one of the 10 C2 server addresses found within the configuration file, IndiaIndia reports its activation to the C2
+server. IndiaIndia also reports details regarding the victim’s system along with a full list of the processes that are running
+on a victim’s system, the filename of the executables responsible for each running process, and the title of the window for
+each running process. IndiaIndia gathers the following specific pieces of information about a victim’s system:
+
+
+Computer name
+
+
+Infected user’s username
+
+
+Windows OS version information (in a OSVERSIONINFOEXA structure)
+
+
+CPU information
+
+
+Locale information
+
+
+First network interface card’s (NIC’s) configuration including IP address, gateways, subnet mask, DHCP information
+
+
+and if WINS is available.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "IndiaHotel", "type" : "DOCF"},
+        {"id": 2, "description": "IndiaIndia", "type" : "EXEF"},
+        {"id": 3, "description": "C2 server", "type" : "CCSH"},
+        {"id": 4, "description": "DLL (IndiaIndia)", "type" : "DOCF"},
+        {"id": 5, "description": "dvpi.dna", "type" : "DOCF"},
+        {"id": 6, "description": "Configuration file", "type" : "DOCF"},
+        {"id": 7, "description": "Malicious binary (IndiaKilo)", "type" : "EXEF"},
+        {"id": 8, "description": "Service for the malicious binary", "type" : "APPS"},
+        {"id": 9, "description": "Suicide script", "type" : "DOCF"},
+        {"id": 10, "description": "Victim’s system information", "type" : "TAMP"},
+        {"id": 11, "description": "svchost subservice", "type" : "APPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "installs"},
+        {"source": 2, "target": 3, "rel_name" : "reports to"},
+        {"source": 2, "target": 4, "rel_name" : "loads"},
+        {"source": 5, "target": 6, "rel_name" : "generates"},
+        {"source": 2, "target": 7, "rel_name" : "drops"},
+        {"source": 2, "target": 8, "rel_name" : "installs"},
+        {"source": 8, "target": 11, "rel_name" : "ties to"},
+        {"source": 2, "target": 9, "rel_name" : "generates and executes"},
+        {"source": 2, "target": 10, "rel_name" : "gathers"}
+    ]
+}

@@ -1,0 +1,79 @@
+
+
+
+Sentence : En Route with Sednit
+
+The bootkit driver injects the bootkit user-mode component into the ~~explorer.exe~~
+process by patching its entry-point before it is executed. The user mode component then
+loads Downdelph and, interestingly, it tries to set an exported global Boolean variable named
+~~m_bLoadedByBootkit~~ in Downdelph to ~~TRUE~~ ~~,~~ as shown in Figure 12.
+
+Figure 12. User mode bootkit component attempts to set an exported Boolean variable
+in Downdelph, after having loaded it
+As this global variable is absent in all Downdelph binaries, we speculate that the bootkit was
+originally intended to be used with a different payload, and was repurposed by Sednit’s operators.
+Moreover, the user-mode component of the bootkit exports two functions named ~~Entry~~ and ~~ep_data~~ .
+Those two export names are also present in early samples of the infamous BlackEnergy malware [11] .
+Also, we found several cases of code sharing between the bootkit components and the same
+BlackEnergy samples. These hints lead us to speculate that the developers may be related.
+Kernel Mode Rootkit
+Another interesting Downdelph persistence method we analyzed relies on a Windows driver,
+used during deployments in February 2014. Once loaded at startup as a Windows service, this driver
+executes and hides Downdelph, effectively acting as a rootkit [22] . We were able to dig up only four
+samples of this rootkit: three 32-bit versions, corresponding to Cases 2, 3 and 4 in Figure 3,
+and an additional 64-bit version for which we do not have any context.
+Roughly summarized, the rootkit hides certain operating system artifacts (files, registry keys, folders)
+whose location matches a rule in a set of so-called ~~Hide rules~~ . Those rules are set by the dropper
+and stored in the Windows Registry, making the rootkit a flexible tool able to hide any given artifacts.
+Interestingly, numerous debug messages were left by the developers in the rootkit, which allow
+those ~~Hide rules~~ in particular to be clearly seen. For example, here are the rules used with
+one sample, as output in debug logs during execution:
+```
+   HIDEDRV: >>>>>>>>Hide rules>>>>>>>> rules
+HIDEDRV: File rules: \Device\HarddiskVolume1\Windows\system32\mypathcom\dnscli1.dll
+   HIDEDRV: File rules: \Device\HarddiskVolume1\Windows\system32\drivers\FsFlt.sys
+   HIDEDRV: Registry rules: \REGISTRY\MACHINE\SYSTEM\ControlSet002\services\FsFlt
+   HIDEDRV: Registry rules: \REGISTRY\MACHINE\SYSTEM\ControlSet001\services\FsFlt
+   HIDEDRV: Registry rules: \REGISTRY\MACHINE\SYSTEM\CurrentControlSet\services\FsFlt
+   HIDEDRV: Inject dll: C:\Windows\system32\mypathcom\dnscli1.dll
+   HIDEDRV: Folder rules: \Device\HarddiskVolume1\Windows\system32\mypathcom
+HIDEDRV: <<<<<<<<XXXXX<<<<<<<< rules
+HIDEDRV: <<<<<<<<Hide rules<<<<<<<< rules
+```
+20
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sednit", "type" : "ACTO"},
+        {"id": 2, "description": "Bootkit driver", "type" : "EXEF"},
+        {"id": 3, "description": "explorer.exe process", "type" : "EXEF"},
+        {"id": 4, "description": "Downdelph", "type" : "APPS"},
+        {"id": 5, "description": "m_bLoadedByBootkit variable in Downdelph", "type" : "TAMP"},
+        {"id": 6, "description": "User mode bootkit component", "type" : "EXEF"},
+        {"id": 7, "description": "BlackEnergy malware", "type" : "APPS"},
+        {"id": 8, "description": "Entry and ep_data functions in the user-mode component of the bootkit", "type" : "TAMP"},
+        {"id": 9, "description": "Windows driver used for Downdelph persistence", "type" : "EXEF"},
+        {"id": 10, "description": "Hide rules stored in Windows Registry", "type" : "REGI"},
+        {"id": 11, "description": "\\Device\\HarddiskVolume1\\Windows\\system32\\mypathcom\\dnscli1.dll", "type" : "SYSP"},
+        {"id": 12, "description": "\\Device\\HarddiskVolume1\\Windows\\system32\\drivers\\FsFlt.sys", "type" : "SYSP"},
+        {"id": 13, "description": "\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet002\\services\\FsFlt", "type" : "REGI"},
+        {"id": 14, "description": "\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\services\\FsFlt", "type" : "REGI"},
+        {"id": 15, "description": "\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\services\\FsFlt", "type" : "REGI"},
+        {"id": 16, "description": "C:\\Windows\\system32\\mypathcom\\dnscli1.dll", "type" : "SYSP"},
+        {"id": 17, "description": "\\Device\\HarddiskVolume1\\Windows\\system32\\mypathcom", "type" : "TPTH"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "patches entry-point of"},
+        {"source": 6, "target": 4, "rel_name" : "loads"},
+        {"source": 6, "target": 5, "rel_name" : "sets variable in"},
+        {"source": 6, "target": 8, "rel_name" : "exports functions"},
+        {"source": 9, "target": 4, "rel_name" : "hides"},
+        {"source": 10, "target": 11, "rel_name" : "specifies file rule for"},
+        {"source": 10, "target": 12, "rel_name" : "specifies file rule for"},
+        {"source": 10, "target": 13, "rel_name" : "specifies registry rule for"},
+        {"source": 10, "target": 14, "rel_name" : "specifies registry rule for"},
+        {"source": 10, "target": 15, "rel_name" : "specifies registry rule for"},
+        {"source": 10, "target": 16, "rel_name" : "specifies inject dll rule for"},
+        {"source": 10, "target": 17, "rel_name" : "specifies folder rule for"}
+    ]
+}

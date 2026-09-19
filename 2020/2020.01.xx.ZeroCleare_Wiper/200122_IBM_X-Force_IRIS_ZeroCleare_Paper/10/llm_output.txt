@@ -1,0 +1,82 @@
+
+
+
+Sentence : 1.6. File #3: Soy.exe Analysis
+```
+|File name|Type|MD5|Compiled|
+|---|---|---|---|
+|~~Soy.exe~~|~~64-bit Windows~~binary|~~1ef610b1f9646063f96ad880aad9569d~~|~~15 Jun 2019, 7:04:22~~|
+New Destructive Wiper “ZeroCleare” Targets Energy Sector in the Middle East | X-Force IRIS
+Use or disclosure of data contained on this page is subject to the restrictions at the end of this document. 9
+The file soy.exe had a special role in the overall kill chain of ZeroCleare attacks as it was
+necessary for the initial bypass of Windows OS controls. This file was identified as a
+customized version of the Turla Driver Loader (TDL), which is a driver loader application
+designed for bypassing Windows x64 Driver Signature Enforcement (DSE) . DSE is a protective
+feature that was introduced in 64-bit versions of Windows 8 and 10, to prevent the loading of
+drivers unsigned by Microsoft.
+TDL works by first loading a legitimate, Microsoft-signed, VirtualBox VBoxDrv driver. However,
+a vulnerable version of the driver is intentionally used, and TDL can then exploit the
+vulnerability to run kernel-level shellcode and ultimately load other, unsigned drivers.
+The file sample's resource section includes two encoded resources with the following hashes:
+Before decoding the resources, soy.exe creates a mutex called Ptición de trabajo . It then
+attempts to access its resource section to read encoded resource 103 and uses XOR key 0x
+AAAAAAAAAAAAAAAA to decode it. Next, soy.exe writes the decoded content to a 64-bit file called
+elrawdsk.sys [1] . This file was identified as the 64-bit version of the EldoS RawDisk driver,
+version 3.0.31.
+After that, soy.exe attempts to access resource 1 and uses XOR key 0xAAAAAAAAAAAAAAAA to
+decode it. The soy.exe sample then writes the decoded content to a 64-bit VirtualBox
+VBoxDrv.sys driver file called saddrv.sys [2], which is known to have privilege escalation and
+arbitrary code execution vulnerabilities. This file is a signed driver.
+Once the resources have been decoded, soy.exe tries to create and start a driver service with
+name VBoxDrv and saddrv.sys, in order to load the vulnerable VBoxDrv device driver. At this
+point, the soy.exe sample uses the Turla Driver Loader (TDL) method to exploit the
+vulnerability in the VirtualBox driver and load and execute the following shellcode:
+1 36a4e35abf2217887e97041e3e0b17483aa4d2c1aee6feadd48ef448bf1b9e6c, driver v3.0.31
+2 cf3a7d4285d65bf8688215407bce1b51d7c6b22497f09021f0fce31cbeb78986, v1.6
+New Destructive Wiper “ZeroCleare” Targets Energy Sector in the Middle East | X-Force IRIS
+Use or disclosure of data contained on this page is subject to the restrictions at the end of this document. 10
+Figure 2: TDLBootstrapLoader in shellcode format. This code is used to load the elrawdsk.sys driver
+into the Windows kernel.
+soy.exe was also found to contain the following PDB file path:
+```
+C:\Users[user]\Desktop\TDL\Source\ Furutaka \output\x64\Release\ soy.pdb
+```
+The presence of ‘Furutaka’ within the PDB string matches that seen within the source code on
+the TDL Github [3] .
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Soy.exe", "type" : "EXEF"},
+        {"id": 2, "description": "ZeroCleare", "type" : "ACTO"},
+        {"id": 3, "description": "Turla Driver Loader (TDL)", "type" : "APPS"},
+        {"id": 4, "description": "Windows OS controls", "type" : "OPPS"},
+        {"id": 5, "description": "VirtualBox VBoxDrv driver", "type" : "EXEF"},
+        {"id": 6, "description": "64-bit Windows 8 and 10 DSE (Driver Signature Enforcement)", "type" : "OPPS"},
+        {"id": 7, "description": "elrawdsk.sys", "type" : "EXEF"},
+        {"id": 8, "description": "EldoS RawDisk driver version 3.0.31", "type" : "EXEF"},
+        {"id": 9, "description": "saddrv.sys (signed driver)", "type" : "EXEF"},
+        {"id": 10, "description": "VBoxDrv device driver service", "type" : "SYSP"},
+        {"id": 11, "description": "Turla Driver Loader method", "type" : "TTPS"},
+        {"id": 12, "description": "36a4e35abf2217887e97041e3e0b17483aa4d2c1aee6feadd48ef448bf1b9e6c", "type" : "IOCS"},
+        {"id": 13, "description": "cf3a7d4285d65bf8688215407bce1b51d7c6b22497f09021f0fce31cbeb78986", "type" : "IOCS"},
+        {"id": 14, "description": "C:\\Users[user]\\Desktop\\TDL\\Source\\Furutaka\\output\\x64\\Release\\soy.pdb", "type" : "SYSP"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "used by"},
+        {"source": 1, "target": 3, "rel_name" : "uses"},
+        {"source": 1, "target": 4, "rel_name" : "bypasses"},
+        {"source": 1, "target": 5, "rel_name" : "loads"},
+        {"source": 1, "target": 6, "rel_name" : "bypasses"},
+        {"source": 1, "target": 7, "rel_name" : "writes to"},
+        {"source": 7, "rel_name" : "is version of", "target": 8},
+        {"source": 1, "target": 9, "rel_name" : "writes to"},
+        {"source": 9, "rel_name" : "is signed driver", "target": 5},
+        {"source": 1, "target": 10, "rel_name" : "creates and starts service with"},
+        {"source": 1, "target": 11, "rel_name" : "uses method of"},
+        {"source": 11, "target": 5, "rel_name" : "exploits vulnerability in"},
+        {"source": 11, "target": 8, "rel_name" : "loads and executes"},
+        {"source": 12, "rel_name" : "is hash of", "target": 7},
+        {"source": 13, "rel_name" : "is hash of", "target": 9},
+        {"source": 14, "rel_name" : "contains PDB file path for", "target": 1}
+    ]
+}

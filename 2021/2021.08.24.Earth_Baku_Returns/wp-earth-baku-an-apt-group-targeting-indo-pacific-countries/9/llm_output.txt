@@ -1,0 +1,172 @@
+
+
+
+Sentence : StealthMutant
+StealthMutant is an evasive shellcode loader written in C# that has been in use since at least July 2020. It
+reads a file that is encrypted by AES-256-ECB, decrypts the file in memory, injects its malicious payload
+into a remote process, and then executes it. We have observed that its payload has been either the
+Cobalt Strike beacon or the ScrambleCross backdoor. Most of the StealthMutant samples we have come
+across are obfuscated by ConfuserEx, an open-source obfuscator for .NET Framework applications.
+After deobfuscating these samples, we have observed raw namespaces and classes that describe their
+purpose (Figure 12).
+Figure 12. The namespaces and classes from the deobfuscated samples
+11 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+All the strings in StealthMutant are encrypted with the encryption algorithm AES-256-ECB and are
+decrypted on the spot, as shown in Figure 13. The decrypted strings are as follows:
+
+
+The MagicString class provides a getter property, which decrypts strings on access.
+
+
+The MagicString class has an encrypted string field.
+
+
+The MagicString class provides ___Decrypt_, a wrapper method for decryption.
+
+
+If it is StealthMutant’s first time to use the ___Decrypt_ method, the AES (Advanced Encryption Standard)
+
+
+key and initialization vector (IV) will be initialized based on the hard-coded ___factory_ value, although
+this IV is meaningless in Electronic Code Block (ECB) mode. The key is the SHA-256 hash, while the IV
+is the MD5 hash. The values of the SHA-256 and MD5 hashes vary with each StealthMutant sample.
+
+
+The ___Decrypt_ method calls the Crypto.DecryptData method.
+
+
+The Crypto.DecryptData method decrypts the given data by the hard-coded mode or, in this case,
+
+
+the ECB mode.
+Figure 13. The decrypted StealthMutant strings
+The main purpose of StealthMutant is to execute the second stage of the shellcode under stealth mode.
+To this end, StealthMutant patches the EtwEventWrite function’s API to disable Event Tracing for Windows
+(ETW), making it invisible to Windows’ built-in logging system.
+StealthMutant appears to support both 32-bit and 64-bit architectures. In the DoPatch method,
+StealthMutant determines the architecture dynamically, as demonstrated in Figure 14. If it is running on a
+32-bit operating system, StealthMutant patches the system with “ C2 14 00 (ret 0x14)”, whereas it patches
+a 64-bit system with “ 48 31 C0 C3 (xor rax, rax; ret)”.
+12 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Figure 14. StealthMutant patching based on the architecture
+The file names of the encrypted payload are hard-coded, but these differ with each StealthMutant sample.
+The file name string is also encrypted using AES-256-ECB. If the target encrypted file exists in a current
+running directory, StealthMutant reads and decrypts it in memory.
+Most of the StealthMutant samples use AES-256-ECB for decryption (Figure 15), but the earlier versions of
+the malware used XOR for decryption (Figure 16). However, we have not spotted these previous iterations
+of StealthMutant since July 2020.
+Figure 15. The version of StealthMutant that uses AES-256-ECB
+13 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Figure 16. An older version of StealthMutant that used XOR
+The StealthMutant variants that use AES-256-ECB and XOR share the same decryption steps. The
+StealthMutant samples that use AES have an encrypted file containing junk bytes, the signature, the
+seed for the key, the seed for the IV, and the encrypted payload body. The sizes of the junk bytes, the
+seed for the key, and the seed for the IV vary among the samples. The decryption algorithm of one such
+StealthMutant sample (Figure 17), which has a junk bytes size of 128, a key seed size of 12, and an IV
+seed size of 12, is as follows:
+
+Calculate the MD5 hash of the encrypted payload body. The body is composed of the key seed, the
+
+IV seed, and the encrypted payload.
+
+
+Compare the MD5 hash with the signature in the encrypted file to check its integrity.
+
+
+Copy the specified size of bytes following the signature, and then calculate the SHA-256 hash for the
+
+
+AES key.
+
+Copy the specified size of bytes following the seed for the key, and then calculate the MD5 hash for
+
+AES IV. However, this is meaningless in ECB mode.
+
+
+Decrypt the rest of the bytes using AES-256-ECB with the generated SHA-256 key.
+
+
+Compare the specified size of bytes at the top of the decrypted bytes with that of the hard-coded
+
+
+bytes, which can be found in the Protocol.Flag field.
+
+If StealthMutant passes all these verifications, read the specified size of the payload.
+
+14 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+|Junk|Col2|
+|---|---|
+|Junk||
+|Encrypted payload|Col2|
+|---|---|
+|Encrypted payload||
+|Size|Col2|
+|---|---|
+|||
+|Signature|Col2|
+|---|---|
+|Signature||
+|Shellcode|Col2|
+|---|---|
+|Shellcode||
+remote process.
+
+It looks for the entry point of the remote suspended process and patches it to change the execution
+
+flow into the entry of the mapped payload.
+
+Finally, it resumes the main thread of the suspended process and executes the payload.
+
+15 | Earth Baku: An APT Group Targeting Indo-Pacific Countries With New Stealth Loaders and Backdoor
+Legitimate process
+5
+Patch entry point
+to jump payload
+in DLL, and then
+resume thread.
+Decrypt 1
+StealthMutant
+|Col1|CodePayload|2 Spawn process insuspended mode.|Col4|Col5|jmpLegitimate codePayload|
+|---|---|---|---|---|---|
+||CodePayload||Payload|||
+||CodePayload|Map view ofsection toremote process.4|Map view ofsection toremote process.4|Map view ofsection toremote process.4|Map view ofsection toremote process.4|
+3 Create section, map to local
+process, and then copy payload.
+Encrypted payload
+Figure 18. StealthMutant performing process hollowing to execute its payload
+This technique is widely used as a red-team tool in C#. Based on its code, we assume that the author of
+StealthMutant possibly reused an open-source process hollowing implementation from GitHub. [11]
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "StealthMutant", "type" : "EXEF"},
+        {"id": 2, "description": "AES-256-ECB", "type" : "TTPS"},
+        {"id": 3, "description": "Cobalt Strike beacon", "type" : "APPS"},
+        {"id": 4, "description": "ScrambleCross backdoor", "type" : "APPS"},
+        {"id": 5, "description": "ConfuserEx", "type" : "APPS"},
+        {"id": 6, "description": ".NET Framework applications", "type" : "OPPS"},
+        {"id": 7, "description": "EtwEventWrite function’s API", "type" : "TTPS"},
+        {"id": 8, "description": "32-bit architecture", "type" : "SYSP"},
+        {"id": 9, "description": "64-bit architecture", "type" : "SYSP"},
+        {"id": 10, "description": "XOR decryption", "type" : "TTPS"},
+        {"id": 11, "description": "MD5 hash", "type" : "TAMP"},
+        {"id": 12, "description": "SHA-256 hash", "type" : "TAMP"},
+        {"id": 13, "description": "Process Hollowing", "type" : "TTPS"},
+        {"id": 14, "description": "GitHub open-source process hollowing implementation", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "uses"},
+        {"source": 1, "target": 3, "rel_name" : "delivers"},
+        {"source": 1, "target": 4, "rel_name" : "delivers"},
+        {"source": 1, "target": 5, "rel_name" : "obfuscated by"},
+        {"source": 1, "target": 6, "rel_name" : "runs on"},
+        {"source": 1, "target": 7, "rel_name" : "patches"},
+        {"source": 1, "target": 8, "rel_name" : "supports"},
+        {"source": 1, "target": 9, "rel_name" : "supports"},
+        {"source": 1, "target": 10, "rel_name" : "used by older versions of"},
+        {"source": 1, "target": 11, "rel_name" : "generates for IV"},
+        {"source": 1, "target": 12, "rel_name" : "generates for key"},
+        {"source": 1, "target": 13, "rel_name" : "uses technique"},
+        {"source": 1, "target": 14, "rel_name" : "possibly reused from"}
+    ]
+}

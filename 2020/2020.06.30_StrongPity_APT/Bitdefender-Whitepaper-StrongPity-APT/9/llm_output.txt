@@ -1,0 +1,115 @@
+
+
+
+Sentence : The download server
+While monitoring the threat actor activity, we were able to investigate several points from the infrastructure.
+The download servers had some interesting particularities.
+The actor has taken some security measures in order to ensure that only the “right” connections are accepted.
+They use a helper script (self-named “Debian Stretch Hardening Script”) with the following help message:
+```
+    usage: $0 options
+Debian Stretch Hardening Script
+
+OPTIONS:
+
+-u Admin User
+
+-p SSH Port
+
+-k SSH Public Key (example : “ssh-rsa AAA...”)
+
+-d Domain Name
+
+-n Knock Ports (example : 10001,10002,10003,10004)
+
+--helpHelp
+
+```
+The script, among other actions, updates all the packages, creates the “admin user” on the system (and computes
+the password for it, based on the Knock ports and SSH port), configures nginx and configures knockd service and the
+firewall. Due to an error in the script, the password is always the same. This does not represent a problem because the
+SSH daemon is configured to only allow public key authentication.
+In one instance, the actor used a sequence of four Knock Ports when calling the script.
+Interestingly, there seems to be a specific IP from Israel that is denied any connection to the download server, an IP
+address which seems to belong to an important science university.
+Reviewing the software logic, we identified 2 directories with malicious binary files and 3 PHP scripts:
+
+
+configuration.php – contains the locations of those 2 directories and a list named $targets (which should contain a
+list of IP ranges, but it is empty) and a mapping from 32 hex-digits to filename (which does not represent the md5
+hash of the file, but uniquely identifies it- referenced from now on as file-id).
+
+
+read.php – contains two functions:
+
+
+checkUserIP() which checks if an IP address is contained in the $targets list
+
+
+serveFile() – serve an installer file to the client
+
+
+inject.php – the main logic. It Includes the other 2 php files, validates that the IP of the connecting client is among
+the targets list defined in configuration.php, checks the file-id and serves the chosen file.
+
+
+According to the logic of the scripts, one of the directories should contain the original installers and the other the
+tampered ones. If the IP address of the victim is in the $targets list, a trojanized installer would be delivered, otherwise
+a legitimate one would be served. In the case of the nodes we investigated, both directories contained the exact same
+files and the $targets list was empty, meaning that any valid connection would get the malicious installer.
+In the wild, we have seen the requests for the first layer of the following pattern:
+5
+Bitdefender Whitepaper
+StrongPity APT - Revealing Trojanized Tools, Working Hours and Infrastructure
+https://<download server>/<8 character folder>/<the 32 hex-digits that identify the
+file>
+But, in the nodes that we have analyzed, a valid URL would have the form:
+https://<download
+server>/<8 character folder>/?params=.
+This discrepancy points to either the nodes being out of use, or, the known URL scheme being changed.
+Any other requests are redirected to https://google.com
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "The download server", "type" : "CCSH"},
+        {"id": 2, "description": "Debian Stretch Hardening Script", "type" : "EXEF"},
+        {"id": 3, "description": "Admin User", "type" : "TAMP"},
+        {"id": 4, "description": "SSH Port", "type" : "NETP"},
+        {"id": 5, "description": "SSH Public Key (example : “ssh-rsa AAA...”)", "type" : "IOCS"},
+        {"id": 6, "description": "Domain Name", "type" : "URLS"},
+        {"id": 7, "description": "Knock Ports (example : 10001,10002,10003,10004)", "type" : "NETP"},
+        {"id": 8, "description": "Nginx", "type" : "APPS"},
+        {"id": 9, "description": "Knockd service", "type" : "APPS"},
+        {"id": 10, "description": "Firewall", "type" : "FIRW"},
+        {"id": 11, "description": "IP from Israel (denied connection)", "type" : "CCSH"},
+        {"id": 12, "description": "Science university IP address", "type" : "COUN"},
+        {"id": 13, "description": "Malicious binary files directory", "type" : "TPTH"},
+        {"id": 14, "description": "PHP scripts (configuration.php, read.php, inject.php)", "type" : "EXEF"},
+        {"id": 15, "description": "$targets list (empty)", "type" : "REGI"},
+        {"id": 16, "description": "File-id mapping", "type" : "TAMP"},
+        {"id": 17, "description": "Trojanized installer file", "type" : "DOCF"},
+        {"id": 18, "description": "Legitimate installer file", "type" : "DOCF"},
+        {"id": 19, "description": "Request URL pattern (https://<download server>/<8 character folder>/<32 hex-digits>)", "type" : "URLS"},
+        {"id": 20, "description": "Valid URL form (https://<download server>/<8 character folder>/?params=.)", "type" : "URLS"},
+        {"id": 21, "description": "Google.com redirection", "type" : "URLS"}
+    ],
+    "edges": [
+        {"source": 2, "target": 3, "rel_name" : "creates admin user with password based on ports"},
+        {"source": 2, "target": 4, "rel_name" : "configures SSH port"},
+        {"source": 2, "target": 5, "rel_name" : "uses public key for authentication"},
+        {"source": 2, "target": 6, "rel_name" : "configures domain name"},
+        {"source": 2, "target": 7, "rel_name" : "configures knock ports"},
+        {"source": 2, "target": 8, "rel_name" : "configures nginx service"},
+        {"source": 2, "target": 9, "rel_name" : "configures knockd service"},
+        {"source": 2, "target": 10, "rel_name" : "configures firewall"},
+        {"source": 1, "target": 13, "rel_name" : "contains malicious binary files directory"},
+        {"source": 1, "target": 14, "rel_name" : "contains PHP scripts"},
+        {"source": 14, "target": 15, "rel_name" : "uses $targets list for IP validation"},
+        {"source": 14, "target": 16, "rel_name" : "uses file-id mapping"},
+        {"source": 13, "target": 17, "rel_name" : "contains trojanized installer file"},
+        {"source": 13, "target": 18, "rel_name" : "contains legitimate installer file"},
+        {"source": 19, "target": 1, "rel_name" : "requests to download server"},
+        {"source": 20, "target": 1, "rel_name" : "valid URL form for download server"},
+        {"source": 20, "target": 13, "rel_name" : "serves trojanized installer file"}
+    ]
+}

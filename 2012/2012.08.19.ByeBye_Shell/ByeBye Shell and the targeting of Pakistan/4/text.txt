@@ -1,0 +1,95 @@
+Backdoor
+Let's face it: at the point where the attackers obtain control over the target computer, not
+much sophistication is left in day-to-day targeted attacks . PoisonIvy, Gh0st and
+custom backdoors are daily business for threat analysts and malware researchers, in most
+cases being tedious work with little technical challenge.
+This campaign is no exception. The main backdoor installed and executed on the victims'
+systems appears to be a custom reverse shell with just a handful of features. Due to a lack
+of public literature about this case, I decided to dub this family as ByeByeShell .
+When disassembling the binary you can quickly understand the mechanics of the
+backdoor. After some quick initialization, the backdoor XORs an embedded string with
+0x9D to extract the IP address of the C&C server. Subsequently it establishes a connection
+to it (generally on port 80) and checks in with some basic information about the system.
+LAB-OF-Me: 10.0.2.15............................................................UserName: User
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 5/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+HostName:lab
+MAC:
+Address 0: 10.0.2.15
+[P130813]
+As you can see, it reports the computer name, the user name, the IP address and MAC
+address of the network adapter. The [P130813] line appears to be a constant value,
+possibly a target identifier.
+Interestingly, in a specific malware sample belonging to this campaign, the backdoor also
+appends the string " INS and AfPak " at the end of the message - note that, as defined by
+Wikipedia, "_AfPak (or Af-Pak) is a neologism used within US foreign policy circles to
+designate Afghanistan and Pakistan as a single theater of operation_s".
+After the check-in message is sent, the malware enters a continuous loop in which it will
+keep silently waiting for commands from the open socket connection. From now on, it
+expects some manual interaction from the attacker.
+The supported commands are:
+shell
+comd
+sleep
+quit
+kill
+You can see the switch block in the following screenshots.
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 6/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+When a message is received from the socket connection, it checks if the message is
+"shell" then spawn a reverse shell, otherwise continues by checking for "comd"
+which will simply execute a command and returns.
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 7/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+If neither "shell" or "comd" is specified by the operator, it checks if it has been instructed
+to sleep or terminate, otherwise it just continues to the next iteration.
+In the following screenshot you can see how the reverse shell is implemented: it just
+launches a cmd.exe and pipes stdin, stdout and stderr to the opened socket so
+that the operator can directly interact with the Windows prompt.
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 8/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+As you can see, this is an extremely basic backdoor, even poorly written if you ask me.
+Antivirus detection rate is also reasonably good, despite consisting mostly of generic
+signatures.
+The samples are also signed with an invalid Microsoft Windows certificate, which can be
+used for further fingerprinting:
+https://www.rapid7.com/blog/post/2013/08/19/byebye-and-the-targeting-of-pakistan/ 9/15
+8/15/22, 3:23 PM ByeBye Shell and the targeting of Pakistan | Rapid7 Blog
+```
+   Certificate:
+Data:
+Version: 3 (0x2)
+Serial Number:
+5b:b2:39:83:49:9b:89:a0:43:a8:10:3a:67:24:13:78
+Signature Algorithm: md5WithRSAEncryption
+   Issuer: CN=Microsoft Windows
+Validity
+Not Before: Dec 31 18:30:00 2011 GMT
+Not After : Dec 31 18:30:00 2014 GMT
+Subject: CN=Microsoft Windows
+   Subject Public Key Info:
+   Public Key Algorithm: rsaEncryption
+   Public-Key: (1024 bit)
+Modulus:
+00:c6:e9:0c:5e:0a:09:39:db:58:a8:03:6c:60:da:
+32:ad:c5:3d:9a:39:91:ca:93:9f:ac:39:aa:3d:45:
+54:a7:63:e0:a7:c3:b0:b6:ee:2b:6c:bd:83:f9:9b:
+9b:e1:df:0d:e1:2a:96:e3:99:5e:52:0e:c7:c5:63:
+91:b4:e9:37:63:be:4b:62:23:2e:b8:00:f0:48:22:
+1e:ef:60:16:99:a4:08:2c:66:72:26:a2:68:1d:66:
+a4:22:ff:a5:72:7a:ad:f8:78:9c:1f:2e:89:49:62:
+f4:ba:6d:7f:f5:04:b1:9b:29:58:13:1d:f9:0f:a6:
+86:95:95:92:0b:57:9c:ca:39
+Exponent: 65537 (0x10001)
+X509v3 extensions:
+2.5.29.1:
+0D..g.yY,.^.Oxz..../..0.1.0...U....Microsoft Windows..
+   [.9.I...C..:g$.x   Signature Algorithm: md5WithRSAEncryption
+bd:b3:b3:95:14:aa:55:0d:80:4a:7b:d5:54:e9:43:e9:e1:36:
+c1:7b:25:64:4b:a4:35:6f:55:81:d1:f5:9d:69:87:04:f3:8d:
+05:0a:49:31:0e:49:11:62:97:85:42:b4:37:63:ce:88:77:59:
+44:9c:83:03:9c:bb:95:f8:f4:8d:15:b5:1c:96:d4:af:ea:50:
+0a:cf:53:38:01:ed:00:6c:a0:90:f6:4c:8c:80:12:f3:ac:38:
+b1:4f:d9:e9:d1:2b:8b:40:0e:9e:6b:38:45:a1:90:2d:fe:79:
+92:6d:f8:98:f1:a7:bf:9b:8d:7a:bc:89:77:12:33:29:6e:7e:
+d2:ff

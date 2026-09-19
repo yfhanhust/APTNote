@@ -1,0 +1,62 @@
+4.3 WastedLocker Ransomware
+WastedLocker aims to encrypt the files of the infected host. However before the
+encryption procedure runs, WastedLocker performs a few other tasks to ensure the
+ransomware will run properly.
+First, Wastedlocker decrypts the strings which are stored in the .bss section and then
+calculates a DWORD value that is used later for locating decrypted strings that are related
+to the encryption process. This is described in more detail in the String encryption
+section. In addition, the ransomware creates a log file lck.log and then sets an exception
+handler that creates a crash dump file in the Windows temporary folder with the
+filename being the ransomware’s binary filename.
+If the ransomware is not executed with administrator rights or if the infected host runs
+Windows Vista or later, it will attempt to elevate its privileges. In short, WastedLocker
+uses a well-documented UAC bypass method [1] [2]. It chooses a random file (EXE/DLL)
+from the Windows system32 folder and copies it to the %APPDATA% location under a
+different hidden filename. Next, it creates an alternate data stream ( ADS ) into the file
+named bin and copies the ransomware into it. WastedLocker then copies winsat.exe and
+winmm.dll into a newly created folder located in the Windows temporary folder. Once
+loaded, the hijacked DLL ( winmm.dll ) is patched to execute the aforementioned ADS.
+The ransomware supports the following command line parameters ( Table 1 ):
+https://research.nccgroup.com/2020/06/23/wastedlocker-a-new-ransomware-variant-developed-by-the-evil-corp-group/ 6/21
+6/30/2020 WastedLocker: A New Ransomware Variant Developed By The Evil Corp Group – NCC Group Research
+Para-
+meter Purpose
+-r i. Delete shadow copies
+ii. Copy the ransomware binary file to %windir%\system32 and take
+ownership of it (takeown.exe /F filepath) and reset the ACL permissions
+iii. Create and run a service . The service is deleted once the encryption
+process is completed.
+-s Execute service’s entry
+-p
+directory_path
+-f
+directory_path
+Encrypt files in a specified directory and then proceed with the rest of
+the files in the drive
+Encrypt files in a specified directory
+Table 1 – WastedLocker command line parameters
+It is also worth noting that in case of any failure from the first two parameters ( -r and –s ),
+the ransomware proceeds with the encryption but applies the following registry
+modifications in the registry key Software\Microsoft\Windows\CurrentVersion\Internet
+Settings\ZoneMap:
+Name Modification
+ProxyBypass Deletes this key
+IntranetName Deletes this key
+UNCAsIntranet Sets this key to 0
+AutoDetect Sets this key to 1
+Table 2 – Registry keys
+The above modifications apply to both 32-bit and 64-bit systems and is possibly done to
+ensure that the ransomware can access remote drives. However, a bug is included in the
+architecture identification code. The ransomware authors use a well-known method to
+identify the operating system architecture. The ransomware reads the memory address
+0x7FFE0300 ( KUSER_SHARED_DATA ) and checks if the pointer is zero. If it is then
+the 32-bit process of the ransomware is running in a Windows 64-bit host ( Figure 2 ). The
+issue is that this does not work on Windows 10 systems.
+Figure 2: Decompilation showing method used to identify operating system architecture
+https://research.nccgroup.com/2020/06/23/wastedlocker-a-new-ransomware-variant-developed-by-the-evil-corp-group/ 7/21
+6/30/2020 WastedLocker: A New Ransomware Variant Developed By The Evil Corp Group – NCC Group Research
+Additionally, WastedLocker chooses a random name from a generated name list in order
+to generate filename or service names. The ransomware creates this list by reading the
+registry keys stored in HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control
+and then separates their names whenever a capital letter is found. For example, the
+registry key AppReadiness will be separated to two words, App and Readiness.

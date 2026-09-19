@@ -1,0 +1,127 @@
+
+
+
+Sentence : Detection opportunities
+Detection opportunity 1
+Mimikatz module command-line parameters
+ATT&CK technique(s): T1003 OS Credential Dumping
+ATT&CK tactic(s): Credential Access
+Details: To identify execution of Mimikatz, look for processes in which module
+names are observed as command-line parameters. While Mimikatz offers several
+modules related to credential dumping, the ~~sekurlsa::logonpasswords~~ module
+is a boon for detection. To expand detection opportunities, you can detect
+additional module names from the Mimikatz repository . While it may not be
+comprehensive, this is a great starting point for building a list of command-line
+parameters to detect on. Additional modules can be found by keeping an eye
+on the commit history of the project or by following the maintainer on Twitter
+so you can be notified when new modules appear. As always with anything
+open source, this project can be forked and modified to evade this detection
+opportunity, so it is important to institute defense-in-depth practices within
+your organization and not rely on just one detection opportunity.
+97
+l [Mimikatz]
+2021 Threat Detection Report
+Detection opportunity 2
+Kerberos ticket file modifications
+ATT&CK technique(s): T1558 Steal or Forge Kerberos Tickets
+ATT&CK tactic(s): Credential Access
+Details: Another notable feature is Mimikatz’s ability to steal or forge Kerberos
+tickets. Kerberos ticket files ~~(~~ ~~.kirbi~~ ) are of interest to adversaries as they
+can contain sensitive data such as NTLM hashes that can be cracked offline.
+To perform these attacks, a unique file extension variable is defined within
+Mimikatz that designates the default extension as ~~.kirbi~~ ~~.~~ Building detection
+analytics around modification of files with this extension is another easy win
+as they can be a telltale sign that an adversary is in the midst of performing an
+attack. One such attack, popularly known as “ Kerberoasting,” occurs when
+Kerberos tickets are extracted from memory and the password of an account
+is cracked, allowing the adversary to pivot within the environment via a newly
+hijacked account. This type of attack thwarts basic foundational security
+practices such as only delegating permissions to user accounts with
+the principle of least privilege.
+It is important to note that while ~~.kirbi~~ files are utilized by Mimikatz, they are not
+exclusive to Mimikatz—multiple other hacking utilities interact with these files
+following the Kerberos Credential format as well. In addition to using ~~.kirbi~~
+files as a detection opportunity, incident responders should also remember to
+sanitize them as soon as possible, whether their generation was a function of
+sanctioned testing or otherwise.
+Detection opportunity 3
+Suspicious LSASS injection
+ATT&CK technique(s): T1003 OS Credential Dumping
+98
+l [Mimikatz]
+2021 Threat Detection Report
+ATT&CK tactic(s): Credential Access
+Details: Credential dumping is the name of the game for Mimikatz. To be
+successful, Mimikatz must interact with the Local Security Authority Subsystem
+Service (LSASS), which provides a great opportunity for detection. Mimikatz
+requires specific process access rights to initiate cross process injection via the
+Kernel32 OpenProcess function: ~~PROCESS_VM_READ 0x0010~~ and ~~PROCESS_~~
+~~QUERY_LIMITED_INFORMATION 0x1000~~ . These permissions, collectively
+observed via the bitmask ~~0x1010~~ ~~,~~ are relatively rare for ~~lsass.exe~~ under normal
+conditions.
+While identifying processes that are initiating cross process injections may
+provide a foundation for detecting Mimikatz, this can be a bit noisy. A good
+way to filter things down may be to focus around the loading of other suspect
+libraries such as the SAM Library ~~(~~ ~~samlib.dll~~ ~~)~~ and the Credential Vault Client
+Library ~~(~~ ~~vaultcli.dll~~ ~~)~~ . With this information you can identify instances of
+Mimikatz, as well as other credential theft tools, with a higher degree of
+confidence.
+The below detection demonstrates Blue Mockingbird using Mimikatz (renamed
+as ~~mx.exe~~ ~~)~~ to perform credential dumping via LSASS injection.
+Aaron Didier
+I N T E L L I G E N C E
+A N A LY S T
+Aaron is an unconventional autodidact
+who got their start in information
+security as a “terminally curious”
+member of a network operations team
+at a small regional WISP, addressing
+abuse@ emails, digging into netflow,
+and responding to VoIP attacks. Prior
+to joining the flock at Red Canary,
+Aaron was a member of the Motorola
+Solutions SOC, where they contributed
+to the creation of a Security Onion
+inspired RHEL IDS known as Red Onion.
+They also spent time briefly at Baker
+McKenzie administering CB Response
+and Protect while mapping to the
+ATT&CK Framework. In their off hours,
+you may catch Aaron digging just about
+anywhere, be it in the garden, in a
+book, in a 10-k report, capture the flag
+event, Twitter post, or documentary.
+Their fascination for the world knows
+no bounds and they love sharing
+everything they’ve learned with anyone
+willing to listen.
+99
+l [Mimikatz]
+2021 Threat Detection Report
+T H R E AT
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Mimikatz", "type" : "APPS"},
+        {"id": 2, "description": "sekurlsa::logonpasswords module", "type" : "TTPS"},
+        {"id": 3, "description": "Twitter", "type" : "SOCM"},
+        {"id": 4, "description": ".kirbi file extension", "type" : "DOCF"},
+        {"id": 5, "description": "Kerberos ticket files", "type" : "DOCF"},
+        {"id": 6, "description": "T1558 Steal or Forge Kerberos Tickets", "type" : "TTPS"},
+        {"id": 7, "description": "T1003 OS Credential Dumping", "type" : "TTPS"},
+        {"id": 8, "description": "LSASS (Local Security Authority Subsystem Service)", "type" : "SYSP"},
+        {"id": 9, "description": "samlib.dll", "type" : "EXEF"},
+        {"id": 10, "description": "vaultcli.dll", "type" : "EXEF"},
+        {"id": 11, "description": "mx.exe (Mimikatz renamed)", "type" : "EXEF"}
+    ],
+    "edges": [
+        {"source": 2, "target": 1, "rel_name" : "is part of"},
+        {"source": 3, "target": 1, "rel_name" : "follows maintainer on"},
+        {"source": 4, "target": 5, "rel_name" : "defines file extension for"},
+        {"source": 6, "target": 5, "rel_name" : "involves manipulation of"},
+        {"source": 7, "target": 8, "rel_name" : "requires interaction with"},
+        {"source": 9, "target": 1, "rel_name" : "loads library for operation"},
+        {"source": 10, "target": 1, "rel_name" : "loads library for operation"},
+        {"source": 11, "target": 7, "rel_name" : "renamed tool used in"}
+    ]
+}

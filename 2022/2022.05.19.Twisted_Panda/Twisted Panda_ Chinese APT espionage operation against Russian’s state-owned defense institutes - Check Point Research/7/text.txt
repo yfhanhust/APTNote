@@ -1,0 +1,165 @@
+Previous campaign
+While searching VirusTotal for files similar to the loader, we encountered an additional cluster
+which also utilizes DLL sideloading to launch an in-memory loader that is very similar to the one
+we discussed previously. It then loads a payload that could be an earlier variant of the SPINNER
+backdoor. Judging by the names of the files and compilation stamps of the executables, the
+campaign has been active since June 2021.
+Unlike the current campaign, which uses Microsoft Word documents as a dropper, the previous
+wave of attacks relied on executables bearing the Microsoft Word logo. This suggests these
+droppers were intended to be delivered to the victims by the same means as the malicious
+documents, via spear-phishing emails, either as attachments or links to fake sites.
+The Dropper
+The dropper is a 64-bit executable that has a simpler flow than the previously discussed malicious
+document:
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 11/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+Figure 9: The Infection chain of the campaign starts with the executable dropper.
+First, it extracts the following files from resources: rekeywiz.exe, UnityPlayer.dll and
+PIN, and drops them into the working folder C:\\Users\\Public\\PublicPIN . The file
+rekeywiz.exe masquerades as a legitimate Windows executable EFS REKEY Wizard, but in
+fact, is a Steam gaming platform interactive wallpaper called Sheep. Sheep is a digitally signed
+Unity-based application for Steam Wallpaper Engine. Therefore, it can evasively side-load the
+malicious loader that imitates Unity dll which in turn loads, decrypts and executes the shellcode
+from the PIN file.
+The dropper also decrypts from the resources, drops a decoy Word document to
+%USER%\\Documents\\offic\\ (the typo is on the actor) and opens it for the victim. All the
+decoy documents we observed in different droppers used Russian government-related themes,
+such as the Decrees of the President of the Russian Federation, with documents’ names and
+content in Russian. It can be assumed that the campaign is also targeting entities in or related to
+Russia.
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 12/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+Figure 10: A fragment of the decoy document launched by the dropper.
+For persistence, the dropper creates a scheduled task called InterSys that points to
+rekeywiz.exe . The code handling this is very similar to the “persistence and cleanup” function
+from the loader we described earlier:
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 13/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+Figure 11: Persistence set up by the dropper.
+The Loader
+The older versions of the loader contain debugging information and feature an interesting PDB
+path: C:\\D\\StageS\\Release\\HackDll2.pdb .
+As the infection chain is simpler, when it is side-loaded by rekeywiz.exe, the loader only
+handles the PROCESS_ATTACH event. The payload decryption code for the loader is similar to
+the one we described, and it performs the same steps as the new loader: XOR decryption for the
+first layer encryption, RC4 decryption for the second layer, and injection to a newly created
+msiexec.exe .
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 14/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+Figure 12: UnityPlayer.dll XORing bytes from the PIN file (with the keys 0x29, 0x92) vs
+cmpbk32.dll XORing bytes from the INIT file (with the keys 0x29, 0x92)
+Final payload – full SPINNER backdoor
+Many of the functions inside the final payload share similar logic with the SPINNER variant
+described above, but the payload lacks the compiler-level obfuscations observed in the newer
+campaign making it easier to analyze. Furthermore, the previous version of the backdoor contains
+additional features. This is another indication that the initial SPINNER backdoor version we
+observed is only a part of the bigger payload. It’s likely the actors eventually split the payload and
+only equipped the first stage of the main backdoor with essential functions: enumeration of the
+victim’s machine and execution of the next stage payloads received from the C&C server.
+The full version of the SPINNER backdoor contains the following capabilities:
+Collects information about the infected machine (enumerate disks, files).
+Exfiltrates files from the infected machine and manipulates the local files.
+Runs OS commands and executes downloaded payload, as part of typical backdoor
+capabilities.
+Below is the full list of supported commands:
+Command
+ID
+Command Description Arguments Output
+0x10040001 Enumerate disk drives None Logical drive strings and
+their drive types.
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 15/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+0x10040002 Enumerate files in a
+directory
+Directory
+Name
+0x10040003 Create directory Directory
+Name
+0x10040004 Rename file Original File
+Name and
+New File
+Name
+(separated
+by ‘\t’)
+For every file in the
+specified directory:
+Filename, 0/1 (directory or
+not), file size,
+last_write_time. Output
+format:
+“ %s\t%s\t%lld\t%d.%d.%d
+%d:%d:%d ”
+Return value
+Return value
+0x10040005 Delete file File Name Return value
+0x10040006 Copy file Original File
+Name and
+New File
+Name
+(separated
+by ‘\t’)
+0x10040007 Move file Original File
+Name and
+New File
+Name
+(separated
+by ‘\t’)
+Return value
+Return value
+0x10040008 Reads file data (Max File
+Size = 0xA00000)
+File Name File content
+0x10040009 Write to file A struct that
+contains:
+File Name,
+File Name
+Size,
+Content To
+Write,
+Content
+Size
+Return value
+0x10050001 Run command using
+cmd.exe
+cmd line Output from Command Line
+https://research.checkpoint.com/2022/twisted-panda-chinese-apt-espionage-operation-against-russians-state-owned-defense-institutes/ 16/30
+6/6/22, 10:24 AM Twisted Panda: Chinese APT espionage operation against Russian’s state-owned defense institutes - Check Point Research
+0x10010001 Send User Info (same as
+the first message to C&C)
+None Bot ID (saved to and
+retrieved from version.dll
+file), Computer Name, Host
+Info, x86/x64, User Name,
+Sleep Time, Process ID
+0x10000002 Update Sleep time New Sleep
+Time
+0x10000003 Do nothing
+Return value
+0x10030001 Self-delete and exit
+process (create and run a
+file named a.bat with the
+content “ ping
+127.0.0.1 &&del /q
+*\r\n ”). Also, delete
+persistence from the Run
+Registry Key.
+None None
+The communication protocol between the SPINNER backdoor and the C&C server didn’t change
+from one version to the next.
+Campaign TTPs evolution
+In less than a year, the actors significantly improved the infection chain and made it more
+complex. All the functionality from the old campaign was preserved, but it was split between
+multiple components making it harder to analyze or detect each stage. Here are some examples of
+the split components:
+The EXE dropper functionality is split between a malicious document and the loader. It’s a
+reasonable adjustment as an executable. Even one that masquerades as a document might
+raise a lot more suspicion than a carefully crafted document.
+Adding more functionality to the DLL loader. Interestingly, the actors chose not to add more
+exported functions to the DLL, but to handle different call reasons in DllMain, making some
+parts of malicious code run stealthy in the background when the document is closed.
+Although the loader contains some anti-analysis and evasion techniques, such as the use of
+shellcode and dynamic API resolving using hashed, in the latest campaign the actors added
+significant improvements by supplementing complex compiler-level obfuscations to the
+SPINNER backdoor.
+In addition to the complex obfuscations, the SPINNER backdoor was reduced to only basic
+functionality. This was likely done to increase the malware’s stealth and evasion.

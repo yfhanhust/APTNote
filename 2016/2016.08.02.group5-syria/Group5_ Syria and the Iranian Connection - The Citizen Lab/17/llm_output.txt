@@ -1,0 +1,273 @@
+
+
+
+Sentence : Appendix A: Windows Malware Analysis
+This section analyzes the malware used by Group5. It walks through the distinct droppers, which range from malicious
+OLEs in a PowerPoint Slideshow file (PPSX) combined with an exploit, to executable files directly containing malware.
+Dropper Doc 1 (From E-mail 1)
+Assadcrimes.ppsx
+MD5: 76F8142B4E52C671871B3DF87F10C30C
+This slideshow deploys its malicious payload by (ab)using the OLE object embedding capabilities of PowerPoint. [4]
+Specifically, the malware executable is embedded into the slideshow as an OLE Object of type Package:
+Figure 18: Adding an OLE Package to a PowerPoint document
+Once embedded, the slideshow “Animation” feature is used to trigger the execution of the object immediately upon
+viewing the first slide.
+In one of the malicious PPSX files, we can see the embedded package object by viewing the slides in normal view mode:
+https://citizenlab.org/2016/08/group5-syria/ 25/44
+2016/8/3 Group5: Syria and the Iranian Connection - The Citizen Lab
+Figure 19: The malicious OLE Package, visible when editing the PPSX
+Once activated, the embedded object is saved to disk as %TEMP%\putty.exe, and then executed. This executable is a
+.Net downloader.
+Figure 20: showing putty.exe (.Net downloader)
+In Figure 20 we can see that the second stage payload is obtained from the URL http://assadcrimes[.]info/1/dvm.exe [Ref
+1]. This second stage executable is saved to disk as %temp%\dwm.exe [Ref 2], and then executed [Ref 3].
+The %temp%\dwm.exe file has the following hashes:
+https://citizenlab.org/2016/08/group5-syria/ 26/44
+2016/8/3 Group5: Syria and the Iranian Connection - The Citizen Lab
+|MD5|SHA256|
+|---|---|
+|7d898530d2e77f15f5badce8d7df215e|c19bc1ff5f8472fb7ba64f33c2168b42ea881a6ae6e134a1cc142e984fb6647f|
+The malware downloaded and executed by the .Net downloader is NanoCore, a well-known RAT (Remote Access
+Trojan) that enables the remote monitoring of victims via their computers. The NanoCore binary is wrapped using several
+layers of code obfuscation, which we describe in detail below.
+Deobfuscating the Malware
+The malware was obfuscated first with crypting, followed by packing before being distributed.
+We will unwrap these steps in reverse order below.
+Unpacking
+The packer used on this executable employs a simple technique of base64 encoding the PE file and breaking it up into
+numerous lines which are then embedded into the resource section of the .Net packer stub file. At runtime, the packer
+reverses this process, then invokes the resulting .Net assembly from memory.
+Figure 21: Base64 strings found in the resource section of the packed executable.
+Extracting this packed code reveals a .Net assembly which is yet another layer of code protection applied using a
+‘crypter’. This binary has the following hashes:
+|MD5|SHA256|
+|---|---|
+|a4f1f4921bb11ff9d22fad89b19b155d|d81ec563387e2ea47bc8ed50fd36e1de955cb2331d6eaae9f966b5d7ab094806|
+Decrypting
+This executable is stub code which performs in-memory AES decryption of a base64 encoded string variable. This string
+variable holds an encrypted copy of the NanoCore RAT binary.
+https://citizenlab.org/2016/08/group5-syria/ 27/44
+2016/8/3 Group5: Syria and the Iranian Connection - The Citizen Lab
+Figure 22: the AES decryption routines
+This encryption of the underlying malware is typically employed to bypass detection by endpoint security controls such as
+antivirus programs. Many ‘crypter’ tools, as they are known, are available for purchase or trade on various hacking
+forums.
+Of particular note, this decrypting stub code retained its PDB (short for Program Database) information. PDB file
+references are common in .Net applications when compiled in ‘debug’ mode, and they frequently reveal the original
+file path of the application source code on the developer’s computer.
+This executable revealed the following PDB file path:
+c:\users\mr.tekide\documents\visual studio 2013\projects\paccryptnano core dehgani 
+vds\windowsapplication2\obj\debug\launch manager.pdb
+This PDB string indicates that ‘mr.tekide’ was the username of the developer who compiled this particular stub, and
+further that it was compiled as part of a Visual Studio project named ‘paccryptnano core dehgani -vds’. In addition, a
+single subroutine found inside the decrypting stub was named ‘tekide’. The relevance of this PDB string was discussed
+above in Part 5: Attribution .
+In order to obtain the intended malware payload from this decrypting stub executable, we created a small .Net
+application to mimic the decryption steps and output the file to disk. Once complete, we obtained a malicious
+executable with hashes:
+|MD5|SHA256|
+|---|---|
+|dd5bedd915967c5efe00733cf7478cb4|a9db5a548ea17d6606bfbdb20306a3a08b38dbfe720f9f709f4d3369288be104|
+Original NanoCore binary
+Now that we have arrived at the original NanoCore binary, we can examine the configuration as specified by the
+operator. In order to extract the configuration settings from this copy of NanoCore, we used Kevin Breen’s RATDecoders.
+Using Breen’s tool we arrived at the following configuration:
+https://citizenlab.org/2016/08/group5-syria/ 28/44
+2016/8/3 Group5: Syria and the Iranian Connection - The Citizen Lab
+Figure 23: The NanoCore configuration, using Kevin Breen’s RATDecoders
+Notably, 88.198.222[.]163 port 8081 is the command and control channel for this malware. As noted in Part 1, the same IP
+was also present in the seeding e-mail header.
+Dropper Doc 2
+assadcrimes1.ppsx
+MD5:F1F84EA3229DCA0CCACB7381A2F49F99
+This PowerPoint document leverages CVE-2014-4114, a vulnerability in the OLE packager component of the Windows
+operating system. As described in previous reporting, this vulnerability causes a file embedded within the PowerPoint
+document to be copied to disk and executed silently on vulnerable systems.
+The document under examination drops a file named dvm.gif to disk, renames it to dvm.exe and then executes it. This
+dvm.exe is the same packed and crypted copy of NanoCore as retrieved and executed by the .Net downloader
+described in the previous section.
+Dropper Doc 3
+assadcrimes.info.ppsx
+MD5: 30BB678DB3AD0140FC33ACD9803385C3
+This malicious PowerPoint document uses the same weaponization method described above with respect to Dropper
+Doc 1. The executable is embedded as an OLE package object, and subsequently executed using animation actions
+within the PowerPoint slideshow.
+https://citizenlab.org/2016/08/group5-syria/ 29/44
+2016/8/3 Group5: Syria and the Iranian Connection - The Citizen Lab
+Figure 24: The malicious OLE Package, visible when editing the PPSX
+As with Dropper Doc 1, activation of the OLE Package object saves the embedded executable to disk as
+%TEMP%\putty.exe, then executes it. This file is a .Net application employing the same layers and methods of packing
+and crypting as seen in the payloads delivered by Dropper Docs 1 and 2. However, the ultimate malware payload in this
+case is njRat, another well-known RAT tool.
+After unpacking the OLE embedded executable putty.exe, we again arrive at a decrypting stub file which will AES
+decrypt a base64 string variable and run it from memory. The hashes of this file are:
+|MD5|SHA256|
+|---|---|
+|6161083021b695814434450c1882f9f3|d72676bbf8de82486c3cebfdad2961cc68a6b564a43f9f987c95320fcd6a330a|
+Similar to the case of Dropper Doc 1 above, we find a PDB entry present in the decrypting stub executable:
+C:\Users\mr.tekide\Documents\Visual Studio
+2013\Projects\paccrypt11njratmalii\paccryptalipnahzade\obj\Debug\LManager.pdb
+Again we can observe the same username of ‘mr.tekide’ in the project source code path within the PDB string. Further,
+we note the development path components paccrypt11njratmalii and paccryptalipnahzade.
+To obtain the malicious njRat executable from this decrypting stub we used the same .Net program we built for use in the
+Dropper Doc 1 example above. The resulting njRat binary had the following hashes:
+|MD5|SHA256|
+|---|---|
+|b4121c3a1892332402000ef0d587c0ee|1a287331e2bfb4df9cfe2dab1b77c9b5522e923e52998a2b1934ed8a8e52f3a8|
+Interestingly, the njRat executable appears to have been compiled from source by the same user who compiled the
+crypter described above. Note the PDB strings found inside the njRat executable:
+C:\Users\mr.tekide\Documents\Visual Studio 2013\Projects\njrat7stubsoures –
+Copy\njrat7stubsoures\obj\Debug\dvvm.pdb
+A quick look at the configuration data embedded within this njRat binary reveals the command and control IP address
+and port:
+https://citizenlab.org/2016/08/group5-syria/ 30/44
+2016/8/3 Group5: Syria and the Iranian Connection - The Citizen Lab
+Figure 25: The njRAT configuration, showing the C2 and port.
+Decoy Dropper 4
+alshohadaa alatfal.exe
+MD5: 2FC276E1C06C3C78C6D7B66A141213BE
+This file is a .Net application designed to act as a decoy by displaying a window depicting images of dead children (see
+Figure: 5). While displaying these images, the decoy application also silently extracts an executable file from the .Net
+assembly’s resource section, copies it to %TEMP%\dvm.exe, and then launches a new process from this newly created
+file. See Figure 26 below:
+https://citizenlab.org/2016/08/group5-syria/ 31/44
+2016/8/3 Group5: Syria and the Iranian Connection - The Citizen Lab
+Figure 26: Malware dropping code inside the Decoy application
+The dropper also includes a PDB reference:
+C:\users\enterok\desktop\slideshow\slideshow\obj\x86\debug\alshohadaa alatfal.pdb
+The dvm.exe file is itself a .Net executable which is packed using the same .Net packer used above in the cases of
+Dropper Docs 1 – 3. Once unpacked, the resulting file is the same crypted .Net application analysed above from Dropper
+Doc 3, having MD5 hash 6161083021b695814434450c1882f9f3, and containing the njRat payload.
+Malware Infrastructure
+Command and Control Server
+Each of the three distinct RAT tools used by Group5 (njRAT, NanoCore RAT, and DroidJack) were configured to
+communicate with a single command and control server operating on IP address 88.198.222[.]163.
+|IP|Reverse DNS PTR|Assignee|
+|---|---|---|
+|88.198.222[.]163|static.88-198-222-163.clients.your-server.de|HETZNER-RZ-NBG-BLK4Hetzner Online GmbH|
+This server was the sole point of data exfiltration for each of the malware components. As detailed above for njRAT and
+NanoCore, and below in Appendix B for DroidJack, the TCP ports used for command and control for each of the RAT
+tools were as follows:
+Figure 27: RAT ports on the C2 server
+Additionally, we believe a controller for yet another remote access trojan, XpertRAT, was also hosted on this IP in
+November 2015; however, we did not uncover any samples designed to communicate with this XpertRAT controller.
+https://citizenlab.org/2016/08/group5-syria/ 32/44
+2016/8/3 Group5: Syria and the Iranian Connection - The Citizen Lab
+As noted in the above table, the IP address 88.198.222[.]163 is assigned to Hetzner Online, a Germany based web hosting
+provider. Hetzner offers web hosting services as well as virtual and dedicated server rentals. Contact was made with
+Hetzner technical personnel subsequent to the discovery of the malicious activity outlined in this report. A synopsis of this
+contact is provided in Appendix F: Notification.
+Current data available for this IP address suggests that it was likely reprovisioned to a different Hetzner customer in early
+February 2016 at the latest, and then possibly again in May. A series of domain names associated with online multi-player
+games were directed to this Hetzner IP, one of which was apparently hosting a malicious HTML document.
+Assadcrimes Web Hosting
+The assadcrimes[.]info domain name was registered in June 2015, but it remained parked until early October, at which
+time it was migrated to an Iran-based shared web hosting provider named Hostnegar. This action coincided with the
+delivery of the initial e-mails outlined in Part 1 .
+The assadcrimes[.]info website was hosted on a shared hosting platform, and as such the IP address associated was also
+shared by a significant number of other, unrelated, websites.
+|IP|Reverse DNS PTR|
+|---|---|
+|212.7.195[.]171|server22.rayanegarco[.]com|
+Headers from the initial e-mail are shown below in Figure 28. These headers indicate that the initial e-mail was most likely
+sent using the Horde webmail application running on the web hosting server. Furthermore, the headers indicate that the
+sender was accessing the webmail application from the IP address of the command and control server discussed above.
+Figure 28: Headers from the initial e-mail
+Finally, available domain name service data indicates that the assadcrimes[.]info domain name was moved back to its
+original parked location on May 4, 2016.
+Output : 
+{
+  "entities": {
+    "malware_samples": [
+      {
+        "name": "assadcrimes.ppsx",
+        "md5": "30BB678DB3AD0140FC33ACD9803385C3"
+      },
+      {
+        "name": "alshohadaa alatfal.exe",
+        "md5": "2FC276E1C06C3C78C6D7B66A141213BE"
+      },
+      {
+        "name": "putty.exe",
+        "md5": "6161083021b695814434450c1882f9f3"
+      },
+      {
+        "name": "dvm.exe (njRat)",
+        "md5": "b4121c3a1892332402000ef0d587c0ee",
+        "sha256": "1a287331e2bfb4df9cfe2dab1b77c9b5522e923e52998a2b1934ed8a8e52f3a8"
+      },
+      {
+        "name": "dvm.exe (NanoCore)",
+        "md5": "6161083021b695814434450c1882f9f3",
+        "sha256": "d72676bbf8de82486c3cebfdad2961cc68a6b564a43f9f987c95320fcd6a330a"
+      },
+      {
+        "name": "dvm.gif (renamed to dvm.exe)",
+        "md5": "not provided",
+        "sha256": "not provided"
+      }
+    ],
+    "command_and_control_servers": [
+      {
+        "ip": "88.198.222.163",
+        "reverse_dns_ptr": "static.88-198-222-163.clients.your-server.de",
+        "assignee": "HETZNER-RZ-NBG-BLK4 Hetzner Online GmbH"
+      }
+    ],
+    "web_hosting": [
+      {
+        "domain": "assadcrimes.info",
+        "registered": "June 2015",
+        "migrated_to": "Hostnegar (Iran-based shared web hosting provider)",
+        "migrated_date": "early October 2015",
+        "ip": "212.7.195.171",
+        "reverse_dns_ptr": "server22.rayanegarco.com"
+      }
+    ],
+    "email_headers": [
+      {
+        "sender_ip": "88.198.222.163",
+        "webmail_application": "Horde webmail application",
+        "web_hosting_server": "assadcrimes.info"
+      }
+    ],
+    "malware_infrastructure": [
+      {
+        "ip": "88.198.222.163",
+        "rat_tools": ["njRAT", "NanoCore RAT", "DroidJack"],
+        "ports": {
+          "njRAT": 4044,
+          "NanoCore": 7070,
+          "DroidJack": 8080
+        }
+      }
+    ]
+  },
+  "relationships": [
+    {
+      "source": "assadcrimes.ppsx",
+      "target": "%TEMP%\\putty.exe (njRat)",
+      "description": "Drops and executes putty.exe, which is a packed and crypted njRat payload."
+    },
+    {
+      "source": "alshohadaa alatfal.exe",
+      "target": "%TEMP%\\dvm.exe",
+      "description": "Displays decoy images and drops dvm.exe, which is the same packed and crypted njRat payload as in Dropper Doc 3."
+    },
+    {
+      "source": "putty.exe (njRat)",
+      "target": "88.198.222.163",
+      "description": "Communicates with the C2 server at IP address 88.198.222.163."
+    },
+    {
+      "source": "dvm.exe (NanoCore)",
+      "target": "88.198.222.163",
+      "description": "Communicates with the C2 server at IP address 88.198.222.163."
+    },
+    {
+      "source": "assadcrimes.info",
+      "target": "Horde webmail application",
+      "description": "The initial e-mail was sent using Horde webmail running on the assadcrimes.info server."
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+Pipe and internet backdoor
+Samples:
+|MD5|Size|Format|Bits|Linker|Compilationtimestamp|
+|---|---|---|---|---|---|
+|0C4A971E028DC2AE91789E08B424A265|157696|DLL|64|9.0|2009.07.13 23:31:13|
+|44C2FA487A1C01F7839B4898CC54495E|152576|DLL|64|9.0|2009.07.13 23:31:13|
+|F01DC49FCE3A2FF22B18457B1BF098F8|155648|DLL|64|9.0|2009.07.13 23:31:13|
+|F59813AC7E30A1B0630621E865E3538C|145408|DLL|64|9.0|2009.07.13 23:31:13|
+|CA05D537B46D87EA700860573DD8A093|95232|DLL|32|9.0|2009.07.14 01:03:45|
+|01AC1CD4064B44CDFA24BF4EB40290E7|115200|DLL|64|9.0|2009.07.14 01:24:44|
+|1511F3C455128042F1F6DB0C3D13F1AB|115200|DLL|64|9.0|2009.07.14 01:24:44|
+|57C48B6F6CF410002503A670F1337A4B|115200|DLL|64|9.0|2009.07.14 01:24:44|
+|EDB9E045B8DC7BB0B549BDF28E55F3B5|105984|DLL|64|9.0|2009.07.14 01:24:44|
+The DLL libraries are installed as a Security Providers.
+This module employs a different kind of encryption by using a custom virtual machine for decrypting its
+payload. The final artefact of decryption is a standard blob that is then started as usual. The configuration
+data in the shellcode is also stored in a unique format of several encrypted records.
+The blob contains the actual Trojan component. The configuration blob consists of two records: the first one
+is the actual config data including the C2 URL, and the second is another standard blob that has a special
+deinstallation library and its own configuration data inside.
+The configuration contains the following data:
+|0x101|RSA key|
+|---|---|
+|0x102|Exponent|
+|0x301|Format string for a file name. Its default value is "C:\System VolumeInformation\%VID%", where the "%VID%" part is then replaced by a GUID-likerepresentation of the parts of the RSA key.|
+|0x8280 – 0x9000(step 0x100)|C&C URL configuration|
+For any inquiries, contact intelreports@kaspersky.com Page 8 of 33
+The ProjectSauron APT. Technical analysis
+The module collects basic information about the system and sends HTTP POST requests to one of the C&C
+servers specified in the configuration blob. The encrypted response from the server should contain a valid PE
+DLL file that has an exported function called “init”. Once such response is received, the module calls the
+exported function.
+The deinstallation DLL is accompanied by its own configuration file listing the files to be deleted:
+|0x101, 0x102|Names of event objects to wait for|
+|---|---|
+|0x103|Guid-like filename (see 0x301 in the previous description) to be deleted|
+|0x201+|Locations of files to delete|

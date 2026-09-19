@@ -1,0 +1,90 @@
+2.3. ShadowPad
+As mentioned, we found some public directories on one of the xDll servers, and one of those directories
+contained ShadowPad. We found no significant differences from earlier versions, therefore the following
+is only a brief analysis of the new version.
+2.3.1. ShadowPad loader and obfuscation
+The first stage is decryption of the shell code responsible for installing the backdoor on the system. The
+shellcode is decrypted with an XOR-like algorithm, which modifies the encryption key at each iteration
+with arithmetic operations with certain constants.
+22
+Figure 43. Main module decryption cycle
+After decryption, control transfers to the loader, which features a characteristic type of obfuscation.
+Figure 44. Obfuscation used in the loader
+We already saw this type of obfuscation in previous versions of ShadowPad. Certain bytes are inserted
+in various sections of the code pre-marked with two opposite conditional jumps pointing to the same
+address. To do away with this obfuscation, the indicated bytes must be replaced (with the "nop" opcode,
+for instance).
+After the addresses of the API functions are received and the required code is placed in memory, control
+passes to the backdoor installation stage.
+2.3.2. ShadowPad modules
+Like the previous versions, this backdoor
+has a modular architecture. By default, the
+backdoor includes the following modules:
+Figure 45. Calling the functions for decryption and
+decompression of the modules built into the backdoor
+23
+Module
+name ID Compilation time
+Root 5E6909BA GMT: Wednesday, 11 March 2020, 15:54:34
+Plugins 5E69097C GMT: Wednesday, 11 March 2020, 15:53:32
+Online 5E690988 GMT: Wednesday, 11 March 2020, 15:53:44
+Config 5E690982 GMT: Wednesday, 11 March 2020, 15:53:38
+Install 5E69099F GMT: Wednesday, 11 March 2020, 15:54:07
+DNS 5E690909 GMT: Wednesday, 11 March 2020, 15:51:37
+The identifiers of these modules remain unchanged from version to version; they, too, are installed and
+run in a separate thread via the registry. Module compilation times can be found in the auxiliary header
+that comes before the shellcode.
+Figure 46. Location of the compilation time in the shellcode header
+A typical feature of any copy of ShadowPad
+is encryption of the strings in each module.
+The encryption algorithm is similar to the
+one used for backdoor decryption. The
+only difference is in the constants used for
+key modification.
+The method of calling some API functions
+in ShadowPad modules is somewhat
+interesting. Some copies of the malware
+calculate the function address for each
+time a function is called, as shown in Figure
+
+In addition, addresses of the functions
+
+to be called can be obtained via a special
+structure. Loading addresses for libraries
+are obtained based on the values of the
+structure members, to which the offsets of
+the required API functions are then added.
+Figure 47. String decryption code in ShadowPad
+Figure 48. Example of obfuscation of calling an API function
+24
+Figure 49. De-obfuscated calls (illustrated by Install module)
+For persistence, the backdoor copies itself to C:\ProgramData\ALGS\ under the name Algs.exe and
+creates a service with the same name.
+Figure 50. Service created for gaining persistence
+The malware proceeds to launch a new svchost.exe process, which it injects with its own code and then
+gives control.
+Figure 51. Code for creating process and injecting into it
+2.3.3. ShadowPad configuration
+In all samples of the backdoor, the configuration is encrypted. The Config module is responsible for
+operations with it.
+Configuration is a sequence of encrypted strings, in which each string follows the previous one without
+any zero padding or alignment. The configuration is encrypted by the same algorithm as the strings.
+25
+Figure 52. Decrypted malware configuration
+2.3.4. Network protocol
+The format of the packets used in all
+ShadowPad versions has remained
+unchanged. [16] For the packets sent to the
+server, the packet body and the packet
+header are generated separately. After
+they are concatenated (without any
+padding), the packet is covered with an
+encryption algorithm with logic close to
+that of the algorithms used for decrypting
+the main module and the strings inside the
+backdoor. Figure 53 shows the algorithm.
+Figure 53. Packet encryption code used
+in exchanges with the C2 server
+The structure of encrypted packets received from the C2 server is fairly simple (as illustrated by the Init
+packet).
+Figure 54. Structure of ShadowPad packets

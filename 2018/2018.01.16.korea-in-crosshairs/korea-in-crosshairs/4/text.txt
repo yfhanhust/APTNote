@@ -1,0 +1,77 @@
+N O V E M B E R 2 0 1 6 T O C A M P A I G N
+In the early part of 2017, Group123 started the "Evil New Year" campaign. In this campaign the
+actors tried to fool victims by pretending the emails were from the Korean Ministry of
+Unification and that they offered Korean-specific analysis. �This campaign began with a handful
+of spear phishing emails to South Korean targets and containing malicious attachments.
+Group123 further attempted to entice victims to open the attachments by using common
+Hancom Hangul documents. Hancom's Hangul is a popular Office Suite used primarily in the�
+Korean peninsula. The use of Hangul office documents has the advantage of being the norm�
+for the Korean peninsula. If the attacker used Microsoft documents, it may have raised
+suspicions in the victim. Given the regional file format used there is a chance that some�
+security software suites may not handle them well, and this may have provided an evasion
+case for the attacker.
+The documents sent to the targets were titled "Analysis of "Northern New Year in 2017" and
+used the official logo of the Korean Ministry of Unification. This is a simple choice for the actor�
+to make, but it further shows their familiarity with the region.
+The document claimed to discuss the New Year's activities of North Korea and this would have
+been something that the victims in South Korea would be very interested in. This would have
+been particularly true for Government targets, who we believe to be Group123's target of
+choice
+choice.
+This document was a decoy aimed to entice the user to open malicious documents embedded
+further down the page
+The actor embedded two additional links and the document urged the user to click on these
+links for more information about New Year's activities in North Korea. The first link was labeled�
+as "Comparison of Major Tasks in '16 & '17" and the second link was identified as "Comparison�
+between '16 & '17".
+Upon opening these links the user was presented with a further decoy Hangul document. This
+document was well written and further increases our confidence that we are dealing with a new�
+Korean actor. These documents contained malicious OLE objects used to drop binaries.
+This time, however, they contained malicious OLE (Object Link Embedded) objects.
+Initial analysis confirmed two similarly sized OLE object files within this document which�
+appeared to be the same from an execution point of view.
+The two dropped binaries were stored and executed in this location during our analysis:
+C:\Users\ADMINI~1\AppData\Local\Temp\Hwp (2).exe
+C:\Users\ADMINI~1\AppData\Local\Temp\Hwp (3).exe
+Initial analysis showed some sloppy cleaning up from Group123, which we used later to
+determine that separate campaigns were the work of this same actor, as compilation artifacts
+remained within the binaries:
+e:\Happy\Work\Source\version 12\T+M\Result\DocPrint.pdb
+The second stage of the dropped binaries was used to execute wscript.exe while injecting
+shellcode into this process. The shellcode is embedded within the resource 'BIN' and is used to
+unpack another PE32 binary and use wscript.exe to execute it. To do this, Group123 uses a
+well-known technique that harnesses VirtualAllocEx(), WriteProcessMemory() and
+C t R t Th d() Wi d API ll
+CreateRemoteThread() Windows API calls.
+The new PE32 unpacked from the shellcode is an initial reconnaissance malware which is
+used to communicate with the C2 infrastructure to obtain the final payload. The information this�
+malware collected included the following:
+The computer name
+The username
+The execution path of the sample
+The BIOS model
+A randomly-generated ID to uniquely identify the system
+Group123 utilized this method to ensure their victim was (a) someone they wanted to target
+further and (b) someone they could infect further based on the information obtained from the
+reconnaissance phase.
+Further network analysis showed that the binary attempted to connect to the following URLs:
+www[.]kgls[.]or[.]kr/news2/news_dir/index.php
+www[.]kgls[.]or[.]kr/news2/news_dir/02BC6B26_put.jpg
+Korean Government Legal Services (KGLS) is a legitimate Korean government body that
+manages Korean government legal affairs. By compromising the KGLS, the attacker gained a
+trusted platform from which to execute an attack.
+The initial network connection is to 'index.php'. This connection transmits the information
+gathered during the reconnaissance phase. The attacker uses this information to then
+determine the specific filename (based on the random ID) to serve to the infected victim. In our�
+case this was 02BC6B26 - this meant a file "02BC6B26_put.jpg" was created for us on the�
+attackers C2. This file is then dropped and renamed 'officepatch.exe' on the victim's machine.�
+Because the attacker was careful about who they attacked, we were unable to obtain this file�
+during our analysis.
+During our investigation we were able to identify additional Command and Control
+infrastructure used by this actor. Four C2s were observed, based in the following countries:
+3 C2 in South Korea
+1 C2 in the Netherlands
+Here is a global map of the identified infrastructure:�
+Contrary to the previous campaign, the attackers separated the reconnaissance phase from
+the main ROKRAT payload. This trick was likely used to avoid detection. This is an interesting
+adaptation in Group 123's behavior.

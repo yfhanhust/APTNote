@@ -1,0 +1,73 @@
+
+
+
+Sentence : En Route with Sednit
+Hello Message
+First things first, ~~AgentKernel::run()~~ reports the list of installed modules to the C&C server.
+More precisely, the kernel behaves as if it had received a command called ~~PING_REQUEST~~ from
+the C&C server (the kernel’s commands will be described in the following section). It then builds
+a report in a ~~ModuleMsg~~ object, which is the class encapsulating messages to or from modules,
+and whose important fields are shown in the following code snippet.
+class ModuleMsg
+   {
+   private :
+// ID агента от/кому предназначено сообщение
+```
+     / Translates to: The agent ID from/to whom the message is intended /
+     int agentId;
+```
+// ID модуля от/кому предназначено сообщение
+```
+     /Translates to: The module ID from/to whom the message is intended /
+     u_short modId;
+```
+// ID команды, которую выполнил модуль или которую нужно выполнить
+```
+     / Translates to: ID of the command that was executed, or will be executed /
+     u_char cmdId;
+```
+// Указатель на память, где лежат данные команды
+```
+     / Translates to: Pointer to the memory where data are /
+     u_char* data;
+[...]
+}
+```
+In this report message the ~~modId~~ field is set to the kernel ID ~~0x0002~~, ~~cmdId~~ to ~~PING_REQUEST~~,
+and ~~data~~ points to the list of installed module IDs separated by the character ~~#~~ .
+The ~~ModuleMsg~~ object is then passed to the ~~AgentKernel::translateToController()~~ method,
+which takes charge of its encryption, resulting in a ~~CryptRawPacket~~ object. This object just contains
+a pointer to a buffer whose format is described in Figure 6.
+Header
+0 4 8 n-15 n-4 n
+Agent ID Checksum Serialized ModuleMsg DATA_TOKEN RC4 register
+Figure 6. ~~CryptRawPacket~~ data buffer format
+The buffer starts with a header composed of the agent ID and a checksum calculated on the rest
+of the data. This checksum is a 2-byte cyclic redundancy check (CRC) [16] calculated on the data
+with a 2-byte pseudo-randomly generated polynomial. These two values are appended to each other
+to form the checksum field 4-byte value.
+59
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Sednit", "type" : "ACTO"},
+        {"id": 2, "description": "C&C server", "type" : "CCSH"},
+        {"id": 3, "description": "ModuleMsg object", "type" : "DOCF"},
+        {"id": 4, "description": "PING_REQUEST command", "type" : "TTPS"},
+        {"id": 5, "description": "list of installed module IDs", "type" : "REGI"},
+        {"id": 6, "description": "AgentKernel::translateToController() method", "type" : "EXEF"},
+        {"id": 7, "description": "CryptRawPacket object", "type" : "DOCF"},
+        {"id": 8, "description": "agent ID (0x0002)", "type" : "REGI"},
+        {"id": 9, "description": "checksum", "type" : "TAMP"},
+        {"id": 10, "description": "data buffer format", "type" : "DOCF"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "communicates with"},
+        {"source": 3, "target": 4, "rel_name" : "contains command"},
+        {"source": 3, "target": 5, "rel_name" : "contains data"},
+        {"source": 6, "target": 3, "rel_name" : "processes message"},
+        {"source": 6, "target": 7, "rel_name" : "generates packet"},
+        {"source": 8, "target": 10, "rel_name" : "part of buffer"},
+        {"source": 9, "target": 10, "rel_name" : "part of buffer"}
+    ]
+}

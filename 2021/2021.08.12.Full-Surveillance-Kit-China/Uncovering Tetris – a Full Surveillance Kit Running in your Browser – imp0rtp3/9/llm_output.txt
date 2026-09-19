@@ -1,0 +1,101 @@
+
+
+
+Sentence : Plugins
+Once the server gets the first heartbeat, it sends between 11 to 15 different plugins at once.
+The plugins are generally much lighter obfuscated but the degree of obfuscation varies. All plugin have the same class creation mechanism. This plugin class has always at least 2 functions: “run” which
+runs the main logic of the plugin and “callback” or “report” which, well, report back to the server. The numbering of the plugins was done by me randomly, and doesn’t have to do with the order of arrival
+(which wasn’t consistent since the protocol is asynchronous).
+P lugins 0 -7
+These plugins use a known but not a widely used technique called JSONP-hijacking. The technique enables exfiltrating the logged-in user account information from vulnerable sites. While it doesn’t give
+the attacker a password or any authentication token, it enables him to identify the victims and to assess his interest in them.
+The Implementation is quite easy – the attacker needs to load the relevant JSONP address as a script ( $.getScript() ) and to set the name of the callback function inside the url of the JSONP. The callback
+function will be called once the JSONP is loaded and will get as argument the user data.
+Plugin 0 gathers information from 58 different sites. 57 of those sites are very popular Chinese sites, like qq and baidu. There are approximately 30 different attributes the attacker tries to exfiltrate,
+which differ from site to site. The common attributes are userid, real name and phone number. A complete list of the sites and attributes is available in APPENDIX C.
+NYT JSONP callback function
+A site that stands out is the New York Times. The JSONP vulnerability in the site enables the attacker to get the user id and the name of the logged-in reader.
+I reported the vulnerability to the NYT via a 3rd party platform. while I am unable share their response as per their code of conduct, I will say the plugin’s effectiveness remains the same .
+Plugins 1-7 are used to exfiltrate user data specifically from one specific website each, using the same technique. While all the domains in those plugins appear and are already queried in plugin 0, the
+plugins use more complicated techniques and site-specific vulnerabilities to access more comprehensive user data.
+The sites queried by the plugins are:
+P1 – 163.com basic user info query
+P2 – employer.58.com – get “ enterpriseinfo “
+P3 – jd.com JSONP request embedded in iframe
+P4 – sohu.com JSONP request embedded in iframe
+P5 – hupu.com JSONP request embedded in iframe
+https://imp0rtp3.wordpress.com/2021/08/12/tetris/ 7/19
+8/16/2021 Uncovering Tetris – a Full Surveillance Kit Running in your Browser – imp0rtp3
+P6 – qq.com – JSONP exploiting music access API of qq that leaks comprehensive user data.
+P7 – baidu.com – complicated JSONP request utilizing a vulnerability enabling the attacker to run code in the context of the iframe . The plugin had also additional obfuscation (possibly because
+it used a newer version of the obfuscator).
+Plugin 8
+The plugin collects geolocation data. The collection happens through regular browser query, so the accuracy can vary depending on the type of network access and whether the device has GPS. The
+browser gives some value representing accuracy.
+It is worth noting that this plugin would cause the browser to request permission from the victim unless the victim has granted the waterholed website that permission before.
+Plugin 9
+The plugin gets the internal IP(s) of the victim through the use of WebRTC api.
+Plugin 10
+The plugin attempts to take one photo of the victim using the webcam of the device, if present. Similarly to plugin 8, this could make the browser request permission from the victim.
+Plugin 11
+The plugin uses the public javascript library fingerprint2. The result, excluding pixel ration, memory information and devices information is hashed and sent back to the server. Additionally, it loads
+icons of 11 Chinese security research sites, the purpose of that is unclear.
+Plugin 12
+The plugin is used to capture anything the user types in the waterholed domain.
+The plugin does that by registering a callback on any  and  tags in the document and reports their textual data back to the server.
+Plugin 13
+The plugin checks if the victim is using TOR by trying to access a favicon with an onion address. It is worth mentioning that on a victim not running TOR this could trigger a DNS request to an onion
+address (see detection).
+Plugin 14
+https://imp0rtp3.wordpress.com/2021/08/12/tetris/ 8/19
+8/16/2021 Uncovering Tetris – a Full Surveillance Kit Running in your Browser – imp0rtp3
+The plugin tries to connect to websockets at localhost. If the connection succeeds all data transferred through the socket is forwarded to the attackers’ server. This known but relatively new technique
+allows Tetris to exfiltrate developer information and even API secrets. This article is an excellent explanation of the technique.
+The Following table shows the ports tried by the plugin and their default use:
+Port Service
+3000 webpack-dev server, core component in React.js development
+3001 socket.io secure websocket common port
+7000 Used in eventletexamples, Default in RSocket – binary protocol able to run on WS
+8000 Used in many examples, likely to be used by several frameworks
+9856 reload (node module)
+Plugin 15
+The plugin collects very comprehensive OS information, including battery status, ad blocker status, hardware concurrency support and browser plugins. Additionally, it requests the localstorage for the
+current site.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "Server", "type" : "CCSH"},
+        {"id": 2, "description": "JSONP-hijacking technique", "type" : "TTPS"},
+        {"id": 3, "description": "58 different sites (including qq and baidu)", "type" : "URLS"},
+        {"id": 4, "description": "New York Times JSONP callback function", "type" : "URLS"},
+        {"id": 5, "description": "163.com basic user info query", "type" : "URLS"},
+        {"id": 6, "description": "employer.58.com get 'enterpriseinfo'", "type" : "URLS"},
+        {"id": 7, "description": "jd.com JSONP request embedded in iframe", "type" : "URLS"},
+        {"id": 8, "description": "sohu.com JSONP request embedded in iframe", "type" : "URLS"},
+        {"id": 9, "description": "hupu.com JSONP request embedded in iframe", "type" : "URLS"},
+        {"id": 10, "description": "qq.com music access API", "type" : "API"},
+        {"id": 11, "description": "baidu.com complicated JSONP request", "type" : "URLS"},
+        {"id": 12, "description": "WebRTC api", "type" : "API"},
+        {"id": 13, "description": "fingerprint2 javascript library", "type" : "APPS"},
+        {"id": 14, "description": "TOR favicon with onion address", "type" : "URLS"},
+        {"id": 15, "description": "Websockets at localhost", "type" : "NETP"},
+        {"id": 16, "description": "OS information (battery status, ad blocker status, hardware concurrency support)", "type" : "OPPS"},
+        {"id": 17, "description": "Localstorage for the current site", "type" : "STOR"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "sends"},
+        {"source": 2, "target": 3, "rel_name" : "targets"},
+        {"source": 2, "target": 4, "rel_name" : "targets"},
+        {"source": 2, "target": 5, "rel_name" : "targets"},
+        {"source": 2, "target": 6, "rel_name" : "targets"},
+        {"source": 2, "target": 7, "rel_name" : "targets"},
+        {"source": 2, "target": 8, "rel_name" : "targets"},
+        {"source": 2, "target": 9, "rel_name" : "targets"},
+        {"source": 2, "target": 10, "rel_name" : "exploits"},
+        {"source": 2, "target": 11, "rel_name" : "exploits"},
+        {"source": 8, "target": 12, "rel_name" : "uses"},
+        {"source": 9, "target": 13, "rel_name" : "uses"},
+        {"source": 14, "target": 15, "rel_name" : "tries to connect"},
+        {"source": 16, "target": 17, "rel_name" : "collects"}
+    ]
+}

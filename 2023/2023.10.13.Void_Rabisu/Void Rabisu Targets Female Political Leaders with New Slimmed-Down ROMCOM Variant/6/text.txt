@@ -1,0 +1,37 @@
+C&C server communication
+The PEAPOD samples we analyzed force WinHTTP functions to use TLS 1.2 instead of
+the default version chosen by the operating system. A C&C server for a previous
+campaign using the legitimate PaperCut software as a lure checked the TLS version of a
+client HTTP request and would not respond with a payload if the request was not
+conformant. However, the C&C server for the campaign targeting WPL Summit 2023
+attendees responded as expected, regardless of the TLS version negotiation used to
+initiate the communication.
+The malware first prepares the right flag for later use with WinHttpSetOption() .
+Afterward, it creates an HTTP session using Microsoft Edge 1.0 as the User-Agent
+string. However, before anything is sent to the server, the connection is set to use TLS
+1.2.
+We checked how different Windows versions treat SSL/TLS usage, which we summarize
+in the following table:
+|OperatingSystem|WinHTTP flag|TLS versionused|
+|---|---|---|
+|Windows 11|WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2|1.2|
+|Windows 11|(not set / default)|1.3|
+|Windows 10|WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2|1.2|
+|Windows 10|(not set / default)|1.2|
+https://www.trendmicro.com/en_us/research/23/j/void-rabisu-targets-female-leaders-with-new-romcom-variant.html 7/11
+1/24/24, 4:34 PM Void Rabisu Targets Female Political Leaders with New Slimmed-Down ROMCOM Variant
+|Windows 7|WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2|An erroroccurs|
+|---|---|---|
+|Windows 7|(not set / default)|1|
+Table 1. A summary of how Windows versions treat SSL/TLS usage
+Based on the table, we believe that PEAPOD cannot infect systems running Windows 7
+and earlier versions. Why Void Rabisu uses this flag is still an open question, but it is
+possible that it wanted to implement some form of checking on the C&C server side to
+make C&C fingerprinting harder.
+Before sending the POST request by calling WinHttpSendRequest(), additional flags are
+set to ignore all certificate errors. An empty request is sent, followed by a request
+containing a command to let the C&C server know about the victim.
+Figure 6. Additional flags are set to ignore all certificate errors
+If the malware cannot reach out to the C&C server using HTTPS, it tries to connect via
+raw TCP (Transmission Control Protocol) at port 442 or ICMP (Internet Control Message
+Protocol).

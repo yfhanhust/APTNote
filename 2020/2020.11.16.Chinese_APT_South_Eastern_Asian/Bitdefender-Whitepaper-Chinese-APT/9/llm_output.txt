@@ -1,0 +1,147 @@
+
+
+
+Sentence : PcShare
+During the investigation, we noticed files with names like “bitupdating.exe”, “iat.exe” and “bit.exe” on some victims’
+machines. At that moment, we had already encountered many FunnyDream samples that communicated with such
+domains as “eofficeupdate[.]com” and “wmiprvse[.]com” . These domains were known to be connected to “bitupdating[.]
+com” and “iatupdate[.]com” via the IP addresses to which they resolved and the email used for registration. Moreover,
+after having analyzed the binaries named “bitupdating.exe” and “iat.exe”, we identified that they are PcShare droppers
+and their C&C domain was reflected in the file names (“bitupdating[.]com” and “ iatupdate[.]com”, respectively).
+Investigating the Root Cause Analysis for PcShare process, we saw that it was actually executed by the Chinoxy
+backdoor.
+The attackers used a slightly modified version of PcShare that is available on GitHub, in addition to the Chinoxy
+backdoor. The installation of the PcShare payload ( PcMain ) is presented in Figure 3:
+Fig.3: The installation of PcMain
+6
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+PcShareDropper
+All samples of droppers are executable files with the “ wuauclt.exe ” InternalName, as well as many other version info
+fields filled. Besides, there is an invalid certificate in the overlay of each executable. All this suggests that the binaries
+pretend to be legitimate “ Windows Update AutoUpdate Client ”.
+Once executed, the dropper starts its activity by obtaining the addresses of the winapi functions used. After that, it runs
+the “main” function in a separated thread. Some interesting aspects are worth mentioning:
+ The dropper contains the x86 and the x64 versions of the PcShare Loader and, depending on the infrastructure
+on which it was executed, it drops one version or the other.
+ Both of these versions are in the .data section, XOR-ed with different 32-long base16 strings and compressed
+withLZW algorithm.
+ The dropper creates the %LOCALAPPDATA%\microsoft\windows\explorer\update folder, drops the PcShare
+Loader in the %TEMP% folder with the name “ _sts.tmp” and, then moves this file into the
+folder created earlier, naming it “ wuauong.tlb” .
+ Afterwards, the HKCU\Software\Classes\CLSID\{42aedc87-2188-41fd-b9a3-0c966feabec1}\
+InprocServer32 registry key is created by the dropper. The default value of that key has the path to the“ wuauong.
+tlb” file assigned to it. The other key value named “ ThreadingModel” gets created, and is assigned the “ Apartment ”
+string . This marks the completion of the persistence setup. The {42aedc87-2188-41fd-b9a3-0c966feabec1}
+CLSID corresponds to the MRUPIDLList COM object (The Most Recent Used PIDL List) exported by shell32.dll . The
+explorer.exe usually uses that COM object, and, therefore it implicitly loads the correspondent InProcServer32
+DLL. However, the functionality exported by this COM object is not critical for the system, thus, it can be
+removed or disabled.
+Ultimately, the rundll32.exe executable is being run (which, in its turn, calls cmsot function exported by wuauong.tlb )
+and a process running explorer.exe is being run with the same attributes as the existing one in order to trigger the
+persistence.
+PcShareLoader
+The role of the loader is to inject the PcMain payload into the logagent.exe process. This is done probably for defense
+evasion, as logagent.exe is known to create traffic to send log errors from Windows Media Player.
+The loader is a DLL file with the “wuaueng.dll” InternalName and the “rtlmake.dll” ExportName which, besides the
+DllMain function, also exports two other functions: cmsot and Embedding . In the overlay part of the binary, it has
+a certificate which, in combination with the VERSIONINFO fields, should impersonate a module belonging to the
+“ Microsoft Windows Update ”, just like its dropper does.
+Regarding the behavior implemented into the loader, the following should be mentioned:
+ The cmsot function is responsible for deleting the file received as the parameter. The file is renamed “ _mda.tmp”, moved into the %TEMP% folder and, then deleted. The dropper usually calls this
+function in order to delete itself from the disk;
+ The DllMain function checks whether the name of the executable in which the respective DLL is being loaded
+is “explorer.exe”. If it is, the Embedding function is called;
+ Embedding is the “main” function of the loader;
+The Embedding function makes sure that only a single instance of the loader exists in memory (using
+CreateFileMappingW and OpenFileMappingW) . It decrypts and decompresses the structure called PSDLLINFO
+(which contains useful information for PcMain like the IP address and port of the C&C) and decrypts the
+PcMain payload itself. Both the structure and the payload are in 2 global variables, XOR -ed with the strings
+“ 2ae06f136eb6588508eefd4b5f6c98d8345f1104746d15141 ” and “ 5c6575a1c2152b5eb161c670db124b4a ”
+respectively (those keys are used in all samples of PcShare Loader we were able to find related to the attack).
+After obtaining the payload and the PSDLLINFO structure, it maps them into the newly created logagent.exe (using
+VirtualAllocEx/WriteProcessMemory ). Then, using CreateRemoteThread, the Putklm function exported by the payload
+is executed.
+7
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+Looking for similar files in our collection, we found more samples of PcShare loader, some of those
+samples inject their payload into “ rdpclip.exe ” and have C&C that seem unrelated to the current attack (e.g.
+550bf8d1eb81a1a9d4a1e17b6be7d89c with C&C supports.casacam[.]net ).
+PcMain
+All samples of PcMain extracted from loaders we found related to the attack are injected into logagent.exe and have
+External Name as “rtlmain.dll”. Another common characteristic of those samples is that they export Putklm function,
+which is responsible for reflective loading.
+Once the reflective loading is done, the PcMain obtains the PSDLLINFO structure mapped into the logagent.exe
+memory, and it continues with the decryption of the string collection by applying a XOR operation and a decompression
+using LZM algorithm (custom implemented). The string collection contains winapi function names and the DLL
+names that export those functions, as well as format strings, file paths, registry key names and many other strings as
+presented in the figure below:
+Fig. 4 - A part of string collection - similar with StringDll.ini from Github Code
+From this point, the code is pretty similar with that found on Github, with some minor modifications:
+ The single instance of the payload is assured by using OpenFileMappingA/CreateFileMappingA functions.
+ All processes of logagent.exe are killed except the one in which PcMain is injected
+ The module obtains the proxy settings using InternetQueryOptionA and, if a proxy exists, a socket connection
+to it is initiated by sending an http request from the following template “ CONNECT : HTTP/1.1**
+nUser-Agent: Mozilla/v5.0\nHOST: \nProxy-Connection: Keep-Alive\n\n** ”. As the host the C&C address is
+set.
+8
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+There are implemented only a subset of modules that are present in the Github code:
+The PcMain is capable of updating itself and its PSDLLINFO which contains C&C address.
+9
+Bitdefender DracoTeam • WHITEPAPER
+Dissecting a Chinese APT Targeting South Eastern Asian Government Institutions
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "bitupdating.exe", "type" : "EXEF"},
+        {"id": 2, "description": "iat.exe", "type" : "EXEF"},
+        {"id": 3, "description": "bit.exe", "type" : "EXEF"},
+        {"id": 4, "description": "eofficeupdate[.]com", "type" : "CCSH"},
+        {"id": 5, "description": "wmiprvse[.]com", "type" : "CCSH"},
+        {"id": 6, "description": "bitupdating[.]com", "type" : "CCSH"},
+        {"id": 7, "description": "iatupdate[.]com", "type" : "CCSH"},
+        {"id": 8, "description": "Chinoxy backdoor", "type" : "EXEF"},
+        {"id": 9, "description": "wuauclt.exe", "type" : "EXEF"},
+        {"id": 10, "description": "Windows Update AutoUpdate Client", "type" : "APPS"},
+        {"id": 11, "description": "%LOCALAPPDATA%\\microsoft\\windows\\explorer\\update", "type" : "SYSP"},
+        {"id": 12, "description": "%TEMP%", "type" : "SYSP"},
+        {"id": 13, "description": "_sts.tmp", "type" : "DOCF"},
+        {"id": 14, "description": "wuauong.tlb", "type" : "DOCF"},
+        {"id": 15, "description": "HKCU\\Software\\Classes\\CLSID\\{42aedc87-2188-41fd-b9a3-0c966feabec1}\\InprocServer32", "type" : "REGI"},
+        {"id": 16, "description": "{42aedc87-2188-41fd-b9a3-0c966feabec1}", "type" : "TAMP"},
+        {"id": 17, "description": "rundll32.exe", "type" : "EXEF"},
+        {"id": 18, "description": "logagent.exe", "type" : "EXEF"},
+        {"id": 19, "description": "explorer.exe", "type" : "EXEF"},
+        {"id": 20, "description": "wuaueng.dll", "type" : "DOCF"},
+        {"id": 21, "description": "rtlmake.dll", "type" : "DOCF"},
+        {"id": 22, "description": "_mda.tmp", "type" : "DOCF"},
+        {"id": 23, "description": "rdpclip.exe", "type" : "EXEF"},
+        {"id": 24, "description": "supports.casacam[.]net", "type" : "CCSH"},
+        {"id": 25, "description": "rtlmain.dll", "type" : "DOCF"},
+        {"id": 26, "description": "Putklm function", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 8, "rel_name" : "used by"},
+        {"source": 2, "target": 8, "rel_name" : "used by"},
+        {"source": 3, "target": 8, "rel_name" : "used by"},
+        {"source": 4, "target": 6, "rel_name" : "connected to"},
+        {"source": 5, "target": 7, "rel_name" : "connected to"},
+        {"source": 1, "target": 6, "rel_name" : "related to"},
+        {"source": 2, "target": 7, "rel_name" : "related to"},
+        {"source": 9, "target": 10, "rel_name" : "impersonates"},
+        {"source": 11, "target": 14, "rel_name" : "contains"},
+        {"source": 12, "target": 13, "rel_name" : "contains"},
+        {"source": 12, "target": 22, "rel_name" : "contains"},
+        {"source": 13, "target": 14, "rel_name" : "renamed to"},
+        {"source": 15, "target": 14, "rel_name" : "points to"},
+        {"source": 16, "target": 19, "rel_name" : "used by"},
+        {"source": 17, "target": 20, "rel_name" : "calls function from"},
+        {"source": 18, "target": 25, "rel_name" : "injects payload into"},
+        {"source": 20, "target": 26, "rel_name" : "calls function"},
+        {"source": 23, "target": 24, "rel_name" : "used by"},
+        {"source": 25, "target": 18, "rel_name" : "injected into"}
+    ]
+}

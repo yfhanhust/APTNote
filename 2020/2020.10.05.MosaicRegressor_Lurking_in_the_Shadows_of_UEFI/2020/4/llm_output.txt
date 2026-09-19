@@ -1,0 +1,85 @@
+
+
+
+Sentence : UEFI Bootkit
+When inspecting the compromised UEFI firmware, we noticed four components that had unusual proximity in their assigned
+GUID values. These were two DXE drivers and two UEFI applications. Upon closer analysis, we could conclude that those
+were compiled from the source code of a Hacking Team bootkit named VectorEDK, that was leaked in 2015 and is now
+available online.
+Rogue components found within the compromised UEFI firmware
+Following is an outline of the revealed components:
+F5B320F7E87CC6F9D02E28350BB87DE6 (SmmInterfaceBase)
+B53880397D331C6FE3493A9EF81CD76E (SmmAccessSub)
+91A473D3711C28C3C563284DFAFE926B (SmmReset)
+DD8D3718197A10097CD72A94ED223238 (Ntfs)
+
+SmmInterfaceBase : a DXE driver intended to deploy the bootkit itself on the system by registering a callback that will
+
+be invoked upon an event of type EFI_EVENT_GROUP_READY_TO_BOOT. The event occurs at a point when control can
+be passed to the operating system’s bootloader, effectively allowing the callback to take effect before it. The callback
+will, in turn, load and invoke further components of the bootkit, in this case ‘SmmAccessSub’.
+This is equivalent to Hacking Team’s ‘rkloader’ component, and is built using its source code.
+
+
+Ntfs : a driver used to parse the NTFS file system to allow reading or writing to disk.
+
+
+SmmReset : a UEFI application intended to mark the execution of the bootkit. This is done by setting the value of a
+
+
+variable named ‘fTA’ to a hard-coded GUID. The same is done by the original Vector-EDK bootkit as part of the bootkit’s
+main business logic. In this case, it’s not invoked and it seems to be a residue from the open source code that was not
+properly leveraged by the developers.
+Setting of the fTA variable with a predefined GUID to mark the execution of the bootkit
+3
+MosaicRegressor: Lurking in the Shadows of UEFI
+
+SmmAccessSub : the main bootkit component that serves as a persistent dropper for user-mode malware. It is executed by
+
+the callback registered during the execution of ‘SmmInterfaceBase’, and takes care of writing a binary embedded within it as
+a file named ‘IntelUpdate.exe’ to the startup directory on disk. This allows the binary to run when Windows accomplishes
+the boot process.
+This is the only proprietary component amongst the ones we inspected, which doesn’t rely on Vector-EDK code.
+It conducts the following actions to drop the intended file to disk:
+– Bootstraps pointers for SystemTable, BootServices and RuntimeServices global structures.
+– Tries to get a handle to the currently loaded image by invoking the HandleProtocol method with the EFI_LOADED_
+IMAGE_PROTOCOL_GUID argument.
+– If it succeeds, it attempts to find the root drive with Windows installation by enumerating all drives and checking that
+the ‘\Windows\System32’ directory exists. A global EFI_FILE_PROTOCOL object that corresponds to the drive will be
+created at this point and referenced to open any further directories or files on this drive.
+– If the root drive is found, it looks for a marker file named ‘setupinf.log’ under the Windows directory and proceeds only
+if it doesn’t exist. In the absence of this file, it is created.
+– If the creation of ‘setupinf.log’ succeeds, it goes on to check if the ‘Users’ directory exists on the same drive.
+– If the ‘Users’ directory exists, it writes the ‘IntelUpdate.exe’ file (embedded in the UEFI application’s binary) under the
+‘\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup’ directory.
+Code from ‘SmmAccessSub’ used to write the embedded ‘IntelUpdate.exe’ binary to the Windows startup directory
+4
+MosaicRegressor: Lurking in the Shadows of UEFI
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "UEFI firmware", "type" : "SYSP"},
+        {"id": 2, "description": "Hacking Team bootkit VectorEDK", "type" : "DOCF"},
+        {"id": 3, "description": "F5B320F7E87CC6F9D02E28350BB87DE6 (SmmInterfaceBase)", "type" : "EXEF"},
+        {"id": 4, "description": "B53880397D331C6FE3493A9EF81CD76E (SmmAccessSub)", "type" : "EXEF"},
+        {"id": 5, "description": "91A473D3711C28C3C563284DFAFE926B (SmmReset)", "type" : "EXEF"},
+        {"id": 6, "description": "DD8D3718197A10097CD72A94ED223238 (Ntfs)", "type" : "EXEF"},
+        {"id": 7, "description": "EFI_EVENT_GROUP_READY_TO_BOOT", "type" : "TPTH"},
+        {"id": 8, "description": "Operating System’s bootloader", "type" : "SYSP"},
+        {"id": 9, "description": "'fTA' variable", "type" : "REGI"},
+        {"id": 10, "description": "IntelUpdate.exe", "type" : "EXEF"},
+        {"id": 11, "description": "\\Windows\\System32", "type" : "SYSP"},
+        {"id": 12, "description": "\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", "type" : "TPTH"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "compromised with"},
+        {"source": 3, "target": 7, "rel_name" : "registers callback for"},
+        {"source": 4, "target": 10, "rel_name" : "drops file as"},
+        {"source": 5, "target": 9, "rel_name" : "sets variable"},
+        {"source": 6, "target": 11, "rel_name" : "parses directory of"},
+        {"source": 7, "target": 8, "rel_name" : "occurs before"},
+        {"source": 4, "target": 11, "rel_name" : "checks for existence of"},
+        {"source": 4, "target": 9, "rel_name" : "creates marker file if not exists"},
+        {"source": 4, "target": 12, "rel_name" : "writes to directory"}
+    ]
+}

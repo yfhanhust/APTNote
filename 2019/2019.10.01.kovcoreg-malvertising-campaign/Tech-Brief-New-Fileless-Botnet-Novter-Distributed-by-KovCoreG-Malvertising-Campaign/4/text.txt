@@ -1,0 +1,121 @@
+Novter’s notable modules
+Below is a list and our analysis of Novter’s most important modules:
+  - **‘call_02’ module** — The module will use a [Invoke-PSInject](https://github.com/EmpireProject/Empire/blob/master/data/module_source/management/Invoke-PSInject.ps1) script to load a binary
+
+embedded inside it. The loaded binary will connect to a remote server to retrieve data
+and pop up a full-screen window that will display the technical support scam page to the
+victim.
+  - **‘block_av_01’ module** — This module is a JavaScript code and has the following
+
+functions:
+1) Extract from resources, debase64, and drop the WinDivert DLL and drivers
+2) Run a shellcode embedded in a PowerShell script via some kind of Invoke-Shellcode
+The shellcode will iterate through all running processes and attempt to match the ROR13 hashes of their names to its own list of hardcoded ROR13 hashes. If it finds matches,
+process IDs of the detected processes are used in the WinDivert filter. This will make the
+WinDivert filter look like: ((processId=560 or processId=676 or processId=724 or
+processId=848 or processId=888) and (remotePort==80 or remotePort==443)) . As a
+result, certain process communication via HTTP and HTTPS are diverted.
+Figure 6. Snapshot of code showing the important parameters ofWinDivertOpen (top) and the list of
+hardcoded ROR13 hashes (bottom)
+According to the documentation, the WINDIVERT_FLAG_RECV_ONLY flag “forces the
+handle into receive only mode which effectively disables WinDivertSend(). This means
+that it is possible to block/capture packets or events but not inject them.” This creates a
+communication blocker for processes with certain names. Figure 8 (bottom) shows the
+complete list of hardcoded ROR13 hashes. After trying some known process names, we
+found that some of these process names belong to anti-malware solutions.
+ - **‘all_socks_05’ (Nodster) module** — A JavaScript code we named “Nodster” that has
+
+the following functions:
+1) If the OS is Windows 7, it will download and install the update KB3033929
+(Availability of SHA-2 Code Signing Support for Windows 7 and Windows Server
+2008 R2). WinDivert documentation shows that it requires this update for it to be
+installed in the system.
+2) Try to modify the affected system’s TTL value, TCP Window Size, and maximum
+transmission unit (MTU) settings, but it needs to have administrator privileges to do
+so. The following commands/registry values are run/set:
+netsh interface tcp set heuristics ws=disabled
+This disables Windows Scaling heuristics. For Windows 7 and Vista, the TCP autotuning feature is enabled by default. This feature does not always operate effectively
+and it may result in some websites communicating with significantly reduced speed.
+TCP window size is set to Tcp1323Opts 0x02, as the lower erased bit indicates that
+using window scaling is not encouraged. MTU is set in the registry to 1440 (smaller
+than standard Ethernet datagram 1500), likely to prevent fragmentation.
+3) Download and install Node.JS, a JavaScript runtime environment
+4) Extract to a separate folder a script that contains a base64-encoded resource, which
+is a ZIP archive (contents shown in Figure 9).
+Figure 7. Contents of the ZIP archive
+5) Execute divergent or mdivergent based on OS version, a random value, and a fixed
+probability threshold. Both files can be found as standalone executables or
+shellcodes. In case of shellcodes, they are base64-encoded and embedded in some
+kind of Invoke-Shellcode-style PowerShell scripts. The shellcode uses the WinDivert
+library and drivers to manipulate packets in the following ways:
+- Divert only outbound TCP packets with _tcp.Syn and tcp.Ack != 1_, and ignore
+
+local loopback packets
+- Check TCP options; if a combination of certain bits in the TCP header is set
+
+(e.g., CWR - Congestion Window Reduced, URG - urgent pointer, etc.), the
+window size in the TCP packet is also manipulated; the IP Type of Service
+flag Reliability is also set to 1
+These settings likely ensure the packets’ high reliability, which is needed for a
+SOCKS proxy communication.
+Figure 8. Snapshots of code showing the WinDivert library and drivers are abused to manipulate network
+packets
+6) Execute node.js with app.js and base64-encoded configuration address as
+parameters
+7) Check the configuration address (via app.js and getip) to obtain the SOCKS proxy IP
+address, then backconnect it to the C&C server. The C&C server instructs the victim
+machine to visit specified/requested websites. app.js uses an implementation of
+Socket.io, a real-time protocol for web application based on WebSocket or HTTP(S)
+protocol. The following events were listened to and processed via the Socket.io
+connection: connect, firstmessage, closed, message, disconnect, error and
+connect_error .
+To start a new proxy connection, the attacker’s server will send the firstmessage,
+which typically comprises the following: length (126), separator(:), some flags
+specifying the type of the message followed by the message type itself (firstmessage),
+and the last part, which is a JSON object with data, shown in Figure 11.
+The notable aspect in the JSON object is the connection ID, shown in Figure 9. This
+message immediately follows another message with the actual data. The message
+has the length, followed by two base64-encoded blobs of data separated by the :
+separator.
+Figure 9. Code snippet showing the firstmessage (top) and the connection ID (bottom)
+Figure 10. Code snippet of the JSON object’s connection ID parameter (top), which, when decoded,
+reveals the connection the malware creates (center) and receives (bottom)
+The first part of the code, once decoded, reveals Part 1 decodes to how the malware
+uses the socks4a [17] protocol, with these parameters/values:
+- 0x04 = version
+
+- 0x01 = establish TCP stream connection
+
+- 0x1bb = 443 port,
+
+- 61 64 73 … 6e 65 74 = adservercheck.net = domain name
+
+The second part, once decoded, is the TLS client hello message, which has
+parameters/values that include the following:
+- 0x16 = TLS record type
+
+- 0x03 0x01 = TLS version (major/minor)
+
+- 0x02 0x00 = Length of data in the record (excluding the header itself)
+
+- 0x01 = CLIENT_HELLO
+
+- 0x00 0x01 0xfc = length
+
+- 0x03 0x03 = SSL/TLS version
+
+Similarly, a closed message (Figure 13) is where the connection ID is an important
+parameter passed in the JSON object.
+Figure 11. Snippet of the closed message containing the connection ID
+As with a proxy’s typical routine, Nodster will create a new TCP connection to
+connect back to the server, receive the network request, and then send back the
+response. A “message” event can send data over an established connection by
+indicating the existing ID of a connection until it receives a “close” event. Nodster can
+handle multiple TCP proxy connections at the same time.
+TREND MICRO [TM] RESEARCH
+Trend Micro, a global leader in cybersecurity, helps to make the world safe for exchanging digital information.
+Trend Micro Research is powered by experts who are passionate about discovering new threats, sharing key insights, and
+supporting efforts to stop cybercriminals. Our global team helps identify millions of threats daily, leads the industry in
+vulnerability disclosures, and publishes innovative research on new threats techniques. We continually work to anticipate new
+threats and deliver thought-provoking research.
+www.trendmicro.com

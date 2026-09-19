@@ -1,0 +1,97 @@
+Trojanized trading application for Windows
+Including malicious code into distributed software and putting that on a website would be too obvious.
+Instead, the attackers went for a more elaborate scheme: the trojan code was pushed out in the form of an
+update for a trading application.
+A legitimate-looking application called Celas Trade Pro from Celas Limited showed no signs of malicious
+behaviour and looked genuine. This application is an all-in-one style cryptocurrency trading program
+developed by Celas.
+https://securelist.com/operation-applejeus/87553/ 2/30
+8/23/2018 Operation AppleJeus: Lazarus hits cryptocurrency exchange with fake installer and macOS malware - Securelist
+Screenshot of Celas Trade Pro
+When we started this research, any user could download the trading application from the Celas website.
+Checking the installation package downloaded from the website confirmed the presence of a very
+suspicious updater.
+https://securelist.com/operation-applejeus/87553/ 3/30
+8/23/2018 Operation AppleJeus: Lazarus hits cryptocurrency exchange with fake installer and macOS malware - Securelist
+Installation package download page
+We have analyzed the following Windows version of the installation package:
+MD5: 9e740241ca2acdc79f30ad2c3f50990a
+File name: celastradepro_win_installer_1.00.00.msi
+File type: MSI installer
+Creation time: 2018-06-29 01:16:00 UTC
+At the end of the installation process, the installer immediately runs the Updater.exe module with the
+“CheckUpdate” parameter. This file looks like a regular tool and most likely will not arouse the suspicion of
+system administrators. After all, it even contains a valid digital signature, which belongs to the same vendor.
+But the devil is in the detail, as usual.
+The code writer developed this project under the codename “jeus”, which was discovered in a PDB path
+included in the updater and used as unique HTTP multipart message data separator string. Because of this,
+https://securelist.com/operation-applejeus/87553/ 4/30
+8/23/2018 Operation AppleJeus: Lazarus hits cryptocurrency exchange with fake installer and macOS malware - Securelist
+and the fact that the attacked platforms include Apple macOS, we decided to call this Operation AppleJeus.
+Properties of the shady updater tool included in the package are:
+MD5: b054a7382adf6b774b15f52d971f3799
+File Type: PE32 executable (GUI) Intel 80386, for MS Windows
+Known file name: %Program Files%\CelasTradePro\Updater.exe
+Link Time: 2018-06-15 10:56:27 UTC
+Build path: Z:\jeus\downloader\downloader_exe_vs2010\Release\dloader.pdb
+The main purpose of Updater.exe is to collect the victim’s host information and send it back to the server.
+Upon launch, the malware creates a unique string with the format string template “%09d-%05d” based on
+random values, which is used as a unique identifier of the infected host. This malware collects process lists,
+excluding “[System Process]” and “System” processes and gets the exact OS version from the registry value
+at “HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion”. It seems that such values only exist from
+Windows 10, so we assume that the author developed and tested it on Windows 10.
+ProductName: Windows OS version
+CurrentBuildNumber: Windows 10 build version
+ReleaseID: Windows 10 version information
+UBR: Sub version of Windows 10 build
+BuildBranch: Windows 10 build branch information
+The code encrypts the collected information with the hardcoded XOR key (“Moz&Wie#t/6T!2y“) before
+uploading it to the server.
+Data encryption routine
+The code sends the victim’s information to a webserver using HTTP and the following URL:
+www.celasllc[.]com/checkupdate.php
+The server is a legitimate looking website owned by the developer of the program: Celas LLC. At this point
+we were not able to conclude with high confidence whether the server was compromised by the threat
+actor or had belonged to the threat actor from the beginning. To learn more about the server, please read
+the “Infrastructure” section below.
+The malware used a hardcoded User-Agent string “Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1;
+Trident/6.0)” and fixed a multipart form data separator string “jeus“.
+Using encryption, the custom separator string wouldn’t be a red flag for a legitimate application, but
+sending a request with the context-irrelevant string “get_config”, as well as uploading collected system
+information as “temp.gif”, mimicking a GIF image with a magic number in the header, definitely made us
+raise our eyebrows.
+Communication with the C2 server
+https://securelist.com/operation-applejeus/87553/ 6/30
+8/23/2018 Operation AppleJeus: Lazarus hits cryptocurrency exchange with fake installer and macOS malware - Securelist
+After successfully uploading data, the updater checks the server response. If the server responds with HTTP
+code 300, it means the updater should keep quiet and take no action. However, if the response is HTTP
+code 200, it extracts the payload with base64 and decrypts it using RC4 with another hardcoded key
+(“W29ab@ad%Df324V$Yd“). The decrypted data is an executable file that is prepended with the
+“MAX_PATHjeusD” string.
+During our research, we found other similar files. One was created on August 3rd and another on August
+11th. The PDB path shows that the author keeps improving this updater tool, apparently forked from some
+stable version released on July 2, 2018 according to the internal directory name.
+Additional trojanized sample #1 Additional trojanized sample #1
+4126e1f34cf282c354e17587bb6
+Installation package MD5
+e8da3
+0bdb652bbe15942e866083f29f
+b6dd62
+Package creation date 2018-08-03 09:57:29 2018-08-13 0:12:10
+ffae703a1e327380d85880b9037
+Dropped updater MD5
+a0aeb
+bbbcf6da5a4c352e8846bf91c33
+58d5c
+Updater creation date 2018-08-03 09:50:08 2018-08-11 7:28:08
+H:\DEV\TManager\DLoader\201
+80702\dloader\WorkingDir\Out
+put\00000006\Release\dloader.
+pdb
+Updater Build path
+H:\DEV\TManager\DLoader\201
+80702\dloader\WorkingDir\Out
+put\00000009\Release\dloader.
+pdb
+Note the TManager directory in the PDB path from the table. It will pop up again in another unexpected
+place later.

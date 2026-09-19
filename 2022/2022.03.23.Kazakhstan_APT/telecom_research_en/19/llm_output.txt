@@ -1,0 +1,79 @@
+
+
+
+Sentence : Operating principle
+In the beginning, the trojan decrypts the C&C server’s IP addresses and ports using the XOR
+operation:
+```
+ import idaapi
+address = 0x416200
+for i in xrange(0x7c):
+idaapi.patch_byte(address + i, idaapi.get_byte(address + i) ^ 0xEF)
+```
+Decryption result:
+C&C server—159.65.157.100:443
+Communication with it occurs using sockets:
+Depending on the time, the connection to the required C&C server will be selected:
+The trojan creates file tmp.0 in folder %tmp%, that it use as log.
+Collect information about the system:
+Trojan.DownLoader43.44599 pushes each value onto a stack before encrypting and sending the
+collected data. The transferred data looks as follows:
+```
+ struct computer_info {
+string computer_name;
+string user_name;
+uint32_t major_version;
+uint32_t minor_version;
+uint32_t build_number;
+uint32_t computer_bitness;
+string March01;
+uint32_t code_page_id;
+uint32_t oem_code_page_id;
+};
+```
+To encrypt the information collected about the system, the AES128 algorithm is used in CBC
+mode.
+The key and initialization vector are embedded inside:
+The decryption method looks as follows:
+```
+ from Crypto.Cipher import AES
+key = '\x95\x2B\x2D\xBF\x09\xC5\x2F\x80\xB4\xBC\x47\x27\x29\xB3\x28\x09'
+iv = '\x63\x5F\x72\x2A\xBB\xE3\xE8\x95\xF8\xF9\x32\x87\x53\x6A\x77\xFB'
+enc = ...
+decipher = AES.new(key, AES.MODE_CBC, iv)
+open('dec', 'wb').write(decipher.decrypt(enc))
+```
+The command execution cycle received from the C&C server:
+Table of commands compiled from the results of this cycle:
+|Command ID|Command|
+|---|---|
+|0x51|Creatingcmd.exe process|
+|0x52|Execution command exit incmd.exe|
+|0x54|Execute commands in thecmd.execonsole;|
+|0x60|Creating the flow that reads, writes, and encrypts files.|
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "C&C server—159.65.157.100:443", "type" : "CCSH"},
+        {"id": 2, "description": "XOR operation", "type" : "TTPS"},
+        {"id": 3, "description": "tmp.0 in folder %tmp%", "type" : "DOCF"},
+        {"id": 4, "description": "%tmp% folder", "type" : "SYSP"},
+        {"id": 5, "description": "Trojan.DownLoader43.44599", "type" : "ACTO"},
+        {"id": 6, "description": "AES128 algorithm in CBC mode", "type" : "TTPS"},
+        {"id": 7, "description": "cmd.exe process creation (Command ID: 0x51)", "type" : "EXEF"},
+        {"id": 8, "description": "exit command in cmd.exe (Command ID: 0x52)", "type" : "TTPS"},
+        {"id": 9, "description": "commands execution in cmd.exe console (Command ID: 0x54)", "type" : "TTPS"},
+        {"id": 10, "description": "file reading, writing, and encryption flow creation (Command ID: 0x60)", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 5, "rel_name" : "communicates with"},
+        {"source": 2, "target": 1, "rel_name" : "decrypts"},
+        {"source": 3, "target": 4, "rel_name" : "located in"},
+        {"source": 5, "target": 3, "rel_name" : "creates"},
+        {"source": 6, "target": 5, "rel_name" : "uses to encrypt data"},
+        {"source": 7, "target": 1, "rel_name" : "command received from"},
+        {"source": 8, "target": 1, "rel_name" : "command received from"},
+        {"source": 9, "target": 1, "rel_name" : "command received from"},
+        {"source": 10, "target": 1, "rel_name" : "command received from"}
+    ]
+}

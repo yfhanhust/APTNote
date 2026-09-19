@@ -1,0 +1,51 @@
+Exfiltration Tools
+The same source of information – a process tree of the RainyDay revealed a new tool and a new case of side-loading
+shown on the schema:
+Exfiltration tool loading
+The legitimate SandboxieBITS.exe file and the malicious file collector sbiedll.dll were found in the C:\Program Files
+(x86)\Google\Chrome** directory under the names Chrome.exe and sbiedll.dll**, respectively .
+The tool collects recently changed files with a specific extension and uploads them to Dropbox. So, the specific
+directory and the file names were chosen in order to mask the traffic to Dropbox as originating from a legitimate source
+and subsequently, to fly under the radar.
+The sbiedll.dll exports two functions, SbieApi_Log and SbieDll_Hook, that matches the static imports for the
+SandboxieBITS.exe binary, the SbieDll_Hook being the entrypoint of the exfiltration tool.
+Once loaded, the tool tries to assign to the registry key value named contom under the Run key the file path of the
+executable In order to achieve persistence via Registry keys.
+Next steps during the execution correspond to the start of two decoupled components that run in separated threads:
+the collection component and the uploading component.
+Analyzing the collecting component, we found the following:
+
+
+It uses ReadDirectoryChangeW for folder monitoring, where the target folders are all fixed and remote drives.
+
+
+The monitoring mechanism is practically identical to the one available on Github.
+
+
+All files that match the given criteria are copied to C:\ProgramData\Adobe\temp.
+
+
+Each event received after a file change (FILE_ACTION_ADDED, FILE_ACTION_REMOVED, FILE_ACTION_
+MODIFIED, FILE_ACTION_RENAMED_OLD_NAME, FILE_ACTION_RENAMED_NEW_NAME) is logged in the C:**
+ProgramData\Adobe\temp\dhcpinit.dll.**
+
+
+11
+Bitdefender Whitepaper
+NAIKON – Traces from a Military Cyber-Espionage Operation
+The criteria of filtering mainly consist of having an extension from the following list:
+doc, docx, pdf, ppt, pptx, xls, xlsx, rtf, txt, rar, zip, jpg, jpeg, bmp
+The uploading component is responsible for periodic listing of the C:\ProgramData\Adobe\temp folder and for
+uploading the found files to Dropbox using the public HTTP API. The credentials for the Dropbox account are encrypted
+in the binary along with the remote path. Another particularity of the upload module consists of encrypting the content
+of files with AES128-CBC using the “ 1234567890123459 ” value for key and IV.
+The entire logic is implemented in a window procedure tied to a window named WindowsProject1 as the developers
+preferred to use the SetTimer function in combination with the WM_TIMER window event for periodic uploading. The
+upload may occur at a specific time of the day if there is a file named LICENSE in the root directory of the Dropbox.
+The file contains strings that indicates the hours when to upload the collected files and such content looks like the one
+presented below:
+07:00;08:00;09:00;09:20;10;11;12;14:30;15:30;16:30;17:30;19:30;20:30;21:30;01:00
+A file similar with sbiedll.dll is available on VirtusTotal.
+Another tool suspected to be used for data exfiltration is swissfileknife binary that is available for public download
+from the osdn.net site. Despite the fact that there is evidence that RainyDay executes this tool multiple times, we can
+only assume that it was used for exfiltration as per the available description of command line parameters.

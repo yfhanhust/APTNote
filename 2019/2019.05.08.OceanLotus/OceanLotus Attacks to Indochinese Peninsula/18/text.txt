@@ -1,0 +1,119 @@
+CocCocUpdate
+CocCocUpdate is a Dropper that is released into the startup directory using a
+compression package constructed by cve-2018-20250 vulnerability. The screenshot of
+the compression package is as follows:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 35/69
+5/9/2019 奇安信威胁情报中心
+After restart, it will be executed by the system, and the corresponding file is
+coccocupdate.exe. We have exposed a Dropper version of random key passing through
+command line parameters in 2015. This coccocupdate.exe is improved to pass random
+key through environment variables.
+The specific steps are as follows:
+
+Gets the full path of the executed coccocupdate.exe in an environment variable
+
+with a value of "C091A8C8" for later reading.
+
+Randomly generate a 128-byte key and store it in an environment variable with a
+
+value of "DB99050C";Used to encrypt the shellcode data that follows them.
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 36/69
+5/9/2019 奇安信威胁情报中心
+
+Encrypt the data at 0x40E000 by random key, and write the modified PE file to
+
+Temp directory, and then execute it through CreateProcess:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 37/69
+5/9/2019 奇安信威胁情报中心
+The following figure shows the comparison between the original file and the encrypted
+file. It can be seen that there is no change in the code segment, except that the array of
+global variables 0xd000 is encrypted by the random key.
+
+If the file is bundled, it will decrypt and release a bundled file (the key is in the last
+
+64 bytes) from a resource of resource type 10 and resource number 1, such as a
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 38/69
+5/9/2019 奇安信威胁情报中心
+Word document or a normal file, and then execute it through ShellExectue. The file
+does not use the decoy file to release the bundled file, so the ID is wrong:
+
+The executed temp process will first determine whether there are environment
+variables of "C091A8C8" set, if any
+
+If it is encrypted by the original Dropper, it will read the randomly generated 128-bit key
+from the "DB99050C" environment variable, decrypt the code at 0x40e000, and then
+decrypt one more layer and decompress one more layer, because the code has one
+layer of encryption and compression in the original Dropper:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 39/69
+5/9/2019 奇安信威胁情报中心
+Extract:
+
+The decrypted file is a PE file, which will be executed in memory after decryption, as
+shown in the figure:
+
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 40/69
+5/9/2019 奇安信威胁情报中心
+This code will release 3 files to c:\program files\ Microsoft \ Windows \system restore\
+directory:
+Then create the service and point to the rstrui.exe file:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 41/69
+5/9/2019 奇安信威胁情报中心
+Rstrui. Exe is an attacker to write a loader, disguised Microsoft Windows System Restore
+icon:
+Mainly responsible for loading {9fbaa883-1709-4de3-8c1b-48683f740a5f} in the same
+directory through rundll32.
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 42/69
+5/9/2019 奇安信威胁情报中心
+File name {9fbaa883-1709-4de3-8c1b-48683f740a5f}. Clsid file when a DllLoader, PE
+information is as follows:
+The function of this DLL is mainly to decrypt and load shellcode with the same directory
+name as {9fbaa883-1709-4de3-8c1b-48683f740a5f}, as shown in the figure:
+Enter the sub_10001480 function, the contents of the file will be decrypted, and the PE
+will be loaded in memory:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 43/69
+5/9/2019 奇安信威胁情报中心
+The PE after decryption in memory is shown in the figure below:
+DllMain creates a thread to execute the export function Version. In the Version function,
+the remote control function will be executed all the time. If it fails, the sleep 6s will
+continue.
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 44/69
+5/9/2019 奇安信威胁情报中心
+Then a number less than 4 will be randomly generated, and C2 will be randomly
+selected, as shown in the figure:
+One of the functions to decrypt C2 is as follows:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 45/69
+5/9/2019 奇安信威胁情报中心
+The 4 domain names are as follows:
+images.ucange.com
+preload.ointalt.com
+maintenance.allidayser.com
+report.cottallid.com
+The hash of the sample associated with the domain name is as follows:
+2 ea902abe453b70cf77e402cc16eb552
+cc7b9ee1b026e16a9d37e3988a714479
+e60c35dd36c9f525007955e6b3a88b82
+Binding files in this homologous sample:
+Cc7b9ee1b026e16a9d37e3988a714479 bundled office files content is as follows:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 46/69
+5/9/2019 奇安信威胁情报中心
+Translation:
+2 ea902abe453b70cf77e402cc16eb552 bundled Office files content is as follows:
+Translation:
+The flow chart of the Dropper is as follows:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 47/69
+5/9/2019 奇安信威胁情报中心
+A comparison between this version of Dropper and the 2015 version of Dropper:
+
+The Dropper in 2015 is to pass the randomly generated decryption key through the
+
+command line parameter, while the Dropper in this version is to pass the key through the
+environment variables between the process chains (API is SetEnvironmentVariableW
+and GetEnvironmentVariableW).
+2, the presence of the 2015 version of the detection virtual machine, this version does
+not exist in the detection virtual machine.
+The following figure is: Dropper version of OceanLotus in 2015 passes the key through "
+       - ping" :
+The following figure is: in this Dropper version, the randomly generated key is stored in
+the environment variable:
+https://ti.qianxin.com/blog/articles/oceanlotus-attacks-to-indochinese-peninsula-evolution-of-targets-techniques-and-procedure/ 48/69
+5/9/2019 奇安信威胁情报中心

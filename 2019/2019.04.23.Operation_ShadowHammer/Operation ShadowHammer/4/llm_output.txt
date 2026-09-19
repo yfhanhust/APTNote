@@ -1,0 +1,95 @@
+
+
+
+Sentence : ShadowHammer downloader
+The compromised ASUS binaries carried a payload that was a Trojan downloader. Let us take a closer look
+at one such ShadowHammer downloader extracted from a copy of the ASUS Live Updater tool with
+MD5:0f49621b06f2cdaac8850c6e9581a594. It has the following properties:
+MD5: 63f2fe96de336b6097806b22b5ab941a
+SHA1: 6f8f43b6643fc36bae2e15025d533a1d53291b8a
+SHA256: 1bb53937fa4cba70f61dc53f85e4e25551bc811bf9821fc47d25de1be9fd286a
+Digital certificate fingerprint: 0f:f0:67:d8:01:f7:da:ee:ae:84:2e:9f:e5:f6:10:ea
+File Size: 1’662’464 bytes
+File Type: PE32 executable (GUI) Intel 80386, for MS Windows
+Link Time: 2018.07.10 05:58:19 (GMT)
+The relatively large file size is explained by the presence of partial data from the original ASUS Live
+Updater application appended to the end of the executable. The attackers took the original Live Updater
+and overwrote it with their own PE executable starting from the PE header, so that the file contains the
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 5/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+actual PE image, whose size is only 40448 bytes, while the rest comes from ASUS. The malicious
+executable was created using Microsoft Visual C++ 2010.
+The core function of this executable is in a subroutine which is called from WinMain, but also executed
+directly via a hardcoded offset from the code injected into ASUS Live Updater.
+The code uses dynamic import resolution with its own simple hashing algorithm. Once the imports are
+resolved, it collects MAC addresses of all available network adapters and calculates an MD5 hash for each
+of these. After that, the hashes are compared against a table of 55 hardcoded values. Other variants of the
+downloader contained a different table of hashes, and in some cases, the hashes were arranged in pairs.
+Example of hardcoded MD5 values
+In other words, the malware iterates through a table of hashes and compares them to the hashes of local
+adapters’ MAC hashes. This way, the target system is recognized and the malware proceeds to the next
+stage, downloading a binary object from https://asushotfix[.]com/logo.jpg (or
+https://asushotfix[.]com/logo2.jpg in newer samples). The malware also sends the first hash from the
+match entry as a parameter in the request to identify the victim. The server response is expected to be an
+executable shellcode, which is placed in newly allocated memory and started.
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 6/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+Execution of the next stage shellcode
+Our investigation uncovered 230 unique samples with different shellcodes and different sets of MAC
+address hashes. This leads us to believe that the campaign targeted a vast number of people or
+companies. In total, we were able to extract 14 unique hash tables. The smallest hash table found
+contained eight entries and the biggest, 307 entries. Interestingly, although the subset of hash entries was
+changing, some of the entries were present in all of the tables.
+Format of the hash table entries
+For all users whose MAC did not match expected values, the code would create an INI file located two
+directory levels above the current executable and named “idx.ini”. Three values were written into the INI file
+under the [IDX_FILE] section:
+[IDX_FILE]
+XXX_IDN=YYYY-MM-DD
+XXX_IDE=YYYY-MM-DD
+https://securelist.com/operation-shadowhammer-a-high-profile-supply-chain-attack/90380/ 7/25
+4/24/2019 Operation ShadowHammer: A High Profile Supply Chain Attack | Securelist
+XXX_IDX=YYYY-MM-DD
+where YYYY-MM-DD is a date one week ahead of the current system date.
+The code injected by the attackers was discovered with over 57000 Kaspersky Lab users. It would run but
+remain silent on systems that were not primary targets, making it almost impossible to discover the
+anomalous behavior of the trojanized executables. The exact total of the affected users around the world
+remains unknown.
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "ASUS Live Updater tool", "type" : "APPS"},
+        {"id": 2, "description": "ShadowHammer downloader", "type" : "EXEF"},
+        {"id": 3, "description": "0f49621b06f2cdaac8850c6e9581a594", "type" : "IOCS"},
+        {"id": 4, "description": "63f2fe96de336b6097806b22b5ab941a", "type" : "IOCS"},
+        {"id": 5, "description": "6f8f43b6643fc36bae2e15025d533a1d53291b8a", "type" : "IOCS"},
+        {"id": 6, "description": "1bb53937fa4cba70f61dc53f85e4e25551bc811bf9821fc47d25de1be9fd286a", "type" : "IOCS"},
+        {"id": 7, "description": "0f:f0:67:d8:01:f7:da:ee:ae:84:2e:9f:e5:f6:10:ea", "type" : "TAMP"},
+        {"id": 8, "description": "PE32 executable (GUI) Intel 80386, for MS Windows", "type" : "EXEF"},
+        {"id": 9, "description": "Microsoft Visual C++ 2010", "type" : "APPS"},
+        {"id": 10, "description": "MAC addresses of all available network adapters", "type" : "MAC"},
+        {"id": 11, "description": "Table of 55 hardcoded MD5 values", "type" : "TAMP"},
+        {"id": 12, "description": "https://asushotfix[.]com/logo.jpg", "type" : "URLS"},
+        {"id": 13, "description": "https://asushotfix[.]com/logo2.jpg", "type" : "URLS"},
+        {"id": 14, "description": "Shellcode executable", "type" : "EXEF"},
+        {"id": 15, "description": "idx.ini file", "type" : "DOCF"},
+        {"id": 16, "description": "[IDX_FILE] section in idx.ini", "type" : "REGI"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "contains"},
+        {"source": 2, "target": 3, "rel_name" : "has MD5 hash"},
+        {"source": 2, "target": 4, "rel_name" : "has MD5 hash (file size)"},
+        {"source": 2, "target": 5, "rel_name" : "has SHA1 hash"},
+        {"source": 2, "target": 6, "rel_name" : "has SHA256 hash"},
+        {"source": 2, "target": 7, "rel_name" : "has digital certificate fingerprint"},
+        {"source": 2, "target": 8, "rel_name" : "is type of executable"},
+        {"source": 2, "target": 9, "rel_name" : "created using"},
+        {"source": 2, "target": 10, "rel_name" : "collects and hashes"},
+        {"source": 2, "target": 11, "rel_name" : "compares against"},
+        {"source": 2, "target": 12, "rel_name" : "downloads from"},
+        {"source": 2, "target": 13, "rel_name" : "downloads from (newer samples)"},
+        {"source": 2, "target": 14, "rel_name" : "executes shellcode"},
+        {"source": 2, "target": 15, "rel_name" : "creates INI file"},
+        {"source": 15, "target": 16, "rel_name" : "contains section"}
+    ]
+}

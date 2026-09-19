@@ -1,0 +1,238 @@
+
+
+
+Sentence : Malware Analysis
+Arrival Vectors
+The majority of the Taidoor malware samples we have
+seen in the wild were delivered via email. We also saw
+considerable variations among the email and IP
+addresses the senders used.
+We listed down some of the emails that were sent via an
+IP address that also served as a C&C server below. This
+was one of the IP addresses that some compromised
+systems accessed. While we do not exactly know how
+the compromises occurred, we can, based on the
+attackers’ method of operation, determine which email
+was the most likely attack vector.
+
+
+Sample email 1 [8]
+
+
+From: minaki.yang@yahoo.com
+
+
+Subject: US-TAIWAN
+
+
+Date sent: October 25, 2011
+
+
+Sender’s IP address: 60.249.219.82
+
+
+MD5 hash:
+
+
+
+
+97ff2338e568fc382d41c30c31f89720
+
+
+Sample email 2 [9]
+
+
+From: [redacted]@wpafb.af.mil
+
+
+Subject: 20111012
+
+
+Sender’s IP address: 60.249.219.82
+
+
+MD5 hash:
+
+
+
+
+5fd848000d68f45271a0e1abd5844493
+
+
+Sample email 3 [10]
+
+
+From: 95273503@nccu.edu.tw
+
+
+Subject: 稿件 如附檔，請收悉
+
+
+Sender’s IP address: 60.249.219.82
+
+
+MD5 hash:
+
+
+
+
+8406c1ae494add6e4f0e78b476fb4db0
+8
+http://targetedemailattacks.tumblr.com/post/12137336947/fak
+e-excel-from-ibm111
+9
+http://targetedemailattacks.tumblr.com/post/11377987600/ma
+licious-excel
+10 http://contagiodump.blogspot.com/2011/10/sep-28-cve-2010-
+3333-manuscript-with.html
+4  |  T h e T a i d o o r C a m p a i g n
+Exploits, Payloads, and Decoy Documents
+The shellcode in the exploit document is commonly
+encrypted. To successfully exploit a vulnerability, the
+shellcode is first decrypted. It then searches for the
+filehandle of the exploit document by comparing the file
+sizes of enumerated handles to a hardcoded file size
+that is supposed to be that of the exploit document.
+Once the handle is found, two buffers are read from the
+exploit document, which contains the encrypted payload
+and an encrypted decoy document.
+The payload is then decrypted and saved as a file in the
+Windows temporary directory. The payload is then
+commonly executed using the WinExec application
+programming interface (API).
+After the payload is executed, the decoy document is
+decrypted and also saved in the Windows temporary
+directory. The decoy document is then opened in a new
+window of the exploited application to convince the
+victim that nothing is wrong with his/her system. The
+process that executed the exploit shellcode is then
+terminated.
+Keen observation would also reveal that the document a
+victim opened was a decoy because its file name differs
+from the name of the original document that was
+exploited.
+The main purpose of the specially crafted file
+attachments is to silently drop and install BKDR_SIMBOT
+variants in the target’s computer. [11] These BKDR_SIMBOT
+variants include BKDR_SIMBOT.SMXA and
+BKDR_SIMBOT.SME, the generic Trend Micro detection
+names for SIMBOT malware.
+In other instances, the binary poses as an Adobe Flash
+Player installer or uninstaller with a file size of 17,925
+bytes. The file was written using Borland’s Delphi,
+compiled on a machine whose default language was set
+to Chinese (Simplified), and did not use any known
+binary packer.
+11 http://about
+threats.trendmicro.com/malware.aspx?language=us&name=BK
+DR_SIMBOT.SMXA
+Figure 1. File properties of the .TMP of the malicious
+executable file
+The main purpose of the dropped binary file is to install
+an RC4-encrypted executable file, specifically in the
+.data segment, in the memory space of a known
+Windows Service Process. If the registry,
+HKLM\SOFTWARE\McAfee, is found in the target’s
+machine, the malware injects the executable file in the
+services.exe process. If not, it injects the executable file
+in svchost.exe.
+The executable file is written using C++ and has a file
+size of about 11,776 bytes. It is not protected nor packed
+using any known binary protector or packer and has a
+pretty straightforward code. The code seeks out inactive
+services and pseudorandomly chooses one, which it
+then tries to kill. If successful, it uses the service’s name
+as file name for the copy created in the victim’s Temp
+folder then creates an autorun registry entry for the
+binary. If not, “WinHttp” is prepended to the service’s
+name.
+5  |  T h e T a i d o o r C a m p a i g n
+Figure 2. File structure of encrypted SIMBOT malware
+variants
+Network Communication
+The binary file contacts the C&C server for commands
+that it then executes on the victim’s machine.
+Communication with the C&C server is done through
+HTTP and uses RC4 encryption for the data sent and
+received.
+Figure 3. Network communication between a Taidoor
+compromised machine and a Taidoor C&C server
+The initial request to the C&C server is formatted as
+follows:
+```
+  [C&C]/{5 random characters}.php?id={6 random
+  numbers}{encrypted victim’s MAC address}
+```
+The victim’s MAC address is sent to the C&C server, as
+this is used as key to encrypt the data exchanged by the
+victim’s machine and the C&C server. The MAC address
+is encrypted using a custom algorithm, which basically
+increases the values in the address by 1.
+As shown in Figure 4, the C&C server responds with
+encrypted data. Since we know the encryption algorithm
+used and that the key is the MAC address, we were able
+to decrypt it.
+```
+  MAC address of analysis machine: 08-00-27
+  33-9C-23
+```
+Encrypted data: � * 䚔 l ��� S � W 4 � T �� F+UO
+```
+  Decrypted data: cmd/c ipconfig/all
+  Command type: 3
+  Command string: cmd/c ipconfig/all
+```
+The decrypted data shows that the C&C server is
+interested in IP configuration-related data in the victim’s
+machine. The output of the command is then encrypted
+and sent to the C&C server.
+Table 1 shows the full capabilities of the injected binary.
+Complete List of C&C Commands
+The decrypted C&C command was formatted in the
+following manner:
+```
+  [command type][command string]
+```
+Command type refers to a hex digit that can be [0x2],
+[0x3], [0x4], [0x5], or [0x7], which identifies what it will
+do with the command string. Command string, on the
+other hand, refers to a set of strings relevant to the
+command type.
+|Command|Description|
+|---|---|
+|0x2—sleep command0x3—execute commands on the system (i.e., cmd/cipconfig/all)0x4—download and execute file0x5—download files from the C&C server0x7—upload files from infected machine to the C&Cserver|The binary waits for a specified amount of time before requestinganother command from the C&C server.This can be used to explore the data or files in the victim’s machinefor reporting back to the C&C server. This can also be used toexplore the network to which the compromised machine isconnected.This can be used to install additional files in the victim’s machine.The binary downloads but does not execute files from the C&Cserver.This can be used to exfiltrate data or files from the victim’s networkto the C&C server.|
+6  |  T h e T a i d o o r C a m p a i g n
+Output : 
+{
+    "nodes": [
+        {"id": 1, "description": "minaki.yang@yahoo.com", "type" : "MAIL"},
+        {"id": 2, "description": "60.249.219.82", "type" : "CCSH"},
+        {"id": 3, "description": "http://targetedemailattacks.tumblr.com/post/12137336947/fake-excel-from-ibm111", "type" : "URLS"},
+        {"id": 4, "description": "http://targetedemailattacks.tumblr.com/post/11377987600/malicious-excel", "type" : "URLS"},
+        {"id": 5, "description": "http://contagiodump.blogspot.com/2011/10/sep-28-cve-2010-3333-manuscript-with.html", "type" : "URLS"},
+        {"id": 6, "description": "95273503@nccu.edu.tw", "type" : "MAIL"},
+        {"id": 7, "description": "[redacted]@wpafb.af.mil", "type" : "MAIL"},
+        {"id": 8, "description": "BKDR_SIMBOT.SMXA", "type" : "APPS"},
+        {"id": 9, "description": "BKDR_SIMBOT.SME", "type" : "APPS"},
+        {"id": 10, "description": "Adobe Flash Player installer or uninstaller", "type" : "APPS"},
+        {"id": 11, "description": "C++ executable file in .data segment", "type" : "EXEF"},
+        {"id": 12, "description": "services.exe process", "type" : "APPS"},
+        {"id": 13, "description": "svchost.exe process", "type" : "APPS"},
+        {"id": 14, "description": "HKLM\\SOFTWARE\\McAfee", "type" : "REGI"},
+        {"id": 15, "description": "WinHttp", "type" : "APPS"},
+        {"id": 16, "description": "08-00-27-33-9C-23", "type" : "MAC"},
+        {"id": 17, "description": "[command type][command string]", "type" : "TTPS"}
+    ],
+    "edges": [
+        {"source": 1, "target": 2, "rel_name" : "sent from"},
+        {"source": 6, "target": 2, "rel_name" : "sent from"},
+        {"source": 7, "target": 2, "rel_name" : "sent from"},
+        {"source": 8, "target": 11, "rel_name" : "drops and installs"},
+        {"source": 9, "target": 11, "rel_name" : "drops and installs"},
+        {"source": 10, "target": 11, "rel_name" : "poses as"},
+        {"source": 14, "target": 12, "rel_name" : "injects into if exists"},
+        {"source": 11, "target": 13, "rel_name" : "injects into if not"},
+        {"source": 16, "target": 2, "rel_name" : "sends encrypted data to"},
+        {"source": 17, "target": 2, "rel_name" : "commands from"}
+    ]
+}

@@ -1,0 +1,56 @@
+UEFI threats moving to the ESP: Introducing ESPecter bootkit
+welivesecurity.com /2021/10/05/uefi-threats-moving-esp-introducing-especter-bootkit
+October 5, 2021
+ESET researchers have analyzed a previously undocumented, real-world UEFI bootkit that persists on
+the EFI System Partition (ESP). The bootkit, which we’ve named ESPecter, can bypass Windows Driver
+Signature Enforcement to load its own unsigned driver, which facilitates its espionage activities.
+Alongside Kaspersky’s recent discovery of the unrelated FinSpy bootkit, it is now safe to say that real-
+world UEFI threats are no longer limited to SPI flash implants, as used by Lojax.
+The days of UEFI (Unified Extensible Firmware Interface) living in the shadows of the legacy BIOS are
+gone for good. As a leading technology embedded into chips of modern computers and devices, it plays a
+crucial role in securing the pre-OS environment and loading the operating system. And it’s no surprise
+that such a widespread technology has also become a tempting target for threat actors in their search for
+ultimate persistence.
+In the last few years, we have seen proof-of-concept examples of UEFI bootkits (DreamBoot, EfiGuard),
+leaked documents (DerStarke, QuarkMatter) and even leaked source code (Hacking Team Vector EDK),
+suggesting the existence of real UEFI malware either in the form of SPI flash implants or ESP implants.
+Despite all of the above, only three real-world cases of UEFI malware have been discovered so far
+(LoJax, discovered by our team in 2018, MosaicRegressor, discovered by Kaspersky in 2019, and most
+recently the FinSpy bootkit, whose analysis was just published by Kaspersky). While the first two fall in
+the category of SPI flash implants, the last falls in the ESP implants category, and surprisingly, it’s not
+alone there.
+Today, we describe our recent discovery of ESPecter, just the second real-world case of a UEFI bootkit
+persisting on the ESP in the form of a patched Windows Boot Manager to be analyzed. ESPecter was
+encountered on a compromised machine along with a user-mode client component with keylogging and
+document-stealing functionalities, which is why we believe ESPecter is mainly used for espionage.
+Interestingly, we traced the roots of this threat back to at least 2012, previously operating as a bootkit for
+systems with legacy BIOSes. Despite ESPecter’s long existence, its operations and upgrade to UEFI went
+unnoticed and have not been documented until now. Note that the only similarity between ESPecter and
+the Kaspersky FinSpy find is that they share the UEFI boot manager compromise approach.
+https://www.welivesecurity.com/2021/10/05/uefi-threats-moving-esp-introducing-especter-bootkit/ 1/17
+1/21/22, 9:06 PM UEFI threats moving to the ESP: Introducing ESPecter bootkit | WeLiveSecurity
+Figure 1. Comparison of the Legacy Boot flow (left) and UEFI boot flow (right) on Windows (Vista and newer)
+systems
+By patching the Windows Boot Manager, attackers achieve execution in the early stages of the system
+boot process (see Figure 1), before the operating system is fully loaded. This allows ESPecter to bypass
+Windows Driver Signature Enforcement (DSE) in order to execute its own unsigned driver at system
+startup. This driver then injects other user-mode components into specific system processes to initiate
+communication with ESPecter’s C&C server and to allow the attacker to take control of the compromised
+machine by downloading and running additional malware or executing C&C commands.
+Even though Secure Boot stands in the way of executing untrusted UEFI binaries from the ESP, over the
+last few years we have been witness to various UEFI firmware vulnerabilities affecting thousands of
+devices that allow disabling or bypassing Secure Boot (e.g. VU#758382, VU#976132, VU#631788, …).
+This shows that securing UEFI firmware is a challenging task and that the way various vendors apply
+security policies and use UEFI services is not always ideal.
+https://www.welivesecurity.com/2021/10/05/uefi-threats-moving-esp-introducing-especter-bootkit/ 2/17
+1/21/22, 9:06 PM UEFI threats moving to the ESP: Introducing ESPecter bootkit | WeLiveSecurity
+Previously, we have reported multiple malicious EFI samples in the form of simple, single-purpose UEFI
+applications without extensive functionality. These observations, along with the concurrent discovery of
+the ESPecter and FinFisher bootkits, both fully functional UEFI bootkits, show that threat actors are not
+relying only on UEFI firmware implants when it comes to pre-OS persistence, but also are trying to take
+advantage of disabled Secure Boot to execute their own ESP implants.
+We were not able to attribute ESPecter to any known threat actor, but the Chinese debug messages in
+the associated user-mode client component (as seen in Figure 2) leads us to believe with a low
+confidence that an unknown Chinese-speaking threat actor is behind ESPecter. At this point, we don’t
+know how it was distributed.
+Figure 2. Example of Chinese debug messages in the user-mode client component

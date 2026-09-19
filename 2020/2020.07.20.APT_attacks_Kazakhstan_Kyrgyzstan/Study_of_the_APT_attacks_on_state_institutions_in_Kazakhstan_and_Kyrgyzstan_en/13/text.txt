@@ -1,0 +1,260 @@
+Operating routine
+The trojan reads and decrypts the configuration file from the Video or Scsi parameter
+stored in the [HKLM\\SOFTWARE\\Microsoft\\LoginInfo] registry key. It then
+verifies if the first 4 bytes coincide with the 1E 5A CF 24 value and if the 16th bite equals
+0xCE .
+Next, Trojan.XPath.4 forms a unique HWID (Hardware ID) identifier of the infected device,
+based on its hardware configuration.
+After that, it opens the device \\.\BainduHips to verify the network driver is available.
+Depending on the operating system version, any calls to the driver are performed in a
+specific way. The first one is executed in the Windows operating system versions, starting
+from Windows 2000 and ending with Windows Server 2003 R2 where the WinCap-based
+driver is used. The second one is executed on newer versions of Windows where the
+WinDivert-based driver is used.
+In order to determine through which network interfaces the trojan should work, it searches
+for the network interfaces with types MIB_IF_TYPE_ETHERNET and
+IF_TYPE_IEEE80211, which are connected to the network. If Trojan.XPath.4 is running on a
+Windows version earlier than Windows Vista, it sends the IOCTL code 0x80000800 to its
+driver. After this IOCTL code is received, the driver installs its own hooks onto the handlers,
+which are responsible for various functions of the TCP/IP protocol.
+Based on that, the trojan can operate in two modes. In the first mode, it functions as a client
+(Client Mode), connecting to the C&C server and waiting for the corresponding commands.
+In the second mode, the trojan operates as an agent (Agent Mode), listening to the specific
+ports, and waiting for other clients to connect and receive their corresponding commands. In
+this mode, Trojan.XPath.4 acts as a server.
+Operation in the Agent (Server) Mode
+While working with the network driver, Trojan.XPath.4 does not actually listen to or receive
+connections on a port. Instead, the driver listens for traffic on the network interface and
+sends filtered packets to the trojan. As a result, the port, to which the trojan listens, is not
+shown as opened anywhere.
+Trojan.XPath.4 checks the current day of the week and the time set in the system settings and
+compares their values with the data from the configuration file. In this file, there is flag for
+each hour of each day of the week, which inform the trojan if it should run at that specific
+time. If there is no flag for the current time, the malware will not receive any packets.
+Trojan.XPath.4 waits for an incoming packet of 32 bytes. Next, it takes the first 4 bytes as an
+XOR key to decrypt the remaining 28 bytes. The decryption algorithm is shown in the picture
+below:
+After decryption, it verifies bytes 4 through 12 and does not perform any further actions if
+these bytes match the string 1I2#aLeb . If this string is not present, the trojan attempts to
+decrypt the packet with the AES key instead of the XOR key. Next, the trojan verifies if the
+first 4 decrypted bytes match the string 7r#K . If there is no match, the trojan will determine
+an error has occurred, and all further packet processing will be stopped. But in case there is a
+match after decryption, this packet will have the following structure:
+```
+ #pragma pack(push,1)
+struct st_packet_header
+ {
+_BYTE com_flag[4];
+ _DWORD packed_size;
+ _DWORD decomp_size;
+ _DWORD cmdid;
+ _BYTE pad[16];
+ };
+#pragma pack(pop)
+```
+If the packed_size field has 32 value, and the decomp_size field has the value of 0, the
+trojan verifies if there is a tunnel to another bot created. If the tunnel exists, Trojan.XPath.4
+redirects the command into it, so that the connected bot can execute it. If there is no tunnel,
+the trojan executes the command itself.
+If the values of the field mentioned earlier are different from those the trojan expects, it will
+round off the size of the packed_size field to the larger value, multiple to 16, which
+represents the size of packet’s payload. After that, it receives the rest of the data, decrypts it
+with one of two AES keys and unpacks it with the LZMA algorithm. Next, it verifies if the size
+of the unpacked data matches the size presented in the decomp_size field of the
+st_packet_header packet. If the site match is confirmed, Trojan.XPath.4 sends the
+received command into the tunnel or executes it on its own if the tunnel was not created.
+Operation in the Client Mode
+The trojan will run in this mode if the configuration file contains the C&C server address and
+the operation mode 3, which corresponds to the Client Mode, is specified. The malware
+sample analyzed has a 4 mode specified, which corresponds to the Agent Mode.
+The trojan generates a random port number within the range of
+65530 and connects to it.
+Next, it forms the following packet:
+```
+ #pragma pack(push,1)
+struct st_hello
+ {
+_DWORD key;
+ _BYTE magic[8]; // "1I2#aLeb
+ _DWORD packet_id; // 0x00
+ _DWORD dword14; // 0x00
+ _WORD port;
+ _BYTE byte16[10];
+ };
+#pragma pack(pop)
+```
+In the port field it specifies the number of the previously generated port. Next, it takes the
+GetTickCount() value as an XOR key to decrypt the packet, and encrypts this value in its
+first 4 bytes. The trojan creates the socket, connects to the C&C server listed in the
+configuration file, sends the packet, and ends the connection. Upon receipt of this packet,
+the trojan driver will add IP:port from where the packet originates into the firewall
+exceptions.
+Next, Trojan.XPath.4 connects to the same C&C server again, but this time, it uses the socket
+to which it was earlier connected through the random port. After that, Trojan.XPath.4 sends
+the packet TOKEN_CLIENT_LOGIN to the C&C server and waits for further commands
+(additional information about the commands is listed in the corresponding table of the
+Commands list section of this description). Reception and dispatch of the packets is
+executed in the same way as with the operation as a server (Agent (Server) Mode).
+Packet dispatching
+If the packet has any data, that data is packed with the LZMA algorithm. As a result, the
+following data structure is created:
+
+The header in a form of the st_packet_header structure (this structure is described in
+the “Operation in the Agent (Server) Mode” section):
+
+```
+ #pragma pack(push,1)
+struct st_packet_header
+{
+_BYTE com_flag[4];
+_DWORD packed_size;
+_DWORD decomp_size;
+_DWORD cmdid;
+_BYTE pad[16];
+};
+#pragma pack(pop)
+```
+Compressed data
+The resulting data, together with the header, is compressed with the first AES key and sent to
+the addressee. The only packet not compressed and encrypted with the AES key is the
+st_hello packet.
+Commands list
+|Commands IDs|Name of the command|Resulting action|
+|---|---|---|
+|0x138A|AGENT_SERVER_ALIVE|Confirms the Agent-serveroperation|
+|0x138D||Allocates additional socket orexecute the command stored inthe packet’s data|
+|0x138E|AGENT_CLIENT_NEW_CONNECT_ACCEPT|Enables additional connectionwith the Agent-server andexecutes the command|
+|0x4E21|COMMAND_SERVER_ALIVE|Confirms the C&C serveroperation|
+|0x4E22|COMMAND_SERVER_CONNECT|Sends the command to establishthe connection with the C&Cserver|
+|---|---|---|
+|0x4E24|COMMAND_SERVER_NOTIFY_CLIENT|Establishes additionalconnection with the C&C serverand executes the command|
+|0x4E25||Ends the connection|
+|0x4E26||Updates the trojan driver andthe modules|
+|0x4E27||A command for the trojan touninstall itself|
+|0x4E28|COMMAND_SERVER_READY|Checks if the server is ready|
+|0x4E2A||Ends the trojan process|
+|0x4E34||Forces the computer toshutdown|
+|0x4E35||Forces log out from the user’scomputer account|
+|0x4E36||Forces the computer to reboot|
+|0x4E37||Powers off the computer|
+|0x4E38||Forces log out from the user’scomputer account|
+|0x4E39||Reboots the computer|
+|0x5014|COMMAND_SHELL_START|Runs the Shell|
+|0x5015|COMMAND_CMDDLG_OPENED|Starts reading the data from theShell|
+|0x5016||Sends the data to the Shell|
+|0x5017|COMMAND_SHELL_EXIT|Closes the Shell|
+|0x5078|COMMAND_TUNNEL_START|Launches the plug-in creatingthe tunnel|
+|0x5079||Sends the data to the C&Cserver that has a connectedtunnel|
+|0x507A|Col2|Sets the C&C server address towhich the tunnel will be created|
+|---|---|---|
+|0x507B|COMMAND_TUNNEL_NEW_CONNECTION|Creates the tunnel to thespecified C&C server|
+|0x507C||Receives NetBios name of thespecified IP address|
+|0x5082|COMMAND_TUNNEL_EXIT|Disables the tunnel|
+|0x5E30|COMMAND_FILE_START|Runs file manager|
+|0x5E31||Directory listing|
+|0x5E32||Reads the file from the specifiedoffset|
+|0x5E33||Creates the file|
+|0x5E34||Writes into the file from thespecified offset|
+|0x5E36||Reads the file from the specifiedoffset|
+|0x5E37||Transfers an empty packet withthe 0x98BC code to the C&Cserver|
+|0x5E38||Deletes the specified file|
+|0x5E39||Recursively deletes the specifieddirectory or files|
+|0x5E40||Obtains the file size|
+|0x5E41||Creates the folder|
+|0x5E42||Moves the file|
+|0x5E43||Runs the file with the window|
+|0x5E44||Runs the file without a window|
+|0x5E45||Ignored|
+|0x5E46||Ignored|
+|0x5E47||Receives the data about the file(creation and modification time,|
+|Col1|Col2|access information, file size, filetype, the name of the app thatcan be used to open this file)|
+|---|---|---|
+|0x5E49||Sets file attributes specified inthe command|
+|0x5E51||Disables the file manager|
+|0x5E52||Recursively lists the specifieddirectory|
+|0x891C|TOKEN_CLIENT_LOGIN|Client authorization on theserver|
+|0xEA66|PUBLIC_ACTIVE|Setpublic_active flag|
+Artifacts
+The trojan file contains traces of debugging information that reveals the names of the
+following source code files:
+```
+ ..\common\LzmaLib.c
+z:\desk_codes\project_xpath\xpath\ringqueue.h
+ z:\desk_codes\project_xpath\xpath\untils.h
+ z:\desk_codes\project_xpath\xpath\ShellManager.h
+ z:\desk_codes\project_xpath\xpath\file.h
+ z:\desk_codes\project_xpath\xpath\tunnel.h
+ z:\desk_codes\project_xpath\xpath\network.h
+ z:\desk_codes\project_xpath\xpath\clientmode.h
+xPathMain.c
+cyclone_tcp\core\bsd_socket.c
+```
+The original functions names:
+```
+ SendClientMagic
+FindPluginData
+DeCompressData
+GetSockInfo nocase
+StartShell
+UnInitShell
+UnInitFileManager
+ recv_pack2
+ x_gethostbyname
+OutputData
+tcpF
+WorkThread
+alloc_new_si
+ x_decompress
+```
+The original commands names:
+```
+ COMMAND_FILE_START
+ PUBLIC_ACTIVE
+ COMMAND_TUNNEL_EXIT
+ COMMAND_TUNNEL_NEW_CONNECTION
+ COMMAND_SERVER_READY
+ AGENT_SERVER_ALIVE
+ COMMAND_SERVER_CONNECT
+ TOKEN_CLIENT_CONNECT
+ AGENT_SERVER_ALIVE
+ COMMAND_SERVER_ALIVE
+ COMMAND_SERVER_NOTIFY_CLIENT
+ AGENT_CLIENT_NEW_CONNECT_ACCEPT
+ COMMAND_SHELL_START
+ COMMAND_TUNNEL_START
+ COMMAND_CMDDLG_OPENED
+ COMMAND_SHELL_EXIT
+ COMMAND_TUNNEL_EXIT
+ TOKEN_CLIENT_LOGIN
+```
+Various debugging messages:
+```
+ get conf,agent:%d,client:%d,interval:%d,listen1:%d,addr1:%s:%d \n
+ os init:%d-%d-%d bGetConfig:%d %d\tver:%10d\n
+ver:%d remote:%d listen:%d\n
+x_decompress bad in tcpR,socket:%d token:%d len:%d,target len:%d,%d\n
+ dir: %ws,%ws,%ws,%d,%d,%d
+file: %ws,%ws,%ws,%d,%d,%d
+tunnel connect error :%x--%d,%d,%d\n
+ init get ip:%s,%s,%s,%02x-%02x-%02x-%02x-%02x-%02x,%s\n
+ ready accept port of client to agent:%d,local: %x--%d\n
+stack set ip:%s mask:%s gw:%s
+ baidu_tx_web%d
+ stack add ip:%s mask:%s gw:%s
+ agent must with driver\n
+current if:%d\n
+the connect thread is ending.....\n
+ the sub connect thread is ending.....\n
+listen thread1 out\n
+client unknown token %d\n
+errorrrrrrrrrrrrrrrrrr:%d,%d,%d\n
+ tcp reverse decrypt error\n
+ tcp reverse com flag error\n
+%04d %02d %02d-%02d:%02d:%02d :
+update alloc memory false\n
+ update depack false,%d,%d,%d\n
+ create update driver error\n
+ alloc driver memory error,%d\n
+ depack driver error\n
+write driver error\n
+client type wrong:%d,%d,%d

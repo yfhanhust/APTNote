@@ -1,0 +1,61 @@
+3.3. Injections
+There are multiple injections of code during startup. Only advnetcfg32 is probably injected 3
+times. We have no detailed information why code is injected into multiple processes
+(including winlogon.exe, services.exe, explorer.exe).
+```
+0 fltmgr.sys fltmgr.sys + 0x1888 0xf83f0888 C:\WINDOWS\System32\Drivers\fltmgr.sys
+1 fltmgr.sys fltmgr.sys + 0x31a7 0xf83f21a7 C:\WINDOWS\System32\Drivers\fltmgr.sys
+2 fltmgr.sys fltmgr.sys + 0xfc7a 0xf83fec7a C:\WINDOWS\System32\Drivers\fltmgr.sys
+3 ntkrnlpa.exe ntkrnlpa.exe + 0xac124 0x80583124 C:\WINDOWS\system32\ntkrnlpa.exe
+4 ntkrnlpa.exe ntkrnlpa.exe + 0xe8488 0x805bf488 C:\WINDOWS\system32\ntkrnlpa.exe
+5 ntkrnlpa.exe ntkrnlpa.exe + 0xe4a14 0x805bba14 C:\WINDOWS\system32\ntkrnlpa.exe
+6 ntkrnlpa.exe ntkrnlpa.exe + 0x9ffeb 0x80576feb C:\WINDOWS\system32\ntkrnlpa.exe
+7 ntkrnlpa.exe ntkrnlpa.exe + 0x6a67c 0x8054167c C:\WINDOWS\system32\ntkrnlpa.exe
+8  0x1f2a333 0x1f2a333
+9  0x1f1ed9c 0x1f1ed9c
+10  0x1f1128b 0x1f1128b
+11  0x1f1c900 0x1f1c900
+```
+Figure 7 – Winlogon.exe with injected code working with ccalc32.sys – procmon
+In case of Duqu, the authors used ZwCreateSection() and ZwMapViewOfSection() to copy
+code into running processes, while other methods use LoadLibrary() and LoadLibraryEx() to
+load a library into a code. These techniques can easily be detected as the inserted DLLs
+appear in the PEB’s InLoadOrderModuleList. In case of sKyWIper, the code injection
+mechanism is stealthier such that the presence of the code injection cannot be determined
+by conventional methods such as listing the modules of the corresponding system processes
+(winlogon, services, explorer). The only trace we found at the first sight is that certain
+memory regions are mapped with the suspicious READ, WRITE and EXECUTE protection
+flags, and they can only be grasped via the Virtual Address Descriptor (VAD) kernel data
+structure. As these regions must have been allocated dynamically by means of
+VirtualAllocEx() or WriteProcessMemory(), they have the type of Vad Short. Thus, the
+combination of RWE flags and type VadS for a given memory region in a system process
+allowed us to identify the code injection. Figure 8 shows the malicious code injections we
+found with Volatility.
+```
+Process: winlogon.exe Pid: 676 Address: 0xab0000
+Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITE
+Flags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6
+0x00ab0000 10 00 00 00 4a 89 6f d1 aa 04 9b 3c c8 51 72 bc  ....J.o....<.Qr.
+0x00ab0000 1f c4 f1 56 00 00 00 00 00 00 00 00 00 00 00 00  ...V............
+0x00ab0000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+0x00ab0000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+```
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 17
+|Col1|Col2|
+|---|---|
+| Process: winlogon.exe Pid: 676 Address: 0xac0000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x00ac0000 10 00 00 00 4a 89 6f d1 aa 04 9b 3c c8 51 72 bc  ....J.o....<.Qr.0x00ac0000 1f c4 f1 56 00 00 00 00 00 00 00 00 00 00 00 00  ...V............0x00ac0000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................0x00ac0000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................   Process: winlogon.exe Pid: 676 Address: 0xb10000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x00b10000 10 00 00 00 4a 89 6f d1 aa 04 9b 3c c8 51 72 bc  ....J.o....<.Qr.0x00b10000 1f c4 f1 56 00 00 00 00 00 00 00 00 00 00 00 00  ...V............0x00b10000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................0x00b10000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................   Process: winlogon.exe Pid: 676 Address: 0xb20000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x00b20000 10 00 00 00 4a 89 6f d1 aa 04 9b 3c c8 51 72 bc  ....J.o....<.Qr.0x00b20000 1f c4 f1 56 00 00 00 00 00 00 00 00 00 00 00 00  ...V............0x00b20000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................0x00b20000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................   Process: winlogon.exe Pid: 676 Address: 0x10f0000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x010f0000 10 00 00 00 4a 89 6f d1 aa 04 9b 3c c8 51 72 bc  ....J.o....<.Qr.0x010f0000 1f c4 f1 56 00 00 00 00 00 00 00 00 00 00 00 00  ...V............0x010f0000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................0x010f0000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................   Process: winlogon.exe Pid: 676 Address: 0x1220000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x01220000 10 00 00 00 4a 89 6f d1 aa 04 9b 3c c8 51 72 bc  ....J.o....<.Qr.0x01220000 1f c4 f1 56 00 00 00 00 00 00 00 00 00 00 00 00  ...V............0x01220000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................0x01220000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................   Process: winlogon.exe Pid: 676 Address: 0x1490000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x01490000 ba ba 0d f0 00 00 48 01 30 25 80 7c b7 24 80 7c  ......H.0%.|.$.|0x01490000 b3 1d 90 7c 55 8b ec 51 53 56 57 33 ff 89 7d fc  ...|U..QSVW3..}.0x01490000 e8 00 00 00 00 58 89 45 fc 8b 45 fc 6a 64 59 48  .....X.E..E.jdYH0x01490000 49 89 45 fc 74 5b 81 38 ba ba 0d f0 75 f1 8d 70  I.E.t[.8....u..p   Process: winlogon.exe Pid: 676 Address: 0x3c8a0000||
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 18
+|Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITE|Col2|
+|---|---|
+|Flags: CommitCharge: 4, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x3c8a0000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................0x3c8a0000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................0x3c8a0000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................0x3c8a0000 00 00 00 00 27 00 27 00 01 00 00 00 00 00 00 00  ....'.'.........   Process: services.exe Pid: 720 Address: 0x950000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x00950000 ba ba 0d f0 00 00 94 00 30 25 80 7c b7 24 80 7c  ........0%.|.$.|0x00950000 b3 1d 90 7c 55 8b ec 51 53 56 57 33 ff 89 7d fc  ...|U..QSVW3..}.0x00950000 e8 00 00 00 00 58 89 45 fc 8b 45 fc 6a 64 59 48  .....X.E..E.jdYH0x00950000 49 89 45 fc 74 5b 81 38 ba ba 0d f0 75 f1 8d 70  I.E.t[.8....u..p   Process: explorer.exe Pid: 1616 Address: 0x1400000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x01400000 ba ba 0d f0 00 00 e8 00 30 25 80 7c b7 24 80 7c  ........0%.|.$.|0x01400000 b3 1d 90 7c 55 8b ec 51 53 56 57 33 ff 89 7d fc  ...|U..QSVW3..}.0x01400000 e8 00 00 00 00 58 89 45 fc 8b 45 fc 6a 64 59 48  .....X.E..E.jdYH0x01400000 49 89 45 fc 74 5b 81 38 ba ba 0d f0 75 f1 8d 70  I.E.t[.8....u..p   Process: explorer.exe Pid: 1616 Address: 0x1b50000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x01b50000 67 32 cd ba 2e 00 4d 00 53 00 42 00 54 00 53 00  g2....M.S.B.T.S.0x01b50000 00 00 43 02 50 03 f8 01 4b 6c 43 02 04 00 01 00  ..C.P...KlC.....0x01b50000 03 00 00 00 90 fa fc 00 2c fb fc 00 00 00 da 00  ........,.......0x01b50000 00 e9 90 7c 40 00 91 7c ff ff ff ff 3d 00 91 7c  ...|@..|....=..|   Process: explorer.exe Pid: 1616 Address: 0x4540000Vad Tag: VadS Protection: PAGE_EXECUTE_READWRITEFlags: CommitCharge: 1, MemCommit: 1, PrivateMemory: 1, Protection: 6 0x04540000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................0x04540000 00 00 54 04 00 00 00 00 00 00 00 00 00 00 00 00  ..T.............0x04540000 10 00 54 04 00 00 00 00 00 00 00 00 00 00 00 00  ..T.............0x04540000 20 00 54 04 00 00 00 00 00 00 00 00 00 00 00 00  ..T.............||
+Figure 8 – The presence of code injection and hooks (Volatility)
+By examining the injected regions in more details, we found that the inserted code belongs
+to shell32.dll. This can be verified by means of vmmap as shown in Figure 9.
+Laboratory of Cryptography and System Security (CrySyS)
+Budapest University of Technology and Economics
+www.crysys.hu 19
+Figure 9 – The presence of code injection (vmmap)

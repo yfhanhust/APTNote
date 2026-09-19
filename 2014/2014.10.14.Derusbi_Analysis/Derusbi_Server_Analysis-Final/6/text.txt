@@ -1,0 +1,40 @@
+PCC_CMD
+The PCC_CMD object contains the remote shell functionality of the server variant along with the
+ability to execute arbitrary programs. Derived from the PCC_BASEMOD class, the PCC_CMD
+class’s operations are focused largely in the ProcessPacket and ReadWaitingData
+functions. The PCC_CMD::ProcessPacket function works as a stub function that merely
+passes the packet’s payload data ( pkt ) data to PCC_CMD::ProcessPacketEx while ignoring
+the dwPktSize parameter. The packet’s payload data is, in and of itself, another datagram with
+a header and optional payload section. The payload of each PCC_CMD destined packet contains
+the following header:
+```
+struct PCCCMDPacketHeader
+{
+DWORD dwPacketSize;
+DWORD field_4; // purpose unknown, seemingly unused.
+DWORD dwCommandType;
+DWORD dwLastError;
+};
+```
+The dwCommandType field specifies the specific PCC_CMD command that the client is
+requesting the server variant perform. There are four commands that PCC_CMD supports:
+|dwCommandType Functionality|Col2|
+|---|---|
+|0x04|Activate the remote shell|
+|0x08|Execute the specified file|
+|0x0C|Send input to remote shell|
+|0x10|Terminate the remote shell|
+For each of the commands, any output from or acknowledgement of the commands comes in
+the form of another packet consisting of a PacketHeader followed by a
+PCCCMDPacketHeader and any optional payload data. The dwCommandType of the newly
+constructed packet matches the command’s original dwCommandType value (e.g. responses
+from 0x04 commands will reply with dwCommandType set to 0x04 ).
+PCC_CMD::ProcessPacketEx will queue the response packets in an internal buffer.
+The PCC_CMD::ReadWaitingData member function is responsible for transmitting any of the
+previously queued packets from PCC_CMD::ProcessPacketEx . If there are no queued
+packets, PCC_CMD::ReadWaitingData will perform a queue of the console output pipe for the
+remote shell process (if it is active); the function will also attempt to read the entirety of the
+waiting data, which then becomes the payload of a PacketHeader / PCCCMDPacketHeader
+based packet with the dwCommandType set to 0x0C . If the read is unsuccessful, the function
+returns a PacketHeader / PCCCMDPacketHeader based packet with the dwCommandType set
+to 0x10 indicating an error and terminating the remote shell session.

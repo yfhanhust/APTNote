@@ -1,0 +1,49 @@
+COMMAND-AND-CONTROL COMMUNICATIONS
+As long as the test tool named chrome.exe did not make any requests, its memory stayed pristine. There were no injections made
+by the driver.
+As soon as the tool made its first GET requests, the driver immediately injected a malicious DLL module in it, and that module
+started producing the following traffic:
+No.   Time               Source                  Destination              Protocol Length Info
+↓
+↓
+↓
+```
+137 50.536285000 192.168.202.131 31.170.161.136 HTTP 220 GET /D/77568289 HTTP/1.1
+139 50.762073000 31.170.161.136  192.168.202.131 HTTP 474 HTTP/1.1 302 Found (text/html)
+147 51.101706000 192.168.202.131 31.170.164.249 HTTP 217 GET /? HTTP/1.1
+154 51.548661000 192.168.202.131 83.125.22.197  HTTP 225 GET /D/77568289 HTTP/1.1
+163 52.014730000 192.168.202.131 83.125.22.197  HTTP 225 GET /D/77568289 HTTP/1.1
+165 52.637958000 83.125.22.197  192.168.202.131 HTTP 679 HTTP/1.1 200 OK (text/html)
+```
+Received command
+The domain names of the C&C servers it relies on are hard-coded in the body of the malware. Some examples are given below, and
+a full list of known domains is given in the Appendix D:
+• north-area.bbsindex.com
+• winter.site11.com
+• swim.onlinewebshop.net
+• july.mypressonline.com
+• toolsthem.xp3.biz
+• softprog.freeoda.com
+• euassociate.6te.net
+As seen in the traffic dump above, the malware first resolves the domain name of its C&C.
+Next, it fetches a file /D/pub.txt, and expects the server to respond with a string “1”, acknowledging it’s active:
+03:52:06 1336: Connect swim.onlinewebshop.net type(0)... OK
+03:52:06 1336: GET /D/pub.txt
+03:52:07 1336: Http status: 200
+03:52:07 1336: recv 1/1
+03:52:07 DownLoad 1 command(s)
+Once acknowledged, it asks the server for a command, and the server returns a new command to execute:
+03:52:11 1404: Connect swim.onlinewebshop.net type(0)... OK
+03:52:11 1404: GET /D/77568289
+03:52:12 1404: Http status: 200
+03:52:12 1404: Command for all
+03:52:12 1404: recv 346/346
+03:52:12 Command Id:303149772662877808(130201837456870000)[13:42:25 05/08/2013]
+BAE Systems Applied Intelligence: Snake Rootkit Report 2014 9
+The command it receives from C&C above (swim.onlinewebshop.net) is encrypted. In order to decrypt it, the malware first
+applies the XOR mask to the bytes that start from offset 0x40:
+1dM3uu4j7Fw4sjnbcwlDqet4F7JyuUi4m5Imnxl1pzxI6as80cbLnmz54cs5Ldn4ri3do5L6g
+s923HL34x2f5cvd0fk6c1a0s
+An identical XOR mask was also used by Agent.BTZ.
+Next, it calculates and confirms a CRC32 checksum within the command, further decrypts the data by using the Number Theory
+Library (NTL), and makes sure the command is destined to the current host by matching the ID field in it.
